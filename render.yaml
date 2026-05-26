@@ -13,13 +13,20 @@ services:
       - key: BACKEND_CORS_ORIGINS
         value: '["https://ortho-frontend.onrender.com"]'
 
-  # ── Frontend (Next.js) ────────────────────────────────────────
+  # ── Frontend (Next.js) — runtime nativo Node.js ───────────────
   - type: web
     name: ortho-frontend
-    runtime: docker
-    dockerfilePath: ./frontend/Dockerfile
-    dockerContext: ./frontend
+    runtime: node
     plan: free
+    rootDir: frontend
+    buildCommand: npm install && npm run build && cp -r .next/static .next/standalone/.next/static && cp -r public .next/standalone/public
+    startCommand: node .next/standalone/server.js
     envVars:
       - key: NEXT_PUBLIC_API_URL
         value: https://ortho-backend.onrender.com
+      - key: NODE_VERSION
+        value: "20"
+      - key: PORT
+        value: "3000"
+      - key: HOSTNAME
+        value: "0.0.0.0"
