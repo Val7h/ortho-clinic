@@ -1,0 +1,36 @@
+databases:
+  - name: ortho-db
+    plan: free
+    databaseName: orthoclinic
+    user: ortho_user
+
+services:
+  # ── Backend (FastAPI) ──────────────────────────────────────────
+  - type: web
+    name: ortho-backend
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: ortho-db
+          property: connectionString
+      - key: BACKEND_CORS_ORIGINS
+        value: '["https://ortho-frontend.onrender.com"]'
+
+  # ── Frontend (Next.js) ────────────────────────────────────────
+  - type: web
+    name: ortho-frontend
+    runtime: docker
+    dockerfilePath: ./frontend/Dockerfile
+    dockerContext: ./frontend
+    plan: free
+    buildArgs:
+      - key: NEXT_PUBLIC_API_URL
+        value: https://ortho-backend.onrender.com
+    envVars:
+      - key: NEXT_PUBLIC_API_URL
+        value: https://ortho-backend.onrender.com
