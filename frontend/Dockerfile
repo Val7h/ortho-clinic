@@ -7,7 +7,8 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-ARG NEXT_PUBLIC_API_URL=http://localhost:8002
+# Render usa o default de producao; docker-compose local sobrescreve via --build-arg
+ARG NEXT_PUBLIC_API_URL=https://ortho-backend.onrender.com
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 RUN npm run build
 
