@@ -119,7 +119,7 @@ function SendCard({
   };
 
   return (
-    <div className="mt-2 p-4 rounded-xl bg-gray-50 border border-gray-200 space-y-3">
+    <div className="mt-2 p-4 rounded-xl bg-slate-100 border border-gray-200 space-y-3">
       <div className="flex items-start gap-2">
         <Phone className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
         <p className="text-xs text-gray-600">
@@ -280,7 +280,7 @@ export default function WhatsAppPage() {
     (dash?.returns_week.length ?? 0);
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-slate-100">
       <NavBar
         title="WhatsApp & Lembretes"
         subtitle="Comunicação com pacientes"
@@ -457,7 +457,7 @@ export default function WhatsAppPage() {
             <Section
               title="📋 Histórico de Mensagens"
               icon={MessageSquare}
-              iconColor="bg-gray-500"
+              iconColor="bg-slate-1000"
               count={dash.recent_messages.length}
               emptyText="Nenhuma mensagem enviada ainda"
             >

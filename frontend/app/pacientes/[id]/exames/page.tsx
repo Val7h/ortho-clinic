@@ -76,7 +76,7 @@ export default function ExamsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-slate-100">
       <NavBar title="Solicitação de Exames" subtitle={patient?.name} back={`/pacientes/${pid}`} />
 
       <div className="max-w-3xl mx-auto px-4 py-6 space-y-6">

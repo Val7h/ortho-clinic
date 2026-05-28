@@ -386,7 +386,7 @@ export default function PrescriptionPage() {
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-slate-100">
       <NavBar title="Receita Médica" subtitle={patient?.name} back={`/pacientes/${pid}`} />
 
       {/* Demo modal */}
