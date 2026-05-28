@@ -91,6 +91,52 @@ export const dashboardApi = {
   get: () => api.get("/dashboard").then((r) => r.data),
 };
 
+// ── Agenda ────────────────────────────────────────────────────────────────
+export const agendaApi = {
+  get: (start?: string, end?: string) =>
+    api.get("/agenda", { params: { start, end } }).then((r) => r.data),
+};
+
+// ── Financeiro ────────────────────────────────────────────────────────────
+export const financialApi = {
+  list: (params?: { month?: number; year?: number; patient_id?: number }) =>
+    api.get("/financial", { params }).then((r) => r.data),
+  summary: (params?: { month?: number; year?: number }) =>
+    api.get("/financial/summary", { params }).then((r) => r.data),
+  create: (data: any) => api.post("/financial", data).then((r) => r.data),
+  delete: (id: number) => api.delete(`/financial/${id}`),
+};
+
+// ── Mídia de Consulta ─────────────────────────────────────────────────────
+export const mediaApi = {
+  list: (consultationId: number) =>
+    api.get(`/consultations/${consultationId}/media`).then((r) => r.data),
+  upload: (consultationId: number, patientId: number, file: File, mediaType: string, description: string) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("patient_id", String(patientId));
+    fd.append("media_type", mediaType);
+    fd.append("description", description);
+    return api.post(`/consultations/${consultationId}/media`, fd, {
+      headers: { "Content-Type": "multipart/form-data" },
+    }).then((r) => r.data);
+  },
+  delete: (consultationId: number, mediaId: number) =>
+    api.delete(`/consultations/${consultationId}/media/${mediaId}`),
+};
+
+// ── Anamnese ──────────────────────────────────────────────────────────────
+export const anamnesisApi = {
+  list: (patientId: number) =>
+    api.get(`/patients/${patientId}/anamnese`).then((r) => r.data),
+  create: (patientId: number, expiresHours?: number) =>
+    api.post(`/patients/${patientId}/anamnese`, { patient_id: patientId, expires_hours: expiresHours ?? 48 }).then((r) => r.data),
+  getPublic: (token: string) =>
+    api.get(`/anamnese/${token}`).then((r) => r.data),
+  fillPublic: (token: string, data: any) =>
+    api.post(`/anamnese/${token}`, data).then((r) => r.data),
+};
+
 // ── WhatsApp ──────────────────────────────────────────────────────────────
 export const whatsappApi = {
   config: () => api.get("/whatsapp/config").then((r) => r.data),

@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import {
   Users, Stethoscope, BookOpen, MessageSquare,
-  DollarSign, Bell, TrendingUp, Activity,
+  DollarSign, TrendingUp, Activity,
   Calendar, FileText,
 } from "lucide-react";
 import Link from "next/link";
@@ -89,7 +89,7 @@ export default function Dashboard() {
               badge={stats?.stats.total_patients}
             />
             <ModuleCard
-              href="/pacientes"
+              href="/agenda"
               icon={Stethoscope}
               label="Consultas"
               description="Nova / Retorno"
@@ -110,17 +110,17 @@ export default function Dashboard() {
               color="bg-gradient-to-br from-emerald-500 to-emerald-700"
             />
             <ModuleCard
-              href="#"
+              href="/financeiro"
               icon={DollarSign}
               label="Financeiro"
               description="Faturamento"
               color="bg-gradient-to-br from-amber-400 to-amber-600"
             />
             <ModuleCard
-              href="#"
-              icon={Bell}
-              label="Alertas"
-              description="Notificações"
+              href="/agenda"
+              icon={Calendar}
+              label="Agenda"
+              description="Semana atual"
               color="bg-gradient-to-br from-rose-500 to-rose-700"
             />
           </div>
@@ -163,7 +163,7 @@ export default function Dashboard() {
         )}
 
         {/* ── Quick actions footer ──────────────────────────────────────── */}
-        <div className="grid grid-cols-2 gap-3 pb-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pb-4">
           <Link href="/pacientes/novo">
             <div className="card card-hover p-4 flex items-center gap-3 cursor-pointer group">
               <div className="w-10 h-10 rounded-xl bg-brand-600 flex items-center justify-center flex-shrink-0">
@@ -181,8 +181,30 @@ export default function Dashboard() {
                 <FileText className="w-5 h-5 text-white" />
               </div>
               <div>
-                <p className="font-semibold text-slate-900 text-sm">Ver prontuários</p>
+                <p className="font-semibold text-slate-900 text-sm">Prontuários</p>
                 <p className="text-xs text-slate-400">Lista de pacientes</p>
+              </div>
+            </div>
+          </Link>
+          <Link href="/agenda">
+            <div className="card card-hover p-4 flex items-center gap-3 cursor-pointer group">
+              <div className="w-10 h-10 rounded-xl bg-rose-500 flex items-center justify-center flex-shrink-0">
+                <Calendar className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <p className="font-semibold text-slate-900 text-sm">Agenda</p>
+                <p className="text-xs text-slate-400">Semana atual</p>
+              </div>
+            </div>
+          </Link>
+          <Link href="/financeiro">
+            <div className="card card-hover p-4 flex items-center gap-3 cursor-pointer group">
+              <div className="w-10 h-10 rounded-xl bg-amber-500 flex items-center justify-center flex-shrink-0">
+                <DollarSign className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <p className="font-semibold text-slate-900 text-sm">Financeiro</p>
+                <p className="text-xs text-slate-400">Este mês</p>
               </div>
             </div>
           </Link>

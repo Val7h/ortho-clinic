@@ -26,5 +26,5 @@ def get_db():
 
 
 def init_db():
-    from models import patient, consultation, documents, whatsapp  # noqa
+    from models import patient, consultation, documents, whatsapp, financial, media, anamnesis  # noqa
     Base.metadata.create_all(bind=engine)

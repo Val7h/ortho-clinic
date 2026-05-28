@@ -50,6 +50,9 @@ class Consultation(Base):
     next_appointment_notes = Column(String(500), nullable=True)
     doctor_private_notes = Column(Text, nullable=True)
 
+    # Teleconsulta
+    teleconsult_url = Column(String(200), nullable=True)
+
     # Meta
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
@@ -60,3 +63,5 @@ class Consultation(Base):
     exam_requests = relationship("ExamRequest", back_populates="consultation")
     physio_requests = relationship("PhysioRequest", back_populates="consultation")
     medical_reports = relationship("MedicalReport", back_populates="consultation")
+    financial_records = relationship("FinancialRecord", back_populates="consultation")
+    media = relationship("ConsultationMedia", back_populates="consultation", cascade="all, delete-orphan")

@@ -5,13 +5,14 @@ import {
   User, Phone, Mail, Shield, Stethoscope,
   FileText, FlaskConical, Dumbbell, ClipboardList,
   BookOpen, Plus, Edit, Trash2, ChevronRight,
-  MessageSquare, Send, X, AlertCircle,
+  MessageSquare, Send, X, AlertCircle, ClipboardCheck,
+  Link as LinkIcon, Clock, CheckCircle,
 } from "lucide-react";
 import Link from "next/link";
 import toast from "react-hot-toast";
 import NavBar from "@/components/NavBar";
 import Timeline from "@/components/Timeline";
-import { patientsApi, whatsappApi } from "@/lib/api";
+import { patientsApi, whatsappApi, anamnesisApi } from "@/lib/api";
 import { calcAge, formatDate, formatDate as fd } from "@/lib/utils";
 
 type Tab = "timeline" | "dados" | "documentos";
@@ -37,6 +38,8 @@ export default function PatientPage() {
   const [waPreview, setWaPreview] = useState<string | null>(null);
   const [waSending, setWaSending] = useState(false);
   const [waDemo, setWaDemo] = useState(true);
+  const [anamneses, setAnamneses] = useState<any[]>([]);
+  const [anamnesisLoading, setAnamnesisLoading] = useState(false);
 
   useEffect(() => {
     Promise.all([patientsApi.get(pid), patientsApi.timeline(pid)])
@@ -44,6 +47,7 @@ export default function PatientPage() {
       .catch(() => toast.error("Erro ao carregar paciente"))
       .finally(() => setLoading(false));
     whatsappApi.config().then((c) => setWaDemo(c.demo)).catch(() => {});
+    anamnesisApi.list(pid).then(setAnamneses).catch(() => {});
   }, [pid]);
 
   const handleWaSelect = async (type: string) => {
@@ -70,6 +74,21 @@ export default function PatientPage() {
       toast.error("Erro ao enviar mensagem");
     } finally {
       setWaSending(false);
+    }
+  };
+
+  const handleCreateAnamnesis = async () => {
+    setAnamnesisLoading(true);
+    try {
+      const a = await anamnesisApi.create(pid);
+      setAnamneses((prev) => [a, ...prev]);
+      const link = `${window.location.origin}/anamnese/${a.token}`;
+      await navigator.clipboard.writeText(link);
+      toast.success("Link copiado! Envie ao paciente.");
+    } catch {
+      toast.error("Erro ao gerar link");
+    } finally {
+      setAnamnesisLoading(false);
     }
   };
 
@@ -220,6 +239,67 @@ export default function PatientPage() {
                   </button>
                 </div>
               )}
+            </div>
+          )}
+        </div>
+
+        {/* Anamnese digital */}
+        <div className="card overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-brand-100 flex items-center justify-center">
+                <ClipboardCheck className="w-4 h-4 text-brand-600" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-gray-800">Anamnese digital</p>
+                <p className="text-xs text-gray-400">Paciente preenche antes da consulta</p>
+              </div>
+            </div>
+            <button
+              onClick={handleCreateAnamnesis}
+              disabled={anamnesisLoading}
+              className="btn-primary text-xs py-1.5 px-3 flex items-center gap-1"
+            >
+              {anamnesisLoading ? (
+                <div className="w-3 h-3 border border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <LinkIcon className="w-3 h-3" />
+              )}
+              Gerar link
+            </button>
+          </div>
+
+          {anamneses.length > 0 && (
+            <div className="border-t border-gray-100 divide-y divide-gray-50">
+              {anamneses.slice(0, 3).map((a) => (
+                <div key={a.id} className="flex items-center gap-3 px-4 py-2.5">
+                  {a.status === "filled" ? (
+                    <CheckCircle className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
+                  ) : (
+                    <Clock className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium text-gray-700">
+                      {a.status === "filled" ? "Preenchida" : "Aguardando"}
+                    </p>
+                    <p className="text-[10px] text-gray-400">
+                      {a.expires_at ? `Expira ${new Date(a.expires_at).toLocaleDateString("pt-BR")}` : ""}
+                    </p>
+                  </div>
+                  {a.status === "pending" && (
+                    <button
+                      onClick={async () => {
+                        const link = `${window.location.origin}/anamnese/${a.token}`;
+                        await navigator.clipboard.writeText(link);
+                        toast.success("Link copiado!");
+                      }}
+                      className="text-[10px] text-brand-600 hover:underline font-medium"
+                    >
+                      Copiar link
+                    </button>
+                  )}
+                </div>
+              ))}
             </div>
           )}
         </div>

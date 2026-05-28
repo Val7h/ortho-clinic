@@ -8,6 +8,10 @@ from routers import patients, consultations, dashboard
 from routers.documents import include_all
 from routers.memed import router as memed_router
 from routers.whatsapp import router as whatsapp_router
+from routers.financial import router as financial_router
+from routers.media import router as media_router
+from routers.anamnesis import router as anamnesis_router
+from routers.consultations import agenda_router
 
 app = FastAPI(
     title="OrthoClinic API",
@@ -41,6 +45,10 @@ app.include_router(patients.router)
 app.include_router(consultations.router)
 app.include_router(memed_router)
 app.include_router(whatsapp_router)
+app.include_router(financial_router)
+app.include_router(media_router)
+app.include_router(anamnesis_router)
+app.include_router(agenda_router)
 include_all(app)
 
 

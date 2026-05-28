@@ -27,6 +27,7 @@ class ConsultationBase(BaseModel):
     next_appointment: Optional[date] = None
     next_appointment_notes: Optional[str] = None
     doctor_private_notes: Optional[str] = None
+    teleconsult_url: Optional[str] = None
 
 
 class ConsultationCreate(ConsultationBase):
