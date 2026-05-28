@@ -4,6 +4,7 @@ from database import SessionLocal, init_db
 from models.patient import Patient
 from models.consultation import Consultation
 from models.documents import Prescription, ExamRequest, PhysioRequest, MedicalReport, TreatmentLeaflet
+from models.clinic import Clinic, ClinicSchedule
 
 def seed():
     init_db()
@@ -206,6 +207,97 @@ def seed():
     ]
     db.add_all(leaflets)
     db.commit()
+
+    # ── Clínicas ──────────────────────────────────────────────────────────────
+    CLINICS_DATA = [
+        {
+            "name": "Clínica Artro",
+            "city": "Campina Grande",
+            "state": "PB",
+            "color": "#3B82F6",
+            "slug": "artro",
+            "schedules": [
+                # Quinta 15h–19h — agendamento por horário
+                {"day_of_week": 3, "start_time": "15:00", "end_time": "19:00",
+                 "schedule_type": "appointment", "slot_duration": 12},
+            ],
+        },
+        {
+            "name": "Hospital Intensiva Day",
+            "city": "Caruaru",
+            "state": "PE",
+            "color": "#10B981",
+            "slug": "intensiva-day",
+            "schedules": [
+                # Segunda 17h–21h — agendamento por horário
+                {"day_of_week": 0, "start_time": "17:00", "end_time": "21:00",
+                 "schedule_type": "appointment", "slot_duration": 12},
+            ],
+        },
+        {
+            "name": "CTO",
+            "city": "Campina Grande",
+            "state": "PB",
+            "color": "#F59E0B",
+            "slug": "cto",
+            "schedules": [
+                # Segunda manhã — ordem de chegada
+                {"day_of_week": 0, "start_time": "08:00", "end_time": "12:00",
+                 "schedule_type": "walk_in", "slot_duration": 12},
+                # Quinta manhã — ordem de chegada
+                {"day_of_week": 3, "start_time": "08:00", "end_time": "12:00",
+                 "schedule_type": "walk_in", "slot_duration": 12},
+            ],
+        },
+        {
+            "name": "Clínica Mário Bento",
+            "city": "Palmares",
+            "state": "PE",
+            "color": "#8B5CF6",
+            "slug": "mario-bento",
+            "schedules": [
+                # Terça 10h–15h — ordem de chegada
+                {"day_of_week": 1, "start_time": "10:00", "end_time": "15:00",
+                 "schedule_type": "walk_in", "slot_duration": 12},
+            ],
+        },
+        {
+            "name": "Instituto Pernambuco (IP)",
+            "city": "Caruaru",
+            "state": "PE",
+            "color": "#EF4444",
+            "slug": "ip",
+            "schedules": [
+                # Quarta manhã — ordem de chegada
+                {"day_of_week": 2, "start_time": "09:00", "end_time": "13:00",
+                 "schedule_type": "walk_in", "slot_duration": 12},
+            ],
+        },
+        {
+            "name": "Unimagem",
+            "city": "Caruaru",
+            "state": "PE",
+            "color": "#F97316",
+            "slug": "unimagem",
+            "schedules": [
+                # Quarta tarde — ordem de chegada
+                {"day_of_week": 2, "start_time": "14:00", "end_time": "18:00",
+                 "schedule_type": "walk_in", "slot_duration": 12},
+            ],
+        },
+    ]
+
+    if db.query(Clinic).count() == 0:
+        for c_data in CLINICS_DATA:
+            schedules_data = c_data.pop("schedules")
+            clinic = Clinic(**c_data)
+            db.add(clinic)
+            db.flush()
+            for s in schedules_data:
+                db.add(ClinicSchedule(clinic_id=clinic.id, **s))
+        db.commit()
+        print(f"✓ {len(CLINICS_DATA)} clínicas cadastradas.")
+
     print(f"✓ Banco populado com {len(patients)} pacientes, {3} consultas e {len(leaflets)} folhetos.")
     db.close()
 

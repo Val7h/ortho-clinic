@@ -97,6 +97,26 @@ export const agendaApi = {
     api.get("/agenda", { params: { start, end } }).then((r) => r.data),
 };
 
+// ── Clínicas ──────────────────────────────────────────────────────────────
+export const clinicApi = {
+  list: () => api.get("/clinics").then((r) => r.data),
+  appointments: (clinicId: number, params?: { date_from?: string; date_to?: string; status?: string }) =>
+    api.get(`/clinics/${clinicId}/appointments`, { params }).then((r) => r.data),
+  week: (start?: string, end?: string) =>
+    api.get("/appointments/week", { params: { start, end } }).then((r) => r.data),
+  updateAppointment: (id: number, status: string, notes?: string) =>
+    api.put(`/appointments/${id}`, { status, notes }).then((r) => r.data),
+  deleteAppointment: (id: number) => api.delete(`/appointments/${id}`),
+  blockSlot: (clinicId: number, data: { date: string; start_time: string; reason?: string }) =>
+    api.post(`/clinics/${clinicId}/block`, { ...data, patient_name: "[BLOQUEADO]" }).then((r) => r.data),
+  // Public
+  getPublic: (slug: string) => api.get(`/agendar/${slug}`).then((r) => r.data),
+  slots: (slug: string, date: string) =>
+    api.get(`/agendar/${slug}/slots`, { params: { date_req: date } }).then((r) => r.data),
+  book: (slug: string, data: { date: string; start_time: string; patient_name: string; patient_phone?: string; reason?: string }) =>
+    api.post(`/agendar/${slug}/book`, data).then((r) => r.data),
+};
+
 // ── Financeiro ────────────────────────────────────────────────────────────
 export const financialApi = {
   list: (params?: { month?: number; year?: number; patient_id?: number }) =>

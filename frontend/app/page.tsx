@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import {
   Users, Stethoscope, BookOpen, MessageSquare,
   DollarSign, TrendingUp, Activity,
-  Calendar, FileText,
+  Calendar, FileText, MapPin,
 } from "lucide-react";
 import Link from "next/link";
 import NavBar from "@/components/NavBar";
@@ -122,6 +122,13 @@ export default function Dashboard() {
               label="Agenda"
               description="Semana atual"
               color="bg-gradient-to-br from-rose-500 to-rose-700"
+            />
+            <ModuleCard
+              href="/clinicas"
+              icon={MapPin}
+              label="Clínicas"
+              description="Agendamentos"
+              color="bg-gradient-to-br from-indigo-500 to-indigo-700"
             />
           </div>
         </div>

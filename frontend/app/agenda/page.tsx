@@ -1,44 +1,41 @@
 "use client";
 import { useEffect, useState } from "react";
-import { ChevronLeft, ChevronRight, Video, RotateCcw, Stethoscope, UserPlus, RefreshCw } from "lucide-react";
+import {
+  ChevronLeft, ChevronRight, Video, RotateCcw, Stethoscope,
+  UserPlus, RefreshCw, MapPin, Users, Clock,
+} from "lucide-react";
 import Link from "next/link";
 import NavBar from "@/components/NavBar";
-import { agendaApi } from "@/lib/api";
+import { agendaApi, clinicApi } from "@/lib/api";
 
-const TYPE_LABELS: Record<string, { label: string; color: string; icon: any }> = {
-  primeira_consulta: { label: "1ª Consulta", color: "bg-brand-500 text-white", icon: UserPlus },
-  retorno: { label: "Retorno", color: "bg-accent-500 text-white", icon: RotateCcw },
-  teleconsulta: { label: "Teleconsulta", color: "bg-violet-500 text-white", icon: Video },
-  procedimento: { label: "Procedimento", color: "bg-amber-500 text-white", icon: Stethoscope },
-  urgencia: { label: "Urgência", color: "bg-red-500 text-white", icon: Stethoscope },
-  retorno_agendado: { label: "Retorno agend.", color: "bg-teal-500 text-white", icon: RefreshCw },
+const CONSULT_TYPES: Record<string, { label: string; color: string }> = {
+  primeira_consulta:  { label: "1ª Consulta",   color: "#0F2D5E" },
+  retorno:            { label: "Retorno",        color: "#06B6D4" },
+  teleconsulta:       { label: "Teleconsulta",   color: "#7C3AED" },
+  procedimento:       { label: "Procedimento",   color: "#F59E0B" },
+  urgencia:           { label: "Urgência",       color: "#EF4444" },
+  retorno_agendado:   { label: "Ret. agend.",    color: "#14B8A6" },
 };
 
-const WEEK_DAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
-const MONTHS = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+const WEEK_DAYS = ["Seg","Ter","Qua","Qui","Sex","Sáb","Dom"];
+const MONTHS_PT = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 
 function startOfWeek(d: Date) {
   const day = d.getDay();
-  const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Monday start
+  const diff = d.getDate() - (day === 0 ? 6 : day - 1);
   return new Date(d.getFullYear(), d.getMonth(), diff);
 }
-
-function toISO(d: Date) {
-  return d.toISOString().slice(0, 10);
-}
-
-function fmt(iso: string) {
-  const d = new Date(iso);
-  return d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-}
-
-function fmtDate(d: Date) {
-  return `${d.getDate().toString().padStart(2, "0")}/${(d.getMonth()+1).toString().padStart(2, "0")}`;
+function toISO(d: Date) { return d.toISOString().slice(0, 10); }
+function fmtDate(d: Date) { return `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}`; }
+function fmtTime(iso: string) {
+  try { return new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }); }
+  catch { return ""; }
 }
 
 export default function AgendaPage() {
   const [weekStart, setWeekStart] = useState<Date>(startOfWeek(new Date()));
-  const [events, setEvents] = useState<any[]>([]);
+  const [consultations, setConsultations] = useState<any[]>([]);
+  const [clinicEvents, setClinicEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
   const days = Array.from({ length: 7 }, (_, i) => {
@@ -51,52 +48,58 @@ export default function AgendaPage() {
     setLoading(true);
     const start = toISO(days[0]);
     const end = toISO(days[6]);
-    agendaApi.get(start, end)
-      .then(setEvents)
-      .catch(() => setEvents([]))
+    Promise.all([
+      agendaApi.get(start, end),
+      clinicApi.week(start, end),
+    ])
+      .then(([consults, clinic]) => {
+        setConsultations(consults);
+        setClinicEvents(clinic);
+      })
+      .catch(() => {})
       .finally(() => setLoading(false));
   }, [weekStart]);
 
-  const byDay: Record<string, any[]> = {};
-  for (const d of days) byDay[toISO(d)] = [];
-  for (const e of events) {
+  const today = toISO(new Date());
+
+  // Group by day
+  const byDay: Record<string, { consultations: any[]; blocks: any[]; appointments: any[] }> = {};
+  for (const d of days) {
+    byDay[toISO(d)] = { consultations: [], blocks: [], appointments: [] };
+  }
+  for (const c of consultations) {
+    const key = c.date?.slice(0, 10);
+    if (key && byDay[key]) byDay[key].consultations.push(c);
+  }
+  for (const e of clinicEvents) {
     const key = e.date?.slice(0, 10);
-    if (key && byDay[key]) byDay[key].push(e);
+    if (!key || !byDay[key]) continue;
+    if (e.source === "walk_in_block") byDay[key].blocks.push(e);
+    else if (e.source === "appointment") byDay[key].appointments.push(e);
   }
 
-  const prevWeek = () => {
-    const d = new Date(weekStart);
-    d.setDate(d.getDate() - 7);
-    setWeekStart(d);
-  };
-
-  const nextWeek = () => {
-    const d = new Date(weekStart);
-    d.setDate(d.getDate() + 7);
-    setWeekStart(d);
-  };
-
-  const today = toISO(new Date());
-  const totalEvents = events.length;
+  const totalConsults = consultations.length;
+  const totalAppts = clinicEvents.filter((e) => e.source === "appointment").length;
 
   return (
     <div className="min-h-screen bg-slate-100">
       <NavBar
         title="Agenda"
-        subtitle={`Semana de ${fmtDate(days[0])} a ${fmtDate(days[6])}`}
+        subtitle={`${fmtDate(days[0])} – ${fmtDate(days[6])}`}
         back="/"
         actions={
           <div className="flex items-center gap-1">
-            <button onClick={prevWeek} className="p-1.5 rounded-lg hover:bg-white/20 transition-colors text-white">
+            <button onClick={() => { const d=new Date(weekStart); d.setDate(d.getDate()-7); setWeekStart(d); }}
+              className="p-1.5 rounded-lg hover:bg-white/20 text-white">
               <ChevronLeft className="w-4 h-4" />
             </button>
             <button
               onClick={() => setWeekStart(startOfWeek(new Date()))}
-              className="text-xs px-2.5 py-1 bg-white/20 rounded-lg hover:bg-white/30 transition-colors text-white font-medium"
-            >
+              className="text-xs px-2.5 py-1 bg-white/20 rounded-lg hover:bg-white/30 text-white font-medium">
               Hoje
             </button>
-            <button onClick={nextWeek} className="p-1.5 rounded-lg hover:bg-white/20 transition-colors text-white">
+            <button onClick={() => { const d=new Date(weekStart); d.setDate(d.getDate()+7); setWeekStart(d); }}
+              className="p-1.5 rounded-lg hover:bg-white/20 text-white">
               <ChevronRight className="w-4 h-4" />
             </button>
           </div>
@@ -105,63 +108,93 @@ export default function AgendaPage() {
 
       <main className="max-w-5xl mx-auto px-4 py-5 space-y-4">
 
-        {/* Header month */}
         <div className="flex items-center justify-between">
           <h2 className="text-base font-bold text-slate-700">
-            {MONTHS[days[3].getMonth()]} {days[3].getFullYear()}
+            {MONTHS_PT[days[3].getMonth()]} {days[3].getFullYear()}
           </h2>
-          <span className="text-sm text-slate-500">
-            {loading ? "Carregando..." : `${totalEvents} evento${totalEvents !== 1 ? "s" : ""}`}
+          <span className="text-sm text-slate-400">
+            {loading ? "Carregando..." : `${totalConsults} consulta${totalConsults !== 1 ? "s" : ""} · ${totalAppts} agendamento${totalAppts !== 1 ? "s" : ""}`}
           </span>
         </div>
 
-        {/* Week grid */}
+        {/* Week columns */}
         <div className="grid grid-cols-7 gap-1.5">
-          {days.map((day, i) => {
+          {days.map((day) => {
             const key = toISO(day);
             const isToday = key === today;
-            const dayEvents = byDay[key] || [];
+            const { consultations: cons, blocks, appointments: appts } = byDay[key];
+            const hasContent = cons.length > 0 || blocks.length > 0 || appts.length > 0;
+
             return (
-              <div key={key} className={`rounded-xl overflow-hidden border transition-all ${
-                isToday ? "border-brand-400 shadow-md" : "border-gray-200"
-              }`}>
+              <div key={key} className={`rounded-xl overflow-hidden border ${isToday ? "border-brand-400 shadow-md" : "border-gray-200"}`}>
                 {/* Day header */}
-                <div className={`px-2 py-2 text-center ${isToday ? "bg-brand-600" : "bg-white"}`}>
+                <div className={`px-1 py-2 text-center ${isToday ? "bg-brand-600" : "bg-white"}`}>
                   <p className={`text-[10px] font-bold uppercase tracking-wide ${isToday ? "text-blue-200" : "text-slate-400"}`}>
-                    {WEEK_DAYS[day.getDay()]}
+                    {WEEK_DAYS[day.getDay() === 0 ? 6 : day.getDay()-1]}
                   </p>
                   <p className={`text-lg font-extrabold leading-none mt-0.5 ${isToday ? "text-white" : "text-slate-700"}`}>
                     {day.getDate()}
                   </p>
                 </div>
 
-                {/* Events */}
-                <div className="bg-slate-50 min-h-[80px] p-1 space-y-1">
-                  {dayEvents.length === 0 && (
-                    <div className="h-full flex items-center justify-center py-4">
+                {/* Content */}
+                <div className="bg-slate-50 min-h-[90px] p-1 space-y-1">
+                  {!hasContent && (
+                    <div className="flex items-center justify-center py-5">
                       <p className="text-[10px] text-slate-300">—</p>
                     </div>
                   )}
-                  {dayEvents.map((ev) => {
-                    const type = TYPE_LABELS[ev.type] || { label: ev.type, color: "bg-gray-400 text-white", icon: Stethoscope };
-                    const Icon = type.icon;
+
+                  {/* Walk-in clinic blocks */}
+                  {blocks.map((b, i) => (
+                    <Link key={i} href="/clinicas">
+                      <div
+                        className="rounded-lg px-1.5 py-1.5 cursor-pointer hover:opacity-90 transition-opacity"
+                        style={{ backgroundColor: b.clinic_color + "22", borderLeft: `3px solid ${b.clinic_color}` }}
+                      >
+                        <p className="text-[9px] font-bold truncate" style={{ color: b.clinic_color }}>
+                          {b.clinic_name}
+                        </p>
+                        <p className="text-[9px] text-slate-500 truncate">{b.start_time}–{b.end_time}</p>
+                        <p className="text-[8px] text-slate-400">chegada</p>
+                      </div>
+                    </Link>
+                  ))}
+
+                  {/* Booked appointments */}
+                  {appts.map((a: any, i: number) => (
+                    <Link key={i} href="/clinicas">
+                      <div
+                        className="rounded-lg px-1.5 py-1.5 cursor-pointer hover:opacity-90 transition-opacity text-white"
+                        style={{ backgroundColor: a.clinic_color || "#0F2D5E" }}
+                      >
+                        <p className="text-[9px] font-bold truncate">{a.patient_name}</p>
+                        <p className="text-[9px] opacity-80">{a.start_time}</p>
+                      </div>
+                    </Link>
+                  ))}
+
+                  {/* Prontuário consultations */}
+                  {cons.map((c: any) => {
+                    const type = CONSULT_TYPES[c.type] || { label: c.type, color: "#888" };
                     return (
-                      <Link key={`${ev.id}-${ev.type}`} href={`/pacientes/${ev.patient_id}`}>
-                        <div className={`rounded-lg px-1.5 py-1 ${type.color} cursor-pointer hover:opacity-90 transition-opacity`}>
-                          <p className="text-[10px] font-bold truncate">{ev.patient_name}</p>
+                      <Link key={c.id} href={`/pacientes/${c.patient_id}`}>
+                        <div
+                          className="rounded-lg px-1.5 py-1 cursor-pointer hover:opacity-90 transition-opacity text-white"
+                          style={{ backgroundColor: type.color }}
+                        >
+                          <p className="text-[10px] font-bold truncate">{c.patient_name}</p>
                           <div className="flex items-center gap-0.5 mt-0.5">
-                            <Icon className="w-2.5 h-2.5 opacity-80 flex-shrink-0" />
-                            <p className="text-[9px] opacity-90 truncate">{fmt(ev.date)}</p>
+                            {c.type === "teleconsulta" && <Video className="w-2.5 h-2.5 opacity-80 flex-shrink-0" />}
+                            <p className="text-[9px] opacity-90 truncate">{fmtTime(c.date)}</p>
                           </div>
-                          {ev.teleconsult_url && (
+                          {c.teleconsult_url && (
                             <a
-                              href={ev.teleconsult_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
+                              href={c.teleconsult_url} target="_blank" rel="noopener noreferrer"
                               onClick={(e) => e.stopPropagation()}
                               className="text-[9px] underline opacity-90 block truncate"
                             >
-                              Entrar na chamada
+                              Entrar →
                             </a>
                           )}
                         </div>
@@ -176,50 +209,76 @@ export default function AgendaPage() {
 
         {/* Legend */}
         <div className="card p-4">
-          <p className="text-xs font-semibold text-slate-500 mb-3 uppercase tracking-wide">Legenda</p>
+          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Legenda</p>
           <div className="flex flex-wrap gap-2">
-            {Object.entries(TYPE_LABELS).map(([key, val]) => (
-              <span key={key} className={`text-xs px-2.5 py-1 rounded-lg font-medium ${val.color}`}>
-                {val.label}
+            {Object.entries(CONSULT_TYPES).map(([k, v]) => (
+              <span key={k} className="text-xs px-2.5 py-1 rounded-lg font-medium text-white" style={{ backgroundColor: v.color }}>
+                {v.label}
               </span>
             ))}
+            <span className="text-xs px-2.5 py-1 rounded-lg font-medium bg-slate-200 text-slate-600">
+              Clínica — chegada
+            </span>
           </div>
         </div>
 
-        {/* List view for mobile / detail */}
-        {totalEvents > 0 && (
+        {/* Detail list */}
+        {(totalConsults > 0 || totalAppts > 0) && (
           <div>
-            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3">
-              Detalhes da semana
-            </p>
+            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3">Detalhes</p>
             <div className="card overflow-hidden divide-y divide-slate-100">
-              {events.map((ev) => {
-                const type = TYPE_LABELS[ev.type] || { label: ev.type, color: "bg-gray-400 text-white", icon: Stethoscope };
-                const Icon = type.icon;
+
+              {/* Clinic appointments */}
+              {clinicEvents.filter(e => e.source === "appointment").map((a: any, i: number) => (
+                <Link key={`appt-${i}`} href="/clinicas">
+                  <div className="flex items-center gap-4 px-5 py-3.5 hover:bg-slate-50 transition-colors cursor-pointer">
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-white text-xs font-bold"
+                      style={{ backgroundColor: a.clinic_color }}>
+                      {a.clinic_name?.slice(0, 2).toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-slate-800 truncate">{a.patient_name}</p>
+                      <p className="text-xs text-slate-400">{a.clinic_name} · {a.start_time}–{a.end_time}</p>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <p className="text-xs font-medium text-slate-600">
+                        {WEEK_DAYS[new Date(a.date + "T12:00:00").getDay() === 0 ? 6 : new Date(a.date + "T12:00:00").getDay()-1]}, {fmtDate(new Date(a.date + "T12:00:00"))}
+                      </p>
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                        a.status === "confirmed" ? "bg-emerald-100 text-emerald-700" :
+                        a.status === "pending" ? "bg-amber-100 text-amber-700" : "bg-gray-100 text-gray-600"
+                      }`}>
+                        {a.status === "confirmed" ? "Confirmado" : a.status === "pending" ? "Pendente" : a.status}
+                      </span>
+                    </div>
+                  </div>
+                </Link>
+              ))}
+
+              {/* Prontuário consultations */}
+              {consultations.map((c: any) => {
+                const type = CONSULT_TYPES[c.type] || { label: c.type, color: "#888" };
                 return (
-                  <Link key={`list-${ev.id}-${ev.type}`} href={`/pacientes/${ev.patient_id}`}>
+                  <Link key={`c-${c.id}`} href={`/pacientes/${c.patient_id}`}>
                     <div className="flex items-center gap-4 px-5 py-3.5 hover:bg-slate-50 transition-colors cursor-pointer">
-                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${type.color}`}>
-                        <Icon className="w-4 h-4" />
+                      <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-white"
+                        style={{ backgroundColor: type.color }}>
+                        <Stethoscope className="w-4 h-4" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-slate-800 truncate">{ev.patient_name}</p>
-                        <p className="text-xs text-slate-400">{type.label}{ev.diagnosis ? ` · ${ev.diagnosis}` : ""}</p>
+                        <p className="text-sm font-semibold text-slate-800 truncate">{c.patient_name}</p>
+                        <p className="text-xs text-slate-400">{type.label}{c.diagnosis ? ` · ${c.diagnosis}` : ""}</p>
                       </div>
                       <div className="text-right flex-shrink-0">
-                        <p className="text-xs font-medium text-slate-700">
-                          {WEEK_DAYS[new Date(ev.date).getDay()]}, {fmtDate(new Date(ev.date))}
+                        <p className="text-xs font-medium text-slate-600">
+                          {WEEK_DAYS[new Date(c.date).getDay() === 0 ? 6 : new Date(c.date).getDay()-1]}
                         </p>
-                        <p className="text-xs text-slate-400">{fmt(ev.date)}</p>
+                        <p className="text-xs text-slate-400">{fmtTime(c.date)}</p>
                       </div>
-                      {ev.teleconsult_url && (
-                        <a
-                          href={ev.teleconsult_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
+                      {c.teleconsult_url && (
+                        <a href={c.teleconsult_url} target="_blank" rel="noopener noreferrer"
                           onClick={(e) => e.stopPropagation()}
-                          className="flex-shrink-0 p-1.5 bg-violet-100 text-violet-700 rounded-lg hover:bg-violet-200 transition-colors"
-                        >
+                          className="flex-shrink-0 p-1.5 bg-violet-100 text-violet-700 rounded-lg hover:bg-violet-200 transition-colors">
                           <Video className="w-3.5 h-3.5" />
                         </a>
                       )}
@@ -231,13 +290,10 @@ export default function AgendaPage() {
           </div>
         )}
 
-        {totalEvents === 0 && !loading && (
+        {totalConsults === 0 && totalAppts === 0 && !loading && (
           <div className="card p-12 text-center">
-            <div className="w-14 h-14 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <Stethoscope className="w-7 h-7 text-slate-300" />
-            </div>
+            <Stethoscope className="w-10 h-10 text-slate-200 mx-auto mb-3" />
             <p className="text-slate-500 font-medium">Nenhuma consulta esta semana</p>
-            <p className="text-xs text-slate-400 mt-1">Navegue para outras semanas ou agende uma consulta</p>
           </div>
         )}
 

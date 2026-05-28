@@ -12,6 +12,7 @@ from routers.financial import router as financial_router
 from routers.media import router as media_router
 from routers.anamnesis import router as anamnesis_router
 from routers.consultations import agenda_router
+from routers.clinic import router as clinic_router, public_router as clinic_public_router
 
 app = FastAPI(
     title="OrthoClinic API",
@@ -49,6 +50,8 @@ app.include_router(financial_router)
 app.include_router(media_router)
 app.include_router(anamnesis_router)
 app.include_router(agenda_router)
+app.include_router(clinic_router)
+app.include_router(clinic_public_router)
 include_all(app)
 
 
