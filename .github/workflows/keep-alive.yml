@@ -1,0 +1,19 @@
+name: Keep Alive — OrthoClinic
+
+on:
+  schedule:
+    - cron: '*/14 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping OrthoClinic Backend
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://ortho-backend.onrender.com)
+          echo "ortho-backend: $STATUS"
+      - name: Ping OrthoClinic Frontend
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://ortho-frontend.onrender.com)
+          echo "ortho-frontend: $STATUS"
