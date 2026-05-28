@@ -79,7 +79,7 @@ export default function Dashboard() {
               color="bg-purple-600"
             />
             <ModuleCard
-              href="#"
+              href="/whatsapp"
               icon={MessageSquare}
               label="WhatsApp"
               description="Mensagens e lembretes"

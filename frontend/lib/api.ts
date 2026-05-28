@@ -90,3 +90,25 @@ export const leafletsApi = {
 export const dashboardApi = {
   get: () => api.get("/dashboard").then((r) => r.data),
 };
+
+// ── WhatsApp ──────────────────────────────────────────────────────────────
+export const whatsappApi = {
+  config: () => api.get("/whatsapp/config").then((r) => r.data),
+  dashboard: () => api.get("/whatsapp/dashboard").then((r) => r.data),
+  send: (data: {
+    patient_id: number;
+    message_type: string;
+    custom_text?: string;
+    appointment_date?: string;
+    consultation_date?: string;
+  }) => api.post("/whatsapp/send", data).then((r) => r.data),
+  messages: () => api.get("/whatsapp/messages").then((r) => r.data),
+  patientMessages: (patientId: number) =>
+    api.get(`/whatsapp/patients/${patientId}/messages`).then((r) => r.data),
+  preview: (params: {
+    patient_id: number;
+    message_type: string;
+    appointment_date?: string;
+    consultation_date?: string;
+  }) => api.get("/whatsapp/preview", { params }).then((r) => r.data),
+};

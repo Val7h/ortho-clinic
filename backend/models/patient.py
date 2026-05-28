@@ -61,3 +61,4 @@ class Patient(Base):
     physio_requests = relationship("PhysioRequest", back_populates="patient", cascade="all, delete-orphan")
     medical_reports = relationship("MedicalReport", back_populates="patient", cascade="all, delete-orphan")
     documents = relationship("Document", back_populates="patient", cascade="all, delete-orphan")
+    whatsapp_messages = relationship("WhatsAppMessage", back_populates="patient", cascade="all, delete-orphan")

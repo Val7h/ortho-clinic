@@ -7,6 +7,7 @@ from database import init_db
 from routers import patients, consultations, dashboard
 from routers.documents import include_all
 from routers.memed import router as memed_router
+from routers.whatsapp import router as whatsapp_router
 
 app = FastAPI(
     title="OrthoClinic API",
@@ -39,6 +40,7 @@ app.include_router(dashboard.router)
 app.include_router(patients.router)
 app.include_router(consultations.router)
 app.include_router(memed_router)
+app.include_router(whatsapp_router)
 include_all(app)
 
 

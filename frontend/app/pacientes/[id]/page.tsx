@@ -5,15 +5,23 @@ import {
   User, Phone, Mail, Shield, Stethoscope,
   FileText, FlaskConical, Dumbbell, ClipboardList,
   BookOpen, Plus, Edit, Trash2, ChevronRight,
+  MessageSquare, Send, X, AlertCircle,
 } from "lucide-react";
 import Link from "next/link";
 import toast from "react-hot-toast";
 import NavBar from "@/components/NavBar";
 import Timeline from "@/components/Timeline";
-import { patientsApi } from "@/lib/api";
+import { patientsApi, whatsappApi } from "@/lib/api";
 import { calcAge, formatDate, formatDate as fd } from "@/lib/utils";
 
 type Tab = "timeline" | "dados" | "documentos";
+
+const WA_TYPES = [
+  { key: "post_consultation", label: "Pós-consulta" },
+  { key: "return_reminder", label: "Lembrete retorno" },
+  { key: "semestral", label: "Acompanhamento" },
+  { key: "birthday", label: "Aniversário" },
+] as const;
 
 export default function PatientPage() {
   const { id } = useParams<{ id: string }>();
@@ -24,13 +32,46 @@ export default function PatientPage() {
   const [timeline, setTimeline] = useState<any[]>([]);
   const [tab, setTab] = useState<Tab>("timeline");
   const [loading, setLoading] = useState(true);
+  const [waOpen, setWaOpen] = useState(false);
+  const [waType, setWaType] = useState<string | null>(null);
+  const [waPreview, setWaPreview] = useState<string | null>(null);
+  const [waSending, setWaSending] = useState(false);
+  const [waDemo, setWaDemo] = useState(true);
 
   useEffect(() => {
     Promise.all([patientsApi.get(pid), patientsApi.timeline(pid)])
       .then(([p, t]) => { setPatient(p); setTimeline(t); })
       .catch(() => toast.error("Erro ao carregar paciente"))
       .finally(() => setLoading(false));
+    whatsappApi.config().then((c) => setWaDemo(c.demo)).catch(() => {});
   }, [pid]);
+
+  const handleWaSelect = async (type: string) => {
+    setWaType(type);
+    setWaPreview(null);
+    try {
+      const r = await whatsappApi.preview({ patient_id: pid, message_type: type });
+      setWaPreview(r.text);
+    } catch {
+      setWaPreview("Erro ao carregar prévia");
+    }
+  };
+
+  const handleWaSend = async () => {
+    if (!waType) return;
+    setWaSending(true);
+    try {
+      await whatsappApi.send({ patient_id: pid, message_type: waType });
+      toast.success(waDemo ? "Mensagem simulada (demo)" : "Mensagem enviada!");
+      setWaOpen(false);
+      setWaType(null);
+      setWaPreview(null);
+    } catch {
+      toast.error("Erro ao enviar mensagem");
+    } finally {
+      setWaSending(false);
+    }
+  };
 
   const handleDelete = async () => {
     if (!confirm(`Desativar o cadastro de ${patient?.name}?`)) return;
@@ -106,6 +147,81 @@ export default function PatientPage() {
               </div>
             </Link>
           ))}
+        </div>
+
+        {/* WhatsApp quick-send */}
+        <div className="card overflow-hidden">
+          <button
+            onClick={() => { setWaOpen((v) => !v); setWaType(null); setWaPreview(null); }}
+            className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors"
+          >
+            <div className="w-8 h-8 rounded-lg bg-green-500 flex items-center justify-center">
+              <MessageSquare className="w-4 h-4 text-white" />
+            </div>
+            <span className="flex-1 text-left text-sm font-medium text-gray-700">
+              Enviar mensagem via WhatsApp
+            </span>
+            {waOpen ? <X className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
+          </button>
+
+          {waOpen && (
+            <div className="border-t border-gray-100 px-4 py-4 space-y-3">
+              <div className="grid grid-cols-2 gap-2">
+                {WA_TYPES.map(({ key, label }) => (
+                  <button
+                    key={key}
+                    onClick={() => handleWaSelect(key)}
+                    className={`text-sm py-2 px-3 rounded-lg border transition-colors text-left ${
+                      waType === key
+                        ? "border-green-500 bg-green-50 text-green-800 font-medium"
+                        : "border-gray-200 text-gray-700 hover:border-green-300"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              {waType && (
+                <div className="space-y-2">
+                  <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
+                    <p className="text-xs font-semibold text-gray-500 mb-1">Prévia:</p>
+                    {waPreview ? (
+                      <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">{waPreview}</p>
+                    ) : (
+                      <p className="text-xs text-gray-400">Carregando...</p>
+                    )}
+                  </div>
+
+                  {!patient?.phone && (
+                    <p className="text-xs text-amber-600 flex items-center gap-1.5">
+                      <AlertCircle className="w-3.5 h-3.5" />
+                      Telefone não cadastrado neste paciente
+                    </p>
+                  )}
+
+                  {waDemo && (
+                    <p className="text-xs text-amber-600 flex items-center gap-1.5">
+                      <AlertCircle className="w-3.5 h-3.5" />
+                      Modo demo — não será enviado de verdade
+                    </p>
+                  )}
+
+                  <button
+                    onClick={handleWaSend}
+                    disabled={waSending || !waPreview}
+                    className="btn-primary w-full flex items-center justify-center gap-2 text-sm py-2"
+                  >
+                    {waSending ? (
+                      <><div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> Enviando...</>
+                    ) : (
+                      <><Send className="w-3.5 h-3.5" /> {waDemo ? "Simular envio" : "Enviar agora"}</>
+                    )}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Tabs */}
