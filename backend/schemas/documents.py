@@ -21,7 +21,7 @@ class PrescriptionBase(BaseModel):
 
 
 class PrescriptionCreate(PrescriptionBase):
-    pass
+    memed_id: Optional[str] = None
 
 
 class PrescriptionOut(PrescriptionBase):

@@ -6,6 +6,7 @@ import os
 from database import init_db
 from routers import patients, consultations, dashboard
 from routers.documents import include_all
+from routers.memed import router as memed_router
 
 app = FastAPI(
     title="OrthoClinic API",
@@ -37,6 +38,7 @@ app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 app.include_router(dashboard.router)
 app.include_router(patients.router)
 app.include_router(consultations.router)
+app.include_router(memed_router)
 include_all(app)
 
 
