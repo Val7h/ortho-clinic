@@ -13,13 +13,14 @@ from schemas.documents import (
     MedicalReportCreate, MedicalReportOut,
     TreatmentLeafletCreate, TreatmentLeafletOut,
 )
+from deps import require_doctor, get_current_user
 
 router = APIRouter(tags=["documents"])
 
 
 # ── RECEITAS ──────────────────────────────────────────────────────────────────
 
-presc_router = APIRouter(prefix="/patients/{patient_id}/prescriptions")
+presc_router = APIRouter(prefix="/patients/{patient_id}/prescriptions", dependencies=[Depends(require_doctor)])
 
 @presc_router.get("", response_model=List[PrescriptionOut])
 def list_prescriptions(patient_id: int, db: Session = Depends(get_db)):
@@ -54,7 +55,7 @@ def delete_prescription(patient_id: int, doc_id: int, db: Session = Depends(get_
 
 # ── SOLICITAÇÕES DE EXAME ─────────────────────────────────────────────────────
 
-exam_router = APIRouter(prefix="/patients/{patient_id}/exams")
+exam_router = APIRouter(prefix="/patients/{patient_id}/exams", dependencies=[Depends(require_doctor)])
 
 @exam_router.get("", response_model=List[ExamRequestOut])
 def list_exams(patient_id: int, db: Session = Depends(get_db)):
@@ -89,7 +90,7 @@ def delete_exam(patient_id: int, doc_id: int, db: Session = Depends(get_db)):
 
 # ── FISIOTERAPIA ──────────────────────────────────────────────────────────────
 
-physio_router = APIRouter(prefix="/patients/{patient_id}/physio")
+physio_router = APIRouter(prefix="/patients/{patient_id}/physio", dependencies=[Depends(require_doctor)])
 
 @physio_router.get("", response_model=List[PhysioRequestOut])
 def list_physio(patient_id: int, db: Session = Depends(get_db)):
@@ -124,7 +125,7 @@ def delete_physio(patient_id: int, doc_id: int, db: Session = Depends(get_db)):
 
 # ── LAUDOS ────────────────────────────────────────────────────────────────────
 
-report_router = APIRouter(prefix="/patients/{patient_id}/reports")
+report_router = APIRouter(prefix="/patients/{patient_id}/reports", dependencies=[Depends(require_doctor)])
 
 @report_router.get("", response_model=List[MedicalReportOut])
 def list_reports(patient_id: int, db: Session = Depends(get_db)):
@@ -159,7 +160,7 @@ def delete_report(patient_id: int, doc_id: int, db: Session = Depends(get_db)):
 
 # ── FOLHETOS INFORMATIVOS ─────────────────────────────────────────────────────
 
-leaflet_router = APIRouter(prefix="/leaflets")
+leaflet_router = APIRouter(prefix="/leaflets", dependencies=[Depends(get_current_user)])
 
 @leaflet_router.get("", response_model=List[TreatmentLeafletOut])
 def list_leaflets(db: Session = Depends(get_db)):

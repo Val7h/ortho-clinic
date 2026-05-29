@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 import os
@@ -26,5 +26,35 @@ def get_db():
 
 
 def init_db():
-    from models import patient, consultation, documents, whatsapp, financial, media, anamnesis, clinic  # noqa
+    from models import patient, consultation, documents, whatsapp, financial, media, anamnesis, clinic, organization  # noqa
     Base.metadata.create_all(bind=engine)
+
+
+def migrate_db():
+    """Adiciona colunas para multi-tenant sem quebrar dados existentes."""
+    inspector = inspect(engine)
+    existing_tables = inspector.get_table_names()
+
+    # Mapeamento: tabela → coluna a adicionar
+    migrations = []
+
+    if "patients" in existing_tables:
+        cols = [c["name"] for c in inspector.get_columns("patients")]
+        if "organization_id" not in cols:
+            migrations.append("ALTER TABLE patients ADD COLUMN organization_id INTEGER DEFAULT 1")
+
+    if "clinics" in existing_tables:
+        cols = [c["name"] for c in inspector.get_columns("clinics")]
+        if "organization_id" not in cols:
+            migrations.append("ALTER TABLE clinics ADD COLUMN organization_id INTEGER DEFAULT 1")
+
+    if not migrations:
+        return
+
+    with engine.begin() as conn:
+        for sql in migrations:
+            try:
+                conn.execute(text(sql))
+                print(f"✓ Migração: {sql}")
+            except Exception as e:
+                print(f"! Migração ignorada ({sql}): {e}")

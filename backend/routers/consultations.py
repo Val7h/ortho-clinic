@@ -7,8 +7,9 @@ from database import get_db
 from models.patient import Patient
 from models.consultation import Consultation
 from schemas.consultation import ConsultationCreate, ConsultationUpdate, ConsultationOut
+from deps import require_doctor, get_current_user
 
-router = APIRouter(prefix="/patients/{patient_id}/consultations", tags=["consultations"])
+router = APIRouter(prefix="/patients/{patient_id}/consultations", tags=["consultations"], dependencies=[Depends(require_doctor)])
 
 
 @router.get("", response_model=List[ConsultationOut])
@@ -42,7 +43,7 @@ def create_consultation(patient_id: int, data: ConsultationCreate, db: Session =
 
 
 # ── Agenda ────────────────────────────────────────────────────────────────────
-agenda_router = APIRouter(prefix="/agenda", tags=["Agenda"])
+agenda_router = APIRouter(prefix="/agenda", tags=["Agenda"], dependencies=[Depends(get_current_user)])
 
 @agenda_router.get("")
 def get_agenda(

@@ -5,8 +5,9 @@ from datetime import date, timedelta
 from database import get_db
 from models.patient import Patient
 from models.consultation import Consultation
+from deps import get_current_user
 
-router = APIRouter(prefix="/dashboard", tags=["dashboard"])
+router = APIRouter(prefix="/dashboard", tags=["dashboard"], dependencies=[Depends(get_current_user)])
 
 
 @router.get("")

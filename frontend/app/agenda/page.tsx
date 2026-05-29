@@ -7,6 +7,7 @@ import {
 import Link from "next/link";
 import NavBar from "@/components/NavBar";
 import { agendaApi, clinicApi } from "@/lib/api";
+import { useProtectedPage } from "@/components/AuthProvider";
 
 const CONSULT_TYPES: Record<string, { label: string; color: string }> = {
   primeira_consulta:  { label: "1ª Consulta",   color: "#0F2D5E" },
@@ -33,6 +34,7 @@ function fmtTime(iso: string) {
 }
 
 export default function AgendaPage() {
+  const { user } = useProtectedPage();
   const [weekStart, setWeekStart] = useState<Date>(startOfWeek(new Date()));
   const [consultations, setConsultations] = useState<any[]>([]);
   const [clinicEvents, setClinicEvents] = useState<any[]>([]);

@@ -10,8 +10,9 @@ from models.patient import Patient
 from models.consultation import Consultation
 from models.whatsapp import WhatsAppMessage
 from schemas.whatsapp import WhatsAppMessageOut, SendMessageIn
+from deps import get_current_user
 
-router = APIRouter(prefix="/whatsapp", tags=["WhatsApp"])
+router = APIRouter(prefix="/whatsapp", tags=["WhatsApp"], dependencies=[Depends(get_current_user)])
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 

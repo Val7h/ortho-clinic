@@ -7,6 +7,24 @@ export const api = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
+// ── Auth ──────────────────────────────────────────────────────────────────────
+export const authApi = {
+  login: (email: string, password: string) =>
+    api.post("/auth/login", { email, password }).then((r) => r.data),
+  me: () => api.get("/auth/me").then((r) => r.data),
+  changePassword: (current_password: string, new_password: string) =>
+    api.post("/auth/change-password", { current_password, new_password }),
+  // User management
+  listUsers: () => api.get("/auth/users").then((r) => r.data),
+  createUser: (data: any) => api.post("/auth/users", data).then((r) => r.data),
+  updateUser: (id: number, data: any) => api.put(`/auth/users/${id}`, data).then((r) => r.data),
+  deleteUser: (id: number) => api.delete(`/auth/users/${id}`),
+  // Org management (superadmin)
+  listOrgs: () => api.get("/auth/organizations").then((r) => r.data),
+  createOrg: (data: any) => api.post("/auth/organizations", data).then((r) => r.data),
+  updateOrg: (id: number, data: any) => api.put(`/auth/organizations/${id}`, data).then((r) => r.data),
+};
+
 // ── Pacientes ──────────────────────────────────────────────────────────────
 export const patientsApi = {
   list: (search?: string) =>

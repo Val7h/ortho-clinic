@@ -1,6 +1,8 @@
 "use client";
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, LogOut, Users, ChevronDown, User } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useState, useRef, useEffect } from "react";
+import { useAuth } from "@/components/AuthProvider";
 
 interface NavBarProps {
   title: string;
@@ -9,12 +11,85 @@ interface NavBarProps {
   actions?: React.ReactNode;
 }
 
-// OrthoClinic bone/joint icon (inline SVG for crisp rendering)
 function OrthoIcon() {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M18 6a3 3 0 0 0-3-3 3 3 0 0 0-2.1 5.1L6.1 14.9A3 3 0 0 0 3 17a3 3 0 0 0 3 3 3 3 0 0 0 2.1-5.1l6.8-6.8A3 3 0 0 0 18 6z"/>
     </svg>
+  );
+}
+
+const ROLE_LABEL: Record<string, string> = {
+  superadmin: "Super Admin",
+  admin: "Admin",
+  doctor: "Médico",
+  secretary: "Secretária",
+};
+
+function UserMenu() {
+  const { user, logout, isAdmin } = useAuth();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const router = useRouter();
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  if (!user) return null;
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/15 hover:bg-white/25 transition-colors border border-white/20"
+      >
+        <div className="w-6 h-6 rounded-full bg-white/25 flex items-center justify-center">
+          <User className="w-3.5 h-3.5 text-white" />
+        </div>
+        <span className="hidden sm:block text-xs font-semibold text-white max-w-[100px] truncate">
+          {user.name.split(" ")[0]}
+        </span>
+        <ChevronDown className={`w-3 h-3 text-white/70 transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-xl shadow-xl border border-slate-100 overflow-hidden z-50">
+          {/* User info */}
+          <div className="px-4 py-3 bg-slate-50 border-b border-slate-100">
+            <p className="text-sm font-bold text-slate-800 truncate">{user.name}</p>
+            <p className="text-xs text-slate-500 truncate">{user.email}</p>
+            <span className="inline-block mt-1 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wide bg-brand-50 text-brand-700">
+              {ROLE_LABEL[user.role] || user.role}
+            </span>
+          </div>
+
+          {/* Actions */}
+          <div className="py-1">
+            {isAdmin && (
+              <button
+                onClick={() => { setOpen(false); router.push("/usuarios"); }}
+                className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+              >
+                <Users className="w-4 h-4 text-slate-400" />
+                Gerenciar usuários
+              </button>
+            )}
+            <button
+              onClick={() => { setOpen(false); logout(); }}
+              className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
+            >
+              <LogOut className="w-4 h-4" />
+              Sair
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -31,12 +106,10 @@ export default function NavBar({ title, subtitle, back, actions }: NavBarProps) 
       className="sticky top-0 z-20 no-print"
       style={{ background: "linear-gradient(135deg, #0F2D5E 0%, #1A4A9A 100%)" }}
     >
-      {/* Subtle bottom glow line */}
       <div className="absolute inset-x-0 bottom-0 h-px bg-white/10" />
 
       <div className="max-w-5xl mx-auto px-4 h-16 flex items-center gap-3">
 
-        {/* Back button or brand logo */}
         {back ? (
           <button
             onClick={handleBack}
@@ -56,7 +129,6 @@ export default function NavBar({ title, subtitle, back, actions }: NavBarProps) 
           </div>
         )}
 
-        {/* Title area */}
         <div className="flex-1 min-w-0">
           <h1 className="font-bold text-white text-[15px] truncate leading-tight">{title}</h1>
           {subtitle && (
@@ -64,12 +136,10 @@ export default function NavBar({ title, subtitle, back, actions }: NavBarProps) 
           )}
         </div>
 
-        {/* Actions */}
-        {actions && (
-          <div className="flex items-center gap-2 text-white">
-            {actions}
-          </div>
-        )}
+        <div className="flex items-center gap-2 text-white">
+          {actions}
+          <UserMenu />
+        </div>
       </div>
     </header>
   );

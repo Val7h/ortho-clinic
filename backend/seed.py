@@ -5,19 +5,82 @@ from models.patient import Patient
 from models.consultation import Consultation
 from models.documents import Prescription, ExamRequest, PhysioRequest, MedicalReport, TreatmentLeaflet
 from models.clinic import Clinic, ClinicSchedule
+from models.organization import Organization, User
+
+
+def _hash(password: str) -> str:
+    from passlib.context import CryptContext
+    return CryptContext(schemes=["bcrypt"], deprecated="auto").hash(password)
+
 
 def seed():
     init_db()
     db = SessionLocal()
 
+    # ── Organização demo ──────────────────────────────────────────────────────
+    org = db.query(Organization).filter(Organization.id == 1).first()
+    if not org:
+        org = Organization(
+            id=1,
+            name="OrthoClinic Demo",
+            city="Campina Grande",
+            state="PB",
+            plan="pro",
+        )
+        db.add(org)
+        db.commit()
+        db.refresh(org)
+        print("✓ Organização demo criada.")
+
+    # ── Usuários padrão ───────────────────────────────────────────────────────
+    if db.query(User).count() == 0:
+        users = [
+            User(
+                organization_id=1,
+                name="Super Admin",
+                email="super@ortho.app",
+                password_hash=_hash("super123"),
+                role="superadmin",
+            ),
+            User(
+                organization_id=1,
+                name="Administrador",
+                email="admin@clinica.com",
+                password_hash=_hash("admin123"),
+                role="admin",
+            ),
+            User(
+                organization_id=1,
+                name="Dr. Ortopedista",
+                email="medico@clinica.com",
+                password_hash=_hash("medico123"),
+                role="doctor",
+            ),
+            User(
+                organization_id=1,
+                name="Secretária",
+                email="secretaria@clinica.com",
+                password_hash=_hash("secretaria123"),
+                role="secretary",
+            ),
+        ]
+        db.add_all(users)
+        db.commit()
+        print("✓ Usuários padrão criados.")
+        print("  super@ortho.app / super123")
+        print("  admin@clinica.com / admin123")
+        print("  medico@clinica.com / medico123")
+        print("  secretaria@clinica.com / secretaria123")
+
+    # ── Pacientes ─────────────────────────────────────────────────────────────
     if db.query(Patient).count() > 0:
-        print("Banco já possui dados.")
+        print("Banco já possui pacientes.")
         db.close()
         return
 
-    # Pacientes de exemplo
     patients = [
         Patient(
+            organization_id=1,
             name="Maria Silva Santos",
             birthdate=date(1975, 3, 15),
             cpf="123.456.789-00",
@@ -33,6 +96,7 @@ def seed():
             emergency_phone="(11) 91234-5678",
         ),
         Patient(
+            organization_id=1,
             name="Roberto Oliveira Lima",
             birthdate=date(1968, 7, 22),
             cpf="987.654.321-00",
@@ -43,6 +107,7 @@ def seed():
             chronic_conditions="Diabetes tipo 2, Lombalgia crônica",
         ),
         Patient(
+            organization_id=1,
             name="Ana Carolina Mendes",
             birthdate=date(1990, 11, 8),
             cpf="456.789.123-00",
@@ -104,7 +169,6 @@ def seed():
         instructions="Evitar esforço físico intenso. Retornar em caso de piora.",
     )
 
-    # Solicitação de exame
     ex = ExamRequest(
         patient_id=patients[0].id,
         consultation_id=c1.id,
@@ -117,7 +181,6 @@ def seed():
         urgency="eletivo",
     )
 
-    # Fisioterapia
     fi = PhysioRequest(
         patient_id=patients[0].id,
         consultation_id=c1.id,
@@ -131,7 +194,6 @@ def seed():
         techniques="Eletroterapia, hidroterapia, exercícios de fortalecimento",
     )
 
-    # Laudo
     lr = MedicalReport(
         patient_id=patients[0].id,
         date=date.today() - timedelta(days=60),
@@ -140,10 +202,9 @@ def seed():
         content="Atesto que a paciente MARIA SILVA SANTOS, portadora de gonartrose direita (CID10: M17.1), necessita de afastamento de suas atividades laborais pelo período de 15 (quinze) dias, contados desta data.",
         purpose="Dispensa de atividades laborais",
     )
-
     db.add_all([rx, ex, fi, lr])
 
-    # Folhetos informativos
+    # Folhetos
     leaflets = [
         TreatmentLeaflet(
             title="Entendendo a Gonartrose (Artrose do Joelho)",
@@ -208,7 +269,7 @@ def seed():
     db.add_all(leaflets)
     db.commit()
 
-    # ── Clínicas ──────────────────────────────────────────────────────────────
+    # ── Clínicas ───────────────────────────────────────────────────────────────
     CLINICS_DATA = [
         {
             "name": "Clínica Artro",
@@ -216,8 +277,8 @@ def seed():
             "state": "PB",
             "color": "#3B82F6",
             "slug": "artro",
+            "organization_id": 1,
             "schedules": [
-                # Quinta 15h–19h — agendamento por horário
                 {"day_of_week": 3, "start_time": "15:00", "end_time": "19:00",
                  "schedule_type": "appointment", "slot_duration": 12},
             ],
@@ -228,8 +289,8 @@ def seed():
             "state": "PE",
             "color": "#10B981",
             "slug": "intensiva-day",
+            "organization_id": 1,
             "schedules": [
-                # Segunda 17h–21h — agendamento por horário
                 {"day_of_week": 0, "start_time": "17:00", "end_time": "21:00",
                  "schedule_type": "appointment", "slot_duration": 12},
             ],
@@ -240,11 +301,10 @@ def seed():
             "state": "PB",
             "color": "#F59E0B",
             "slug": "cto",
+            "organization_id": 1,
             "schedules": [
-                # Segunda manhã — ordem de chegada
                 {"day_of_week": 0, "start_time": "08:00", "end_time": "12:00",
                  "schedule_type": "walk_in", "slot_duration": 12},
-                # Quinta manhã — ordem de chegada
                 {"day_of_week": 3, "start_time": "08:00", "end_time": "12:00",
                  "schedule_type": "walk_in", "slot_duration": 12},
             ],
@@ -255,8 +315,8 @@ def seed():
             "state": "PE",
             "color": "#8B5CF6",
             "slug": "mario-bento",
+            "organization_id": 1,
             "schedules": [
-                # Terça 10h–15h — ordem de chegada
                 {"day_of_week": 1, "start_time": "10:00", "end_time": "15:00",
                  "schedule_type": "walk_in", "slot_duration": 12},
             ],
@@ -267,8 +327,8 @@ def seed():
             "state": "PE",
             "color": "#EF4444",
             "slug": "ip",
+            "organization_id": 1,
             "schedules": [
-                # Quarta manhã — ordem de chegada
                 {"day_of_week": 2, "start_time": "09:00", "end_time": "13:00",
                  "schedule_type": "walk_in", "slot_duration": 12},
             ],
@@ -279,8 +339,8 @@ def seed():
             "state": "PE",
             "color": "#F97316",
             "slug": "unimagem",
+            "organization_id": 1,
             "schedules": [
-                # Quarta tarde — ordem de chegada
                 {"day_of_week": 2, "start_time": "14:00", "end_time": "18:00",
                  "schedule_type": "walk_in", "slot_duration": 12},
             ],
@@ -298,7 +358,7 @@ def seed():
         db.commit()
         print(f"✓ {len(CLINICS_DATA)} clínicas cadastradas.")
 
-    print(f"✓ Banco populado com {len(patients)} pacientes, {3} consultas e {len(leaflets)} folhetos.")
+    print(f"✓ Banco populado com {len(patients)} pacientes, 3 consultas e {len(leaflets)} folhetos.")
     db.close()
 
 

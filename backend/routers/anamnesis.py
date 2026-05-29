@@ -7,6 +7,7 @@ import secrets
 from database import get_db
 from models.patient import Patient
 from models.anamnesis import Anamnesis
+from deps import get_current_user
 
 router = APIRouter(tags=["Anamnese"])
 
@@ -45,7 +46,7 @@ class AnamnesisOut(BaseModel):
 
 
 @router.post("/patients/{patient_id}/anamnese", response_model=AnamnesisOut, status_code=201)
-def create_anamnesis(patient_id: int, data: AnamnesisCreate, db: Session = Depends(get_db)):
+def create_anamnesis(patient_id: int, data: AnamnesisCreate, db: Session = Depends(get_db), _: object = Depends(get_current_user)):
     p = db.query(Patient).filter(Patient.id == patient_id).first()
     if not p:
         raise HTTPException(404, "Paciente não encontrado")
@@ -63,7 +64,7 @@ def create_anamnesis(patient_id: int, data: AnamnesisCreate, db: Session = Depen
 
 
 @router.get("/patients/{patient_id}/anamnese", response_model=list[AnamnesisOut])
-def list_anamneses(patient_id: int, db: Session = Depends(get_db)):
+def list_anamneses(patient_id: int, db: Session = Depends(get_db), _: object = Depends(get_current_user)):
     return (
         db.query(Anamnesis)
         .filter(Anamnesis.patient_id == patient_id)

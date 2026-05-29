@@ -6,12 +6,21 @@ import os, shutil, uuid
 from database import get_db
 from models.patient import Patient
 from models.consultation import Consultation
+from models.organization import User
 from schemas.patient import PatientCreate, PatientUpdate, PatientOut, PatientSummary
+from deps import get_current_user
 
 router = APIRouter(prefix="/patients", tags=["patients"])
 
 UPLOAD_DIR = "uploads/photos"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+
+def _org_filter(q, current_user: User):
+    """Filtra por organização, exceto para superadmin."""
+    if current_user.role != "superadmin":
+        q = q.filter(Patient.organization_id == current_user.organization_id)
+    return q
 
 
 @router.get("", response_model=List[PatientSummary])
@@ -20,8 +29,10 @@ def list_patients(
     skip: int = 0,
     limit: int = 50,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     q = db.query(Patient).filter(Patient.active == True)
+    q = _org_filter(q, current_user)
     if search:
         term = f"%{search}%"
         q = q.filter(or_(Patient.name.ilike(term), Patient.cpf.ilike(term), Patient.phone.ilike(term)))
@@ -37,12 +48,19 @@ def list_patients(
 
 
 @router.post("", response_model=PatientOut, status_code=201)
-def create_patient(data: PatientCreate, db: Session = Depends(get_db)):
+def create_patient(
+    data: PatientCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     if data.cpf:
-        existing = db.query(Patient).filter(Patient.cpf == data.cpf).first()
+        existing = db.query(Patient).filter(
+            Patient.cpf == data.cpf,
+            Patient.organization_id == current_user.organization_id,
+        ).first()
         if existing:
             raise HTTPException(400, "CPF já cadastrado")
-    patient = Patient(**data.model_dump())
+    patient = Patient(**data.model_dump(), organization_id=current_user.organization_id)
     db.add(patient)
     db.commit()
     db.refresh(patient)
@@ -50,16 +68,29 @@ def create_patient(data: PatientCreate, db: Session = Depends(get_db)):
 
 
 @router.get("/{patient_id}", response_model=PatientOut)
-def get_patient(patient_id: int, db: Session = Depends(get_db)):
-    patient = db.query(Patient).filter(Patient.id == patient_id).first()
+def get_patient(
+    patient_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    q = db.query(Patient).filter(Patient.id == patient_id)
+    q = _org_filter(q, current_user)
+    patient = q.first()
     if not patient:
         raise HTTPException(404, "Paciente não encontrado")
     return patient
 
 
 @router.put("/{patient_id}", response_model=PatientOut)
-def update_patient(patient_id: int, data: PatientUpdate, db: Session = Depends(get_db)):
-    patient = db.query(Patient).filter(Patient.id == patient_id).first()
+def update_patient(
+    patient_id: int,
+    data: PatientUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    q = db.query(Patient).filter(Patient.id == patient_id)
+    q = _org_filter(q, current_user)
+    patient = q.first()
     if not patient:
         raise HTTPException(404, "Paciente não encontrado")
     for key, value in data.model_dump(exclude_unset=True).items():
@@ -70,8 +101,14 @@ def update_patient(patient_id: int, data: PatientUpdate, db: Session = Depends(g
 
 
 @router.delete("/{patient_id}", status_code=204)
-def delete_patient(patient_id: int, db: Session = Depends(get_db)):
-    patient = db.query(Patient).filter(Patient.id == patient_id).first()
+def delete_patient(
+    patient_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    q = db.query(Patient).filter(Patient.id == patient_id)
+    q = _org_filter(q, current_user)
+    patient = q.first()
     if not patient:
         raise HTTPException(404, "Paciente não encontrado")
     patient.active = False
@@ -79,8 +116,15 @@ def delete_patient(patient_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/{patient_id}/photo")
-async def upload_photo(patient_id: int, file: UploadFile = File(...), db: Session = Depends(get_db)):
-    patient = db.query(Patient).filter(Patient.id == patient_id).first()
+async def upload_photo(
+    patient_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    q = db.query(Patient).filter(Patient.id == patient_id)
+    q = _org_filter(q, current_user)
+    patient = q.first()
     if not patient:
         raise HTTPException(404, "Paciente não encontrado")
     ext = os.path.splitext(file.filename)[1]
@@ -94,10 +138,16 @@ async def upload_photo(patient_id: int, file: UploadFile = File(...), db: Sessio
 
 
 @router.get("/{patient_id}/timeline")
-def get_timeline(patient_id: int, db: Session = Depends(get_db)):
+def get_timeline(
+    patient_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     from models.documents import Prescription, ExamRequest, PhysioRequest, MedicalReport
 
-    patient = db.query(Patient).filter(Patient.id == patient_id).first()
+    q = db.query(Patient).filter(Patient.id == patient_id)
+    q = _org_filter(q, current_user)
+    patient = q.first()
     if not patient:
         raise HTTPException(404, "Paciente não encontrado")
 

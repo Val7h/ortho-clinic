@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import NavBar from "@/components/NavBar";
 import { clinicApi } from "@/lib/api";
+import { useProtectedPage } from "@/components/AuthProvider";
 import toast from "react-hot-toast";
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
@@ -38,6 +39,7 @@ function getNextDates(dayOfWeek: number, count = 4): string[] {
 }
 
 export default function ClinicasPage() {
+  const { user, loading: authLoading } = useProtectedPage();
   const [clinics, setClinics] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<number | null>(null);

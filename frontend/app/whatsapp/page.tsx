@@ -8,6 +8,7 @@ import {
 import toast from "react-hot-toast";
 import NavBar from "@/components/NavBar";
 import { whatsappApi } from "@/lib/api";
+import { useProtectedPage } from "@/components/AuthProvider";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 interface WaConfig {
@@ -257,6 +258,7 @@ function Section({
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function WhatsAppPage() {
+  const { user } = useProtectedPage();
   const [config, setConfig] = useState<WaConfig | null>(null);
   const [dash, setDash] = useState<Dashboard | null>(null);
   const [loading, setLoading] = useState(true);

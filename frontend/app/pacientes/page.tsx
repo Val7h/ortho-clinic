@@ -5,8 +5,10 @@ import Link from "next/link";
 import NavBar from "@/components/NavBar";
 import PatientCard from "@/components/PatientCard";
 import { patientsApi } from "@/lib/api";
+import { useProtectedPage } from "@/components/AuthProvider";
 
 export default function PatientsPage() {
+  const { user, loading: authLoading } = useProtectedPage();
   const [patients, setPatients] = useState<any[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);

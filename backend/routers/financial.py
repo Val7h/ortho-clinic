@@ -7,8 +7,9 @@ from pydantic import BaseModel
 from database import get_db
 from models.patient import Patient
 from models.financial import FinancialRecord
+from deps import get_current_user
 
-router = APIRouter(prefix="/financial", tags=["Financeiro"])
+router = APIRouter(prefix="/financial", tags=["Financeiro"], dependencies=[Depends(get_current_user)])
 
 
 class FinancialIn(BaseModel):

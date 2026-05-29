@@ -5,8 +5,9 @@ from datetime import date, datetime, timedelta
 from pydantic import BaseModel
 from database import get_db
 from models.clinic import Clinic, ClinicSchedule, Appointment
+from deps import get_current_user
 
-router = APIRouter(tags=["Clínicas"])
+router = APIRouter(tags=["Clínicas"], dependencies=[Depends(get_current_user)])
 public_router = APIRouter(tags=["Agendamento Público"])
 
 MAX_WALK_IN = 30  # limite por turno para ordem de chegada

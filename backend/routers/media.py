@@ -6,8 +6,9 @@ from pydantic import BaseModel
 import os, uuid, aiofiles
 from database import get_db
 from models.media import ConsultationMedia
+from deps import require_doctor
 
-router = APIRouter(prefix="/consultations/{consultation_id}/media", tags=["Media"])
+router = APIRouter(prefix="/consultations/{consultation_id}/media", tags=["Media"], dependencies=[Depends(require_doctor)])
 
 
 class MediaOut(BaseModel):

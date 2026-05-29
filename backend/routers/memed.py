@@ -1,7 +1,8 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 import os
+from deps import get_current_user
 
-router = APIRouter(prefix="/memed", tags=["Memed"])
+router = APIRouter(prefix="/memed", tags=["Memed"], dependencies=[Depends(get_current_user)])
 
 
 @router.get("/config")

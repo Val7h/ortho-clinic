@@ -8,6 +8,7 @@ class Clinic(Base):
     __tablename__ = "clinics"
 
     id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, default=1, index=True)
     name = Column(String(100), nullable=False)
     city = Column(String(100))
     state = Column(String(2))

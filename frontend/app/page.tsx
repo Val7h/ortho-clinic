@@ -3,32 +3,38 @@ import { useEffect, useState } from "react";
 import {
   Users, Stethoscope, BookOpen, MessageSquare,
   DollarSign, TrendingUp, Activity,
-  Calendar, FileText, MapPin,
+  Calendar, FileText, MapPin, Loader2, Shield,
 } from "lucide-react";
 import Link from "next/link";
 import NavBar from "@/components/NavBar";
 import ModuleCard from "@/components/ModuleCard";
 import { dashboardApi } from "@/lib/api";
 import { formatDateTime } from "@/lib/utils";
+import { useProtectedPage } from "@/components/AuthProvider";
 
 export default function Dashboard() {
+  const { user, loading: authLoading } = useProtectedPage();
   const [stats, setStats] = useState<any>(null);
 
   useEffect(() => {
-    dashboardApi.get().then(setStats).catch(() => {});
-  }, []);
+    if (user) {
+      dashboardApi.get().then(setStats).catch(() => {});
+    }
+  }, [user]);
+
+  if (authLoading || !user) {
+    return (
+      <div className="min-h-screen bg-slate-100 flex items-center justify-center">
+        <Loader2 className="w-7 h-7 animate-spin text-brand-600" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-100">
       <NavBar
         title="OrthoClinic"
         subtitle="Sistema de gestão ortopédica"
-        actions={
-          <div className="text-right">
-            <p className="text-xs font-bold text-white leading-tight">Dr. Ortopedista</p>
-            <p className="text-[11px] text-blue-200/70 leading-tight">CRM 00000</p>
-          </div>
-        }
       />
 
       <main className="max-w-5xl mx-auto px-4 py-5 space-y-6">
@@ -123,6 +129,15 @@ export default function Dashboard() {
               description="Semana atual"
               color="bg-gradient-to-br from-rose-500 to-rose-700"
             />
+            {user && (user.role === "admin" || user.role === "superadmin") && (
+              <ModuleCard
+                href="/usuarios"
+                icon={Shield}
+                label="Usuários"
+                description="Equipe"
+                color="bg-gradient-to-br from-slate-500 to-slate-700"
+              />
+            )}
             <ModuleCard
               href="/clinicas"
               icon={MapPin}

@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import NavBar from "@/components/NavBar";
 import { financialApi, patientsApi } from "@/lib/api";
+import { useProtectedPage } from "@/components/AuthProvider";
 import toast from "react-hot-toast";
 
 const METHODS: Record<string, { label: string; icon: any; color: string }> = {
@@ -28,6 +29,7 @@ function formatDate(iso: string) {
 }
 
 export default function FinanceiroPage() {
+  const { user } = useProtectedPage();
   const today = new Date();
   const [month, setMonth] = useState(today.getMonth() + 1);
   const [year, setYear] = useState(today.getFullYear());
