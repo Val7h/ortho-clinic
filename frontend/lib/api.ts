@@ -113,7 +113,7 @@ export const clinicApi = {
   getPublic: (slug: string) => api.get(`/agendar/${slug}`).then((r) => r.data),
   slots: (slug: string, date: string) =>
     api.get(`/agendar/${slug}/slots`, { params: { date_req: date } }).then((r) => r.data),
-  book: (slug: string, data: { date: string; start_time: string; patient_name: string; patient_phone?: string; reason?: string }) =>
+  book: (slug: string, data: { date: string; start_time?: string; patient_name: string; patient_phone?: string; reason?: string }) =>
     api.post(`/agendar/${slug}/book`, data).then((r) => r.data),
 };
 

@@ -323,7 +323,6 @@ export default function ClinicasPage() {
                         </div>
                       )}
                     </div>
-                  </div>
                 </div>
               )}
             </div>
