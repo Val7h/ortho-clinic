@@ -2,7 +2,7 @@ name: Keep Alive — OrthoClinic
 
 on:
   schedule:
-    - cron: '*/14 * * * *'
+    - cron: '*/5 * * * *'
   workflow_dispatch:
 
 jobs:
@@ -11,9 +11,11 @@ jobs:
     steps:
       - name: Ping OrthoClinic Backend
         run: |
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://ortho-backend.onrender.com)
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://ortho-backend.onrender.com/health)
           echo "ortho-backend: $STATUS"
+          if [ "$STATUS" = "200" ]; then echo "✅ Backend ativo"; else echo "⚠️ Backend retornou $STATUS"; fi
       - name: Ping OrthoClinic Frontend
         run: |
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://ortho-frontend.onrender.com)
           echo "ortho-frontend: $STATUS"
+          if [ "$STATUS" = "200" ]; then echo "✅ Frontend ativo"; else echo "⚠️ Frontend retornou $STATUS"; fi
