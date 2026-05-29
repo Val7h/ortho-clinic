@@ -9,6 +9,8 @@ from models.clinic import Clinic, ClinicSchedule, Appointment
 router = APIRouter(tags=["Clínicas"])
 public_router = APIRouter(tags=["Agendamento Público"])
 
+MAX_WALK_IN = 30  # limite por turno para ordem de chegada
+
 
 # ── Pydantic schemas ──────────────────────────────────────────────────────────
 
@@ -46,6 +48,7 @@ class AppointmentOut(BaseModel):
     patient_phone: Optional[str] = None
     reason: Optional[str] = None
     status: str
+    queue_number: Optional[int] = None
     notes: Optional[str] = None
     created_at: datetime
     model_config = {"from_attributes": True}
@@ -53,7 +56,7 @@ class AppointmentOut(BaseModel):
 
 class BookIn(BaseModel):
     date: date
-    start_time: str
+    start_time: Optional[str] = None
     patient_name: str
     patient_phone: Optional[str] = None
     reason: Optional[str] = None
@@ -88,6 +91,15 @@ def _generate_slots(start: str, end: str, duration: int, booked_times: set) -> l
     return slots
 
 
+def _walk_in_count(db: Session, clinic_id: int, appt_date: date, start_time: str) -> int:
+    return db.query(Appointment).filter(
+        Appointment.clinic_id == clinic_id,
+        Appointment.date == appt_date,
+        Appointment.start_time == start_time,
+        Appointment.status.in_(["pending", "confirmed"]),
+    ).count()
+
+
 # ── Doctor endpoints ──────────────────────────────────────────────────────────
 
 @router.get("/clinics", response_model=List[ClinicOut])
@@ -113,7 +125,7 @@ def list_appointments(
         q = q.filter(Appointment.date <= date_to)
     if status:
         q = q.filter(Appointment.status == status)
-    return q.order_by(Appointment.date, Appointment.start_time).all()
+    return q.order_by(Appointment.date, Appointment.queue_number, Appointment.start_time).all()
 
 
 @router.get("/appointments/week")
@@ -122,7 +134,6 @@ def appointments_week(
     end: Optional[date] = None,
     db: Session = Depends(get_db),
 ):
-    """Returns all appointments + clinic walk-in blocks for agenda view."""
     today = date.today()
     if start is None:
         dow = today.weekday()
@@ -134,20 +145,21 @@ def appointments_week(
     appointments = (
         db.query(Appointment)
         .filter(Appointment.date >= start, Appointment.date <= end)
-        .filter(Appointment.status != "cancelled")
-        .order_by(Appointment.date, Appointment.start_time)
+        .filter(Appointment.status.notin_(["cancelled", "blocked"]))
+        .order_by(Appointment.date, Appointment.queue_number, Appointment.start_time)
         .all()
     )
 
     result = []
 
-    # Walk-in blocks: generate one block per clinic per working day in range
+    # Walk-in / clinic blocks per day
     current = start
     while current <= end:
         dow = current.weekday()
         for clinic in clinics:
             for sched in clinic.schedules:
                 if sched.active and sched.day_of_week == dow:
+                    count = _walk_in_count(db, clinic.id, current, sched.start_time) if sched.schedule_type == "walk_in" else 0
                     result.append({
                         "source": "walk_in_block" if sched.schedule_type == "walk_in" else "clinic_block",
                         "clinic_id": clinic.id,
@@ -160,18 +172,22 @@ def appointments_week(
                         "date": current.isoformat(),
                         "start_time": sched.start_time,
                         "end_time": sched.end_time,
+                        "walk_in_count": count,
+                        "walk_in_max": MAX_WALK_IN,
                     })
         current += timedelta(days=1)
 
-    # Individual appointments
+    # Individual appointments (timed + walk-in registrations)
     for a in appointments:
         clinic = next((c for c in clinics if c.id == a.clinic_id), None)
+        sched = next((s for s in (clinic.schedules if clinic else []) if s.start_time == a.start_time), None)
         result.append({
             "source": "appointment",
             "id": a.id,
             "clinic_id": a.clinic_id,
             "clinic_name": clinic.name if clinic else "",
             "clinic_color": clinic.color if clinic else "#888",
+            "schedule_type": sched.schedule_type if sched else "appointment",
             "date": a.date.isoformat(),
             "start_time": a.start_time,
             "end_time": a.end_time,
@@ -179,17 +195,14 @@ def appointments_week(
             "patient_phone": a.patient_phone,
             "reason": a.reason,
             "status": a.status,
+            "queue_number": a.queue_number,
         })
 
     return result
 
 
 @router.put("/appointments/{appointment_id}", response_model=AppointmentOut)
-def update_appointment(
-    appointment_id: int,
-    data: StatusUpdate,
-    db: Session = Depends(get_db),
-):
+def update_appointment(appointment_id: int, data: StatusUpdate, db: Session = Depends(get_db)):
     a = db.query(Appointment).filter(Appointment.id == appointment_id).first()
     if not a:
         raise HTTPException(404, "Agendamento não encontrado")
@@ -210,7 +223,6 @@ def delete_appointment(appointment_id: int, db: Session = Depends(get_db)):
     db.commit()
 
 
-# ── Block a slot (doctor) ─────────────────────────────────────────────────────
 @router.post("/clinics/{clinic_id}/block", response_model=AppointmentOut, status_code=201)
 def block_slot(clinic_id: int, data: BookIn, db: Session = Depends(get_db)):
     clinic = db.query(Clinic).filter(Clinic.id == clinic_id).first()
@@ -218,11 +230,12 @@ def block_slot(clinic_id: int, data: BookIn, db: Session = Depends(get_db)):
         raise HTTPException(404, "Clínica não encontrada")
     sched = next((s for s in clinic.schedules if s.active), None)
     duration = sched.slot_duration if sched else 12
-    end_time = _add_minutes(data.start_time, duration)
+    start = data.start_time or (sched.start_time if sched else "08:00")
+    end_time = _add_minutes(start, duration)
     a = Appointment(
         clinic_id=clinic_id,
         date=data.date,
-        start_time=data.start_time,
+        start_time=start,
         end_time=end_time,
         patient_name="[BLOQUEADO]",
         status="blocked",
@@ -234,16 +247,16 @@ def block_slot(clinic_id: int, data: BookIn, db: Session = Depends(get_db)):
     return a
 
 
-# ── PUBLIC endpoints (patient booking) ────────────────────────────────────────
+# ── PUBLIC endpoints ───────────────────────────────────────────────────────────
 
 @public_router.get("/agendar/{slug}")
 def get_clinic_public(slug: str, db: Session = Depends(get_db)):
     clinic = db.query(Clinic).filter(Clinic.slug == slug, Clinic.active == True).first()
     if not clinic:
         raise HTTPException(404, "Clínica não encontrada")
-    appt_schedules = [s for s in clinic.schedules if s.active and s.schedule_type == "appointment"]
-    if not appt_schedules:
-        raise HTTPException(404, "Esta clínica não aceita agendamento online")
+    active_schedules = [s for s in clinic.schedules if s.active]
+    if not active_schedules:
+        raise HTTPException(404, "Clínica sem horários ativos")
     return {
         "id": clinic.id,
         "name": clinic.name,
@@ -255,9 +268,10 @@ def get_clinic_public(slug: str, db: Session = Depends(get_db)):
                 "day_of_week": s.day_of_week,
                 "start_time": s.start_time,
                 "end_time": s.end_time,
+                "schedule_type": s.schedule_type,
                 "slot_duration": s.slot_duration,
             }
-            for s in appt_schedules
+            for s in active_schedules
         ],
     }
 
@@ -269,34 +283,38 @@ def get_available_slots(slug: str, date_req: date, db: Session = Depends(get_db)
         raise HTTPException(404, "Clínica não encontrada")
 
     dow = date_req.weekday()
-    sched = next(
-        (s for s in clinic.schedules if s.active and s.day_of_week == dow and s.schedule_type == "appointment"),
-        None,
-    )
+    sched = next((s for s in clinic.schedules if s.active and s.day_of_week == dow), None)
     if not sched:
-        return {"available": False, "message": "Sem atendimento neste dia", "slots": []}
+        return {"available": False, "message": "Sem atendimento neste dia", "schedule_type": None}
 
-    # Can't book in the past
+    if date_req < date.today():
+        return {"available": False, "message": "Data no passado", "schedule_type": sched.schedule_type}
+
+    # ── Walk-in: return spot count ────────────────────────────────────────────
+    if sched.schedule_type == "walk_in":
+        count = _walk_in_count(db, clinic.id, date_req, sched.start_time)
+        return {
+            "schedule_type": "walk_in",
+            "available": count < MAX_WALK_IN,
+            "booked_count": count,
+            "max_patients": MAX_WALK_IN,
+            "available_spots": max(0, MAX_WALK_IN - count),
+            "start_time": sched.start_time,
+            "end_time": sched.end_time,
+            "message": "Vagas esgotadas para este turno" if count >= MAX_WALK_IN else None,
+        }
+
+    # ── Appointment: return time slots ────────────────────────────────────────
     now = datetime.now()
-    if date_req < now.date():
-        return {"available": False, "message": "Data no passado", "slots": []}
-
-    # Booked / blocked slots
-    existing = (
-        db.query(Appointment)
-        .filter(
-            Appointment.clinic_id == clinic.id,
-            Appointment.date == date_req,
-            Appointment.status.in_(["pending", "confirmed", "blocked"]),
-        )
-        .all()
-    )
+    existing = db.query(Appointment).filter(
+        Appointment.clinic_id == clinic.id,
+        Appointment.date == date_req,
+        Appointment.status.in_(["pending", "confirmed", "blocked"]),
+    ).all()
     booked = {a.start_time for a in existing}
 
-    # If booking for today, block past slots
     if date_req == now.date():
-        current_h, current_m = now.hour, now.minute
-        current_total = current_h * 60 + current_m + 60  # 1h antecedência
+        current_total = now.hour * 60 + now.minute + 60
         h, m = map(int, sched.start_time.split(":"))
         t = h * 60 + m
         while t < current_total:
@@ -307,6 +325,7 @@ def get_available_slots(slug: str, date_req: date, db: Session = Depends(get_db)
     available_count = sum(1 for s in slots if s["available"])
 
     return {
+        "schedule_type": "appointment",
         "available": available_count > 0,
         "total_slots": len(slots),
         "available_count": available_count,
@@ -321,32 +340,49 @@ def book_slot(slug: str, data: BookIn, db: Session = Depends(get_db)):
         raise HTTPException(404, "Clínica não encontrada")
 
     dow = data.date.weekday()
-    sched = next(
-        (s for s in clinic.schedules if s.active and s.day_of_week == dow and s.schedule_type == "appointment"),
-        None,
-    )
+    sched = next((s for s in clinic.schedules if s.active and s.day_of_week == dow), None)
     if not sched:
         raise HTTPException(400, "Sem atendimento neste dia")
 
     if data.date < date.today():
         raise HTTPException(400, "Data no passado")
 
-    # Check conflict
-    conflict = (
-        db.query(Appointment)
-        .filter(
-            Appointment.clinic_id == clinic.id,
-            Appointment.date == data.date,
-            Appointment.start_time == data.start_time,
-            Appointment.status.in_(["pending", "confirmed", "blocked"]),
+    # ── Walk-in booking ───────────────────────────────────────────────────────
+    if sched.schedule_type == "walk_in":
+        count = _walk_in_count(db, clinic.id, data.date, sched.start_time)
+        if count >= MAX_WALK_IN:
+            raise HTTPException(400, f"Vagas esgotadas — limite de {MAX_WALK_IN} pacientes atingido")
+        queue_number = count + 1
+        a = Appointment(
+            clinic_id=clinic.id,
+            date=data.date,
+            start_time=sched.start_time,
+            end_time=sched.end_time,
+            patient_name=data.patient_name,
+            patient_phone=data.patient_phone,
+            reason=data.reason,
+            status="pending",
+            queue_number=queue_number,
         )
-        .first()
-    )
+        db.add(a)
+        db.commit()
+        db.refresh(a)
+        return a
+
+    # ── Timed appointment ─────────────────────────────────────────────────────
+    if not data.start_time:
+        raise HTTPException(400, "Horário obrigatório para agendamento")
+
+    conflict = db.query(Appointment).filter(
+        Appointment.clinic_id == clinic.id,
+        Appointment.date == data.date,
+        Appointment.start_time == data.start_time,
+        Appointment.status.in_(["pending", "confirmed", "blocked"]),
+    ).first()
     if conflict:
         raise HTTPException(409, "Horário já ocupado")
 
     end_time = _add_minutes(data.start_time, sched.slot_duration)
-
     a = Appointment(
         clinic_id=clinic.id,
         date=data.date,

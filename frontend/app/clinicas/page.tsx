@@ -151,11 +151,13 @@ export default function ClinicasPage() {
                 <div className="flex-1 text-left min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <p className="font-bold text-slate-800">{clinic.name}</p>
-                    {hasOnlineBooking && (
-                      <span className="text-[10px] px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full font-bold uppercase tracking-wide">
-                        Online
-                      </span>
-                    )}
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wide ${
+                      hasOnlineBooking
+                        ? "bg-blue-100 text-blue-700"
+                        : "bg-amber-100 text-amber-700"
+                    }`}>
+                      {hasOnlineBooking ? "Agendamento" : "Chegada"}
+                    </span>
                     {pending > 0 && (
                       <span className="text-[10px] px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full font-bold">
                         {pending} pendente{pending > 1 ? "s" : ""}
@@ -185,44 +187,35 @@ export default function ClinicasPage() {
               {isOpen && (
                 <div className="border-t border-slate-100">
 
-                  {/* Link de agendamento (only for appointment type) */}
-                  {hasOnlineBooking && (
-                    <div className="px-5 py-4 bg-blue-50/50 border-b border-blue-100/50">
-                      <p className="text-xs font-bold text-blue-700 uppercase tracking-wide mb-2">
-                        Link público de agendamento
-                      </p>
-                      <div className="flex items-center gap-2">
-                        <div className="flex-1 bg-white border border-blue-100 rounded-xl px-3 py-2 text-xs text-blue-800 font-mono truncate">
-                          {typeof window !== "undefined" ? `${window.location.origin}/agendar/${clinic.slug}` : `/agendar/${clinic.slug}`}
-                        </div>
-                        <button
-                          onClick={() => copyLink(clinic.slug)}
-                          className="flex-shrink-0 p-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors"
-                        >
-                          <Copy className="w-3.5 h-3.5" />
-                        </button>
+                  {/* Link público — todas as clínicas têm agora */}
+                  <div className="px-5 py-4 bg-slate-50 border-b border-slate-100">
+                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">
+                      Link de {hasOnlineBooking ? "agendamento" : "confirmação de presença"}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-700 font-mono truncate">
+                        {typeof window !== "undefined" ? `${window.location.origin}/agendar/${clinic.slug}` : `/agendar/${clinic.slug}`}
                       </div>
-                      <p className="text-[10px] text-blue-500 mt-1.5">
-                        Envie este link para os pacientes agendarem direto pelo celular
-                      </p>
+                      <button
+                        onClick={() => copyLink(clinic.slug)}
+                        className="flex-shrink-0 p-2 text-white rounded-xl hover:opacity-90 transition-opacity"
+                        style={{ backgroundColor: clinic.color }}
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                      </button>
                     </div>
-                  )}
-
-                  {/* Schedule info for walk_in */}
-                  {!hasOnlineBooking && (
-                    <div className="px-5 py-3 bg-amber-50/50 border-b border-amber-100/50">
-                      <p className="text-xs text-amber-700 font-medium">
-                        🚶 Atendimento por ordem de chegada — sem agendamento online
+                    {!hasOnlineBooking && (
+                      <p className="text-[10px] text-slate-400 mt-1.5">
+                        🚶 Ordem de chegada · Limite de 30 pacientes por turno
                       </p>
-                    </div>
-                  )}
+                    )}
+                  </div>
 
-                  {/* Appointments list */}
-                  {hasOnlineBooking && (
-                    <div className="px-5 py-4">
+                  {/* Appointments list — all clinics */}
+                  <div className="px-5 py-4">
                       <div className="flex items-center justify-between mb-3">
                         <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">
-                          Próximos agendamentos
+                          {hasOnlineBooking ? "Próximos agendamentos" : "Presenças confirmadas"}
                         </p>
                         <button
                           onClick={() => loadAppointments(clinic.id)}
@@ -254,6 +247,14 @@ export default function ClinicasPage() {
                                   <div className="flex items-start justify-between gap-2">
                                     <div className="flex-1 min-w-0">
                                       <div className="flex items-center gap-2 flex-wrap">
+                                        {a.queue_number && (
+                                          <span
+                                            className="text-xs font-extrabold px-2 py-0.5 rounded-lg text-white"
+                                            style={{ backgroundColor: clinic.color }}
+                                          >
+                                            #{a.queue_number}
+                                          </span>
+                                        )}
                                         <p className="font-semibold text-slate-800 text-sm">{a.patient_name}</p>
                                         <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${st.bg} ${st.color}`}>
                                           {st.label}
@@ -266,7 +267,7 @@ export default function ClinicasPage() {
                                         </span>
                                         <span className="flex items-center gap-1 text-xs text-slate-500">
                                           <Clock className="w-3 h-3" />
-                                          {a.start_time} – {a.end_time}
+                                          {a.queue_number ? `Turno ${a.start_time}–${a.end_time}` : `${a.start_time} – ${a.end_time}`}
                                         </span>
                                         {a.patient_phone && (
                                           <span className="flex items-center gap-1 text-xs text-slate-500">
@@ -322,7 +323,7 @@ export default function ClinicasPage() {
                         </div>
                       )}
                     </div>
-                  )}
+                  </div>
                 </div>
               )}
             </div>

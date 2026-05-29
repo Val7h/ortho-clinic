@@ -50,6 +50,7 @@ class Appointment(Base):
     reason = Column(String(300), nullable=True)
     status = Column(String(20), default="pending")
     # pending | confirmed | cancelled | completed | blocked
+    queue_number = Column(Integer, nullable=True)   # para ordem de chegada
     notes = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
