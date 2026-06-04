@@ -11,18 +11,13 @@ from models.consultation import Consultation
 from models.whatsapp import WhatsAppMessage
 from schemas.whatsapp import WhatsAppMessageOut, SendMessageIn
 from deps import get_current_user
+from services.whatsapp import send_whatsapp, is_demo as _is_demo, DOCTOR_NAME
 
 router = APIRouter(prefix="/whatsapp", tags=["WhatsApp"], dependencies=[Depends(get_current_user)])
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
-DOCTOR_NAME = os.getenv("DOCTOR_NAME", "Dr. Ortopedista")
 CLINIC_PHONE = os.getenv("CLINIC_PHONE", "")
-
-
-def _is_demo() -> bool:
-    token = os.getenv("WHATSAPP_TOKEN", "").strip()
-    return not token or token == "demo"
 
 
 def _days_until_birthday(birthdate: date) -> int:
@@ -94,11 +89,14 @@ def _render_template(
 
 @router.get("/config")
 def get_config():
-    token = os.getenv("WHATSAPP_TOKEN", "").strip()
+    from services.whatsapp import EVOLUTION_URL, EVOLUTION_DEFAULT_INSTANCE
+    demo = _is_demo()
     return {
-        "demo": _is_demo(),
-        "configured": bool(token and token != "demo"),
+        "demo": demo,
+        "configured": not demo,
         "doctor_name": DOCTOR_NAME,
+        "evolution_url": EVOLUTION_URL if not demo else None,
+        "evolution_instance": EVOLUTION_DEFAULT_INSTANCE if not demo else None,
     }
 
 
@@ -245,12 +243,18 @@ def send_message(data: SendMessageIn, db: Session = Depends(get_db)):
     text = _render_template(data.message_type, patient.name, extra, data.custom_text)
     demo = _is_demo()
 
+    if not demo and patient.phone:
+        result = send_whatsapp(patient.phone, text)
+        status = "sent" if result.get("sent") else "error"
+    else:
+        status = "demo"
+
     msg = WhatsAppMessage(
         patient_id=patient.id,
         phone=patient.phone,
         message_type=data.message_type,
         message_text=text,
-        status="demo" if demo else "sent",
+        status=status,
         demo=demo,
         sent_at=datetime.now(timezone.utc),
     )

@@ -97,6 +97,13 @@ export const reportsApi = {
     api.delete(`/patients/${patientId}/reports/${id}`),
 };
 
+// ── Confirmação de agendamento (público, sem auth) ────────────────────────────
+export const confirmApi = {
+  get: (token: string) => api.get(`/confirmar/${token}`).then((r) => r.data),
+  confirm: (token: string) => api.post(`/confirmar/${token}`, { action: "confirm" }).then((r) => r.data),
+  cancel: (token: string) => api.post(`/confirmar/${token}`, { action: "cancel" }).then((r) => r.data),
+};
+
 // ── Folhetos ──────────────────────────────────────────────────────────────
 export const leafletsApi = {
   list: () => api.get("/leaflets").then((r) => r.data),

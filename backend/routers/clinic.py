@@ -3,9 +3,11 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import date, datetime, timedelta
 from pydantic import BaseModel
+import secrets
 from database import get_db
 from models.clinic import Clinic, ClinicSchedule, Appointment
 from deps import get_current_user
+from services.whatsapp import send_whatsapp, build_booking_message, is_demo
 
 router = APIRouter(tags=["Clínicas"], dependencies=[Depends(get_current_user)])
 public_router = APIRouter(tags=["Agendamento Público"])
@@ -348,6 +350,8 @@ def book_slot(slug: str, data: BookIn, db: Session = Depends(get_db)):
     if data.date < date.today():
         raise HTTPException(400, "Data no passado")
 
+    token = secrets.token_urlsafe(32)
+
     # ── Walk-in booking ───────────────────────────────────────────────────────
     if sched.schedule_type == "walk_in":
         count = _walk_in_count(db, clinic.id, data.date, sched.start_time)
@@ -364,10 +368,12 @@ def book_slot(slug: str, data: BookIn, db: Session = Depends(get_db)):
             reason=data.reason,
             status="pending",
             queue_number=queue_number,
+            confirmation_token=token,
         )
         db.add(a)
         db.commit()
         db.refresh(a)
+        _try_send_booking_wa(a, clinic, sched.schedule_type)
         return a
 
     # ── Timed appointment ─────────────────────────────────────────────────────
@@ -393,8 +399,105 @@ def book_slot(slug: str, data: BookIn, db: Session = Depends(get_db)):
         patient_phone=data.patient_phone,
         reason=data.reason,
         status="pending",
+        confirmation_token=token,
     )
     db.add(a)
     db.commit()
     db.refresh(a)
+    _try_send_booking_wa(a, clinic, sched.schedule_type)
     return a
+
+
+# ── WhatsApp helper ───────────────────────────────────────────────────────────
+
+def _try_send_booking_wa(appt: Appointment, clinic: Clinic, schedule_type: str):
+    """Envia mensagem de confirmação via WhatsApp após agendamento."""
+    if not appt.patient_phone:
+        return
+    msg = build_booking_message(
+        patient_name=appt.patient_name,
+        clinic_name=clinic.name,
+        clinic_city=clinic.city or "",
+        appt_date=appt.date,
+        start_time=appt.start_time,
+        end_time=appt.end_time,
+        confirmation_token=appt.confirmation_token,
+        queue_number=appt.queue_number,
+        schedule_type=schedule_type,
+    )
+    send_whatsapp(appt.patient_phone, msg, clinic.whatsapp_instance)
+
+
+# ── Confirmation endpoints (PUBLIC) ───────────────────────────────────────────
+
+class ConfirmationOut(BaseModel):
+    id: int
+    clinic_name: str
+    clinic_city: str
+    clinic_color: str
+    date: date
+    start_time: str
+    end_time: str
+    patient_name: str
+    queue_number: int | None
+    schedule_type: str
+    status: str
+    model_config = {"from_attributes": True}
+
+
+class ConfirmAction(BaseModel):
+    action: str  # "confirm" | "cancel"
+
+
+@public_router.get("/confirmar/{token}", response_model=ConfirmationOut)
+def get_confirmation(token: str, db: Session = Depends(get_db)):
+    a = db.query(Appointment).filter(Appointment.confirmation_token == token).first()
+    if not a:
+        raise HTTPException(404, "Link inválido ou expirado")
+    clinic = db.query(Clinic).filter(Clinic.id == a.clinic_id).first()
+    sched = next((s for s in clinic.schedules if s.start_time == a.start_time), None) if clinic else None
+    return {
+        "id": a.id,
+        "clinic_name": clinic.name if clinic else "",
+        "clinic_city": clinic.city if clinic else "",
+        "clinic_color": clinic.color if clinic else "#0F2D5E",
+        "date": a.date,
+        "start_time": a.start_time,
+        "end_time": a.end_time,
+        "patient_name": a.patient_name,
+        "queue_number": a.queue_number,
+        "schedule_type": sched.schedule_type if sched else "appointment",
+        "status": a.status,
+    }
+
+
+@public_router.post("/confirmar/{token}", response_model=ConfirmationOut)
+def confirm_appointment(token: str, data: ConfirmAction, db: Session = Depends(get_db)):
+    a = db.query(Appointment).filter(Appointment.confirmation_token == token).first()
+    if not a:
+        raise HTTPException(404, "Link inválido ou expirado")
+    if a.status in ("completed", "blocked"):
+        raise HTTPException(400, "Este agendamento não pode ser alterado")
+    if data.action == "confirm":
+        a.status = "confirmed"
+    elif data.action == "cancel":
+        a.status = "cancelled"
+    else:
+        raise HTTPException(400, "Ação inválida. Use 'confirm' ou 'cancel'")
+    db.commit()
+    db.refresh(a)
+    clinic = db.query(Clinic).filter(Clinic.id == a.clinic_id).first()
+    sched = next((s for s in clinic.schedules if s.start_time == a.start_time), None) if clinic else None
+    return {
+        "id": a.id,
+        "clinic_name": clinic.name if clinic else "",
+        "clinic_city": clinic.city if clinic else "",
+        "clinic_color": clinic.color if clinic else "#0F2D5E",
+        "date": a.date,
+        "start_time": a.start_time,
+        "end_time": a.end_time,
+        "patient_name": a.patient_name,
+        "queue_number": a.queue_number,
+        "schedule_type": sched.schedule_type if sched else "appointment",
+        "status": a.status,
+    }

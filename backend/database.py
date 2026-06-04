@@ -47,6 +47,13 @@ def migrate_db():
         cols = [c["name"] for c in inspector.get_columns("clinics")]
         if "organization_id" not in cols:
             migrations.append("ALTER TABLE clinics ADD COLUMN organization_id INTEGER DEFAULT 1")
+        if "whatsapp_instance" not in cols:
+            migrations.append("ALTER TABLE clinics ADD COLUMN whatsapp_instance VARCHAR(100)")
+
+    if "appointments" in existing_tables:
+        cols = [c["name"] for c in inspector.get_columns("appointments")]
+        if "confirmation_token" not in cols:
+            migrations.append("ALTER TABLE appointments ADD COLUMN confirmation_token VARCHAR(64)")
 
     if not migrations:
         return

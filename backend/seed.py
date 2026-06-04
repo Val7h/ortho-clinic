@@ -278,6 +278,7 @@ def seed():
             "color": "#3B82F6",
             "slug": "artro",
             "organization_id": 1,
+            "whatsapp_instance": "cto-campina",
             "schedules": [
                 {"day_of_week": 3, "start_time": "15:00", "end_time": "19:00",
                  "schedule_type": "appointment", "slot_duration": 12},
@@ -290,6 +291,7 @@ def seed():
             "color": "#10B981",
             "slug": "intensiva-day",
             "organization_id": 1,
+            "whatsapp_instance": "cto-caruaru",
             "schedules": [
                 {"day_of_week": 0, "start_time": "17:00", "end_time": "21:00",
                  "schedule_type": "appointment", "slot_duration": 12},
@@ -302,6 +304,7 @@ def seed():
             "color": "#F59E0B",
             "slug": "cto",
             "organization_id": 1,
+            "whatsapp_instance": "cto-campina",
             "schedules": [
                 {"day_of_week": 0, "start_time": "08:00", "end_time": "12:00",
                  "schedule_type": "walk_in", "slot_duration": 12},
@@ -316,6 +319,7 @@ def seed():
             "color": "#8B5CF6",
             "slug": "mario-bento",
             "organization_id": 1,
+            "whatsapp_instance": "cto-geral",
             "schedules": [
                 {"day_of_week": 1, "start_time": "10:00", "end_time": "15:00",
                  "schedule_type": "walk_in", "slot_duration": 12},
@@ -328,6 +332,7 @@ def seed():
             "color": "#EF4444",
             "slug": "ip",
             "organization_id": 1,
+            "whatsapp_instance": "cto-caruaru",
             "schedules": [
                 {"day_of_week": 2, "start_time": "09:00", "end_time": "13:00",
                  "schedule_type": "walk_in", "slot_duration": 12},
@@ -340,6 +345,7 @@ def seed():
             "color": "#F97316",
             "slug": "unimagem",
             "organization_id": 1,
+            "whatsapp_instance": "cto-caruaru",
             "schedules": [
                 {"day_of_week": 2, "start_time": "14:00", "end_time": "18:00",
                  "schedule_type": "walk_in", "slot_duration": 12},

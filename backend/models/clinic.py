@@ -15,6 +15,7 @@ class Clinic(Base):
     address = Column(String(200), nullable=True)
     color = Column(String(20), default="#0F2D5E")
     slug = Column(String(50), unique=True, index=True)
+    whatsapp_instance = Column(String(100), nullable=True)  # Evolution API instance name
     active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
@@ -52,6 +53,7 @@ class Appointment(Base):
     status = Column(String(20), default="pending")
     # pending | confirmed | cancelled | completed | blocked
     queue_number = Column(Integer, nullable=True)   # para ordem de chegada
+    confirmation_token = Column(String(64), nullable=True, unique=True, index=True)
     notes = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
