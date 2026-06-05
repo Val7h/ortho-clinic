@@ -1,13 +1,14 @@
-"use client";
-import { useEffect, useState } from "react";
-import {
-  ChevronLeft, ChevronRight, Video, RotateCcw, Stethoscope,
-  UserPlus, RefreshCw, MapPin, Users, Clock,
-} from "lucide-react";
-import Link from "next/link";
-import NavBar from "@/components/NavBar";
-import { agendaApi, clinicApi } from "@/lib/api";
-import { useProtectedPage } from "@/components/AuthProvider";
+'use client';
+
+import { useEffect, useState } from 'react';
+import { ChevronLeft, ChevronRight, Video, Stethoscope } from 'lucide-react';
+import Link from 'next/link';
+import NavBar from '@/components/NavBar';
+import { agendaApi, clinicApi } from '@/lib/api';
+import { useProtectedPage } from '@/components/AuthProvider';
+import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
+import { Badge } from '@/components/ui/Badge';
 
 const CONSULT_TYPES: Record<string, { label: string; color: string }> = {
   primeira_consulta:  { label: "1ª Consulta",   color: "#0F2D5E" },
@@ -85,49 +86,69 @@ export default function AgendaPage() {
   const totalAppts = clinicEvents.filter((e) => e.source === "appointment").length;
 
   return (
-    <div className="min-h-screen bg-slate-100">
+    <div className="min-h-screen bg-slate-50">
       <NavBar
         title="Agenda"
         subtitle={`${fmtDate(days[0])} – ${fmtDate(days[6])}`}
         back="/"
         actions={
-          <div className="flex items-center gap-1">
-            <button onClick={() => { const d=new Date(weekStart); d.setDate(d.getDate()-7); setWeekStart(d); }}
-              className="p-1.5 rounded-lg hover:bg-white/20 text-white">
-              <ChevronLeft className="w-4 h-4" />
-            </button>
+          <div className="flex items-center gap-2">
             <button
-              onClick={() => setWeekStart(startOfWeek(new Date()))}
-              className="text-xs px-2.5 py-1 bg-white/20 rounded-lg hover:bg-white/30 text-white font-medium">
-              Hoje
+              onClick={() => {
+                const d = new Date(weekStart);
+                d.setDate(d.getDate() - 7);
+                setWeekStart(d);
+              }}
+              className="rounded-lg p-2 hover:bg-white/20 text-white transition-colors"
+            >
+              <ChevronLeft className="h-5 w-5" />
             </button>
-            <button onClick={() => { const d=new Date(weekStart); d.setDate(d.getDate()+7); setWeekStart(d); }}
-              className="p-1.5 rounded-lg hover:bg-white/20 text-white">
-              <ChevronRight className="w-4 h-4" />
+            <Button variant="secondary" size="sm" onClick={() => setWeekStart(startOfWeek(new Date()))}>
+              Hoje
+            </Button>
+            <button
+              onClick={() => {
+                const d = new Date(weekStart);
+                d.setDate(d.getDate() + 7);
+                setWeekStart(d);
+              }}
+              className="rounded-lg p-2 hover:bg-white/20 text-white transition-colors"
+            >
+              <ChevronRight className="h-5 w-5" />
             </button>
           </div>
         }
       />
 
-      <div className="sm:hidden flex gap-2 px-4 pt-3 pb-1">
-        {["hoje", "semana"].map((v) => (
-          <button key={v} onClick={() => setMobileView(v)}
-            className={"flex-1 py-2 rounded-xl text-sm font-bold " +
-              (mobileView === v ? "bg-brand-600 text-white" : "bg-white text-slate-500 border border-slate-200")}>
-            {v === "hoje" ? "Hoje" : "Semana"}
+      <div className="flex gap-2 border-b border-slate-200 bg-white px-4 sm:hidden">
+        {['hoje', 'semana'].map((v) => (
+          <button
+            key={v}
+            onClick={() => setMobileView(v)}
+            className={`flex-1 border-b-2 py-3 text-sm font-semibold transition-colors ${
+              mobileView === v ? 'border-brand-600 text-brand-600' : 'border-transparent text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            {v === 'hoje' ? 'Hoje' : 'Semana'}
           </button>
         ))}
       </div>
 
-      <main className="max-w-5xl mx-auto px-4 py-5 space-y-4">
-
-        <div className="flex items-center justify-between">
-          <h2 className="text-base font-bold text-slate-700">
+      <main className="mx-auto max-w-6xl space-y-6 px-4 py-8">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <h2 className="text-xl font-bold text-slate-900">
             {MONTHS_PT[days[3].getMonth()]} {days[3].getFullYear()}
           </h2>
-          <span className="text-sm text-slate-400">
-            {loading ? "Carregando..." : `${totalConsults} consulta${totalConsults !== 1 ? "s" : ""} · ${totalAppts} agendamento${totalAppts !== 1 ? "s" : ""}`}
-          </span>
+          <p className="text-sm font-medium text-slate-600">
+            {loading ? (
+              'Carregando...'
+            ) : (
+              <>
+                {totalConsults} consulta{totalConsults !== 1 ? 's' : ''} · {totalAppts} agendamento
+                {totalAppts !== 1 ? 's' : ''}
+              </>
+            )}
+          </p>
         </div>
 
         {/* Week columns */}
@@ -223,25 +244,28 @@ export default function AgendaPage() {
         </div>
 
         {/* Legend */}
-        <div className="card p-4">
-          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Legenda</p>
-          <div className="flex flex-wrap gap-2">
-            {Object.entries(CONSULT_TYPES).map(([k, v]) => (
-              <span key={k} className="text-xs px-2.5 py-1 rounded-lg font-medium text-white" style={{ backgroundColor: v.color }}>
-                {v.label}
-              </span>
-            ))}
-            <span className="text-xs px-2.5 py-1 rounded-lg font-medium bg-slate-200 text-slate-600">
-              Clínica — chegada
-            </span>
+        <Card shadow="sm">
+          <div className="p-6">
+            <p className="mb-4 text-sm font-bold uppercase tracking-wider text-slate-600">Legenda</p>
+            <div className="flex flex-wrap gap-2">
+              {Object.entries(CONSULT_TYPES).map(([k, v]) => (
+                <Badge key={k} size="md" style={{ backgroundColor: v.color }} className="text-white">
+                  {v.label}
+                </Badge>
+              ))}
+              <Badge size="md" variant="neutral" outline>
+                Clínica — chegada
+              </Badge>
+            </div>
           </div>
-        </div>
+        </Card>
 
         {/* Detail list */}
         {(totalConsults > 0 || totalAppts > 0) && (
           <div>
-            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3">Detalhes</p>
-            <div className="card overflow-hidden divide-y divide-slate-100">
+            <h3 className="mb-4 text-sm font-bold uppercase tracking-wider text-slate-600">Detalhes</h3>
+            <Card shadow="sm">
+              <div className="divide-y divide-slate-100">
 
               {/* Clinic appointments */}
               {clinicEvents.filter(e => e.source === "appointment").map((a: any, i: number) => (
@@ -301,15 +325,18 @@ export default function AgendaPage() {
                   </Link>
                 );
               })}
-            </div>
+              </div>
+            </Card>
           </div>
         )}
 
         {totalConsults === 0 && totalAppts === 0 && !loading && (
-          <div className="card p-12 text-center">
-            <Stethoscope className="w-10 h-10 text-slate-200 mx-auto mb-3" />
-            <p className="text-slate-500 font-medium">Nenhuma consulta esta semana</p>
-          </div>
+          <Card shadow="sm">
+            <div className="py-16 text-center">
+              <Stethoscope className="mx-auto mb-3 h-10 w-10 text-slate-200" />
+              <p className="font-medium text-slate-500">Nenhuma consulta esta semana</p>
+            </div>
+          </Card>
         )}
 
       </main>

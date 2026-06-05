@@ -12,6 +12,7 @@ import Link from "next/link";
 import toast from "react-hot-toast";
 import NavBar from "@/components/NavBar";
 import Timeline from "@/components/Timeline";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter, Badge, Button, Modal, useModal, CardSkeleton, ListSkeleton } from "@/components/ui";
 import { patientsApi, whatsappApi, anamnesisApi } from "@/lib/api";
 import { calcAge, formatDate, formatDate as fd } from "@/lib/utils";
 
@@ -100,7 +101,7 @@ export default function PatientPage() {
   };
 
   if (loading) return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center">
       <div className="w-8 h-8 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />
     </div>
   );
@@ -114,7 +115,7 @@ export default function PatientPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-slate-100">
+    <div className="min-h-screen bg-slate-50">
       <NavBar
         title={patient.name}
         subtitle={patient.birthdate ? `${calcAge(patient.birthdate)} • ${patient.insurance || "Particular"}` : patient.insurance || "Particular"}
@@ -134,66 +135,73 @@ export default function PatientPage() {
       <main className="max-w-3xl mx-auto px-4 py-4 space-y-4">
 
         {/* Card do paciente */}
-        <div className="card p-5 flex items-center gap-4">
-          <div className="w-16 h-16 rounded-2xl bg-brand-100 flex items-center justify-center flex-shrink-0">
+        <Card padding="lg" className="flex items-center gap-4">
+          <div className="w-16 h-16 rounded-xl bg-brand-100 flex items-center justify-center flex-shrink-0">
             <User className="w-8 h-8 text-brand-600" />
           </div>
-          <div className="flex-1 min-w-0 space-y-1">
-            <p className="font-bold text-lg text-gray-900">{patient.name}</p>
-            <div className="flex flex-wrap gap-3 text-sm text-gray-500">
+          <div className="flex-1 min-w-0 space-y-2">
+            <div className="flex items-center gap-2">
+              <h2 className="font-semibold text-lg text-slate-900">{patient.name}</h2>
+              {patient.allergies && (
+                <Badge variant="error" size="sm">Alergia</Badge>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-3 text-sm text-slate-600">
               {patient.phone && <span className="flex items-center gap-1"><Phone className="w-3.5 h-3.5" />{patient.phone}</span>}
               {patient.email && <span className="flex items-center gap-1"><Mail className="w-3.5 h-3.5" />{patient.email}</span>}
               {patient.insurance && <span className="flex items-center gap-1"><Shield className="w-3.5 h-3.5" />{patient.insurance}</span>}
             </div>
             {patient.allergies && (
-              <p className="text-xs text-red-600 font-medium">⚠ Alergia: {patient.allergies}</p>
+              <p className="text-xs text-error-600 font-medium">{patient.allergies}</p>
             )}
           </div>
-        </div>
+        </Card>
 
         {/* Ações rápidas de documentos */}
-        <div className="grid grid-cols-4 gap-2">
+        <div className="grid grid-cols-4 gap-3">
           {[
-            { href: `/pacientes/${pid}/receita`, icon: FileText, label: "Receita", color: "bg-teal-50 text-teal-700" },
-            { href: `/pacientes/${pid}/exames`, icon: FlaskConical, label: "Exames", color: "bg-purple-50 text-purple-700" },
-            { href: `/pacientes/${pid}/fisio`, icon: Dumbbell, label: "Fisio", color: "bg-amber-50 text-amber-700" },
-            { href: `/pacientes/${pid}/laudo`, icon: ClipboardList, label: "Laudo", color: "bg-gray-50 text-gray-700" },
-          ].map(({ href, icon: Icon, label, color }) => (
+            { href: `/pacientes/${pid}/receita`, icon: FileText, label: "Receita" },
+            { href: `/pacientes/${pid}/exames`, icon: FlaskConical, label: "Exames" },
+            { href: `/pacientes/${pid}/fisio`, icon: Dumbbell, label: "Fisio" },
+            { href: `/pacientes/${pid}/laudo`, icon: ClipboardList, label: "Laudo" },
+          ].map(({ href, icon: Icon, label }) => (
             <Link key={label} href={href}>
-              <div className={`card p-3 flex flex-col items-center gap-2 cursor-pointer hover:shadow-md active:scale-95 transition-all ${color}`}>
-                <Icon className="w-5 h-5" />
-                <span className="text-xs font-medium">{label}</span>
-              </div>
+              <Card hoverable padding="md" className="flex flex-col items-center gap-2 h-full">
+                <div className="w-10 h-10 rounded-lg bg-brand-100 flex items-center justify-center">
+                  <Icon className="w-5 h-5 text-brand-600" />
+                </div>
+                <span className="text-xs font-semibold text-slate-900 text-center">{label}</span>
+              </Card>
             </Link>
           ))}
         </div>
 
         {/* WhatsApp quick-send */}
-        <div className="card overflow-hidden">
+        <Card>
           <button
             onClick={() => { setWaOpen((v) => !v); setWaType(null); setWaPreview(null); }}
-            className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors"
+            className="w-full flex items-center gap-3 hover:bg-slate-50 transition-colors p-4"
           >
-            <div className="w-8 h-8 rounded-lg bg-green-500 flex items-center justify-center">
-              <MessageSquare className="w-4 h-4 text-white" />
+            <div className="w-10 h-10 rounded-lg bg-success-100 flex items-center justify-center flex-shrink-0">
+              <MessageSquare className="w-5 h-5 text-success-600" />
             </div>
-            <span className="flex-1 text-left text-sm font-medium text-gray-700">
+            <span className="flex-1 text-left text-sm font-semibold text-slate-900">
               Enviar mensagem via WhatsApp
             </span>
-            {waOpen ? <X className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
+            {waOpen ? <X className="w-4 h-4 text-slate-400" /> : <ChevronRight className="w-4 h-4 text-slate-400" />}
           </button>
 
           {waOpen && (
-            <div className="border-t border-gray-100 px-4 py-4 space-y-3">
+            <div className="border-t border-slate-200 px-6 py-4 space-y-4">
               <div className="grid grid-cols-2 gap-2">
                 {WA_TYPES.map(({ key, label }) => (
                   <button
                     key={key}
                     onClick={() => handleWaSelect(key)}
-                    className={`text-sm py-2 px-3 rounded-lg border transition-colors text-left ${
+                    className={`text-sm py-2 px-3 rounded-lg border transition-colors text-left font-medium ${
                       waType === key
-                        ? "border-green-500 bg-green-50 text-green-800 font-medium"
-                        : "border-gray-200 text-gray-700 hover:border-green-300"
+                        ? "border-success-500 bg-success-50 text-success-800"
+                        : "border-slate-200 text-slate-700 hover:border-success-300 hover:bg-slate-50"
                     }`}
                   >
                     {label}
@@ -202,87 +210,89 @@ export default function PatientPage() {
               </div>
 
               {waType && (
-                <div className="space-y-2">
-                  <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
-                    <p className="text-xs font-semibold text-gray-500 mb-1">Prévia:</p>
+                <div className="space-y-3">
+                  <div className="bg-slate-50 rounded-lg p-4 border border-slate-200">
+                    <p className="text-xs font-semibold text-slate-600 mb-2">Prévia da mensagem:</p>
                     {waPreview ? (
-                      <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">{waPreview}</p>
+                      <p className="text-sm text-slate-800 whitespace-pre-wrap leading-relaxed">{waPreview}</p>
                     ) : (
-                      <p className="text-xs text-gray-400">Carregando...</p>
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" />
+                        <p className="text-xs text-slate-500">Carregando...</p>
+                      </div>
                     )}
                   </div>
 
                   {!patient?.phone && (
-                    <p className="text-xs text-amber-600 flex items-center gap-1.5">
-                      <AlertCircle className="w-3.5 h-3.5" />
-                      Telefone não cadastrado neste paciente
-                    </p>
+                    <div className="flex items-start gap-2 p-3 bg-warning-50 border border-warning-200 rounded-lg">
+                      <AlertCircle className="w-4 h-4 text-warning-600 flex-shrink-0 mt-0.5" />
+                      <p className="text-xs text-warning-700">Telefone não cadastrado neste paciente</p>
+                    </div>
                   )}
 
                   {waDemo && (
-                    <p className="text-xs text-amber-600 flex items-center gap-1.5">
-                      <AlertCircle className="w-3.5 h-3.5" />
-                      Modo demo — não será enviado de verdade
-                    </p>
+                    <div className="flex items-start gap-2 p-3 bg-warning-50 border border-warning-200 rounded-lg">
+                      <AlertCircle className="w-4 h-4 text-warning-600 flex-shrink-0 mt-0.5" />
+                      <p className="text-xs text-warning-700">Modo demo — não será enviado de verdade</p>
+                    </div>
                   )}
 
-                  <button
+                  <Button
                     onClick={handleWaSend}
                     disabled={waSending || !waPreview}
-                    className="btn-primary w-full flex items-center justify-center gap-2 text-sm py-2"
+                    isLoading={waSending}
+                    fullWidth
+                    icon={<Send className="w-4 h-4" />}
                   >
-                    {waSending ? (
-                      <><div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> Enviando...</>
-                    ) : (
-                      <><Send className="w-3.5 h-3.5" /> {waDemo ? "Simular envio" : "Enviar agora"}</>
-                    )}
-                  </button>
+                    {waDemo ? "Simular envio" : "Enviar agora"}
+                  </Button>
                 </div>
               )}
             </div>
           )}
-        </div>
+        </Card>
 
         {/* Anamnese digital */}
-        <div className="card overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-3">
+        <Card>
+          <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-brand-100 flex items-center justify-center">
-                <ClipboardCheck className="w-4 h-4 text-brand-600" />
+              <div className="w-10 h-10 rounded-lg bg-brand-100 flex items-center justify-center flex-shrink-0">
+                <ClipboardCheck className="w-5 h-5 text-brand-600" />
               </div>
               <div>
-                <p className="text-sm font-semibold text-gray-800">Anamnese digital</p>
-                <p className="text-xs text-gray-400">Paciente preenche antes da consulta</p>
+                <p className="text-sm font-semibold text-slate-900">Anamnese digital</p>
+                <p className="text-xs text-slate-600">Paciente preenche antes da consulta</p>
               </div>
             </div>
-            <button
+            <Button
               onClick={handleCreateAnamnesis}
               disabled={anamnesisLoading}
-              className="btn-primary text-xs py-1.5 px-3 flex items-center gap-1"
+              isLoading={anamnesisLoading}
+              variant="primary"
+              size="sm"
+              icon={<LinkIcon className="w-4 h-4" />}
             >
-              {anamnesisLoading ? (
-                <div className="w-3 h-3 border border-white border-t-transparent rounded-full animate-spin" />
-              ) : (
-                <LinkIcon className="w-3 h-3" />
-              )}
               Gerar link
-            </button>
+            </Button>
           </div>
 
           {anamneses.length > 0 && (
-            <div className="border-t border-gray-100 divide-y divide-gray-50">
+            <div className="mt-4 pt-4 border-t border-slate-200 space-y-2">
               {anamneses.slice(0, 3).map((a) => (
-                <div key={a.id} className="flex items-center gap-3 px-4 py-2.5">
+                <div key={a.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
                   {a.status === "filled" ? (
-                    <CheckCircle className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
+                    <Badge variant="success" size="sm" className="flex-shrink-0">
+                      <CheckCircle className="w-3 h-3" />
+                      Preenchida
+                    </Badge>
                   ) : (
-                    <Clock className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
+                    <Badge variant="warning" size="sm" className="flex-shrink-0">
+                      <Clock className="w-3 h-3" />
+                      Aguardando
+                    </Badge>
                   )}
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium text-gray-700">
-                      {a.status === "filled" ? "Preenchida" : "Aguardando"}
-                    </p>
-                    <p className="text-[10px] text-gray-400">
+                    <p className="text-xs text-slate-600">
                       {a.expires_at ? `Expira ${new Date(a.expires_at).toLocaleDateString("pt-BR")}` : ""}
                     </p>
                   </div>
@@ -293,7 +303,7 @@ export default function PatientPage() {
                         await navigator.clipboard.writeText(link);
                         toast.success("Link copiado!");
                       }}
-                      className="text-[10px] text-brand-600 hover:underline font-medium"
+                      className="text-xs text-brand-600 hover:text-brand-700 font-semibold"
                     >
                       Copiar link
                     </button>
@@ -302,16 +312,18 @@ export default function PatientPage() {
               ))}
             </div>
           )}
-        </div>
+        </Card>
 
         {/* Tabs */}
-        <div className="flex bg-white rounded-xl border border-gray-100 p-1 gap-1">
+        <div className="flex bg-white rounded-lg border border-slate-200 p-1 gap-1">
           {tabs.map(({ key, label }) => (
             <button
               key={key}
               onClick={() => setTab(key)}
-              className={`flex-1 py-2 text-sm font-medium rounded-lg transition-colors ${
-                tab === key ? "bg-brand-600 text-white" : "text-gray-500 hover:text-gray-900"
+              className={`flex-1 py-2.5 text-sm font-semibold rounded-md transition-colors ${
+                tab === key
+                  ? "bg-brand-600 text-white"
+                  : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
               }`}
             >
               {label}
@@ -321,15 +333,18 @@ export default function PatientPage() {
 
         {/* Conteúdo da tab */}
         {tab === "timeline" && (
-          <div className="space-y-2">
+          <div className="space-y-4">
             {timeline.length === 0 ? (
-              <div className="card p-8 text-center">
-                <Stethoscope className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-                <p className="text-gray-500 text-sm">Nenhum registro ainda.</p>
+              <Card className="p-8 text-center">
+                <Stethoscope className="w-12 h-12 text-slate-300 mx-auto mb-4" />
+                <p className="text-slate-600 text-sm mb-6">Nenhum registro de consulta ainda.</p>
                 <Link href={`/pacientes/${pid}/consulta`}>
-                  <button className="btn-primary mt-4 text-sm">Iniciar primeira consulta</button>
+                  <Button variant="primary">
+                    <Plus className="w-4 h-4" />
+                    Iniciar primeira consulta
+                  </Button>
                 </Link>
-              </div>
+              </Card>
             ) : (
               <Timeline items={timeline} patientId={pid} />
             )}
@@ -337,7 +352,7 @@ export default function PatientPage() {
         )}
 
         {tab === "dados" && (
-          <div className="space-y-4">
+          <div className="space-y-4 pb-6">
             <DataSection title="Dados Pessoais" items={[
               { label: "Nome", value: patient.name },
               { label: "Nascimento", value: patient.birthdate ? `${formatDate(patient.birthdate)} (${calcAge(patient.birthdate)})` : null },
@@ -370,33 +385,38 @@ export default function PatientPage() {
               { label: "Telefone", value: patient.emergency_phone },
               { label: "Parentesco", value: patient.emergency_relation },
             ]} />
-            <div className="flex gap-2 pb-6">
-              <button onClick={handleDelete} className="btn-danger text-sm flex items-center gap-2">
-                <Trash2 className="w-4 h-4" /> Desativar
-              </button>
+            <div className="flex gap-2 pt-4">
+              <Button
+                onClick={handleDelete}
+                variant="danger"
+                size="sm"
+                icon={<Trash2 className="w-4 h-4" />}
+              >
+                Desativar paciente
+              </Button>
             </div>
           </div>
         )}
 
         {tab === "documentos" && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {[
-              { href: `/pacientes/${pid}/receita`, icon: FileText, label: "Receitas", desc: "Prescrições médicas", color: "bg-teal-600" },
-              { href: `/pacientes/${pid}/exames`, icon: FlaskConical, label: "Exames", desc: "Solicitações de exame", color: "bg-purple-600" },
-              { href: `/pacientes/${pid}/fisio`, icon: Dumbbell, label: "Fisioterapia", desc: "Encaminhamentos", color: "bg-amber-600" },
-              { href: `/pacientes/${pid}/laudo`, icon: ClipboardList, label: "Laudos", desc: "Laudos e atestados", color: "bg-gray-600" },
-            ].map(({ href, icon: Icon, label, desc, color }) => (
+              { href: `/pacientes/${pid}/receita`, icon: FileText, label: "Receitas", desc: "Prescrições médicas" },
+              { href: `/pacientes/${pid}/exames`, icon: FlaskConical, label: "Exames", desc: "Solicitações de exame" },
+              { href: `/pacientes/${pid}/fisio`, icon: Dumbbell, label: "Fisioterapia", desc: "Encaminhamentos" },
+              { href: `/pacientes/${pid}/laudo`, icon: ClipboardList, label: "Laudos", desc: "Laudos e atestados" },
+            ].map(({ href, icon: Icon, label, desc }) => (
               <Link key={label} href={href}>
-                <div className="card p-5 flex items-center gap-4 hover:shadow-md active:scale-95 transition-all cursor-pointer">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${color}`}>
-                    <Icon className="w-5 h-5 text-white" />
+                <Card hoverable padding="lg" className="flex items-center gap-4 h-full">
+                  <div className="w-12 h-12 rounded-lg bg-brand-100 flex items-center justify-center flex-shrink-0">
+                    <Icon className="w-6 h-6 text-brand-600" />
                   </div>
                   <div className="flex-1">
-                    <p className="font-medium text-gray-900">{label}</p>
-                    <p className="text-xs text-gray-500">{desc}</p>
+                    <p className="font-semibold text-slate-900">{label}</p>
+                    <p className="text-xs text-slate-600">{desc}</p>
                   </div>
-                  <ChevronRight className="w-4 h-4 text-gray-400" />
-                </div>
+                  <ChevronRight className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                </Card>
               </Link>
             ))}
           </div>
@@ -410,16 +430,16 @@ function DataSection({ title, items }: { title: string; items: { label: string; 
   const filled = items.filter((i) => i.value);
   if (filled.length === 0) return null;
   return (
-    <div className="card p-5">
-      <h3 className="text-sm font-semibold text-gray-700 mb-3">{title}</h3>
-      <div className="space-y-2">
+    <Card padding="lg">
+      <h3 className="text-sm font-semibold text-slate-900 mb-4">{title}</h3>
+      <div className="space-y-3">
         {filled.map(({ label, value }) => (
-          <div key={label} className="flex gap-2">
-            <span className="text-xs text-gray-400 w-32 flex-shrink-0">{label}</span>
-            <span className="text-sm text-gray-900">{value}</span>
+          <div key={label} className="flex gap-4">
+            <span className="text-xs font-medium text-slate-600 w-32 flex-shrink-0">{label}</span>
+            <span className="text-sm text-slate-900">{value}</span>
           </div>
         ))}
       </div>
-    </div>
+    </Card>
   );
 }

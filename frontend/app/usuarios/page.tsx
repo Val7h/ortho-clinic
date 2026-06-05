@@ -5,23 +5,24 @@ import {
   Loader2, Eye, EyeOff, Shield, User, Building2,
 } from "lucide-react";
 import NavBar from "@/components/NavBar";
+import { Card, CardHeader, Badge, Button, Input, Modal, useModal } from "@/components/ui";
 import { authApi } from "@/lib/api";
 import { useProtectedPage } from "@/components/AuthProvider";
 import toast from "react-hot-toast";
 
 const ROLES = [
-  { value: "secretary", label: "Secretária", color: "bg-slate-100 text-slate-600" },
-  { value: "doctor",    label: "Médico",      color: "bg-blue-100 text-blue-700" },
-  { value: "admin",     label: "Admin",       color: "bg-purple-100 text-purple-700" },
-  { value: "superadmin",label: "Super Admin", color: "bg-red-100 text-red-700" },
+  { value: "secretary", label: "Secretária", variant: "neutral" as const },
+  { value: "doctor",    label: "Médico",      variant: "brand" as const },
+  { value: "admin",     label: "Admin",       variant: "accent" as const },
+  { value: "superadmin",label: "Super Admin", variant: "error" as const },
 ];
 
 function roleBadge(role: string) {
   const r = ROLES.find((x) => x.value === role) || ROLES[0];
   return (
-    <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wide ${r.color}`}>
+    <Badge variant={r.variant} size="sm">
       {r.label}
-    </span>
+    </Badge>
   );
 }
 
@@ -123,7 +124,7 @@ export default function UsuariosPage() {
 
   if (authLoading || !me) {
     return (
-      <div className="min-h-screen bg-slate-100 flex items-center justify-center">
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <Loader2 className="w-7 h-7 animate-spin text-brand-600" />
       </div>
     );
@@ -131,29 +132,32 @@ export default function UsuariosPage() {
 
   if (!isAdmin) {
     return (
-      <div className="min-h-screen bg-slate-100">
+      <div className="min-h-screen bg-slate-50">
         <NavBar title="Usuários" back="/" />
         <div className="max-w-xl mx-auto px-4 py-20 text-center">
           <Shield className="w-12 h-12 text-slate-200 mx-auto mb-4" />
-          <p className="text-slate-500">Acesso restrito a administradores.</p>
+          <p className="text-slate-600 font-medium">Acesso restrito a administradores.</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-100">
+    <div className="min-h-screen bg-slate-50">
       <NavBar
         title="Usuários"
         subtitle="Gerenciar equipe"
         back="/"
         actions={
-          <button
+          <Button
             onClick={openCreate}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-white/15 hover:bg-white/25 rounded-xl text-sm font-semibold text-white transition-colors border border-white/20"
+            variant="secondary"
+            size="sm"
+            icon={<Plus className="w-4 h-4" />}
+            className="text-white bg-white/15 hover:bg-white/25 border border-white/20"
           >
-            <Plus className="w-4 h-4" /> Novo
-          </button>
+            Novo
+          </Button>
         }
       />
 
@@ -164,196 +168,186 @@ export default function UsuariosPage() {
           {ROLES.filter((r) => r.value !== "superadmin" || me.role === "superadmin").map((r) => {
             const count = users.filter((u) => u.role === r.value && u.active).length;
             return (
-              <div key={r.value} className="card p-4 border-l-4 border-brand-400">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">{r.label}</p>
-                <p className="text-2xl font-extrabold text-brand-600 mt-0.5">{count}</p>
-              </div>
+              <Card key={r.value} padding="md" className="border-l-4 border-brand-500">
+                <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide">{r.label}</p>
+                <p className="text-3xl font-bold text-brand-600 mt-2">{count}</p>
+              </Card>
             );
           })}
         </div>
 
         {/* Org management (superadmin) */}
         {me.role === "superadmin" && orgs.length > 0 && (
-          <div className="card overflow-hidden">
-            <div className="px-5 py-3 bg-slate-50 border-b border-slate-100 flex items-center gap-2">
-              <Building2 className="w-4 h-4 text-slate-400" />
-              <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">Organizações</p>
+          <Card>
+            <div className="flex items-center gap-2 mb-4 pb-4 border-b border-slate-200">
+              <Building2 className="w-5 h-5 text-slate-400" />
+              <p className="text-sm font-semibold text-slate-900">Organizações</p>
             </div>
-            <div className="divide-y divide-slate-100">
+            <div className="space-y-3">
               {orgs.map((org) => (
-                <div key={org.id} className="flex items-center px-5 py-3 gap-3">
+                <div key={org.id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
                   <div className="flex-1">
-                    <p className="font-semibold text-slate-800 text-sm">{org.name}</p>
-                    <p className="text-xs text-slate-400">{org.city}/{org.state} · {org.plan}</p>
+                    <p className="font-semibold text-slate-900 text-sm">{org.name}</p>
+                    <p className="text-xs text-slate-600">{org.city}/{org.state} · {org.plan}</p>
                   </div>
-                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wide ${org.active ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}>
+                  <Badge variant={org.active ? "success" : "error"} size="sm">
                     {org.active ? "Ativo" : "Inativo"}
-                  </span>
+                  </Badge>
                 </div>
               ))}
             </div>
-          </div>
+          </Card>
         )}
 
         {/* Users list */}
-        <div className="card overflow-hidden">
-          <div className="px-5 py-3 bg-slate-50 border-b border-slate-100 flex items-center gap-2">
-            <Users className="w-4 h-4 text-slate-400" />
-            <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">Equipe</p>
-            <span className="ml-auto text-xs text-slate-400">{users.length} usuário{users.length !== 1 ? "s" : ""}</span>
+        <Card>
+          <div className="flex items-center gap-2 mb-4 pb-4 border-b border-slate-200">
+            <Users className="w-5 h-5 text-slate-400" />
+            <p className="text-sm font-semibold text-slate-900">Equipe</p>
+            <span className="ml-auto text-xs text-slate-600 font-medium">{users.length} usuário{users.length !== 1 ? "s" : ""}</span>
           </div>
 
           {loading ? (
-            <div className="flex justify-center py-10">
-              <Loader2 className="w-6 h-6 animate-spin text-slate-300" />
+            <div className="flex justify-center py-12">
+              <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
+            </div>
+          ) : users.length === 0 ? (
+            <div className="text-center py-12">
+              <Users className="w-10 h-10 text-slate-200 mx-auto mb-3" />
+              <p className="text-sm text-slate-500">Nenhum usuário cadastrado</p>
             </div>
           ) : (
-            <div className="divide-y divide-slate-100">
+            <div className="space-y-2">
               {users.map((u) => (
-                <div key={u.id} className={`flex items-center gap-3 px-5 py-3.5 ${!u.active ? "opacity-50" : ""}`}>
-                  <div className="w-9 h-9 rounded-xl bg-brand-50 flex items-center justify-center flex-shrink-0">
-                    <User className="w-4 h-4 text-brand-500" />
+                <div key={u.id} className={`flex items-center gap-3 p-4 bg-slate-50 rounded-lg transition-opacity ${!u.active ? "opacity-50" : ""}`}>
+                  <div className="w-10 h-10 rounded-lg bg-brand-100 flex items-center justify-center flex-shrink-0">
+                    <User className="w-5 h-5 text-brand-600" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="font-semibold text-slate-800 text-sm">{u.name}</p>
+                    <div className="flex items-center gap-2 flex-wrap mb-1">
+                      <p className="font-semibold text-slate-900 text-sm">{u.name}</p>
                       {roleBadge(u.role)}
                       {!u.active && (
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-100 text-red-600 font-bold uppercase">Inativo</span>
+                        <Badge variant="error" size="sm">Inativo</Badge>
                       )}
                       {u.id === me.id && (
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-brand-100 text-brand-700 font-bold">Você</span>
+                        <Badge variant="brand" size="sm">Você</Badge>
                       )}
                     </div>
-                    <p className="text-xs text-slate-400 mt-0.5 truncate">{u.email}</p>
+                    <p className="text-xs text-slate-600 truncate">{u.email}</p>
                   </div>
-                  <div className="flex items-center gap-1.5 flex-shrink-0">
-                    <button
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <Button
                       onClick={() => openEdit(u)}
-                      className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-brand-600 transition-colors"
-                    >
-                      <Pencil className="w-3.5 h-3.5" />
-                    </button>
+                      variant="tertiary"
+                      size="sm"
+                      icon={<Pencil className="w-4 h-4" />}
+                      className="text-slate-600"
+                    />
                     {u.id !== me.id && u.active && (
-                      <button
+                      <Button
                         onClick={() => handleDeactivate(u)}
-                        className="p-1.5 rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600 transition-colors"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                        variant="danger"
+                        size="sm"
+                        icon={<Trash2 className="w-4 h-4" />}
+                        className="text-error-600"
+                      />
                     )}
                   </div>
                 </div>
               ))}
-              {users.length === 0 && (
-                <div className="text-center py-10">
-                  <Users className="w-8 h-8 text-slate-200 mx-auto mb-2" />
-                  <p className="text-sm text-slate-400">Nenhum usuário cadastrado</p>
-                </div>
-              )}
             </div>
           )}
-        </div>
+        </Card>
       </main>
 
       {/* Modal */}
-      {(modal === "create" || modal === "edit") && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-4">
-          <div className="w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
-              <h3 className="font-bold text-slate-800">
-                {modal === "create" ? "Novo usuário" : "Editar usuário"}
-              </h3>
-              <button onClick={closeModal} className="p-1.5 hover:bg-slate-100 rounded-lg">
-                <X className="w-4 h-4 text-slate-400" />
-              </button>
-            </div>
-            <div className="px-5 py-4 space-y-3">
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 mb-1 uppercase tracking-wide">Nome completo</label>
-                <input
-                  type="text"
-                  value={form.name}
-                  onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-                  placeholder="Nome do usuário"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 mb-1 uppercase tracking-wide">E-mail</label>
-                <input
-                  type="email"
-                  value={form.email}
-                  onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-                  placeholder="email@clinica.com"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 mb-1 uppercase tracking-wide">
-                  Senha {modal === "edit" && <span className="normal-case font-normal">(deixe em branco para manter)</span>}
-                </label>
-                <div className="relative">
-                  <input
-                    type={showPass ? "text" : "password"}
-                    value={form.password}
-                    onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
-                    className="w-full px-3 py-2 pr-9 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-                    placeholder={modal === "create" ? "Mínimo 6 caracteres" : "Nova senha (opcional)"}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPass((v) => !v)}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400"
-                  >
-                    {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 mb-1 uppercase tracking-wide">Perfil</label>
-                <div className="grid grid-cols-2 gap-2">
-                  {ROLES.filter((r) => r.value !== "superadmin" || me.role === "superadmin").map((r) => (
-                    <button
-                      key={r.value}
-                      type="button"
-                      onClick={() => setForm((f) => ({ ...f, role: r.value }))}
-                      className={`px-3 py-2 rounded-xl text-xs font-semibold border transition-all ${
-                        form.role === r.value
-                          ? "border-brand-500 bg-brand-50 text-brand-700"
-                          : "border-slate-200 text-slate-600 hover:border-slate-300"
-                      }`}
-                    >
-                      {r.label}
-                    </button>
-                  ))}
-                </div>
-                <p className="text-[10px] text-slate-400 mt-2">
-                  Secretária: agendamentos • Médico: clínico completo • Admin: + usuários
-                </p>
-              </div>
-            </div>
-            <div className="flex gap-3 px-5 py-4 border-t border-slate-100">
+      <Modal
+        open={modal === "create" || modal === "edit"}
+        onOpenChange={(open) => !open && closeModal()}
+        title={modal === "create" ? "Novo usuário" : "Editar usuário"}
+        size="md"
+        footer={
+          <div className="flex gap-3">
+            <Button
+              onClick={closeModal}
+              variant="secondary"
+              fullWidth
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleSave}
+              isLoading={saving}
+              fullWidth
+              icon={<Check className="w-4 h-4" />}
+            >
+              Salvar
+            </Button>
+          </div>
+        }
+      >
+        <div className="space-y-4">
+          <Input
+            label="Nome completo"
+            type="text"
+            value={form.name}
+            onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+            placeholder="Nome do usuário"
+          />
+          <Input
+            label="E-mail"
+            type="email"
+            value={form.email}
+            onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+            placeholder="email@clinica.com"
+          />
+          <div>
+            <label className="block text-sm font-medium text-slate-900 mb-2">
+              Senha
+              {modal === "edit" && <span className="text-xs text-slate-500 font-normal ml-1">(deixe em branco para manter)</span>}
+            </label>
+            <div className="relative">
+              <input
+                type={showPass ? "text" : "password"}
+                value={form.password}
+                onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
+                className="w-full rounded-lg border border-slate-300 px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+                placeholder={modal === "create" ? "Mínimo 6 caracteres" : "Nova senha (opcional)"}
+              />
               <button
-                onClick={closeModal}
-                className="flex-1 py-2 border border-slate-200 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors"
+                type="button"
+                onClick={() => setShowPass((v) => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-700"
               >
-                Cancelar
-              </button>
-              <button
-                onClick={handleSave}
-                disabled={saving}
-                className="flex-1 py-2 rounded-xl text-sm font-bold text-white bg-brand-600 hover:bg-brand-700 transition-colors disabled:opacity-60 flex items-center justify-center gap-1.5"
-              >
-                {saving
-                  ? <><Loader2 className="w-4 h-4 animate-spin" /> Salvando...</>
-                  : <><Check className="w-4 h-4" /> Salvar</>
-                }
+                {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
           </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-900 mb-2">Perfil</label>
+            <div className="grid grid-cols-2 gap-2">
+              {ROLES.filter((r) => r.value !== "superadmin" || me.role === "superadmin").map((r) => (
+                <button
+                  key={r.value}
+                  type="button"
+                  onClick={() => setForm((f) => ({ ...f, role: r.value }))}
+                  className={`px-3 py-2.5 rounded-lg text-xs font-semibold border transition-all ${
+                    form.role === r.value
+                      ? "border-brand-500 bg-brand-50 text-brand-700"
+                      : "border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+                  }`}
+                >
+                  {r.label}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-slate-600 mt-3">
+              Secretária: agendamentos • Médico: clínico completo • Admin: + usuários
+            </p>
+          </div>
         </div>
-      )}
+      </Modal>
     </div>
   );
 }

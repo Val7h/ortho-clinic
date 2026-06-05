@@ -1,13 +1,15 @@
 "use client";
 import { useEffect, useState } from "react";
-import { BookOpen, Search, ChevronRight, X } from "lucide-react";
+import { BookOpen, Search, ChevronRight, X, Printer } from "lucide-react";
 import NavBar from "@/components/NavBar";
+import { Card, Badge, Button, Input, Modal, useModal } from "@/components/ui";
 import { leafletsApi } from "@/lib/api";
 
 export default function LeafletsPage() {
   const [leaflets, setLeaflets] = useState<any[]>([]);
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<any>(null);
+  const modal = useModal(false);
 
   useEffect(() => {
     leafletsApi.list().then(setLeaflets).catch(() => {});
@@ -21,46 +23,54 @@ export default function LeafletsPage() {
       l.tags?.some((t: string) => t.toLowerCase().includes(search.toLowerCase()))
   );
 
+  const openLeaflet = (leaflet: any) => {
+    setSelected(leaflet);
+    modal.openModal();
+  };
+
   return (
-    <div className="min-h-screen bg-slate-100">
+    <div className="min-h-screen bg-slate-50">
       <NavBar title="Folhetos Informativos" back="/" />
 
       <main className="max-w-3xl mx-auto px-4 py-4 space-y-4">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <input
-            className="input pl-9"
-            placeholder="Buscar por condição, categoria..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
+        <Input
+          label=""
+          icon={<Search className="w-4 h-4" />}
+          iconPosition="left"
+          placeholder="Buscar por condição, categoria..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
 
         {categories.map((cat) => {
           const items = filtered.filter((l) => l.category === cat);
           if (items.length === 0) return null;
           return (
-            <div key={cat}>
-              <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">{cat}</h3>
+            <div key={cat} className="space-y-3">
+              <h3 className="text-xs font-semibold text-slate-700 uppercase tracking-widest">{cat}</h3>
               <div className="space-y-2">
                 {items.map((l) => (
                   <button
                     key={l.id}
-                    onClick={() => setSelected(l)}
-                    className="card w-full p-4 flex items-center gap-3 text-left hover:shadow-md active:scale-95 transition-all"
+                    onClick={() => openLeaflet(l)}
+                    className="w-full text-left"
                   >
-                    <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center flex-shrink-0">
-                      <BookOpen className="w-5 h-5 text-purple-600" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-gray-900 text-sm truncate">{l.title}</p>
-                      <div className="flex gap-1 mt-1">
-                        {l.tags?.slice(0, 3).map((t: string) => (
-                          <span key={t} className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">{t}</span>
-                        ))}
+                    <Card hoverable padding="md" className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-brand-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <BookOpen className="w-5 h-5 text-brand-600" />
                       </div>
-                    </div>
-                    <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-slate-900 text-sm truncate">{l.title}</p>
+                        <div className="flex gap-1 mt-2 flex-wrap">
+                          {l.tags?.slice(0, 2).map((t: string) => (
+                            <Badge key={t} variant="neutral" size="sm">
+                              {t}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                    </Card>
                   </button>
                 ))}
               </div>
@@ -69,33 +79,43 @@ export default function LeafletsPage() {
         })}
 
         {filtered.length === 0 && (
-          <div className="text-center py-12 text-gray-400">
-            <BookOpen className="w-10 h-10 mx-auto mb-2 opacity-40" />
-            <p className="text-sm">Nenhum folheto encontrado</p>
+          <div className="text-center py-12">
+            <BookOpen className="w-12 h-12 text-slate-200 mx-auto mb-3" />
+            <p className="text-sm text-slate-500">Nenhum folheto encontrado</p>
           </div>
         )}
       </main>
 
       {/* Modal de visualização */}
-      {selected && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[85vh] flex flex-col">
-            <div className="flex items-center justify-between p-5 border-b border-gray-100">
-              <h2 className="font-semibold text-gray-900">{selected.title}</h2>
-              <div className="flex gap-2">
-                <button onClick={() => window.print()} className="btn-secondary text-sm">Imprimir</button>
-                <button onClick={() => setSelected(null)} className="p-2 hover:bg-gray-100 rounded-xl">
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-            </div>
-            <div
-              className="overflow-y-auto p-5 prose prose-sm max-w-none"
-              dangerouslySetInnerHTML={{ __html: selected.content_html }}
-            />
+      <Modal
+        open={modal.open}
+        onOpenChange={modal.onOpenChange}
+        title={selected?.title}
+        size="lg"
+        footer={
+          <div className="flex gap-3">
+            <Button
+              onClick={() => window.print()}
+              variant="secondary"
+              icon={<Printer className="w-4 h-4" />}
+            >
+              Imprimir
+            </Button>
+            <Button
+              onClick={() => modal.close()}
+              variant="tertiary"
+              fullWidth
+            >
+              Fechar
+            </Button>
           </div>
-        </div>
-      )}
+        }
+      >
+        <div
+          className="prose prose-sm max-w-none text-slate-700"
+          dangerouslySetInnerHTML={{ __html: selected?.content_html || "" }}
+        />
+      </Modal>
     </div>
   );
 }

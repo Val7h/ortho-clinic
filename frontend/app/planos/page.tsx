@@ -2,6 +2,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Check, X, ChevronDown, ChevronUp, Stethoscope } from "lucide-react";
+import { Card, Badge, Button } from "@/components/ui";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -122,17 +123,17 @@ const faqs = [
 
 function FeatureRow({ label, included }: Feature) {
   return (
-    <li className="flex items-center gap-3 py-1.5">
+    <li className="flex items-center gap-3 py-2">
       {included ? (
-        <span className="flex-shrink-0 w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center">
-          <Check className="w-3 h-3 text-emerald-600" strokeWidth={2.5} />
+        <span className="flex-shrink-0 w-5 h-5 rounded-full bg-success-100 flex items-center justify-center">
+          <Check className="w-3 h-3 text-success-600" strokeWidth={2.5} />
         </span>
       ) : (
         <span className="flex-shrink-0 w-5 h-5 rounded-full bg-slate-100 flex items-center justify-center">
           <X className="w-3 h-3 text-slate-400" strokeWidth={2.5} />
         </span>
       )}
-      <span className={`text-sm ${included ? "text-slate-700" : "text-slate-400"}`}>{label}</span>
+      <span className={`text-sm font-medium ${included ? "text-slate-800" : "text-slate-400"}`}>{label}</span>
     </li>
   );
 }
@@ -141,65 +142,61 @@ function PlanCard({ plan }: { plan: Plan }) {
   const waUrl = `https://wa.me/5583999999999?text=${encodeURIComponent(plan.waMessage)}`;
 
   return (
-    <div
-      className={`relative flex flex-col rounded-2xl bg-white shadow-lg overflow-hidden transition-transform hover:-translate-y-1 ${
+    <Card
+      className={`relative flex flex-col transition-transform hover:-translate-y-1 overflow-hidden ${
         plan.popular
-          ? "ring-2 ring-blue-600 shadow-blue-100"
+          ? "ring-2 ring-brand-600 shadow-lg"
           : "ring-1 ring-slate-200"
       }`}
     >
       {/* Popular badge */}
       {plan.popular && (
-        <div className="absolute top-0 left-0 right-0 text-center bg-blue-600 py-1.5">
+        <div className="absolute top-0 left-0 right-0 text-center bg-brand-600 py-2 z-10">
           <span className="text-xs font-bold text-white tracking-widest uppercase">
             Mais popular
           </span>
         </div>
       )}
 
-      <div className={`p-7 ${plan.popular ? "pt-10" : ""}`}>
+      <div className={`p-6 ${plan.popular ? "pt-12" : ""}`}>
         {/* Plan name */}
-        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">
+        <Badge variant="brand" size="sm" className="mb-3">
           {plan.name}
-        </p>
+        </Badge>
 
         {/* Price */}
-        <div className="flex items-end gap-1 mb-3">
-          <span className="text-sm font-semibold text-slate-500 self-start mt-2">R$</span>
+        <div className="flex items-end gap-1 mb-4">
+          <span className="text-sm font-semibold text-slate-600 self-start mt-1">R$</span>
           <span className="text-5xl font-extrabold text-slate-900 leading-none">
             {plan.price}
           </span>
-          <span className="text-sm text-slate-400 mb-1">/{plan.period}</span>
+          <span className="text-sm text-slate-600 mb-1">/{plan.period}</span>
         </div>
 
         {/* Description */}
-        <p className="text-sm text-slate-500 mb-6 leading-relaxed">{plan.description}</p>
+        <p className="text-sm text-slate-600 mb-6 leading-relaxed">{plan.description}</p>
 
         {/* CTA */}
-        <a
-          href={waUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className={`block w-full text-center py-3 rounded-xl font-bold text-sm transition-all ${
-            plan.popular
-              ? "bg-blue-600 text-white hover:bg-blue-700 shadow-md shadow-blue-200"
-              : "bg-slate-900 text-white hover:bg-slate-700"
-          }`}
-        >
-          {plan.ctaLabel}
+        <a href={waUrl} target="_blank" rel="noopener noreferrer" className="block w-full mb-6">
+          <Button
+            variant={plan.popular ? "primary" : "secondary"}
+            fullWidth
+          >
+            {plan.ctaLabel}
+          </Button>
         </a>
       </div>
 
       {/* Divider */}
-      <div className="border-t border-slate-100 mx-6" />
+      <div className="border-t border-slate-200 mx-6" />
 
       {/* Features list */}
-      <ul className="px-7 py-5 flex flex-col gap-0.5 flex-1">
+      <ul className="px-6 py-5 flex flex-col gap-0.5 flex-1">
         {plan.features.map((f) => (
           <FeatureRow key={f.label} {...f} />
         ))}
       </ul>
-    </div>
+    </Card>
   );
 }
 
@@ -207,24 +204,24 @@ function FaqItem({ question, answer }: { question: string; answer: string }) {
   const [open, setOpen] = useState(false);
 
   return (
-    <div className="border border-slate-200 rounded-xl overflow-hidden">
+    <Card padding="lg">
       <button
         onClick={() => setOpen(!open)}
-        className="w-full flex items-center justify-between gap-4 px-6 py-4 text-left bg-white hover:bg-slate-50 transition-colors"
+        className="w-full flex items-center justify-between gap-4 text-left"
       >
-        <span className="font-semibold text-slate-800 text-sm">{question}</span>
+        <span className="font-semibold text-slate-900 text-sm">{question}</span>
         {open ? (
-          <ChevronUp className="w-4 h-4 text-slate-400 flex-shrink-0" />
+          <ChevronUp className="w-5 h-5 text-slate-400 flex-shrink-0" />
         ) : (
-          <ChevronDown className="w-4 h-4 text-slate-400 flex-shrink-0" />
+          <ChevronDown className="w-5 h-5 text-slate-400 flex-shrink-0" />
         )}
       </button>
       {open && (
-        <div className="px-6 py-4 bg-slate-50 border-t border-slate-100">
+        <div className="mt-4 pt-4 border-t border-slate-200">
           <p className="text-sm text-slate-600 leading-relaxed">{answer}</p>
         </div>
       )}
-    </div>
+    </Card>
   );
 }
 
@@ -289,12 +286,12 @@ export default function PlanosPage() {
 
       {/* ── Feature comparison callout ───────────────────────────────────── */}
       <section
-        className="py-14 px-4"
+        className="py-16 px-4"
         style={{ background: "linear-gradient(135deg, #0F2D5E 0%, #1A4A9A 100%)" }}
       >
         <div className="max-w-2xl mx-auto text-center text-white">
-          <h2 className="text-2xl font-extrabold mb-3">Tem dúvidas sobre qual plano escolher?</h2>
-          <p className="text-blue-100 text-sm mb-8">
+          <h2 className="text-2xl sm:text-3xl font-bold mb-4">Tem dúvidas sobre qual plano escolher?</h2>
+          <p className="text-blue-100 text-sm mb-8 leading-relaxed">
             Nossa equipe entende a rotina de uma clínica de ortopedia.
             Fale com a gente pelo WhatsApp e te ajudamos a decidir.
           </p>
@@ -302,9 +299,11 @@ export default function PlanosPage() {
             href={`https://wa.me/5583999999999?text=${encodeURIComponent("Olá! Quero saber qual plano do OrthoClinic é ideal para minha clínica.")}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-block bg-emerald-500 hover:bg-emerald-400 text-white font-bold px-8 py-4 rounded-xl transition-colors shadow-lg shadow-emerald-900/30 text-sm"
+            className="inline-block"
           >
-            Falar com consultor pelo WhatsApp
+            <Button variant="success" size="lg">
+              Falar com consultor pelo WhatsApp
+            </Button>
           </a>
         </div>
       </section>

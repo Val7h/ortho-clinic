@@ -1,13 +1,26 @@
-"use client";
-import { useEffect, useState } from "react";
+'use client';
+
+import { useEffect, useState } from 'react';
 import {
-  DollarSign, Plus, Trash2, TrendingUp, CreditCard,
-  Wallet, Smartphone, Banknote, Gift, ChevronDown, X,
-} from "lucide-react";
-import NavBar from "@/components/NavBar";
-import { financialApi, patientsApi } from "@/lib/api";
-import { useProtectedPage } from "@/components/AuthProvider";
-import toast from "react-hot-toast";
+  DollarSign,
+  Plus,
+  Trash2,
+  CreditCard,
+  Smartphone,
+  Banknote,
+  Gift,
+  ChevronDown,
+} from 'lucide-react';
+import NavBar from '@/components/NavBar';
+import { financialApi, patientsApi } from '@/lib/api';
+import { useProtectedPage } from '@/components/AuthProvider';
+import toast from 'react-hot-toast';
+import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
+import { Input } from '@/components/ui/Input';
+import { Select } from '@/components/ui/Select';
+import { Badge } from '@/components/ui/Badge';
+import { Modal, useModal } from '@/components/ui/Modal';
 
 const METHODS: Record<string, { label: string; icon: any; color: string }> = {
   pix: { label: "Pix", icon: Smartphone, color: "text-teal-600 bg-teal-50" },
@@ -30,13 +43,13 @@ function formatDate(iso: string) {
 
 export default function FinanceiroPage() {
   const { user } = useProtectedPage();
+  const { open: showForm, onOpenChange: setShowForm } = useModal();
   const today = new Date();
   const [month, setMonth] = useState(today.getMonth() + 1);
   const [year, setYear] = useState(today.getFullYear());
   const [summary, setSummary] = useState<any>(null);
   const [records, setRecords] = useState<any[]>([]);
   const [patients, setPatients] = useState<any[]>([]);
-  const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     patient_id: "",
@@ -99,59 +112,80 @@ export default function FinanceiroPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-100">
+    <div className="min-h-screen bg-slate-50">
       <NavBar
         title="Financeiro"
-        subtitle="Controle de pagamentos particulares"
+        subtitle="Controle de pagamentos"
         back="/"
         actions={
-          <button onClick={() => setShowForm(true)} className="btn-primary text-sm flex items-center gap-1.5">
-            <Plus className="w-4 h-4" />
+          <Button size="md" icon={<Plus className="h-5 w-5" />} onClick={() => setShowForm(true)}>
             Registrar
-          </button>
+          </Button>
         }
       />
 
-      <main className="max-w-3xl mx-auto px-4 py-5 space-y-5">
-
+      <main className="mx-auto max-w-3xl space-y-6 px-4 py-8">
         {/* Month navigator */}
-        <div className="flex items-center justify-between bg-white rounded-2xl px-5 py-3 border border-gray-100 shadow-sm">
-          <button onClick={prevMonth} className="p-1.5 rounded-lg hover:bg-slate-100 transition-colors">
-            <ChevronDown className="w-4 h-4 text-slate-500 rotate-90" />
-          </button>
-          <span className="font-bold text-slate-700 text-base">
-            {MONTHS_PT[month - 1]} {year}
-          </span>
-          <button onClick={nextMonth} className="p-1.5 rounded-lg hover:bg-slate-100 transition-colors">
-            <ChevronDown className="w-4 h-4 text-slate-500 -rotate-90" />
-          </button>
-        </div>
+        <Card shadow="sm">
+          <div className="flex items-center justify-between p-4">
+            <button
+              onClick={prevMonth}
+              className="rounded-lg p-2 hover:bg-slate-100 transition-colors"
+            >
+              <ChevronDown className="h-5 w-5 rotate-90 text-slate-500" />
+            </button>
+            <span className="text-lg font-bold text-slate-900">
+              {MONTHS_PT[month - 1]} {year}
+            </span>
+            <button
+              onClick={nextMonth}
+              className="rounded-lg p-2 hover:bg-slate-100 transition-colors"
+            >
+              <ChevronDown className="h-5 w-5 -rotate-90 text-slate-500" />
+            </button>
+          </div>
+        </Card>
 
         {/* Summary cards */}
         {summary && (
-          <div className="grid grid-cols-3 gap-3">
-            <div className="card p-4 border-l-4 border-emerald-400">
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1">Mês</p>
-              <p className="text-xl font-extrabold text-emerald-600 leading-tight">{formatBRL(summary.total_month)}</p>
-              <p className="text-xs text-slate-400 mt-0.5">{summary.count_month} pgto{summary.count_month !== 1 ? "s" : ""}</p>
-            </div>
-            <div className="card p-4 border-l-4 border-brand-400">
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1">No ano</p>
-              <p className="text-xl font-extrabold text-brand-600 leading-tight">{formatBRL(summary.total_ytd)}</p>
-              <p className="text-xs text-slate-400 mt-0.5">{year}</p>
-            </div>
-            <div className="card p-4 border-l-4 border-amber-400">
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1">Pendente</p>
-              <p className="text-xl font-extrabold text-amber-600 leading-tight">{formatBRL(summary.pending)}</p>
-              <p className="text-xs text-slate-400 mt-0.5">a receber</p>
-            </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <Card shadow="sm">
+              <div className="border-l-4 border-success-400 p-4">
+                <p className="mb-1 text-xs font-bold uppercase tracking-wider text-slate-600">Mês</p>
+                <p className="leading-tight text-2xl font-bold text-success-600">
+                  {formatBRL(summary.total_month)}
+                </p>
+                <p className="mt-1 text-xs text-slate-600">
+                  {summary.count_month} pagto{summary.count_month !== 1 ? 's' : ''}
+                </p>
+              </div>
+            </Card>
+            <Card shadow="sm">
+              <div className="border-l-4 border-brand-400 p-4">
+                <p className="mb-1 text-xs font-bold uppercase tracking-wider text-slate-600">No ano</p>
+                <p className="leading-tight text-2xl font-bold text-brand-600">
+                  {formatBRL(summary.total_ytd)}
+                </p>
+                <p className="mt-1 text-xs text-slate-600">{year}</p>
+              </div>
+            </Card>
+            <Card shadow="sm">
+              <div className="border-l-4 border-warning-400 p-4">
+                <p className="mb-1 text-xs font-bold uppercase tracking-wider text-slate-600">Pendente</p>
+                <p className="leading-tight text-2xl font-bold text-warning-600">
+                  {formatBRL(summary.pending)}
+                </p>
+                <p className="mt-1 text-xs text-slate-600">a receber</p>
+              </div>
+            </Card>
           </div>
         )}
 
         {/* By method */}
         {summary && Object.keys(summary.by_method || {}).length > 0 && (
-          <div className="card p-5">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Por forma de pagamento</p>
+          <Card shadow="sm">
+            <div className="p-6">
+              <p className="mb-4 text-sm font-bold uppercase tracking-wider text-slate-600">Por forma de pagamento</p>
             <div className="space-y-2.5">
               {Object.entries(summary.by_method as Record<string, number>).map(([method, total]) => {
                 const m = METHODS[method] || { label: method, icon: DollarSign, color: "text-gray-600 bg-gray-50" };
@@ -178,13 +212,17 @@ export default function FinanceiroPage() {
                 );
               })}
             </div>
-          </div>
+            </div>
+          </Card>
         )}
 
         {/* Monthly bar chart */}
         {summary?.monthly_totals && Object.keys(summary.monthly_totals).length > 0 && (
-          <div className="card p-5">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-4">Faturamento mensal ({year})</p>
+          <Card shadow="sm">
+            <div className="p-6">
+              <p className="mb-4 text-sm font-bold uppercase tracking-wider text-slate-600">
+                Faturamento mensal ({year})
+              </p>
             <div className="flex items-end gap-1 h-24">
               {Array.from({ length: 12 }, (_, i) => {
                 const m = String(i + 1);
@@ -208,167 +246,165 @@ export default function FinanceiroPage() {
                 );
               })}
             </div>
-          </div>
+            </div>
+          </Card>
         )}
 
         {/* Records list */}
         <div>
-          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3">
+          <h3 className="mb-4 text-sm font-bold uppercase tracking-wider text-slate-600">
             Registros — {MONTHS_PT[month - 1]} {year}
-          </p>
+          </h3>
           {records.length === 0 ? (
-            <div className="card p-10 text-center">
-              <DollarSign className="w-10 h-10 text-slate-200 mx-auto mb-3" />
-              <p className="text-slate-500 text-sm">Nenhum pagamento registrado</p>
-              <button onClick={() => setShowForm(true)} className="btn-primary mt-4 text-sm">
-                Registrar pagamento
-              </button>
-            </div>
+            <Card shadow="sm">
+              <div className="space-y-4 py-12 text-center">
+                <DollarSign className="mx-auto h-10 w-10 text-slate-200" />
+                <p className="text-sm text-slate-600">Nenhum pagamento registrado</p>
+                <Button variant="primary" onClick={() => setShowForm(true)}>
+                  Registrar pagamento
+                </Button>
+              </div>
+            </Card>
           ) : (
-            <div className="card overflow-hidden divide-y divide-slate-100">
+            <Card shadow="sm">
+              <div className="divide-y divide-slate-100">
               {records.map((r) => {
                 const m = METHODS[r.payment_method] || { label: r.payment_method, icon: DollarSign, color: "text-gray-600 bg-gray-50" };
                 const Icon = m.icon;
                 return (
-                  <div key={r.id} className="flex items-center gap-4 px-5 py-3.5 hover:bg-slate-50 transition-colors">
-                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${m.color}`}>
-                      <Icon className="w-4 h-4" />
+                  <div key={r.id} className="flex items-center gap-4 px-6 py-4 transition-colors hover:bg-brand-50">
+                    <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg ${m.color}`}>
+                      <Icon className="h-5 w-5" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-slate-800 truncate">
+                      <p className="truncate text-sm font-semibold text-slate-900">
                         {patients.find((p) => p.id === r.patient_id)?.name || `Paciente #${r.patient_id}`}
                       </p>
-                      <p className="text-xs text-slate-400 truncate">
-                        {m.label} · {formatDate(r.date)}{r.description ? ` · ${r.description}` : ""}
+                      <p className="mt-0.5 truncate text-xs text-slate-600">
+                        {m.label} · {formatDate(r.date)}{r.description ? ` · ${r.description}` : ''}
                       </p>
                     </div>
-                    <div className="flex items-center gap-3 flex-shrink-0">
+                    <div className="flex flex-shrink-0 items-center gap-3">
                       <div className="text-right">
-                        <p className="text-sm font-bold text-emerald-600">{formatBRL(r.amount)}</p>
-                        {r.status !== "paid" && (
-                          <p className="text-xs text-amber-600 font-medium capitalize">{r.status}</p>
+                        <p className="text-sm font-bold text-success-600">{formatBRL(r.amount)}</p>
+                        {r.status !== 'paid' && (
+                          <Badge variant="warning" size="sm" className="mt-1">
+                            {r.status === 'pending' ? 'Pendente' : r.status}
+                          </Badge>
                         )}
                       </div>
                       <button
                         onClick={() => handleDelete(r.id)}
-                        className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                        className="rounded-lg p-2 text-slate-300 transition-colors hover:bg-error-50 hover:text-error-600"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <Trash2 className="h-4 w-4" />
                       </button>
                     </div>
                   </div>
                 );
               })}
             </div>
+            </Card>
           )}
         </div>
 
       </main>
 
       {/* Form modal */}
-      {showForm && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div className="bg-white w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl shadow-2xl overflow-hidden">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-              <h3 className="font-bold text-gray-900">Registrar Pagamento</h3>
-              <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-gray-600">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
-              <div>
-                <label className="label">Paciente</label>
-                <select
-                  className="input"
-                  value={form.patient_id}
-                  onChange={(e) => setForm((f) => ({ ...f, patient_id: e.target.value }))}
-                  required
-                >
-                  <option value="">Selecionar paciente...</option>
-                  {patients.map((p) => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="label">Valor (R$)</label>
-                  <input
-                    className="input"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    placeholder="150,00"
-                    value={form.amount}
-                    onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="label">Data</label>
-                  <input
-                    className="input"
-                    type="date"
-                    value={form.date}
-                    onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))}
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="label">Forma de pagamento</label>
-                <div className="grid grid-cols-3 gap-2">
-                  {Object.entries(METHODS).map(([key, m]) => {
-                    const Icon = m.icon;
-                    return (
-                      <button
-                        key={key}
-                        type="button"
-                        onClick={() => setForm((f) => ({ ...f, payment_method: key }))}
-                        className={`flex flex-col items-center gap-1.5 py-2.5 px-2 rounded-xl border text-xs font-medium transition-all ${
-                          form.payment_method === key
-                            ? "border-brand-500 bg-brand-50 text-brand-700"
-                            : "border-gray-200 text-gray-600 hover:border-brand-300"
-                        }`}
-                      >
-                        <Icon className="w-4 h-4" />
-                        {m.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-              <div>
-                <label className="label">Descrição (opcional)</label>
-                <input
-                  className="input"
-                  placeholder="Ex: Consulta inicial, Infiltração..."
-                  value={form.description}
-                  onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-                />
-              </div>
-              <div>
-                <label className="label">Status</label>
-                <select
-                  className="input"
-                  value={form.status}
-                  onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}
-                >
-                  <option value="paid">Pago</option>
-                  <option value="pending">Pendente</option>
-                </select>
-              </div>
-              <div className="flex gap-3 pt-2">
-                <button type="button" onClick={() => setShowForm(false)} className="btn-secondary flex-1">
-                  Cancelar
-                </button>
-                <button type="submit" disabled={saving} className="btn-primary flex-1">
-                  {saving ? "Salvando..." : "Salvar"}
-                </button>
-              </div>
-            </form>
+      <Modal
+        open={showForm}
+        onOpenChange={setShowForm}
+        title="Registrar Pagamento"
+        size="md"
+        footer={
+          <div className="flex gap-3">
+            <Button variant="secondary" fullWidth onClick={() => setShowForm(false)}>
+              Cancelar
+            </Button>
+            <Button
+              variant="primary"
+              fullWidth
+              isLoading={saving}
+              onClick={() => {
+                const form_el = document.querySelector('form[data-financeiro-form]') as HTMLFormElement;
+                if (form_el) form_el.dispatchEvent(new Event('submit', { bubbles: true }));
+              }}
+            >
+              {saving ? 'Salvando...' : 'Salvar'}
+            </Button>
           </div>
-        </div>
-      )}
+        }
+      >
+        <form onSubmit={handleSubmit} data-financeiro-form className="space-y-5">
+          <Select
+            label="Paciente"
+            options={patients.map((p) => ({ value: p.id, label: p.name }))}
+            value={form.patient_id}
+            onChange={(e) => setForm((f) => ({ ...f, patient_id: e.target.value }))}
+            required
+          />
+
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              type="number"
+              label="Valor (R$)"
+              step="0.01"
+              min="0"
+              placeholder="150,00"
+              value={form.amount}
+              onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}
+              required
+            />
+            <Input
+              type="date"
+              label="Data"
+              value={form.date}
+              onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))}
+            />
+          </div>
+
+          <div>
+            <label className="mb-2 block text-sm font-medium text-slate-900">Forma de pagamento</label>
+            <div className="grid grid-cols-3 gap-2">
+              {Object.entries(METHODS).map(([key, m]) => {
+                const Icon = m.icon;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setForm((f) => ({ ...f, payment_method: key }))}
+                    className={`flex flex-col items-center gap-2 rounded-lg border-2 p-2.5 text-center text-xs font-medium transition-all ${
+                      form.payment_method === key
+                        ? 'border-brand-600 bg-brand-50 text-brand-700'
+                        : 'border-slate-200 text-slate-600 hover:border-brand-300'
+                    }`}
+                  >
+                    <Icon className="h-5 w-5" />
+                    {m.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <Input
+            label="Descrição (opcional)"
+            placeholder="Ex: Consulta inicial, Infiltração..."
+            value={form.description}
+            onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+          />
+
+          <Select
+            label="Status"
+            options={[
+              { value: 'paid', label: 'Pago' },
+              { value: 'pending', label: 'Pendente' },
+            ]}
+            value={form.status}
+            onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}
+          />
+        </form>
+      </Modal>
     </div>
   );
 }

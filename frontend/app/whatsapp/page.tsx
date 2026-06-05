@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 import NavBar from "@/components/NavBar";
+import { Card, Badge, Button } from "@/components/ui";
 import { whatsappApi } from "@/lib/api";
 import { useProtectedPage } from "@/components/AuthProvider";
 
@@ -120,45 +121,44 @@ function SendCard({
   };
 
   return (
-    <div className="mt-2 p-4 rounded-xl bg-slate-100 border border-gray-200 space-y-3">
+    <div className="mt-3 p-4 rounded-lg bg-slate-50 border border-slate-200 space-y-4">
       <div className="flex items-start gap-2">
-        <Phone className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
-        <p className="text-xs text-gray-600">
-          {patient.phone || <span className="text-amber-600">Telefone não cadastrado</span>}
+        <Phone className="w-4 h-4 text-slate-600 flex-shrink-0 mt-0.5" />
+        <p className="text-xs text-slate-700">
+          {patient.phone || <span className="text-error-600 font-medium">Telefone não cadastrado</span>}
         </p>
       </div>
-      <div className="bg-white rounded-xl p-3 border border-gray-100">
-        <p className="text-xs font-semibold text-gray-500 mb-1.5">Prévia da mensagem:</p>
+      <div className="bg-white rounded-lg p-3 border border-slate-200">
+        <p className="text-xs font-semibold text-slate-600 mb-2">Prévia da mensagem:</p>
         {preview ? (
-          <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">{preview}</p>
+          <p className="text-sm text-slate-800 whitespace-pre-wrap leading-relaxed">{preview}</p>
         ) : (
-          <div className="flex items-center gap-2 text-gray-400">
-            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+          <div className="flex items-center gap-2 text-slate-500">
+            <RefreshCw className="w-4 h-4 animate-spin" />
             <span className="text-xs">Carregando...</span>
           </div>
         )}
       </div>
       {demo && (
-        <p className="text-xs text-amber-600 flex items-center gap-1.5">
-          <AlertCircle className="w-3.5 h-3.5" />
-          Modo demo — mensagem salva no sistema mas não enviada
-        </p>
+        <div className="flex items-start gap-2 p-3 bg-warning-50 border border-warning-200 rounded-lg">
+          <AlertCircle className="w-4 h-4 text-warning-600 flex-shrink-0 mt-0.5" />
+          <p className="text-xs text-warning-700">Modo demo — mensagem salva no sistema mas não enviada</p>
+        </div>
       )}
       <div className="flex gap-2">
-        <button onClick={onCancel} className="btn-secondary flex-1 text-sm py-1.5">
+        <Button onClick={onCancel} variant="secondary" fullWidth>
           Cancelar
-        </button>
-        <button
+        </Button>
+        <Button
           onClick={handleSend}
           disabled={sending || !preview}
-          className="btn-primary flex-1 text-sm py-1.5 flex items-center justify-center gap-1.5"
+          isLoading={sending}
+          variant="success"
+          fullWidth
+          icon={<Send className="w-4 h-4" />}
         >
-          {sending ? (
-            <><div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> Enviando...</>
-          ) : (
-            <><Send className="w-3.5 h-3.5" /> {demo ? "Simular envio" : "Enviar agora"}</>
-          )}
-        </button>
+          {demo ? "Simular envio" : "Enviar agora"}
+        </Button>
       </div>
     </div>
   );
@@ -185,27 +185,27 @@ function PatientRow({
   const [expanded, setExpanded] = useState(false);
 
   return (
-    <div className="py-3 border-b border-gray-50 last:border-0">
+    <div className="pb-3 border-b border-slate-200 last:border-0 pt-3 first:pt-0">
       <div className="flex items-center gap-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-medium text-gray-900 truncate">{patient.name}</span>
-            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${badgeColor}`}>
+            <span className="text-sm font-semibold text-slate-900 truncate">{patient.name}</span>
+            <Badge variant="success" size="sm">
               {badge}
-            </span>
+            </Badge>
           </div>
           {patient.phone && (
-            <p className="text-xs text-gray-400 mt-0.5">{patient.phone}</p>
+            <p className="text-xs text-slate-600 mt-1">{patient.phone}</p>
           )}
         </div>
-        <button
+        <Button
           onClick={() => setExpanded((v) => !v)}
-          className="flex items-center gap-1 text-xs font-medium text-green-700 bg-green-50 hover:bg-green-100 px-3 py-1.5 rounded-lg transition-colors flex-shrink-0"
+          variant="success"
+          size="sm"
+          icon={<MessageCircle className="w-4 h-4" />}
         >
-          <MessageCircle className="w-3.5 h-3.5" />
-          Enviar
           {expanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-        </button>
+        </Button>
       </div>
       {expanded && (
         <SendCard
@@ -223,36 +223,48 @@ function PatientRow({
 
 // ── Section ───────────────────────────────────────────────────────────────────
 function Section({
-  title, icon: Icon, iconColor, count, children, emptyText,
+  title, icon: Icon, variant = "brand", count, children, emptyText,
 }: {
   title: string;
   icon: React.ComponentType<any>;
-  iconColor: string;
+  variant?: any;
   count: number;
   children: React.ReactNode;
   emptyText: string;
 }) {
+  const variantMap: Record<string, string> = {
+    brand: "bg-brand-100",
+    pink: "bg-error-100",
+    blue: "bg-brand-100",
+    purple: "bg-accent-100",
+    teal: "bg-accent-100",
+    amber: "bg-warning-100",
+    slate: "bg-slate-100",
+  };
+
   return (
-    <div className="card overflow-hidden">
-      <div className="px-5 py-4 border-b border-gray-50 flex items-center gap-3">
-        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${iconColor}`}>
-          <Icon className="w-4 h-4 text-white" />
+    <Card>
+      <div className="flex items-center gap-3 mb-4 pb-4 border-b border-slate-200">
+        <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${variantMap[variant] || variantMap.brand}`}>
+          <Icon className="w-5 h-5 text-slate-900" />
         </div>
-        <h2 className="font-semibold text-gray-900 flex-1">{title}</h2>
+        <h2 className="font-semibold text-slate-900 flex-1">{title}</h2>
         {count > 0 && (
-          <span className="text-xs font-bold bg-gray-100 text-gray-700 px-2 py-0.5 rounded-full">
+          <Badge variant="neutral" size="sm">
             {count}
-          </span>
+          </Badge>
         )}
       </div>
-      <div className="px-5">
+      <div>
         {count === 0 ? (
-          <p className="py-4 text-sm text-gray-400 text-center">{emptyText}</p>
+          <p className="py-6 text-sm text-slate-500 text-center">{emptyText}</p>
         ) : (
-          children
+          <div className="space-y-0.5">
+            {children}
+          </div>
         )}
       </div>
-    </div>
+    </Card>
   );
 }
 
@@ -282,15 +294,18 @@ export default function WhatsAppPage() {
     (dash?.returns_week.length ?? 0);
 
   return (
-    <div className="min-h-screen bg-slate-100">
+    <div className="min-h-screen bg-slate-50">
       <NavBar
         title="WhatsApp & Lembretes"
         subtitle="Comunicação com pacientes"
         back="/"
         actions={
-          <button onClick={load} className="p-2 text-gray-400 hover:text-gray-600 rounded-lg">
-            <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
-          </button>
+          <Button
+            onClick={load}
+            variant="tertiary"
+            size="sm"
+            icon={<RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />}
+          />
         }
       />
 
@@ -298,51 +313,53 @@ export default function WhatsAppPage() {
 
         {/* ── Config banner ────────────────────────────────────────────── */}
         {config && (
-          <div className={`card p-4 flex items-start gap-3 ${demo ? "border-l-4 border-amber-400 bg-amber-50" : "border-l-4 border-green-400 bg-green-50"}`}>
-            <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${demo ? "bg-amber-500" : "bg-green-600"}`}>
-              <MessageSquare className="w-4 h-4 text-white" />
+          <Card className={`border-l-4 ${demo ? "border-l-warning-500 bg-warning-50" : "border-l-success-500 bg-success-50"}`}>
+            <div className="flex items-start gap-3">
+              <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${demo ? "bg-warning-100" : "bg-success-100"}`}>
+                <MessageSquare className={`w-5 h-5 ${demo ? "text-warning-600" : "text-success-600"}`} />
+              </div>
+              <div className="flex-1 min-w-0">
+                {demo ? (
+                  <>
+                    <p className="font-semibold text-warning-900 text-sm">Modo demonstração ativo</p>
+                    <p className="text-xs text-warning-700 mt-1">
+                      Mensagens são simuladas e salvas no sistema sem envio real.
+                      Para envio real, cadastre-se no <strong>Z-API (zapi.com.br)</strong> e adicione
+                      <code className="bg-warning-100 px-1 rounded mx-0.5 text-xs font-mono">WHATSAPP_TOKEN</code> no Render.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="font-semibold text-success-900 text-sm">WhatsApp configurado ✓</p>
+                    <p className="text-xs text-success-700 mt-1">
+                      Mensagens serão enviadas via API para os pacientes.
+                    </p>
+                  </>
+                )}
+              </div>
             </div>
-            <div className="flex-1 min-w-0">
-              {demo ? (
-                <>
-                  <p className="font-semibold text-amber-900 text-sm">Modo demonstração ativo</p>
-                  <p className="text-xs text-amber-700 mt-0.5">
-                    Mensagens são simuladas e salvas no sistema sem envio real.
-                    Para envio real, cadastre-se no <strong>Z-API (zapi.com.br)</strong> e adicione
-                    <code className="bg-amber-100 px-1 rounded mx-0.5">WHATSAPP_TOKEN</code> no Render.
-                  </p>
-                </>
-              ) : (
-                <>
-                  <p className="font-semibold text-green-900 text-sm">WhatsApp configurado ✓</p>
-                  <p className="text-xs text-green-700 mt-0.5">
-                    Mensagens serão enviadas via API para os pacientes.
-                  </p>
-                </>
-              )}
-            </div>
-          </div>
+          </Card>
         )}
 
         {/* ── Summary ──────────────────────────────────────────────────── */}
         {dash && (
           <div className="grid grid-cols-3 gap-3">
             {[
-              { label: "Aniversários hoje", value: dash.birthdays_today.length, color: "text-pink-600" },
-              { label: "Retornos hoje", value: dash.returns_today.length, color: "text-blue-600" },
-              { label: "Esta semana", value: totalAlerts, color: "text-purple-600" },
+              { label: "Aniversários hoje", value: dash.birthdays_today.length, variant: "error" },
+              { label: "Retornos hoje", value: dash.returns_today.length, variant: "brand" },
+              { label: "Esta semana", value: totalAlerts, variant: "accent" },
             ].map((s) => (
-              <div key={s.label} className="card p-3 text-center">
-                <p className={`text-2xl font-bold ${s.color}`}>{s.value}</p>
-                <p className="text-xs text-gray-500 mt-0.5 leading-tight">{s.label}</p>
-              </div>
+              <Card key={s.label} padding="md" className="text-center">
+                <p className={`text-3xl font-bold text-${s.variant}-600`}>{s.value}</p>
+                <p className="text-xs text-slate-600 mt-2">{s.label}</p>
+              </Card>
             ))}
           </div>
         )}
 
         {loading && !dash && (
           <div className="flex justify-center py-12">
-            <div className="w-8 h-8 border-2 border-green-600 border-t-transparent rounded-full animate-spin" />
+            <RefreshCw className="w-7 h-7 animate-spin text-brand-600" />
           </div>
         )}
 
@@ -352,7 +369,7 @@ export default function WhatsAppPage() {
             <Section
               title="🎂 Aniversariantes Hoje"
               icon={Cake}
-              iconColor="bg-pink-500"
+              variant="pink"
               count={dash.birthdays_today.length}
               emptyText="Nenhum aniversariante hoje"
             >
@@ -373,7 +390,7 @@ export default function WhatsAppPage() {
             <Section
               title="📅 Retornos Hoje"
               icon={Calendar}
-              iconColor="bg-blue-500"
+              variant="blue"
               count={dash.returns_today.length}
               emptyText="Nenhum retorno agendado para hoje"
             >
@@ -395,7 +412,7 @@ export default function WhatsAppPage() {
             <Section
               title="🎉 Aniversários — Próximos 7 dias"
               icon={Cake}
-              iconColor="bg-purple-500"
+              variant="purple"
               count={dash.birthdays_week.length}
               emptyText="Nenhum aniversário nos próximos 7 dias"
             >
@@ -416,7 +433,7 @@ export default function WhatsAppPage() {
             <Section
               title="⏰ Retornos — Próximos 7 dias"
               icon={Clock}
-              iconColor="bg-teal-500"
+              variant="teal"
               count={dash.returns_week.length}
               emptyText="Nenhum retorno agendado para os próximos 7 dias"
             >
@@ -438,7 +455,7 @@ export default function WhatsAppPage() {
             <Section
               title="💤 Sem consulta há 6+ meses"
               icon={UserCheck}
-              iconColor="bg-amber-500"
+              variant="amber"
               count={dash.overdue.length}
               emptyText="Todos os pacientes consultaram nos últimos 6 meses"
             >
@@ -459,15 +476,15 @@ export default function WhatsAppPage() {
             <Section
               title="📋 Histórico de Mensagens"
               icon={MessageSquare}
-              iconColor="bg-slate-1000"
+              variant="slate"
               count={dash.recent_messages.length}
               emptyText="Nenhuma mensagem enviada ainda"
             >
-              <div className="py-2 space-y-0">
+              <div className="space-y-0.5">
                 {dash.recent_messages.map((m) => (
-                  <div key={m.id} className="py-3 border-b border-gray-50 last:border-0">
+                  <div key={m.id} className="py-3 border-b border-slate-200 last:border-0">
                     <div className="flex items-start gap-3">
-                      <div className={`mt-0.5 flex-shrink-0 ${m.status === "sent" ? "text-green-500" : "text-amber-500"}`}>
+                      <div className={`mt-0.5 flex-shrink-0 ${m.status === "sent" ? "text-success-500" : "text-warning-500"}`}>
                         {m.status === "sent" ? (
                           <CheckCircle2 className="w-4 h-4" />
                         ) : (
@@ -476,14 +493,14 @@ export default function WhatsAppPage() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-sm font-medium text-gray-900">{m.patient_name}</span>
-                          <span className="text-xs text-gray-400">{TYPE_LABELS[m.message_type] ?? m.message_type}</span>
+                          <span className="text-sm font-semibold text-slate-900">{m.patient_name}</span>
+                          <span className="text-xs text-slate-600">{TYPE_LABELS[m.message_type] ?? m.message_type}</span>
                           {m.demo && (
-                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 uppercase">demo</span>
+                            <Badge variant="warning" size="sm">demo</Badge>
                           )}
                         </div>
-                        <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{m.message_text}</p>
-                        <p className="text-xs text-gray-300 mt-0.5">{formatTime(m.created_at)}</p>
+                        <p className="text-xs text-slate-600 mt-1 line-clamp-2">{m.message_text}</p>
+                        <p className="text-xs text-slate-500 mt-1">{formatTime(m.created_at)}</p>
                       </div>
                     </div>
                   </div>
