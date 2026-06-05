@@ -11,6 +11,7 @@ from models.consultation import Consultation
 from models.whatsapp import WhatsAppMessage
 from schemas.whatsapp import WhatsAppMessageOut, SendMessageIn
 from deps import get_current_user
+from models.organization import User
 from services.whatsapp import send_whatsapp, is_demo as _is_demo, DOCTOR_NAME
 
 router = APIRouter(prefix="/whatsapp", tags=["WhatsApp"], dependencies=[Depends(get_current_user)])
@@ -101,12 +102,15 @@ def get_config():
 
 
 @router.get("/dashboard")
-def get_dashboard(db: Session = Depends(get_db)):
+def get_dashboard(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     today = date.today()
     seven_days = today + timedelta(days=7)
     six_months_ago = today - timedelta(days=180)
 
-    active_patients = db.query(Patient).filter(Patient.active == True).all()
+    q_active = db.query(Patient).filter(Patient.active == True)
+    if current_user.role != "superadmin":
+        q_active = q_active.filter(Patient.organization_id == current_user.organization_id)
+    active_patients = q_active.all()
 
     # ── Birthdays ──────────────────────────────────────────────────────────
     birthdays_today = []

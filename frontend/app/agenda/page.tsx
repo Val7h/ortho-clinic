@@ -35,6 +35,7 @@ function fmtTime(iso: string) {
 
 export default function AgendaPage() {
   const { user } = useProtectedPage();
+  const [mobileView, setMobileView] = useState("hoje");
   const [weekStart, setWeekStart] = useState<Date>(startOfWeek(new Date()));
   const [consultations, setConsultations] = useState<any[]>([]);
   const [clinicEvents, setClinicEvents] = useState<any[]>([]);
@@ -108,6 +109,16 @@ export default function AgendaPage() {
         }
       />
 
+      <div className="sm:hidden flex gap-2 px-4 pt-3 pb-1">
+        {["hoje", "semana"].map((v) => (
+          <button key={v} onClick={() => setMobileView(v)}
+            className={"flex-1 py-2 rounded-xl text-sm font-bold " +
+              (mobileView === v ? "bg-brand-600 text-white" : "bg-white text-slate-500 border border-slate-200")}>
+            {v === "hoje" ? "Hoje" : "Semana"}
+          </button>
+        ))}
+      </div>
+
       <main className="max-w-5xl mx-auto px-4 py-5 space-y-4">
 
         <div className="flex items-center justify-between">
@@ -120,6 +131,7 @@ export default function AgendaPage() {
         </div>
 
         {/* Week columns */}
+        <div className={mobileView === "semana" ? "block" : "hidden sm:block"}>
         <div className="grid grid-cols-7 gap-1.5">
           {days.map((day) => {
             const key = toISO(day);
@@ -207,6 +219,7 @@ export default function AgendaPage() {
               </div>
             );
           })}
+        </div>
         </div>
 
         {/* Legend */}

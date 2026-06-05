@@ -7,6 +7,20 @@ export const api = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
+api.interceptors.response.use(
+  function(r) { return r; },
+  function(err) {
+    if (err && err.response && err.response.status === 401 && typeof window !== "undefined") {
+      if (window.location.pathname !== "/login") {
+        localStorage.removeItem("ortho_token");
+        localStorage.removeItem("ortho_user");
+        window.location.href = "/login";
+      }
+    }
+    return Promise.reject(err);
+  }
+);
+
 // ── Auth ──────────────────────────────────────────────────────────────────────
 export const authApi = {
   login: (email: string, password: string) =>

@@ -3,6 +3,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import os
 
+_secret = os.getenv("SECRET_KEY", "")
+if not _secret or "dev-secret" in _secret or len(_secret) < 32:
+    print("AVISO: SECRET_KEY fraca ou nao configurada no Render!")
+
 from database import init_db, migrate_db
 from routers import patients, consultations, dashboard
 from routers.documents import include_all
@@ -70,8 +74,9 @@ include_all(app)
 def startup():
     init_db()
     migrate_db()
-    from seed import seed
-    seed()
+    if os.getenv("ENVIRONMENT", "development") != "production":
+        from seed import seed
+        seed()
 
 
 @app.get("/health")

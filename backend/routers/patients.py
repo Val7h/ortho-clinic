@@ -2,7 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from sqlalchemy.orm import Session
 from sqlalchemy import func, or_
 from typing import List, Optional
-import os, shutil, uuid
+import os, uuid
+from services.storage import upload_file
 from database import get_db
 from models.patient import Patient
 from models.consultation import Consultation
@@ -127,12 +128,10 @@ async def upload_photo(
     patient = q.first()
     if not patient:
         raise HTTPException(404, "Paciente não encontrado")
+    file_bytes = await file.read()
     ext = os.path.splitext(file.filename)[1]
-    filename = f"{uuid.uuid4()}{ext}"
-    filepath = os.path.join(UPLOAD_DIR, filename)
-    with open(filepath, "wb") as f:
-        shutil.copyfileobj(file.file, f)
-    patient.photo_url = f"/uploads/photos/{filename}"
+    fname = str(uuid.uuid4()) + ext
+    patient.photo_url = upload_file(file_bytes, fname, folder="patients")
     db.commit()
     return {"photo_url": patient.photo_url}
 

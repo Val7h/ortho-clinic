@@ -3,10 +3,11 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime
 from pydantic import BaseModel
-import os, uuid, aiofiles
+import os, uuid
 from database import get_db
 from models.media import ConsultationMedia
 from deps import require_doctor
+from services.storage import upload_file
 
 router = APIRouter(prefix="/consultations/{consultation_id}/media", tags=["Media"], dependencies=[Depends(require_doctor)])
 
@@ -47,17 +48,14 @@ async def upload_media(
     db: Session = Depends(get_db),
 ):
     ext = os.path.splitext(file.filename or "file.jpg")[1].lower() or ".jpg"
-    filename = f"{uuid.uuid4()}{ext}"
-    filepath = os.path.join(MEDIA_DIR, filename)
-
-    async with aiofiles.open(filepath, "wb") as f:
-        content = await file.read()
-        await f.write(content)
+    fname = str(uuid.uuid4()) + ext
+    content = await file.read()
+    file_url = upload_file(content, fname, folder="consultations")
 
     media = ConsultationMedia(
         consultation_id=consultation_id,
         patient_id=patient_id,
-        file_path=f"/uploads/media/{filename}",
+        file_path=file_url,
         media_type=media_type,
         description=description or None,
     )

@@ -232,6 +232,10 @@ export default function Dashboard() {
           </Link>
         </div>
 
+        <div className="text-center pb-4">
+          <a href="/planos" className="text-xs text-brand-600 hover:underline font-semibold">Ver planos e preços →</a>
+        </div>
+
       </main>
     </div>
   );
