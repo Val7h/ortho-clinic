@@ -10,7 +10,7 @@ from models.organization import Organization, User
 
 def _hash(password: str) -> str:
     from passlib.context import CryptContext
-    return CryptContext(schemes=["bcrypt"], deprecated="auto").hash(password)
+    return CryptContext(schemes=["argon2"], deprecated="auto").hash(password)
 
 
 def seed():
