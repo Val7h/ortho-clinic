@@ -329,6 +329,13 @@ export default function PlanosPage() {
         <p className="text-xs text-slate-400 mt-1">
           Desenvolvido por ortopedistas, para ortopedistas.
         </p>
+        <div className="flex items-center justify-center gap-4 mt-4">
+          <Link href="/termos" className="text-xs text-slate-400 hover:text-brand-600 hover:underline">Termos de Uso</Link>
+          <span className="text-slate-200">·</span>
+          <Link href="/privacidade" className="text-xs text-slate-400 hover:text-brand-600 hover:underline">Política de Privacidade</Link>
+          <span className="text-slate-200">·</span>
+          <Link href="/contrato" className="text-xs text-slate-400 hover:text-brand-600 hover:underline">Modelo de Contrato</Link>
+        </div>
       </footer>
 
     </div>
