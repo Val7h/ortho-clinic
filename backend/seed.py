@@ -18,10 +18,9 @@ def seed():
     db = SessionLocal()
 
     # ── Organização demo ──────────────────────────────────────────────────────
-    org = db.query(Organization).filter(Organization.id == 1).first()
+    org = db.query(Organization).filter(Organization.name == "OrthoClinic Demo").first()
     if not org:
         org = Organization(
-            id=1,
             name="OrthoClinic Demo",
             city="Campina Grande",
             state="PB",
@@ -36,28 +35,28 @@ def seed():
     if db.query(User).count() == 0:
         users = [
             User(
-                organization_id=1,
+                organization_id=org.id,
                 name="Super Admin",
                 email="super@ortho.app",
                 password_hash=_hash("super123"),
                 role="superadmin",
             ),
             User(
-                organization_id=1,
+                organization_id=org.id,
                 name="Administrador",
                 email="admin@clinica.com",
                 password_hash=_hash("admin123"),
                 role="admin",
             ),
             User(
-                organization_id=1,
+                organization_id=org.id,
                 name="Dr. Ortopedista",
                 email="medico@clinica.com",
                 password_hash=_hash("medico123"),
                 role="doctor",
             ),
             User(
-                organization_id=1,
+                organization_id=org.id,
                 name="Secretária",
                 email="secretaria@clinica.com",
                 password_hash=_hash("secretaria123"),
@@ -80,7 +79,7 @@ def seed():
 
     patients = [
         Patient(
-            organization_id=1,
+            organization_id=org.id,
             name="Maria Silva Santos",
             birthdate=date(1975, 3, 15),
             cpf="123.456.789-00",
@@ -96,7 +95,7 @@ def seed():
             emergency_phone="(11) 91234-5678",
         ),
         Patient(
-            organization_id=1,
+            organization_id=org.id,
             name="Roberto Oliveira Lima",
             birthdate=date(1968, 7, 22),
             cpf="987.654.321-00",
@@ -107,7 +106,7 @@ def seed():
             chronic_conditions="Diabetes tipo 2, Lombalgia crônica",
         ),
         Patient(
-            organization_id=1,
+            organization_id=org.id,
             name="Ana Carolina Mendes",
             birthdate=date(1990, 11, 8),
             cpf="456.789.123-00",
@@ -277,7 +276,7 @@ def seed():
             "state": "PB",
             "color": "#3B82F6",
             "slug": "artro",
-            "organization_id": 1,
+            "organization_id": org.id,
             "whatsapp_instance": "cto-campina",
             "schedules": [
                 {"day_of_week": 3, "start_time": "15:00", "end_time": "19:00",
@@ -290,7 +289,7 @@ def seed():
             "state": "PE",
             "color": "#10B981",
             "slug": "intensiva-day",
-            "organization_id": 1,
+            "organization_id": org.id,
             "whatsapp_instance": "cto-caruaru",
             "schedules": [
                 {"day_of_week": 0, "start_time": "17:00", "end_time": "21:00",
@@ -303,7 +302,7 @@ def seed():
             "state": "PB",
             "color": "#F59E0B",
             "slug": "cto",
-            "organization_id": 1,
+            "organization_id": org.id,
             "whatsapp_instance": "cto-campina",
             "schedules": [
                 {"day_of_week": 0, "start_time": "08:00", "end_time": "12:00",
@@ -318,7 +317,7 @@ def seed():
             "state": "PE",
             "color": "#8B5CF6",
             "slug": "mario-bento",
-            "organization_id": 1,
+            "organization_id": org.id,
             "whatsapp_instance": "cto-geral",
             "schedules": [
                 {"day_of_week": 1, "start_time": "10:00", "end_time": "15:00",
@@ -331,7 +330,7 @@ def seed():
             "state": "PE",
             "color": "#EF4444",
             "slug": "ip",
-            "organization_id": 1,
+            "organization_id": org.id,
             "whatsapp_instance": "cto-caruaru",
             "schedules": [
                 {"day_of_week": 2, "start_time": "09:00", "end_time": "13:00",
@@ -344,7 +343,7 @@ def seed():
             "state": "PE",
             "color": "#F97316",
             "slug": "unimagem",
-            "organization_id": 1,
+            "organization_id": org.id,
             "whatsapp_instance": "cto-caruaru",
             "schedules": [
                 {"day_of_week": 2, "start_time": "14:00", "end_time": "18:00",

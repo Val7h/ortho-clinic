@@ -34,12 +34,45 @@ const AuthContext = createContext<AuthContextType | null>(null);
 const TOKEN_KEY = "ortho_token";
 const USER_KEY = "ortho_user";
 
+function readStoredUser(): AuthUser | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(USER_KEY);
+    return raw ? (JSON.parse(raw) as AuthUser) : null;
+  } catch {
+    return null;
+  }
+}
+
+function readStoredToken(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return localStorage.getItem(TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<AuthUser | null>(() => {
+    const storedUser = readStoredUser();
+    const storedToken = readStoredToken();
+    if (storedUser && storedToken) {
+      // Set Authorization header synchronously so the first API call is authenticated
+      api.defaults.headers.common["Authorization"] = `Bearer ${storedToken}`;
+    }
+    return storedUser;
+  });
+  const [loading, setLoading] = useState(() => {
+    // If we already have a user from localStorage, skip the loading state
+    if (typeof window === "undefined") return true;
+    const hasToken = !!localStorage.getItem(TOKEN_KEY);
+    const hasUser = !!localStorage.getItem(USER_KEY);
+    return !(hasToken && hasUser);
+  });
   const router = useRouter();
 
-  // Restore session from localStorage on mount
+  // Only needed to handle edge cases (e.g. token present but user missing, or invalid JSON)
   useEffect(() => {
     const token = localStorage.getItem(TOKEN_KEY);
     const raw = localStorage.getItem(USER_KEY);

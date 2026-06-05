@@ -6,6 +6,7 @@ import uuid
 from database import get_db
 from models.patient import Patient
 from models.consultation import Consultation
+from models.organization import User
 from schemas.consultation import ConsultationCreate, ConsultationUpdate, ConsultationOut
 from deps import require_doctor, get_current_user
 
@@ -50,8 +51,8 @@ def get_agenda(
     start: date = None,
     end: date = None,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    from models.patient import Patient
     today = date.today()
     if start is None:
         start = today - timedelta(days=today.weekday())  # Monday of current week
@@ -61,9 +62,19 @@ def get_agenda(
     start_dt = datetime.combine(start, datetime.min.time())
     end_dt = datetime.combine(end, datetime.max.time())
 
+    # Build org-scoped patient subquery (superadmin sees all orgs)
+    patient_q = db.query(Patient.id)
+    if current_user.role != "superadmin":
+        patient_q = patient_q.filter(Patient.organization_id == current_user.organization_id)
+    org_patient_ids = patient_q.subquery()
+
     consultations = (
         db.query(Consultation)
-        .filter(Consultation.date >= start_dt, Consultation.date <= end_dt)
+        .filter(
+            Consultation.patient_id.in_(org_patient_ids),
+            Consultation.date >= start_dt,
+            Consultation.date <= end_dt,
+        )
         .order_by(Consultation.date)
         .all()
     )
@@ -86,6 +97,7 @@ def get_agenda(
     returns = (
         db.query(Consultation)
         .filter(
+            Consultation.patient_id.in_(org_patient_ids),
             Consultation.next_appointment >= start,
             Consultation.next_appointment <= end,
         )

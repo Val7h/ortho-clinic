@@ -21,9 +21,13 @@ app = FastAPI(
     version="2.0.0",
 )
 
+# CORS: em produção (Render), configure a variável de ambiente BACKEND_CORS_ORIGINS
+# com o JSON contendo a URL real do frontend, ex:
+#   BACKEND_CORS_ORIGINS=["https://ortho-clinic.onrender.com"]
+# O fallback abaixo inclui localhost (dev) + URL padrão do Render (produção).
 _raw_origins = os.getenv(
     "BACKEND_CORS_ORIGINS",
-    '["http://localhost:3000","http://localhost:3001","http://localhost:3002"]',
+    '["http://localhost:3000","http://localhost:3001","http://localhost:3002","https://ortho-clinic.onrender.com"]',
 )
 try:
     import json as _json

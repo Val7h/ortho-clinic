@@ -6,16 +6,13 @@ from typing import Optional
 from jose import jwt
 from passlib.context import CryptContext
 from pydantic import BaseModel
-import os
 
 from database import get_db
 from models.organization import User, Organization
-from deps import get_current_user, require_admin, require_superadmin
+from deps import get_current_user, require_admin, require_superadmin, SECRET_KEY, ALGORITHM
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
-SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-change-in-production-32chars")
-ALGORITHM = "HS256"
 TOKEN_DAYS = 7
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
