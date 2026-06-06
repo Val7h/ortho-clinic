@@ -15,7 +15,7 @@ router = APIRouter(prefix="/auth", tags=["Auth"])
 
 TOKEN_DAYS = 7
 
-pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 # ── Schemas ───────────────────────────────────────────────────────────────────

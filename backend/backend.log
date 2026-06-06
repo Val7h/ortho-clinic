@@ -1,0 +1,46 @@
+AVISO: SECRET_KEY fraca ou nao configurada no Render!
+INFO:     127.0.0.1:64834 - "POST /auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52318 - "POST /auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59630 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59631 - "POST /auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59638 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59639 - "GET /auth/users HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59640 - "GET /patients HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59641 - "POST /patients HTTP/1.1" 400 Bad Request
+INFO:     127.0.0.1:59642 - "GET /patients HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:59646 - "POST /auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59647 - "POST /patients HTTP/1.1" 201 Created
+INFO:     127.0.0.1:59653 - "POST /auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59654 - "GET /patients HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59655 - "GET /dashboard HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59656 - "GET /clinics HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54679 - "POST /auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54680 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54681 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54682 - "GET /patients HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54684 - "GET /dashboard HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54685 - "GET /auth/users HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54686 - "POST /auth/login HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:54687 - "GET /auth/organizations HTTP/1.1" 403 Forbidden
+INFO:     127.0.0.1:61533 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54470 - "POST /auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54474 - "GET /auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54476 - "GET /patients HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54477 - "POST /patients HTTP/1.1" 201 Created
+INFO:     127.0.0.1:54478 - "GET /dashboard HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59613 - "OPTIONS /auth/login HTTP/1.1" 400 Bad Request
+INFO:     127.0.0.1:55218 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55238 - "POST /auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63238 - "OPTIONS /auth/login HTTP/1.1" 400 Bad Request
+INFO:     127.0.0.1:60889 - "OPTIONS /auth/login HTTP/1.1" 400 Bad Request
+INFO:     127.0.0.1:64006 - "OPTIONS /auth/login HTTP/1.1" 400 Bad Request
+INFO:     127.0.0.1:64007 - "POST /auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60828 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57488 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57489 - "POST /auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49445 - "OPTIONS /auth/login HTTP/1.1" 400 Bad Request
+INFO:     127.0.0.1:50284 - "POST /auth/login HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:54046 - "POST /auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54047 - "POST /auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54048 - "POST /auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60647 - "GET /health HTTP/1.1" 200 OK

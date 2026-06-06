@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { ThemeToggle } from "./ui/ThemeToggle";
+import { Logo } from "./Logo";
 
 interface NavBarProps {
   title: string;
@@ -124,13 +125,8 @@ export default function NavBar({ title, subtitle, back, actions }: NavBarProps) 
             <ChevronLeft className="w-5 h-5 text-white" />
           </button>
         ) : (
-          <div className="flex items-center gap-2.5 mr-0.5">
-            <div className="w-9 h-9 bg-white/15 rounded-xl flex items-center justify-center backdrop-blur-sm border border-white/20">
-              <span className="text-white"><OrthoIcon /></span>
-            </div>
-            <div className="hidden sm:block">
-              <span className="font-extrabold text-white text-sm tracking-tight">OrthoClinic</span>
-            </div>
+          <div className="flex items-center gap-2 mr-2">
+            <Logo width={45} height={45} />
           </div>
         )}
 

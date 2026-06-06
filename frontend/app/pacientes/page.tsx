@@ -3,16 +3,16 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Plus, Search, Users } from 'lucide-react';
 import Link from 'next/link';
-import NavBar from '@/components/NavBar';
+import { ProtectedPageLayout } from '@/components/ProtectedPageLayout';
 import PatientCard from '@/components/PatientCard';
 import { patientsApi } from '@/lib/api';
-import { useProtectedPage } from '@/components/AuthProvider';
+import { useAuth } from '@/components/AuthProvider';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 
 export default function PatientsPage() {
-  const { user, loading: authLoading } = useProtectedPage();
+  const { user } = useAuth();
   const [patients, setPatients] = useState<any[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
@@ -36,29 +36,19 @@ export default function PatientsPage() {
     return () => clearTimeout(timer);
   }, [search, load]);
 
-  if (authLoading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-200 border-t-brand-600" />
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-slate-50">
-      <NavBar
-        title="Pacientes"
-        back="/"
-        actions={
-          <Link href="/pacientes/novo">
-            <Button size="md" icon={<Plus className="h-5 w-5" />}>
-              Novo paciente
-            </Button>
-          </Link>
-        }
-      />
-
-      <main className="mx-auto max-w-5xl space-y-6 px-4 py-8">
+    <ProtectedPageLayout
+      title="Pacientes"
+      back="/"
+      actions={
+        <Link href="/pacientes/novo">
+          <Button size="md" icon={<Plus className="h-5 w-5" />}>
+            Novo paciente
+          </Button>
+        </Link>
+      }
+    >
+      <div className="mx-auto max-w-5xl space-y-6">
         {/* Busca */}
         <Input
           type="search"
@@ -116,7 +106,7 @@ export default function PatientsPage() {
             ))}
           </div>
         )}
-      </main>
-    </div>
+      </div>
+    </ProtectedPageLayout>
   );
 }

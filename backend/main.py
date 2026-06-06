@@ -18,6 +18,7 @@ from routers.anamnesis import router as anamnesis_router
 from routers.consultations import agenda_router
 from routers.clinic import router as clinic_router, public_router as clinic_public_router
 from routers.auth import router as auth_router
+from routers.queue import router as queue_router
 
 app = FastAPI(
     title="OrthoClinic API",
@@ -31,7 +32,7 @@ app = FastAPI(
 # O fallback abaixo inclui localhost (dev) + URL padrão do Render (produção).
 _raw_origins = os.getenv(
     "BACKEND_CORS_ORIGINS",
-    '["http://localhost:3000","http://localhost:3001","http://localhost:3002","https://ortho-clinic.onrender.com"]',
+    '["http://localhost:3000","http://localhost:3001","http://localhost:3002","http://localhost:3003","http://localhost:3004","http://localhost:3005","http://localhost:3006","http://localhost:3007","http://localhost:3008","http://127.0.0.1:3000","http://127.0.0.1:3001","http://127.0.0.1:3002","http://127.0.0.1:3003","http://127.0.0.1:3004","http://127.0.0.1:3005","http://127.0.0.1:3006","http://127.0.0.1:3007","http://127.0.0.1:3008","https://ortho-clinic.onrender.com"]',
 )
 try:
     import json as _json
@@ -67,6 +68,7 @@ app.include_router(financial_router)
 app.include_router(media_router)
 app.include_router(anamnesis_router)
 app.include_router(agenda_router)
+app.include_router(queue_router)
 include_all(app)
 
 
@@ -74,11 +76,46 @@ include_all(app)
 def startup():
     init_db()
     migrate_db()
-    if os.getenv("ENVIRONMENT", "development") != "production":
-        from seed import seed
-        seed()
+    # Seed desabilitado temporariamente - problema de argon2-cffi
+    # if os.getenv("ENVIRONMENT", "development") != "production":
+    #     from seed import seed
+    #     seed()
 
 
 @app.get("/health")
 def health():
     return {"status": "ok", "app": "OrthoClinic", "version": "2.0.0"}
+
+
+# ===== SERVE NEXT.JS FRONTEND =====
+# Montar arquivos estáticos do Next.js
+from pathlib import Path
+from fastapi.responses import FileResponse
+
+frontend_dir = Path(__file__).parent.parent / "frontend"
+nextjs_static = frontend_dir / ".next" / "static"
+public_dir = frontend_dir / "public"
+
+if nextjs_static.exists():
+    app.mount("/_next/static", StaticFiles(directory=nextjs_static), name="nextjs-static")
+
+if public_dir.exists():
+    app.mount("/public", StaticFiles(directory=public_dir), name="public")
+
+# Rota catch-all: serve o Next.js para qualquer rota não reconhecida
+@app.get("/{full_path:path}")
+async def serve_frontend(full_path: str):
+    # Se for requisição da API, deixa passar (já tratada pelos routers acima)
+    if full_path.startswith("api/") or full_path.startswith("auth/"):
+        return {"error": "Not found"}
+
+    # Serve o index.html do Next.js
+    index_html = frontend_dir / ".next" / "server" / "pages" / "_document.html"
+    if not index_html.exists():
+        index_html = frontend_dir / ".next" / "server" / "app" / "layout.html"
+
+    if index_html.exists():
+        return FileResponse(index_html)
+
+    # Fallback
+    return {"error": "Frontend not found"}

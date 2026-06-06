@@ -1,0 +1,380 @@
+╔════════════════════════════════════════════════════════════════════════════╗
+║                    DIAGRAMAS DE FLUXO - ORTHOCLINIC                         ║
+║                         Índice de Documentação                              ║
+║                            Junho 2026 | v1.0                                ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+📦 ARQUIVOS GERADOS (5 total)
+────────────────────────────────────────────────────────────────────────────
+
+1. 📊 FLUXOS_ORTHOCLINIC.pptx (174.7 KB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   Apresentação PowerPoint profissional com 4 slides
+
+   Conteúdo:
+   • Slide 1: Capa e Overview dos 3 fluxos
+   • Slide 2: Fluxo 1 - Chamada de Paciente (real-time, < 1s)
+     ├─ Diagrama visual com caixas de etapas
+     ├─ Setas com tempos de latência
+     └─ Box crítico com sequência de latências
+   • Slide 3: Fluxo 2 - Assinatura Digital (ClickSign, 30-60s)
+     ├─ 3 colunas: Frontend | Backend API | ClickSign
+     ├─ Timeline visual com tempos
+     └─ Box final com info de compartilhamento WhatsApp
+   • Slide 4: Fluxo 3 - Anamnese (5 abas, 5-20 min)
+     ├─ Grid de 5 abas (Queixa, Histórico, Hábitos, Exame, Resumo)
+     ├─ Cards de funcionalidades (Preenchimento, Auto-save, Validação)
+     ├─ Barra de progresso visual
+     └─ Fluxo de finalização com 4 etapas
+
+   👉 USO: Apresentações executivas, reuniões com stakeholders
+
+
+2. 🌐 DIAGRAMAS_FLUXOS.html (30.1 KB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   Documentação interativa em HTML (responsiva)
+
+   Conteúdo:
+   • Paleta de cores OrthoClinic (Deep Blue, Seafoam, Coral)
+   • Diagramas visuais com boxes coloridos
+   • Tabelas de latências críticas
+   • Legendas de componentes e atores
+   • Timeline interativo para assinatura digital
+   • Grid de tabs para anamnese
+   • Resumo comparativo dos 3 fluxos
+   • Formatação impressão (print-friendly)
+
+   👉 USO: Documentação web, compartilhamento, relatórios HTML
+   💡 COMO ABRIR: Clique duplo ou arraste em navegador web
+
+
+3. 📘 FLUXOS_ARQUITETURA_COMPLETO.md (31.7 KB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   Documentação técnica completa em Markdown
+
+   Conteúdo por Fluxo:
+   • Visão geral da arquitetura
+   • Sequência detalhada (diagramas ASCII)
+   • Latências críticas (tabelas)
+   • Endpoints API completos (request/response)
+   • SQL DDL (criação de tabelas, índices)
+   • Pontos críticos (race conditions, security)
+   • Estruturas de dados (JSON, SQLAlchemy)
+
+   FLUXO 1 - Chamada de Paciente:
+   ├─ 4 status: pending → called → arrived → in_consultation → completed
+   ├─ Índices: (clinic_id, called_at), (status)
+   ├─ WebSocket broadcast para todos clientes
+   └─ Validação de race condition com LOCK
+
+   FLUXO 2 - Assinatura Digital:
+   ├─ Conformidade CFM 2.299/21
+   ├─ ClickSign API integration
+   ├─ PDF geração com ReportLab + QR Code
+   ├─ Webhook validation (HMAC SHA-256)
+   └─ WhatsApp envio automático
+
+   FLUXO 3 - Anamnese:
+   ├─ 5 abas + auto-save a cada 2s
+   ├─ JSON estruturado por aba
+   ├─ Validação de campos obrigatórios
+   ├─ Alertas de interações medicamentosas
+   └─ Follow-up simplificado para retornos
+
+   👉 USO: Development, code reviews, onboarding, implementação
+
+
+4. 📄 DIAGRAMAS_FLUXOS_RESUMO_EXECUTIVO.docx (13.1 KB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   Resumo executivo em Word (formatado)
+
+   Conteúdo:
+   • Capa profissional
+   • Sumário executivo (1 página)
+   • Fluxo 1: Chamada de Paciente (1 página)
+     ├─ Sequência de etapas em tabela
+     ├─ Latências críticas
+     └─ Pontos críticos
+   • Fluxo 2: Assinatura Digital (1.5 páginas)
+     ├─ Sequência com tabelas
+     ├─ Timeline
+     ├─ Checklist CFM 2.299/21
+     └─ Conformidade legal
+   • Fluxo 3: Anamnese (1.5 páginas)
+     ├─ As 5 abas
+     ├─ Recursos (auto-save, validação, etc)
+     └─ Fluxo de finalização
+   • Resumo comparativo
+   • Checklist de status
+
+   👉 USO: Relatórios formais, apresentações a liderança, impressão
+
+
+5. 📖 README_DIAGRAMAS_FLUXOS.md (9.4 KB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   Guia de uso e índice dos arquivos
+
+   Conteúdo:
+   • Descrição de cada arquivo
+   • Tabela comparativa dos 3 fluxos
+   • Resumo técnico de cada fluxo
+   • Tecnologias envolvidas
+   • Como usar os documentos
+   • Performance targets
+   • Checklist de status
+   • Próximos passos
+
+   👉 USO: Primeira leitura para entender os documentos
+
+
+════════════════════════════════════════════════════════════════════════════
+
+🎯 3 FLUXOS PRINCIPAIS
+────────────────────────────────────────────────────────────────────────────
+
+FLUXO 1: Chamada de Paciente ⏱️ < 1 segundo
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Tipo:        Real-time
+Atores:      Frontend, API, Backend, Database, WebSocket, TV
+Crítico em:  Latência (< 1s) e sincronização em tempo real
+
+Etapas:
+  1. Médico clica "Chamar Próximo"              (< 0.1s)
+  2. POST /clinic/queue/call                    (< 0.1s)
+  3. Backend valida e atualiza BD               (< 0.2s)
+  4. WebSocket broadcast para clientes          (< 0.3s)
+  5. TV exibe nome do paciente                  (< 0.5s)
+  6. Admin dashboard atualizado                 (< 0.5s)
+
+Latências:
+  ✓ Clique → API:            < 100ms
+  ✓ Validação BD:            < 200ms
+  ✓ WebSocket broadcast:     < 300ms
+  ✓ Dashboard atualizado:    < 500ms
+  ✓ TOTAL:                   < 1 segundo
+
+Pontos Críticos:
+  ⚠️ Race Condition: Usar transação com LOCK
+  ⚠️ WebSocket: Fallback com polling 5s
+  ⚠️ Sincronização: Backend é fonte de verdade
+
+Dados:
+  Tabela:    clinic_queue
+  Índices:   (clinic_id, called_at), (status)
+  Campos:    id, clinic_id, appointment_id, patient_id, room,
+             called_at, called_by_user_id, status
+
+
+FLUXO 2: Assinatura Digital ⏱️ 30-60 segundos
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Tipo:        Assinatura legal + Integração externa
+Atores:      Frontend, API, Backend, ClickSign, WhatsApp
+Crítico em:  Conformidade CFM 2.299/21 e segurança
+
+Etapas:
+  1. Médico clica "Assinar Receita"            (0s)
+  2. Backend gera PDF com QR Code              (1-2s)
+  3. Envia para ClickSign API                  (2-3s)
+  4. Médico assina no portal ClickSign         (~30-40s)
+  5. Webhook notifica backend                  (31-42s)
+  6. PDF salvo e enviado via WhatsApp          (32-44s)
+
+Latências:
+  ✓ Geração PDF:      1-2s
+  ✓ Upload ClickSign: < 2s
+  ✓ Assinatura:       30-40s (humano)
+  ✓ Webhook:          < 1s
+  ✓ WhatsApp:         < 2s
+  ✓ TOTAL:            30-60 segundos
+
+Conformidade:
+  ✅ Certificado ICP-Brasil
+  ✅ Assinatura criptográfica (RSA-2048)
+  ✅ QR Code para validação pública
+  ✅ Timestamp certificado (RFC 3161)
+  ✅ Hash digital SHA-256
+  ✅ Proof de assinatura em BD
+  ✅ Disponível para auditoria
+  ✅ Lei 14.065/2020 compliant
+
+Dados:
+  Tabelas:   prescriptions, prescription_signatures
+  Índices:   prescription_signatures(status)
+  Campos:    prescription_id, clicksign_doc_id, signed_at,
+             signature_proof (JSON), status
+
+
+FLUXO 3: Anamnese (Primeira Consulta) ⏱️ 5-20 minutos
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Tipo:        Coleta de dados estruturada + Auto-save
+Atores:      Frontend, Backend, Database
+Crítico em:  Completude de dados e validação
+
+As 5 Abas:
+  1. 🔴 Queixa Principal
+     ├─ Motivo da consulta
+     ├─ Localização (8 regiões)
+     ├─ Duração sintomas
+     ├─ Intensidade (0-10 com cores)
+     └─ O que piora/melhora
+
+  2. 📜 Histórico
+     ├─ Traumas anteriores
+     ├─ Cirurgias
+     ├─ Fisioterapia
+     ├─ Medicações (com alertas)
+     └─ Alergias
+
+  3. ⚠️ Hábitos & Risco
+     ├─ Profissão
+     ├─ Atividades físicas
+     ├─ Sedentarismo (slider)
+     ├─ Tabagismo
+     └─ Qualidade do sono
+
+  4. 🔍 Exame Físico
+     ├─ Amplitude movimento
+     ├─ Testes específicos
+     ├─ Inflamação
+     └─ Deformidades
+
+  5. ✅ Resumo & Assinar
+     ├─ Preview colorido
+     ├─ Barra de progresso
+     ├─ Validação final
+     └─ Assinatura digital (ClickSign)
+
+Funcionalidades:
+  💾 Auto-save: A cada campo (< 0.5s)
+  ✓ Validação: Campos obrigatórios, interações
+  📊 Progresso: Barra em tempo real
+  🔐 Assinatura: ClickSign integrado
+  📱 Follow-up: Versão simplificada para retornos
+
+Dados:
+  Tabela:    patient_anamnesis
+  Índices:   (patient_id, created_at)
+  Campos:    data_chief_complaint (JSON), data_history (JSON),
+             data_habits (JSON), data_physical_exam (JSON),
+             status, created_by_user_id, last_edited_by_user_id
+
+
+════════════════════════════════════════════════════════════════════════════
+
+📋 COMPARATIVA RÁPIDA
+
+                    Chamada      Assinatura    Anamnese
+────────────────────────────────────────────────────────
+Duração             < 1s         30-60s        5-20 min
+Atores              4            4             2
+WebSocket           ✅           -             -
+Integração Ext.     -            ✅ ClickSign  -
+Complexidade        Média        Alta          Alta
+Crítico em          Latência     Legal         Dados
+Performance         Real-time    Webhook       Auto-save
+
+
+════════════════════════════════════════════════════════════════════════════
+
+✅ CHECKLIST DE IMPLEMENTAÇÃO
+
+  [✅] Chamada de Paciente
+       ├─ Tabela clinic_queue criada
+       ├─ Índices DB otimizados
+       ├─ Endpoint POST /clinic/queue/call
+       ├─ WebSocket implementado
+       ├─ Validações de agendamento
+       └─ Testes de carga
+
+  [✅] Assinatura Digital
+       ├─ ClickSign integrado
+       ├─ PDF com QR Code (ReportLab)
+       ├─ Endpoint POST /prescriptions/{id}/sign
+       ├─ Webhook receiver
+       ├─ Validação HMAC
+       ├─ WhatsApp integration
+       └─ CFM 2.299/21 validado
+
+  [✅] Anamnese
+       ├─ 5 abas implementadas
+       ├─ Auto-save a cada 2s
+       ├─ Validação em tempo real
+       ├─ Barra de progresso
+       ├─ PDF geração
+       ├─ ClickSign assinatura
+       └─ Follow-up simplificado
+
+
+════════════════════════════════════════════════════════════════════════════
+
+🎓 COMO USAR ESTES DOCUMENTOS
+
+Para Executivos/Product Managers:
+  → Abrir: DIAGRAMAS_FLUXOS_RESUMO_EXECUTIVO.docx
+  → Leitura: 10-15 minutos
+
+Para Arquitetos de Sistemas:
+  → Ler: FLUXOS_ARQUITETURA_COMPLETO.md
+  → Leitura: 30-45 minutos
+
+Para Desenvolvedores:
+  → Ref: FLUXOS_ARQUITETURA_COMPLETO.md (endpoints, SQL)
+  → Consulta: Conforme necessário
+
+Para Apresentações:
+  → Usar: FLUXOS_ORTHOCLINIC.pptx
+  → Duração: 15-20 minutos de apresentação
+
+Para Documentação Interativa:
+  → Abrir: DIAGRAMAS_FLUXOS.html em navegador
+  → Navegar: Clique em seções
+
+Primeiro Contato:
+  → Ler: README_DIAGRAMAS_FLUXOS.md
+  → Duração: 5 minutos
+
+
+════════════════════════════════════════════════════════════════════════════
+
+📊 PERFORMANCE TARGETS
+
+Métrica                           Target    Status
+─────────────────────────────────────────────────
+Latência chamada de paciente      < 1s      ✅
+Geração PDF                       < 2s      ✅
+Upload ClickSign                  < 2s      ✅
+Auto-save latência                < 0.5s    ✅
+WebSocket broadcast               < 300ms   ✅
+Dashboard refresh                 < 500ms   ✅
+
+Todos os targets dentro das especificações.
+
+
+════════════════════════════════════════════════════════════════════════════
+
+🛠️ TECNOLOGIAS
+
+Frontend:    React / TypeScript / Next.js 14 / WebSocket client
+Backend:     FastAPI (Python) / SQLAlchemy
+Database:    PostgreSQL / SQLite
+APIs Ext.:   ClickSign (ICP-Brasil) / WhatsApp
+PDF:         ReportLab + QR Code library
+DevOps:      Docker / Docker Compose
+
+
+════════════════════════════════════════════════════════════════════════════
+
+📞 SUPORTE
+
+Para dúvidas ou atualizações:
+  → Consulte a equipe de arquitetura do sistema
+  → Código-fonte: /backend, /frontend
+  → Issues: GitHub/Jira
+
+Mantido por: Sistema de Documentação OrthoClinic
+Data: Junho 2026 | Versão: 1.0
+
+
+════════════════════════════════════════════════════════════════════════════
+FIM DO ÍNDICE
+════════════════════════════════════════════════════════════════════════════

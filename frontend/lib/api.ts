@@ -3,8 +3,12 @@ import axios from "axios";
 // API URL with fallbacks for different environments
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL ||
-  (typeof window !== 'undefined' && window.location.hostname === 'localhost'
-    ? 'http://localhost:8002'
+  (typeof window !== 'undefined' && (
+    window.location.hostname === 'localhost' ||
+    window.location.hostname === '127.0.0.1' ||
+    window.location.hostname.startsWith('localhost:')
+  )
+    ? 'http://localhost:8003'
     : 'https://ortho-backend.onrender.com') ||
   'https://ortho-backend.onrender.com';
 

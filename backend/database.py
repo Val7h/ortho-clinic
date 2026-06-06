@@ -26,7 +26,7 @@ def get_db():
 
 
 def init_db():
-    from models import patient, consultation, documents, whatsapp, financial, media, anamnesis, clinic, organization  # noqa
+    from models import patient, consultation, documents, whatsapp, financial, media, anamnesis, clinic, organization, queue  # noqa
     Base.metadata.create_all(bind=engine)
 
 
@@ -54,6 +54,22 @@ def migrate_db():
         cols = [c["name"] for c in inspector.get_columns("appointments")]
         if "confirmation_token" not in cols:
             migrations.append("ALTER TABLE appointments ADD COLUMN confirmation_token VARCHAR(64)")
+
+    if "patients" in existing_tables:
+        cols = [c["name"] for c in inspector.get_columns("patients")]
+        # Adicionar campos de saúde críticos
+        if "alergias" not in cols:
+            migrations.append("ALTER TABLE patients ADD COLUMN alergias TEXT")
+        if "medicacoes_uso_continuo" not in cols:
+            migrations.append("ALTER TABLE patients ADD COLUMN medicacoes_uso_continuo JSON")
+        if "contraindicacoes" not in cols:
+            migrations.append("ALTER TABLE patients ADD COLUMN contraindicacoes TEXT")
+        if "peso_kg" not in cols:
+            migrations.append("ALTER TABLE patients ADD COLUMN peso_kg NUMERIC(5,2)")
+        if "altura_cm" not in cols:
+            migrations.append("ALTER TABLE patients ADD COLUMN altura_cm NUMERIC(5,2)")
+        if "comorbidades" not in cols:
+            migrations.append("ALTER TABLE patients ADD COLUMN comorbidades JSON")
 
     if not migrations:
         return

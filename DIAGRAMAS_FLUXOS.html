@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Diagramas de Fluxo - OrthoClinic</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f5f5f5;
+            color: #212121;
+            line-height: 1.6;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #065A82 0%, #00A896 100%);
+            color: white;
+            padding: 40px 20px;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 40px auto;
+            padding: 0 20px;
+        }
+
+        .diagram {
+            background: white;
+            border-radius: 8px;
+            padding: 30px;
+            margin-bottom: 40px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .diagram h2 {
+            color: #065A82;
+            font-size: 1.8em;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 3px solid #00A896;
+        }
+
+        .diagram-content {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .flow-row {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+            margin: 15px 0;
+            flex-wrap: wrap;
+        }
+
+        .flow-box {
+            background: linear-gradient(135deg, #065A82 0%, #00A896 100%);
+            color: white;
+            padding: 15px 20px;
+            border-radius: 8px;
+            text-align: center;
+            min-width: 150px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            font-weight: bold;
+        }
+
+        .flow-box.primary {
+            background: linear-gradient(135deg, #065A82 0%, #1a7fa8 100%);
+        }
+
+        .flow-box.secondary {
+            background: linear-gradient(135deg, #00A896 0%, #00d4b4 100%);
+        }
+
+        .flow-box.accent {
+            background: linear-gradient(135deg, #F96167 0%, #ff4757 100%);
+        }
+
+        .flow-box.success {
+            background: linear-gradient(135deg, #28A745 0%, #20c997 100%);
+        }
+
+        .flow-box.warning {
+            background: linear-gradient(135deg, #FFC107 0%, #ffa502 100%);
+        }
+
+        .flow-box small {
+            display: block;
+            font-size: 0.8em;
+            opacity: 0.8;
+            margin-top: 5px;
+            font-style: italic;
+        }
+
+        .arrow {
+            font-size: 1.5em;
+            color: #065A82;
+            font-weight: bold;
+            flex: 0 0 auto;
+        }
+
+        .time-label {
+            background: #FFF3CD;
+            color: #856404;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.85em;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .section {
+            margin: 20px 0;
+            padding: 15px;
+            background: #f8f9fa;
+            border-left: 4px solid #00A896;
+            border-radius: 4px;
+        }
+
+        .section h3 {
+            color: #065A82;
+            margin-bottom: 10px;
+        }
+
+        .section ul {
+            list-style: none;
+            margin-left: 20px;
+        }
+
+        .section li {
+            margin: 8px 0;
+            padding-left: 20px;
+            position: relative;
+        }
+
+        .section li:before {
+            content: "●";
+            position: absolute;
+            left: 0;
+            color: #00A896;
+            font-weight: bold;
+        }
+
+        .columns {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+
+        .column-header {
+            background: #065A82;
+            color: white;
+            padding: 10px;
+            border-radius: 4px;
+            font-weight: bold;
+            text-align: center;
+        }
+
+        .card {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            padding: 15px;
+            margin-bottom: 10px;
+        }
+
+        .card h4 {
+            color: #065A82;
+            margin-bottom: 10px;
+        }
+
+        .card ul {
+            list-style: none;
+            margin-left: 15px;
+        }
+
+        .card li {
+            margin: 6px 0;
+            font-size: 0.9em;
+        }
+
+        .card li:before {
+            content: "✓ ";
+            color: #00A896;
+            font-weight: bold;
+            margin-right: 5px;
+        }
+
+        .progress-bar {
+            background: #e9ecef;
+            border-radius: 4px;
+            height: 30px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+
+        .progress-fill {
+            background: linear-gradient(90deg, #00A896 0%, #00d4b4 100%);
+            height: 100%;
+            width: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 0.85em;
+        }
+
+        .tabs-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 10px;
+            margin: 15px 0;
+        }
+
+        .tab {
+            background: #00A896;
+            color: white;
+            padding: 15px;
+            border-radius: 6px;
+            text-align: center;
+            font-weight: bold;
+            font-size: 0.9em;
+        }
+
+        .tab.primary {
+            background: #065A82;
+        }
+
+        .tab.success {
+            background: #28A745;
+        }
+
+        .timeline {
+            position: relative;
+            padding: 20px 0;
+            margin: 20px 0;
+        }
+
+        .timeline::before {
+            content: '';
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 2px;
+            height: 100%;
+            background: #00A896;
+        }
+
+        .timeline-item {
+            margin-bottom: 30px;
+            width: 48%;
+        }
+
+        .timeline-item:nth-child(odd) {
+            margin-left: 0;
+            text-align: right;
+            padding-right: 25px;
+        }
+
+        .timeline-item:nth-child(even) {
+            margin-left: 52%;
+            padding-left: 25px;
+        }
+
+        .timeline-content {
+            background: white;
+            padding: 15px;
+            border-radius: 6px;
+            border: 2px solid #00A896;
+        }
+
+        .timeline-content .time {
+            color: #065A82;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .critical-box {
+            background: #fff3cd;
+            border: 2px solid #ffc107;
+            border-radius: 6px;
+            padding: 15px;
+            margin: 20px 0;
+        }
+
+        .critical-box strong {
+            color: #856404;
+        }
+
+        .critical-box h4 {
+            color: #856404;
+            margin-bottom: 10px;
+        }
+
+        .footer {
+            background: #f8f9fa;
+            border-top: 1px solid #ddd;
+            padding: 20px;
+            text-align: center;
+            color: #666;
+            margin-top: 40px;
+        }
+
+        @media print {
+            body {
+                background: white;
+            }
+            .diagram {
+                page-break-inside: avoid;
+                box-shadow: none;
+                border: 1px solid #ddd;
+            }
+        }
+
+        .legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin: 15px 0;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 4px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .legend-box {
+            width: 25px;
+            height: 25px;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>DIAGRAMAS DE FLUXO</h1>
+        <p>Sistema OrthoClinic - Documentação de Arquitetura</p>
+    </div>
+
+    <div class="container">
+        <!-- FLUXO 1: CHAMADA DE PACIENTE -->
+        <div class="diagram">
+            <h2>FLUXO 1: Chamada de Paciente (Real-time)</h2>
+
+            <div class="legend">
+                <div class="legend-item">
+                    <div class="legend-box" style="background: linear-gradient(135deg, #065A82 0%, #1a7fa8 100%);"></div>
+                    <span>Frontend/Backend</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-box" style="background: linear-gradient(135deg, #00A896 0%, #00d4b4 100%);"></div>
+                    <span>API/Database</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-box" style="background: linear-gradient(135deg, #F96167 0%, #ff4757 100%);"></div>
+                    <span>Crítico/Processamento</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-box" style="background: linear-gradient(135deg, #28A745 0%, #20c997 100%);"></div>
+                    <span>Sucesso</span>
+                </div>
+            </div>
+
+            <div class="diagram-content">
+                <div class="flow-row">
+                    <div class="time-label">&lt; 0.1s</div>
+                    <div class="flow-box primary">Médico clica<small>Frontend</small></div>
+                    <div class="arrow">→</div>
+                    <div class="flow-box secondary">POST /queue/call<small>API</small></div>
+                </div>
+
+                <div class="flow-row">
+                    <div class="time-label">&lt; 0.2s</div>
+                    <div class="flow-box primary">Validação de Agendamento<small>Backend</small></div>
+                    <div class="arrow">→</div>
+                    <div class="flow-box secondary">Atualiza BD (status=called)<small>Database</small></div>
+                </div>
+
+                <div class="flow-row">
+                    <div class="time-label">&lt; 0.3s</div>
+                    <div class="flow-box accent">WebSocket Broadcast<small>Backend</small></div>
+                    <div class="arrow">→</div>
+                    <div class="flow-box warning">TV Exibe Paciente<small>Waiting Room</small></div>
+                </div>
+
+                <div class="flow-row">
+                    <div class="time-label">&lt; 0.5s</div>
+                    <div class="flow-box primary">Admin Recebe Atualização<small>Frontend</small></div>
+                    <div class="arrow">→</div>
+                    <div class="flow-box success">Dashboard Atualizado<small>Admin Panel</small></div>
+                </div>
+
+                <div class="critical-box">
+                    <h4>⏱️ SEQUÊNCIA DE LATÊNCIAS CRÍTICAS</h4>
+                    <div class="section">
+                        <ul>
+                            <li><strong>Clique → API:</strong> &lt; 100ms</li>
+                            <li><strong>Validação BD:</strong> &lt; 200ms</li>
+                            <li><strong>WebSocket broadcast:</strong> &lt; 300ms</li>
+                            <li><strong>Dashboard atualizado:</strong> &lt; 500ms</li>
+                            <li><strong>Total (pior caso):</strong> &lt; 1 segundo</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h3>🎯 Pontos Críticos</h3>
+                    <ul>
+                        <li>WebSocket deve broadcast para todos os clientes conectados</li>
+                        <li>Status BD deve ser transacional para evitar race conditions</li>
+                        <li>TV exibe em tempo real sem refresh manual</li>
+                        <li>Admin vê atualização automática da fila</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- FLUXO 2: ASSINATURA DIGITAL -->
+        <div class="diagram">
+            <h2>FLUXO 2: Assinatura Digital (ClickSign - CFM 2.299/21)</h2>
+
+            <div class="diagram-content">
+                <div class="columns">
+                    <div>
+                        <div class="column-header">FRONTEND (Médico)</div>
+                        <div class="card">
+                            <h4>Etapa 1: Validação</h4>
+                            <ul>
+                                <li>Clique "Assinar Receita" (&lt; 0.1s)</li>
+                                <li>Valida dados (&lt; 0.2s)</li>
+                            </ul>
+                        </div>
+                        <div class="card">
+                            <h4>Etapa 2: Assinatura</h4>
+                            <ul>
+                                <li>Abre modal assinatura (&lt; 0.3s)</li>
+                                <li>Popup ClickSign para assinar (~30-40s)</li>
+                            </ul>
+                        </div>
+                        <div class="card">
+                            <h4>Etapa 3: Confirmação</h4>
+                            <ul>
+                                <li>Poll status a cada 5s</li>
+                                <li>Sucesso: Baixa PDF (&lt; 1s)</li>
+                                <li>Compartilha via WhatsApp (&lt; 2s)</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div>
+                        <div class="column-header">BACKEND (FastAPI)</div>
+                        <div class="card">
+                            <h4>POST /prescriptions/{id}/sign</h4>
+                            <ul>
+                                <li>Validação de dados (&lt; 0.1s)</li>
+                                <li>Gera PDF com QR Code (&lt; 1s)</li>
+                            </ul>
+                        </div>
+                        <div class="card">
+                            <h4>Upload ClickSign</h4>
+                            <ul>
+                                <li>Envia PDF para ClickSign (&lt; 2s)</li>
+                                <li>Obtém sign_url de retorno</li>
+                                <li>Armazena doc_id no BD</li>
+                            </ul>
+                        </div>
+                        <div class="card">
+                            <h4>Monitoramento</h4>
+                            <ul>
+                                <li>GET /prescriptions/{id}/signature-status</li>
+                                <li>Webhook ClickSign → Salva PDF assinado</li>
+                                <li>Envia para WhatsApp API</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div>
+                        <div class="column-header">CLICKSIGN (API ICP-BR)</div>
+                        <div class="card">
+                            <h4>Processos</h4>
+                            <ul>
+                                <li>Recebe PDF (&lt; 1s)</li>
+                                <li>Gera sign_url assinatura</li>
+                                <li>Médico assina no portal ClickSign (~30s)</li>
+                            </ul>
+                        </div>
+                        <div class="card">
+                            <h4>Validação e Webhook</h4>
+                            <ul>
+                                <li>Valida assinatura (ICP-Brasil)</li>
+                                <li>Faz POST em webhook OrthoClinic</li>
+                                <li>Disponibiliza PDF assinado</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="critical-box">
+                    <h4>⏱️ TIMELINE COMPLETA</h4>
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <tr style="border-bottom: 1px solid #ffc107;">
+                            <td style="padding: 8px;"><strong>Etapa</strong></td>
+                            <td style="padding: 8px; text-align: right;"><strong>Tempo</strong></td>
+                            <td style="padding: 8px;"><strong>Descrição</strong></td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid #fff3cd;">
+                            <td style="padding: 8px;">1. Clique</td>
+                            <td style="padding: 8px; text-align: right;">0s</td>
+                            <td style="padding: 8px;">Médico clica "Assinar"</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid #fff3cd;">
+                            <td style="padding: 8px;">2. Geração PDF</td>
+                            <td style="padding: 8px; text-align: right;">1-2s</td>
+                            <td style="padding: 8px;">Backend gera PDF com QR Code</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid #fff3cd;">
+                            <td style="padding: 8px;">3. Upload ClickSign</td>
+                            <td style="padding: 8px; text-align: right;">2-3s</td>
+                            <td style="padding: 8px;">API ClickSign pronta para assinatura</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid #fff3cd;">
+                            <td style="padding: 8px;">4. Assinatura Médico</td>
+                            <td style="padding: 8px; text-align: right;">30-40s</td>
+                            <td style="padding: 8px;">Médico assina no portal ClickSign</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 8px;"><strong>5. Webhook & BD</strong></td>
+                            <td style="padding: 8px; text-align: right;"><strong>31-42s</strong></td>
+                            <td style="padding: 8px;"><strong>Documento salvo e disponível</strong></td>
+                        </tr>
+                    </table>
+                    <div style="margin-top: 10px;">
+                        <strong>Melhor caso:</strong> ~35s | <strong>Pior caso:</strong> ~60s
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h3>🔐 Conformidade CFM 2.299/21</h3>
+                    <ul>
+                        <li>Assinatura com certificado ICP-Brasil (ClickSign)</li>
+                        <li>QR Code para validação de autenticidade</li>
+                        <li>Proof de assinatura armazenado em BD</li>
+                        <li>Timestamp de assinatura certificado</li>
+                        <li>PDF com hash digital criptografado</li>
+                    </ul>
+                </div>
+
+                <div class="section">
+                    <h3>📱 Compartilhamento WhatsApp</h3>
+                    <ul>
+                        <li>PDF + Comprovante de assinatura</li>
+                        <li>Link para validação de QR Code</li>
+                        <li>Enviado automaticamente após webhook (&lt; 2s)</li>
+                        <li>Paciente recebe em tempo real</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- FLUXO 3: ANAMNESE -->
+        <div class="diagram">
+            <h2>FLUXO 3: Anamnese (Primeira Consulta)</h2>
+
+            <div class="diagram-content">
+                <div class="section">
+                    <h3>📋 Seleção de Template</h3>
+                    <p>Paciente escolhe entre "Primeira Consulta" (abas completas) ou "Retorno" (formulário simplificado)</p>
+                </div>
+
+                <div style="margin: 20px 0;">
+                    <h3 style="color: #065A82; margin-bottom: 10px;">Navegação por Abas (5 Etapas)</h3>
+                    <div class="tabs-grid">
+                        <div class="tab primary">1️⃣ Queixa Principal</div>
+                        <div class="tab">2️⃣ Histórico</div>
+                        <div class="tab">3️⃣ Hábitos & Risco</div>
+                        <div class="tab">4️⃣ Exame Físico</div>
+                        <div class="tab success">5️⃣ Resumo & Assinar</div>
+                    </div>
+                </div>
+
+                <div class="columns">
+                    <div>
+                        <h3 style="color: #065A82; margin-bottom: 10px;">ABA 1: Queixa Principal 🔴</h3>
+                        <div class="card">
+                            <ul>
+                                <li>Motivo da consulta (textarea)</li>
+                                <li>Localização: 8 regiões (ombro, cotovelo, punho, coluna, quadril, joelho, tornozelo)</li>
+                                <li>Duração dos sintomas</li>
+                                <li>Intensidade: escala visual 0-10 com cores</li>
+                                <li>O que piora? (textarea)</li>
+                                <li>O que melhora? (textarea)</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div>
+                        <h3 style="color: #065A82; margin-bottom: 10px;">ABA 2: Histórico 📜</h3>
+                        <div class="card">
+                            <ul>
+                                <li>Traumas anteriores</li>
+                                <li>Cirurgias anteriores</li>
+                                <li>Fisioterapia anterior</li>
+                                <li>Outros tratamentos</li>
+                                <li>Medicações atuais (com alertas de interações)</li>
+                                <li>Alergias a medicações</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div>
+                        <h3 style="color: #065A82; margin-bottom: 10px;">ABA 3: Hábitos & Risco ⚠️</h3>
+                        <div class="card">
+                            <ul>
+                                <li>Profissão</li>
+                                <li>Atividades físicas/esportes</li>
+                                <li>Nível de sedentarismo (slider 1-10)</li>
+                                <li>Tabagismo (sim/não)</li>
+                                <li>Consumo de álcool</li>
+                                <li>Qualidade do sono (boa/regular/ruim)</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div>
+                        <h3 style="color: #065A82; margin-bottom: 10px;">ABA 4: Exame Físico 🔍</h3>
+                        <div class="card">
+                            <ul>
+                                <li>Amplitude de movimento</li>
+                                <li>Testes específicos (Neer, Speed, Lachman, etc.)</li>
+                                <li>Presença de inflamação</li>
+                                <li>Deformidades/assimetrias</li>
+                                <li>Palpação de pontos-dolorosos</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div>
+                        <h3 style="color: #065A82; margin-bottom: 10px;">ABA 5: Resumo & Assinar ✅</h3>
+                        <div class="card">
+                            <ul>
+                                <li>Preview colorido de todos os dados</li>
+                                <li>Cards por seção com ícones</li>
+                                <li>Barra de progresso de preenchimento</li>
+                                <li>Botão "Salvar Anamnese"</li>
+                                <li>Opção de assinatura digital (ClickSign)</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h3>💾 Auto-save (Salva Automático)</h3>
+                    <ul>
+                        <li>Salva a cada campo preenchido (&lt; 0.5s)</li>
+                        <li>Indicador visual de sincronização</li>
+                        <li>Recuperação automática em caso de desconexão</li>
+                        <li>Status sincronizado com backend</li>
+                    </ul>
+                </div>
+
+                <div class="section">
+                    <h3>✓ Validação de Campos</h3>
+                    <ul>
+                        <li>Campos obrigatórios marcados com asterisco</li>
+                        <li>Alertas de interações medicamentosas</li>
+                        <li>Validação de consistência de dados</li>
+                        <li>Avisos de risco (sedentarismo alto + dor, etc.)</li>
+                    </ul>
+                </div>
+
+                <div style="margin: 20px 0;">
+                    <h3 style="color: #065A82;">Barra de Progresso</h3>
+                    <div class="progress-bar">
+                        <div class="progress-fill">Preenchimento: 50% concluído</div>
+                    </div>
+                </div>
+
+                <div class="critical-box">
+                    <h4>⏱️ FLUXO DE FINALIZAÇÃO</h4>
+                    <div class="flow-row" style="margin-top: 15px;">
+                        <div class="time-label">&lt; 1s</div>
+                        <div class="flow-box primary">Salvar Anamnese<small>Sistema</small></div>
+                        <div class="arrow">→</div>
+                        <div class="time-label">&lt; 2s</div>
+                        <div class="flow-box secondary">Gerar PDF<small>Backend</small></div>
+                        <div class="arrow">→</div>
+                        <div class="time-label">&lt; 0.5s</div>
+                        <div class="flow-box accent">Abrir Assinatura<small>Modal</small></div>
+                        <div class="arrow">→</div>
+                        <div class="time-label">~30-40s</div>
+                        <div class="flow-box success">Assinado BD<small>ClickSign</small></div>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h3>🔄 Fluxo de Retorno (Follow-up)</h3>
+                    <ul>
+                        <li>Anamnese simplificada (não abas completas)</li>
+                        <li>Comparação de dor (antes/depois com cores)</li>
+                        <li>Evolução desde última consulta</li>
+                        <li>Adesão ao tratamento (Excelente/Boa/Regular/Fraca)</li>
+                        <li>Resposta ao tratamento</li>
+                        <li>Novos sintomas aparecidos</li>
+                        <li>Limitações atuais</li>
+                        <li>Resumo automático com indicadores</li>
+                    </ul>
+                </div>
+
+                <div class="section">
+                    <h3>📊 Armazenamento Estruturado</h3>
+                    <ul>
+                        <li>Tabela: <strong>patient_anamnesis</strong> (paciente_id, tipo, data_criacao)</li>
+                        <li>Dados em JSON estruturado por aba</li>
+                        <li>Histórico completo mantido (sem sobrescript)</li>
+                        <li>Linked com prescriptions para análise de efetividade</li>
+                        <li>Busca e filtro por condição/especialidade</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- RESUMO COMPARATIVO -->
+        <div class="diagram">
+            <h2>RESUMO COMPARATIVO DOS 3 FLUXOS</h2>
+
+            <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+                <tr style="background: #065A82; color: white;">
+                    <th style="padding: 12px; border: 1px solid #ccc; text-align: left;">Fluxo</th>
+                    <th style="padding: 12px; border: 1px solid #ccc; text-align: left;">Duração Total</th>
+                    <th style="padding: 12px; border: 1px solid #ccc; text-align: left;">Atores Principais</th>
+                    <th style="padding: 12px; border: 1px solid #ccc; text-align: left;">Crítico em</th>
+                </tr>
+                <tr style="background: #f8f9fa;">
+                    <td style="padding: 12px; border: 1px solid #ccc;"><strong>Chamada de Paciente</strong></td>
+                    <td style="padding: 12px; border: 1px solid #ccc;">&lt; 1s</td>
+                    <td style="padding: 12px; border: 1px solid #ccc;">Frontend, API, DB, WebSocket</td>
+                    <td style="padding: 12px; border: 1px solid #ccc;">Latência real-time</td>
+                </tr>
+                <tr>
+                    <td style="padding: 12px; border: 1px solid #ccc;"><strong>Assinatura Digital</strong></td>
+                    <td style="padding: 12px; border: 1px solid #ccc;">30-60s</td>
+                    <td style="padding: 12px; border: 1px solid #ccc;">Frontend, FastAPI, ClickSign</td>
+                    <td style="padding: 12px; border: 1px solid #ccc;">Conformidade CFM 2.299/21</td>
+                </tr>
+                <tr style="background: #f8f9fa;">
+                    <td style="padding: 12px; border: 1px solid #ccc;"><strong>Anamnese</strong></td>
+                    <td style="padding: 12px; border: 1px solid #ccc;">5-20 min (usuário)</td>
+                    <td style="padding: 12px; border: 1px solid #ccc;">Frontend, Backend, DB</td>
+                    <td style="padding: 12px; border: 1px solid #ccc;">Completude de dados</td>
+                </tr>
+            </table>
+
+            <div class="section" style="margin-top: 20px;">
+                <h3>🎯 Checklist de Implementação</h3>
+                <ul>
+                    <li>✅ Chamada de Paciente: WebSocket implementado, índices DB otimizados</li>
+                    <li>✅ Assinatura Digital: ClickSign integrado, CFM 2.299/21 validado</li>
+                    <li>✅ Anamnese: 5 abas completas, auto-save, validação integrada</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <div class="footer">
+        <p>Documentação de Arquitetura - OrthoClinic Sistema de Gestão Clínica</p>
+        <p style="font-size: 0.9em; margin-top: 10px;">Data: Junho 2026 | Versão: 1.0</p>
+    </div>
+</body>
+</html>

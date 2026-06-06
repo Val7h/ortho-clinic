@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Date, DateTime, Text, Boolean, ForeignKey
+from sqlalchemy import Column, Integer, String, Date, DateTime, Text, Boolean, ForeignKey, JSON, Numeric
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from database import Base
@@ -29,10 +29,20 @@ class Patient(Base):
     # Dados médicos
     blood_type = Column(String(5), nullable=True)
     allergies = Column(Text, nullable=True)
+    alergias = Column(Text, nullable=True)  # Campo duplicado em PT-BR
     chronic_conditions = Column(Text, nullable=True)
     current_medications = Column(Text, nullable=True)
+    medicacoes_uso_continuo = Column(JSON, nullable=True)  # Lista estruturada de medicações
     surgeries_history = Column(Text, nullable=True)
     family_history = Column(Text, nullable=True)
+    contraindicacoes = Column(Text, nullable=True)
+
+    # Vitais
+    peso_kg = Column(Numeric(5, 2), nullable=True)
+    altura_cm = Column(Numeric(5, 2), nullable=True)
+
+    # Comorbidades estruturadas
+    comorbidades = Column(JSON, nullable=True)  # {"diabetes": true, "hipertensao": false, ...}
 
     # Convênio
     insurance = Column(String(100), nullable=True)

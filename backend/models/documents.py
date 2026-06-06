@@ -20,6 +20,7 @@ class Prescription(Base):
 
     patient = relationship("Patient", back_populates="prescriptions")
     consultation = relationship("Consultation", back_populates="prescriptions")
+    signatures = relationship("PrescriptionSignature", back_populates="prescription", cascade="all, delete-orphan")
 
 
 class ExamRequest(Base):

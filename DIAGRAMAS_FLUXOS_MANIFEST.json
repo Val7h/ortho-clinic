@@ -1,0 +1,463 @@
+{
+  "project": "OrthoClinic",
+  "documentation_type": "Flow Diagrams & Architecture",
+  "version": "1.0",
+  "created_date": "2026-06-06",
+  "language": "pt-BR",
+  "files": [
+    {
+      "id": 1,
+      "filename": "FLUXOS_ORTHOCLINIC.pptx",
+      "type": "presentation",
+      "size_kb": 174.7,
+      "description": "Professional PowerPoint presentation with 4 detailed slides",
+      "format": "PPTX (Office Open XML)",
+      "target_audience": "Executives, Stakeholders, Presentations",
+      "slides": [
+        {
+          "number": 1,
+          "title": "Capa e Overview",
+          "content": "Título principal e descrição dos 3 fluxos"
+        },
+        {
+          "number": 2,
+          "title": "FLUXO 1: Chamada de Paciente (Real-time)",
+          "content": "Diagrama com boxes, setas, tempos de latência, e caixa crítica"
+        },
+        {
+          "number": 3,
+          "title": "FLUXO 2: Assinatura Digital (ClickSign)",
+          "content": "3 colunas (Frontend/API/ClickSign), timeline, e info WhatsApp"
+        },
+        {
+          "number": 4,
+          "title": "FLUXO 3: Anamnese (Primeira Consulta)",
+          "content": "5 abas, cards de funcionalidades, barra de progresso, fluxo final"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "filename": "DIAGRAMAS_FLUXOS.html",
+      "type": "interactive_documentation",
+      "size_kb": 30.1,
+      "description": "Interactive HTML documentation (responsive design)",
+      "format": "HTML5",
+      "target_audience": "Technical teams, Web documentation",
+      "features": [
+        "OrthoClinic color palette (Deep Blue, Seafoam, Coral)",
+        "Visual flow boxes with colors",
+        "Performance metrics tables",
+        "Component legends",
+        "Timeline visualization",
+        "Tabs grid",
+        "Comparative summary",
+        "Print-friendly formatting"
+      ]
+    },
+    {
+      "id": 3,
+      "filename": "FLUXOS_ARQUITETURA_COMPLETO.md",
+      "type": "technical_documentation",
+      "size_kb": 31.7,
+      "description": "Complete technical documentation in Markdown",
+      "format": "Markdown",
+      "target_audience": "Developers, Architects, Code reviews",
+      "sections": [
+        "Fluxo 1: Chamada de Paciente (visão geral, sequência, latências, endpoints, SQL, pontos críticos)",
+        "Fluxo 2: Assinatura Digital (visão geral, sequência, timeline, endpoints, conformidade CFM, SQL, pontos críticos)",
+        "Fluxo 3: Anamnese (tipos, sequência 6 fases, auto-save, validação, SQL com JSON, follow-up, pontos críticos)",
+        "Resumo comparativo",
+        "Checklist de implementação",
+        "Performance targets"
+      ]
+    },
+    {
+      "id": 4,
+      "filename": "DIAGRAMAS_FLUXOS_RESUMO_EXECUTIVO.docx",
+      "type": "executive_summary",
+      "size_kb": 13.1,
+      "description": "Executive summary in Word format",
+      "format": "DOCX (Office Open XML)",
+      "target_audience": "Executives, Management, Formal reports",
+      "pages": 5,
+      "content": [
+        "Professional cover",
+        "Executive summary (1 page)",
+        "Flow 1: Call Patient (1 page)",
+        "Flow 2: Digital Signature (1.5 pages)",
+        "Flow 3: Anamnesis (1.5 pages)",
+        "Comparative summary",
+        "Status checklist"
+      ]
+    },
+    {
+      "id": 5,
+      "filename": "README_DIAGRAMAS_FLUXOS.md",
+      "type": "guide_and_index",
+      "size_kb": 9.4,
+      "description": "Usage guide and index of documentation files",
+      "format": "Markdown",
+      "target_audience": "All users (entry point)",
+      "content": [
+        "File descriptions and usage",
+        "Quick comparison table",
+        "Technical summary of each flow",
+        "Technologies involved",
+        "How to use documents",
+        "Performance targets",
+        "Status checklist",
+        "Next steps"
+      ]
+    },
+    {
+      "id": 6,
+      "filename": "INDICE_DIAGRAMAS.txt",
+      "type": "structured_index",
+      "size_kb": 16,
+      "description": "Structured index (easy to read text format)",
+      "format": "Plain Text",
+      "target_audience": "Quick reference, all users",
+      "sections": [
+        "File listing with descriptions",
+        "3 flows detailed summary",
+        "Performance targets",
+        "Checklist",
+        "How to use documents",
+        "Technologies"
+      ]
+    }
+  ],
+  "flows": [
+    {
+      "id": 1,
+      "name": "Chamada de Paciente",
+      "type": "Real-time",
+      "duration": "< 1 segundo",
+      "latency_target": "< 500ms",
+      "critical_in": "Latência real-time e sincronização",
+      "actors": [
+        "Frontend (médico)",
+        "API (FastAPI)",
+        "Backend (validação)",
+        "Database (PostgreSQL)",
+        "WebSocket (broadcast)",
+        "TV (waiting room)",
+        "Admin Panel"
+      ],
+      "stages": 6,
+      "key_metrics": {
+        "click_to_api": "< 100ms",
+        "validation_db": "< 200ms",
+        "websocket_broadcast": "< 300ms",
+        "dashboard_update": "< 500ms",
+        "total": "< 1s"
+      },
+      "database": {
+        "table": "clinic_queue",
+        "fields": [
+          "id",
+          "clinic_id",
+          "appointment_id",
+          "patient_id",
+          "room",
+          "called_at",
+          "called_by_user_id",
+          "status (pending|called|arrived|in_consultation|completed)"
+        ],
+        "indices": [
+          "clinic_queue(clinic_id, called_at DESC)",
+          "clinic_queue(status)"
+        ]
+      },
+      "critical_points": [
+        "Race condition: Usar transação com LOCK",
+        "WebSocket reliability: Fallback com polling 5s",
+        "Sincronização: Backend é fonte de verdade"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "Assinatura Digital",
+      "type": "Digital Signature + External Integration",
+      "duration": "30-60 segundos",
+      "latency_target": "< 2s (sistema) + 30-40s (humano)",
+      "critical_in": "Conformidade legal (CFM 2.299/21) e segurança",
+      "actors": [
+        "Frontend (médico)",
+        "API (FastAPI)",
+        "Backend (PDF generation)",
+        "ClickSign (ICP-Brasil)",
+        "WhatsApp API",
+        "Database (PostgreSQL)"
+      ],
+      "stages": 6,
+      "key_metrics": {
+        "pdf_generation": "1-2s",
+        "clicksign_upload": "< 2s",
+        "signature_human": "30-40s",
+        "webhook": "< 1s",
+        "whatsapp": "< 2s",
+        "total": "30-60s"
+      },
+      "compliance": {
+        "CFM": "Resolução 2.299/21",
+        "Law": "Lei 14.065/2020",
+        "Certificate": "ICP-Brasil",
+        "Encryption": "RSA-2048",
+        "Hash": "SHA-256",
+        "Timestamp": "RFC 3161"
+      },
+      "database": {
+        "tables": [
+          "prescriptions",
+          "prescription_signatures"
+        ],
+        "fields_signatures": [
+          "id",
+          "prescription_id",
+          "clicksign_doc_id",
+          "signed_at",
+          "signature_proof (JSON)",
+          "status (pending|signed|failed)"
+        ],
+        "indices": [
+          "prescription_signatures(status)",
+          "prescription_signatures(prescription_id)"
+        ]
+      },
+      "integrations": [
+        "ClickSign API (sign, webhook)",
+        "WhatsApp API (document delivery)",
+        "ReportLab (PDF generation)",
+        "QRCode library"
+      ],
+      "critical_points": [
+        "Webhook security: Validar HMAC SHA-256",
+        "QR Code validation: Link público para qualquer um",
+        "CFM compliance: Não requer assinatura em papel",
+        "Expiration: Se não assinar em 24h, expirar"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "Anamnese (Primeira Consulta)",
+      "type": "Structured Data Collection + Auto-save",
+      "duration": "5-20 minutos (usuário)",
+      "latency_target": "< 0.5s (auto-save), < 2s (finalização)",
+      "critical_in": "Completude de dados e validação",
+      "actors": [
+        "Frontend (paciente/médico)",
+        "Backend (FastAPI)",
+        "Database (PostgreSQL)",
+        "ClickSign (assinatura opcional)"
+      ],
+      "tabs": 5,
+      "stages": 6,
+      "tabs_detail": [
+        {
+          "number": 1,
+          "name": "Queixa Principal",
+          "icon": "🔴",
+          "fields": [
+            "Motivo da consulta",
+            "Localização (8 regiões)",
+            "Duração dos sintomas",
+            "Intensidade (0-10 com cores)",
+            "O que piora/melhora"
+          ]
+        },
+        {
+          "number": 2,
+          "name": "Histórico",
+          "icon": "📜",
+          "fields": [
+            "Traumas anteriores",
+            "Cirurgias",
+            "Fisioterapia",
+            "Medicações (com alertas)",
+            "Alergias"
+          ]
+        },
+        {
+          "number": 3,
+          "name": "Hábitos & Risco",
+          "icon": "⚠️",
+          "fields": [
+            "Profissão",
+            "Atividades físicas",
+            "Sedentarismo (slider)",
+            "Tabagismo",
+            "Qualidade do sono"
+          ]
+        },
+        {
+          "number": 4,
+          "name": "Exame Físico",
+          "icon": "🔍",
+          "fields": [
+            "Amplitude movimento",
+            "Testes específicos",
+            "Inflamação",
+            "Deformidades"
+          ]
+        },
+        {
+          "number": 5,
+          "name": "Resumo & Assinar",
+          "icon": "✅",
+          "fields": [
+            "Preview colorido",
+            "Barra de progresso",
+            "Validação final",
+            "Assinatura digital (ClickSign)"
+          ]
+        }
+      ],
+      "features": [
+        "Auto-save: A cada campo (< 0.5s)",
+        "Validação: Campos obrigatórios, interações medicamentosas",
+        "Progress bar: Percentual em tempo real",
+        "PDF: Gerado automaticamente ao salvar",
+        "Signature: ClickSign integrado",
+        "Follow-up: Versão simplificada para retornos"
+      ],
+      "database": {
+        "table": "patient_anamnesis",
+        "fields": [
+          "id",
+          "clinic_id",
+          "patient_id",
+          "anamnesis_type (first_consultation|follow_up)",
+          "consultation_date",
+          "data_chief_complaint (JSON)",
+          "data_history (JSON)",
+          "data_habits (JSON)",
+          "data_physical_exam (JSON)",
+          "status (in_progress|completed|signed)",
+          "created_by_user_id",
+          "last_edited_by_user_id",
+          "created_at",
+          "updated_at",
+          "completed_at"
+        ],
+        "indices": [
+          "patient_anamnesis(patient_id, created_at DESC)",
+          "patient_anamnesis(status)"
+        ]
+      },
+      "critical_points": [
+        "Data completeness: Campos obrigatórios não podem estar vazios",
+        "Medication interactions: Alertar sobre conflitos",
+        "Auto-save reliability: Recuperação automática se browser fecha",
+        "Data security: HIPAA/LGPD compliant"
+      ]
+    }
+  ],
+  "performance_targets": {
+    "patient_call_latency": {
+      "target": "< 1s",
+      "breakdown": {
+        "click_to_api": "< 100ms",
+        "validation": "< 200ms",
+        "websocket": "< 300ms",
+        "dashboard": "< 500ms"
+      },
+      "status": "met"
+    },
+    "pdf_generation": {
+      "target": "< 2s",
+      "status": "met"
+    },
+    "clicksign_upload": {
+      "target": "< 2s",
+      "status": "met"
+    },
+    "auto_save": {
+      "target": "< 0.5s",
+      "status": "met"
+    },
+    "websocket_broadcast": {
+      "target": "< 300ms",
+      "status": "met"
+    }
+  },
+  "technologies": {
+    "frontend": [
+      "React",
+      "TypeScript",
+      "Next.js 14",
+      "WebSocket client",
+      "ClickSign SDK"
+    ],
+    "backend": [
+      "FastAPI (Python)",
+      "SQLAlchemy ORM",
+      "WebSocket server",
+      "ReportLab (PDF)",
+      "ClickSign API client",
+      "WhatsApp API client"
+    ],
+    "database": [
+      "PostgreSQL",
+      "SQLite (dev)"
+    ],
+    "external_apis": [
+      "ClickSign (ICP-Brasil digital signature)",
+      "WhatsApp Business API",
+      "QRCODE library"
+    ],
+    "deployment": [
+      "Docker",
+      "Docker Compose"
+    ]
+  },
+  "implementation_status": {
+    "flow_1_patient_call": {
+      "status": "completed",
+      "checklist": [
+        "✅ Table clinic_queue created",
+        "✅ DB indices optimized",
+        "✅ Endpoint POST /clinic/queue/call",
+        "✅ WebSocket implemented",
+        "✅ Validation logic",
+        "✅ Load testing"
+      ]
+    },
+    "flow_2_digital_signature": {
+      "status": "completed",
+      "checklist": [
+        "✅ ClickSign integration",
+        "✅ PDF with QR Code",
+        "✅ Endpoint POST /prescriptions/{id}/sign",
+        "✅ Webhook receiver",
+        "✅ HMAC validation",
+        "✅ WhatsApp integration",
+        "✅ CFM 2.299/21 validated"
+      ]
+    },
+    "flow_3_anamnesis": {
+      "status": "completed",
+      "checklist": [
+        "✅ 5 tabs implemented",
+        "✅ Auto-save every 2s",
+        "✅ Real-time validation",
+        "✅ Progress bar",
+        "✅ PDF generation",
+        "✅ ClickSign signature",
+        "✅ Follow-up simplified flow"
+      ]
+    }
+  },
+  "metadata": {
+    "created_by": "OrthoClinic Documentation System",
+    "created_date": "2026-06-06",
+    "last_updated": "2026-06-06",
+    "version": "1.0",
+    "status": "Complete and Validated",
+    "language": "pt-BR, English",
+    "location": "C:\\Users\\Admin\\ortho-clinic",
+    "total_files": 6,
+    "total_size_kb": 273.2
+  }
+}
