@@ -1,6 +1,12 @@
 import axios from "axios";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8002";
+// API URL with fallbacks for different environments
+const API_URL =
+  process.env.NEXT_PUBLIC_API_URL ||
+  (typeof window !== 'undefined' && window.location.hostname === 'localhost'
+    ? 'http://localhost:8002'
+    : 'https://ortho-backend.onrender.com') ||
+  'https://ortho-backend.onrender.com';
 
 export const api = axios.create({
   baseURL: API_URL,
