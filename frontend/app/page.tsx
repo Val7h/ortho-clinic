@@ -97,6 +97,22 @@ export default function Dashboard() {
           </div>
         )}
 
+        {/* ── Painel de Atendimento (Em destaque) ────────────────────────── */}
+        <Link href="/painel">
+          <Card hoverable shadow="lg" className="border-l-4 border-red-500 bg-gradient-to-r from-red-50 dark:from-red-950/20 to-transparent">
+            <CardContent className="flex items-center gap-4 py-6">
+              <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-lg bg-red-100 dark:bg-red-900/40">
+                <Activity className="h-7 w-7 text-red-600 dark:text-red-400 animate-pulse" />
+              </div>
+              <div className="flex-1">
+                <p className="text-lg font-bold text-slate-900 dark:text-slate-50">Painel de Atendimento</p>
+                <p className="text-sm text-slate-600 dark:text-slate-400">Tempo real com cronômetro</p>
+              </div>
+              <ArrowRight className="h-5 w-5 text-slate-400 dark:text-slate-500" />
+            </CardContent>
+          </Card>
+        </Link>
+
         {/* ── Module grid ───────────────────────────────────────────────── */}
         <div>
           <h3 className="mb-4 text-sm font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400">Módulos principais</h3>
