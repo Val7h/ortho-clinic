@@ -12,6 +12,7 @@ import Link from "next/link";
 import toast from "react-hot-toast";
 import NavBar from "@/components/NavBar";
 import Timeline from "@/components/Timeline";
+import { AnamneseForm } from "@/components/AnamneseForm";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter, Badge, Button, Modal, useModal, CardSkeleton, ListSkeleton } from "@/components/ui";
 import { patientsApi, whatsappApi, anamnesisApi } from "@/lib/api";
 import { calcAge, formatDate, formatDate as fd } from "@/lib/utils";
@@ -414,6 +415,21 @@ export default function PatientPage() {
 
         {tab === "dados" && (
           <div className="space-y-4 pb-6">
+            {/* Formulário de Anamnese */}
+            <Card shadow="md" className="border-l-4 border-blue-500">
+              <CardContent className="pt-6">
+                <div className="space-y-4">
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-900 dark:text-slate-50 mb-2">📋 Anamnese</h3>
+                    <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
+                      Preencha o formulário detalhado de histórico médico do paciente
+                    </p>
+                  </div>
+                  <AnamneseForm patientId={pid} patientName={patient.name} />
+                </div>
+              </CardContent>
+            </Card>
+
             <DataSection title="Dados Pessoais" items={[
               { label: "Nome", value: patient.name },
               { label: "Nascimento", value: patient.birthdate ? `${formatDate(patient.birthdate)} (${calcAge(patient.birthdate)})` : null },
