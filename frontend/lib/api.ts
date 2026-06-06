@@ -123,6 +123,10 @@ export const leafletsApi = {
   list: () => api.get("/leaflets").then((r) => r.data),
   get: (id: number) => api.get(`/leaflets/${id}`).then((r) => r.data),
   create: (data: any) => api.post("/leaflets", data).then((r) => r.data),
+  upload: (formData: FormData) =>
+    api.post("/leaflets/upload", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    }).then((r) => r.data),
 };
 
 // ── Dashboard ─────────────────────────────────────────────────────────────

@@ -34,6 +34,7 @@ export default function PatientPage() {
   const [timeline, setTimeline] = useState<any[]>([]);
   const [tab, setTab] = useState<Tab>("timeline");
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [waOpen, setWaOpen] = useState(false);
   const [waType, setWaType] = useState<string | null>(null);
   const [waPreview, setWaPreview] = useState<string | null>(null);
@@ -43,10 +44,35 @@ export default function PatientPage() {
   const [anamnesisLoading, setAnamnesisLoading] = useState(false);
 
   useEffect(() => {
-    Promise.all([patientsApi.get(pid), patientsApi.timeline(pid)])
-      .then(([p, t]) => { setPatient(p); setTimeline(t); })
-      .catch(() => toast.error("Erro ao carregar paciente"))
-      .finally(() => setLoading(false));
+    if (!pid) {
+      setLoading(false);
+      toast.error("ID do paciente inválido");
+      return;
+    }
+
+    const loadPatient = async () => {
+      try {
+        setError(null);
+        const [p, t] = await Promise.all([
+          patientsApi.get(pid),
+          patientsApi.timeline(pid)
+        ]);
+        setPatient(p);
+        setTimeline(t);
+      } catch (error: any) {
+        const msg = error?.response?.data?.detail || error?.message || "Erro ao carregar paciente";
+        console.error("Patient load error:", error);
+        setError(msg);
+        toast.error(msg);
+        setPatient(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadPatient();
+
+    // Load WhatsApp config and anamneses (non-blocking)
     whatsappApi.config().then((c) => setWaDemo(c.demo)).catch(() => {});
     anamnesisApi.list(pid).then(setAnamneses).catch(() => {});
   }, [pid]);
@@ -106,7 +132,42 @@ export default function PatientPage() {
     </div>
   );
 
-  if (!patient) return null;
+  // Loading state
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+        <NavBar title="Carregando..." back="/pacientes" />
+        <main className="max-w-3xl mx-auto px-4 py-8">
+          <CardSkeleton />
+        </main>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error || !patient) {
+    return (
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+        <NavBar title="Paciente não encontrado" back="/pacientes" />
+        <main className="max-w-3xl mx-auto px-4 py-8">
+          <Card shadow="md" className="text-center py-12">
+            <div className="flex justify-center mb-4">
+              <AlertCircle className="w-12 h-12 text-error-500" />
+            </div>
+            <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-50 mb-2">
+              Erro ao carregar paciente
+            </h2>
+            <p className="text-sm text-slate-600 dark:text-slate-400 mb-6">
+              {error || "O paciente solicitado não foi encontrado."}
+            </p>
+            <Link href="/pacientes">
+              <Button>Voltar para Lista</Button>
+            </Link>
+          </Card>
+        </main>
+      </div>
+    );
+  }
 
   const tabs: { key: Tab; label: string }[] = [
     { key: "timeline", label: "Timeline" },
@@ -115,7 +176,7 @@ export default function PatientPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
       <NavBar
         title={patient.name}
         subtitle={patient.birthdate ? `${calcAge(patient.birthdate)} • ${patient.insurance || "Particular"}` : patient.insurance || "Particular"}

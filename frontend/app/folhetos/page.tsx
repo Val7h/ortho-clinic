@@ -1,18 +1,28 @@
 "use client";
 import { useEffect, useState } from "react";
-import { BookOpen, Search, ChevronRight, X, Printer } from "lucide-react";
+import { BookOpen, Search, ChevronRight, X, Printer, Plus, Upload, File } from "lucide-react";
 import NavBar from "@/components/NavBar";
 import { Card, Badge, Button, Input, Modal, useModal } from "@/components/ui";
 import { leafletsApi } from "@/lib/api";
+import toast from "react-hot-toast";
 
 export default function LeafletsPage() {
   const [leaflets, setLeaflets] = useState<any[]>([]);
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<any>(null);
   const modal = useModal(false);
+  const uploadModal = useModal(false);
+  const [file, setFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [title, setTitle] = useState("");
+  const [category, setCategory] = useState("Geral");
+
+  const loadLeaflets = () => {
+    leafletsApi.list().then(setLeaflets).catch(() => toast.error("Erro ao carregar folhetos"));
+  };
 
   useEffect(() => {
-    leafletsApi.list().then(setLeaflets).catch(() => {});
+    loadLeaflets();
   }, []);
 
   const categories = Array.from(new Set(leaflets.map((l) => l.category)));
@@ -28,11 +38,72 @@ export default function LeafletsPage() {
     modal.openModal();
   };
 
-  return (
-    <div className="min-h-screen bg-slate-50">
-      <NavBar title="Folhetos Informativos" back="/" />
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files?.[0]) {
+      const f = e.target.files[0];
+      const valid = f.type === "application/pdf" ||
+                    f.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+                    f.name.endsWith(".docx") ||
+                    f.name.endsWith(".pdf");
 
-      <main className="max-w-3xl mx-auto px-4 py-4 space-y-4">
+      if (!valid) {
+        toast.error("Apenas PDF e DOCX são aceitos");
+        return;
+      }
+      setFile(f);
+    }
+  };
+
+  const handleUpload = async () => {
+    if (!file || !title) {
+      toast.error("Preencha título e selecione arquivo");
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("title", title);
+      formData.append("category", category);
+      formData.append("file", file);
+
+      // Upload the file (using the API)
+      await leafletsApi.upload(formData);
+      toast.success("Folheto enviado com sucesso!");
+
+      // Reset form
+      setFile(null);
+      setTitle("");
+      setCategory("Geral");
+      uploadModal.onOpenChange(false);
+
+      // Reload leaflets
+      loadLeaflets();
+    } catch (error) {
+      toast.error("Erro ao enviar folheto. Tente novamente.");
+      console.error(error);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+      <NavBar
+        title="Folhetos Informativos"
+        back="/"
+        actions={
+          <Button
+            size="md"
+            icon={<Plus className="h-5 w-5" />}
+            onClick={() => uploadModal.onOpenChange(true)}
+          >
+            Novo Folheto
+          </Button>
+        }
+      />
+
+      <main className="max-w-3xl mx-auto px-4 py-8 space-y-6">
         <Input
           label=""
           icon={<Search className="w-4 h-4" />}
@@ -102,7 +173,7 @@ export default function LeafletsPage() {
               Imprimir
             </Button>
             <Button
-              onClick={() => modal.close()}
+              onClick={() => modal.onOpenChange(false)}
               variant="tertiary"
               fullWidth
             >
@@ -112,9 +183,100 @@ export default function LeafletsPage() {
         }
       >
         <div
-          className="prose prose-sm max-w-none text-slate-700"
+          className="prose prose-sm max-w-none text-slate-700 dark:text-slate-300"
           dangerouslySetInnerHTML={{ __html: selected?.content_html || "" }}
         />
+      </Modal>
+
+      {/* Modal de upload */}
+      <Modal
+        open={uploadModal.open}
+        onOpenChange={uploadModal.onOpenChange}
+        title="Enviar Folheto Informativo"
+        size="md"
+        footer={
+          <div className="flex gap-3 justify-end">
+            <Button
+              onClick={() => uploadModal.onOpenChange(false)}
+              variant="tertiary"
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleUpload}
+              isLoading={uploading}
+              disabled={!file || !title}
+            >
+              Enviar
+            </Button>
+          </div>
+        }
+      >
+        <div className="space-y-4">
+          {/* Título */}
+          <div>
+            <label className="block text-sm font-medium text-slate-900 dark:text-slate-50 mb-2">
+              Título do Folheto
+            </label>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Ex: Tendinite do Ombro"
+              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-50"
+            />
+          </div>
+
+          {/* Categoria */}
+          <div>
+            <label className="block text-sm font-medium text-slate-900 dark:text-slate-50 mb-2">
+              Categoria
+            </label>
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-50"
+            >
+              <option>Geral</option>
+              <option>Lesões</option>
+              <option>Reabilitação</option>
+              <option>Exercícios</option>
+              <option>Prevenção</option>
+              <option>Pós-operatório</option>
+            </select>
+          </div>
+
+          {/* Upload */}
+          <div>
+            <label className="block text-sm font-medium text-slate-900 dark:text-slate-50 mb-2">
+              Arquivo (PDF ou DOCX)
+            </label>
+            <label className="relative block border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-lg p-6 text-center cursor-pointer hover:border-brand-500 transition-colors">
+              <input
+                type="file"
+                accept=".pdf,.docx,.doc,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                onChange={handleFileChange}
+                className="hidden"
+              />
+              <div className="flex flex-col items-center gap-2">
+                <Upload className="w-8 h-8 text-slate-400" />
+                <p className="text-sm font-medium text-slate-900 dark:text-slate-50">
+                  {file ? `Selecionado: ${file.name}` : "Clique para selecionar"}
+                </p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  PDF ou DOCX (máx 10MB)
+                </p>
+              </div>
+            </label>
+          </div>
+
+          {/* Info */}
+          <div className="bg-brand-50 dark:bg-brand-900/20 p-3 rounded-lg">
+            <p className="text-xs text-brand-700 dark:text-brand-200">
+              💡 Após upload, o folheto pode ser visualizado e impresso por todos os usuários.
+            </p>
+          </div>
+        </div>
       </Modal>
     </div>
   );
