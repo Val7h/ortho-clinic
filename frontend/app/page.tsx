@@ -19,6 +19,7 @@ import {
 import Link from 'next/link';
 import NavBar from '@/components/NavBar';
 import ModuleCard from '@/components/ModuleCard';
+import { DashboardAnalytics } from '@/components/DashboardAnalytics';
 import { dashboardApi } from '@/lib/api';
 import { formatDateTime } from '@/lib/utils';
 import { useProtectedPage } from '@/components/AuthProvider';
@@ -48,8 +49,11 @@ export default function Dashboard() {
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
       <NavBar title="OrthoClinic" subtitle="Gestão de Consultório Premium" />
 
-      <main className="mx-auto max-w-6xl space-y-8 px-4 py-8">
-        {/* ── Stats row ────────────────────────────────────────────────── */}
+      <main className="mx-auto max-w-7xl space-y-8 px-4 py-8">
+        {/* ── NEW ANALYTICS DASHBOARD ───────────────────────────────────── */}
+        {stats && <DashboardAnalytics stats={stats} />}
+
+        {/* ── Stats row (Antigo - ainda mantido para compatibilidade) ────── */}
         {stats && (
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             {[
