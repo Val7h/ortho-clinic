@@ -24,7 +24,7 @@ export default function ModuleCard({
 }: ModuleCardProps) {
   return (
     <Link href={href}>
-      <div className="group relative rounded-2xl overflow-hidden cursor-pointer transition-all duration-200 hover:scale-[1.03] active:scale-95 shadow-card hover:shadow-card-hover border border-white/50">
+      <div className="group relative rounded-2xl overflow-hidden cursor-pointer transition-all duration-200 hover:scale-[1.03] active:scale-95 shadow-card hover:shadow-card-hover border border-white/50 dark:border-slate-800">
 
         {/* Color top — app-icon style */}
         <div className={cn(
@@ -50,10 +50,10 @@ export default function ModuleCard({
         </div>
 
         {/* White label area */}
-        <div className="bg-white px-3 py-2.5">
-          <p className="font-bold text-slate-900 text-[13px] leading-tight">{label}</p>
+        <div className="bg-white dark:bg-slate-950 px-3 py-2.5">
+          <p className="font-bold text-slate-900 dark:text-slate-50 text-[13px] leading-tight">{label}</p>
           {description && (
-            <p className="text-[11px] text-slate-500 leading-tight mt-0.5 truncate">{description}</p>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-tight mt-0.5 truncate">{description}</p>
           )}
         </div>
 

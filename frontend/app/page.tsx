@@ -38,14 +38,14 @@ export default function Dashboard() {
 
   if (authLoading || !user) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-200 border-t-brand-600" />
+      <div className="flex min-h-screen items-center justify-center bg-slate-50 dark:bg-slate-950">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-200 dark:border-brand-800 border-t-brand-600" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
       <NavBar title="OrthoClinic" subtitle="Gestão de Consultório Premium" />
 
       <main className="mx-auto max-w-6xl space-y-8 px-4 py-8">
@@ -89,7 +89,7 @@ export default function Dashboard() {
                   </div>
                   <div>
                     <p className={`text-2xl font-bold leading-none ${s.color}`}>{s.value}</p>
-                    <p className="mt-1 text-xs font-medium text-slate-600">{s.label}</p>
+                    <p className="mt-1 text-xs font-medium text-slate-600 dark:text-slate-400">{s.label}</p>
                   </div>
                 </CardContent>
               </Card>
@@ -99,7 +99,7 @@ export default function Dashboard() {
 
         {/* ── Module grid ───────────────────────────────────────────────── */}
         <div>
-          <h3 className="mb-4 text-sm font-bold uppercase tracking-wider text-slate-600">Módulos principais</h3>
+          <h3 className="mb-4 text-sm font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400">Módulos principais</h3>
           <div className="grid grid-cols-3 gap-4 sm:grid-cols-6">
             <ModuleCard
               href="/pacientes"
@@ -159,12 +159,12 @@ export default function Dashboard() {
         {/* ── Recent consultations ──────────────────────────────────────── */}
         {stats?.recent_consultations?.length > 0 && (
           <div>
-            <h3 className="mb-4 text-sm font-bold uppercase tracking-wider text-slate-600">Últimas consultas</h3>
+            <h3 className="mb-4 text-sm font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400">Últimas consultas</h3>
             <Card shadow="sm">
-              <div className="divide-y divide-slate-100">
+              <div className="divide-y divide-slate-100 dark:divide-slate-800">
                 {stats.recent_consultations.map((c: any) => (
                   <Link key={c.id} href={`/pacientes/${c.patient_id}`}>
-                    <div className="flex items-center gap-4 px-6 py-4 transition-colors hover:bg-brand-50">
+                    <div className="flex items-center gap-4 px-6 py-4 transition-colors hover:bg-brand-50 dark:hover:bg-slate-900">
                       <Badge
                         variant={c.type === 'primeira_consulta' ? 'brand' : 'accent'}
                         size="sm"
@@ -173,19 +173,19 @@ export default function Dashboard() {
                       </Badge>
 
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-slate-900">
+                        <p className="text-sm font-semibold text-slate-900 dark:text-slate-50">
                           {c.patient_name || `Paciente #${c.patient_id}`}
                         </p>
                         {c.diagnosis && (
-                          <p className="mt-0.5 truncate text-xs text-slate-500">{c.diagnosis}</p>
+                          <p className="mt-0.5 truncate text-xs text-slate-500 dark:text-slate-400">{c.diagnosis}</p>
                         )}
                       </div>
 
                       <div className="flex flex-shrink-0 items-center gap-3">
-                        <time className="text-xs font-medium text-slate-500">
+                        <time className="text-xs font-medium text-slate-500 dark:text-slate-400">
                           {formatDateTime(c.date)}
                         </time>
-                        <ArrowRight className="h-4 w-4 text-slate-400" />
+                        <ArrowRight className="h-4 w-4 text-slate-400 dark:text-slate-500" />
                       </div>
                     </div>
                   </Link>
@@ -197,7 +197,7 @@ export default function Dashboard() {
 
         {/* ── Quick actions ─────────────────────────────────────────────── */}
         <div>
-          <h3 className="mb-4 text-sm font-bold uppercase tracking-wider text-slate-600">Ações rápidas</h3>
+          <h3 className="mb-4 text-sm font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400">Ações rápidas</h3>
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             <Link href="/pacientes/novo">
               <Card hoverable>
@@ -206,8 +206,8 @@ export default function Dashboard() {
                     <Plus className="h-5 w-5 text-brand-600" />
                   </div>
                   <div>
-                    <p className="text-sm font-semibold text-slate-900">Novo paciente</p>
-                    <p className="text-xs text-slate-500">Cadastrar</p>
+                    <p className="text-sm font-semibold text-slate-900 dark:text-slate-50">Novo paciente</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Cadastrar</p>
                   </div>
                 </CardContent>
               </Card>
@@ -220,8 +220,8 @@ export default function Dashboard() {
                     <FileText className="h-5 w-5 text-accent-600" />
                   </div>
                   <div>
-                    <p className="text-sm font-semibold text-slate-900">Prontuários</p>
-                    <p className="text-xs text-slate-500">Listar</p>
+                    <p className="text-sm font-semibold text-slate-900 dark:text-slate-50">Prontuários</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Listar</p>
                   </div>
                 </CardContent>
               </Card>
@@ -234,8 +234,8 @@ export default function Dashboard() {
                     <Calendar className="h-5 w-5 text-rose-600" />
                   </div>
                   <div>
-                    <p className="text-sm font-semibold text-slate-900">Agenda</p>
-                    <p className="text-xs text-slate-500">Semana</p>
+                    <p className="text-sm font-semibold text-slate-900 dark:text-slate-50">Agenda</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Semana</p>
                   </div>
                 </CardContent>
               </Card>
@@ -248,8 +248,8 @@ export default function Dashboard() {
                     <DollarSign className="h-5 w-5 text-amber-600" />
                   </div>
                   <div>
-                    <p className="text-sm font-semibold text-slate-900">Financeiro</p>
-                    <p className="text-xs text-slate-500">Relatórios</p>
+                    <p className="text-sm font-semibold text-slate-900 dark:text-slate-50">Financeiro</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Relatórios</p>
                   </div>
                 </CardContent>
               </Card>
@@ -258,11 +258,11 @@ export default function Dashboard() {
         </div>
 
         {/* ── Footer CTA ────────────────────────────────────────────────── */}
-        <div className="rounded-xl bg-gradient-to-r from-brand-50 to-accent-50 p-6 sm:p-8">
+        <div className="rounded-xl bg-gradient-to-r from-brand-50 to-accent-50 dark:from-brand-900/20 dark:to-accent-900/20 p-6 sm:p-8">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <h3 className="text-lg font-semibold text-slate-900">Conheça todos os planos</h3>
-              <p className="mt-1 text-sm text-slate-600">Escolha o plano ideal para sua clínica</p>
+              <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-50">Conheça todos os planos</h3>
+              <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">Escolha o plano ideal para sua clínica</p>
             </div>
             <Link href="/planos">
               <Button variant="primary">

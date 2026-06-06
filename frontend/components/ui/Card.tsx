@@ -47,11 +47,11 @@ export const Card = React.forwardRef<HTMLDivElement, CardProps>(
       <div
         ref={ref}
         className={`
-          bg-white border border-slate-200
+          bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800
           ${roundedStyles[rounded]}
           ${shadowStyles[shadow]}
           ${paddingStyles[padding]}
-          ${hoverable ? 'cursor-pointer transition-all duration-200 hover:shadow-card-hover hover:border-slate-300' : ''}
+          ${hoverable ? 'cursor-pointer transition-all duration-200 hover:shadow-card-hover hover:border-slate-300 dark:hover:border-slate-700' : ''}
           ${className}
         `}
         {...props}
@@ -67,18 +67,18 @@ Card.displayName = 'Card';
 // ── Card Sub-components ────────────────────────────────────
 
 export const CardHeader = ({ className = '', ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={`mb-4 border-b border-slate-200 pb-4 ${className}`} {...props} />
+  <div className={`mb-4 border-b border-slate-200 dark:border-slate-800 pb-4 ${className}`} {...props} />
 );
 
 export const CardTitle = ({ className = '', ...props }: React.HTMLAttributes<HTMLHeadingElement>) => (
-  <h3 className={`text-lg font-semibold text-slate-900 ${className}`} {...props} />
+  <h3 className={`text-lg font-semibold text-slate-900 dark:text-slate-50 ${className}`} {...props} />
 );
 
 export const CardDescription = ({
   className = '',
   ...props
 }: React.HTMLAttributes<HTMLParagraphElement>) => (
-  <p className={`text-sm text-slate-600 ${className}`} {...props} />
+  <p className={`text-sm text-slate-600 dark:text-slate-400 ${className}`} {...props} />
 );
 
 export const CardContent = ({ className = '', ...props }: React.HTMLAttributes<HTMLDivElement>) => (
@@ -86,5 +86,5 @@ export const CardContent = ({ className = '', ...props }: React.HTMLAttributes<H
 );
 
 export const CardFooter = ({ className = '', ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={`mt-6 flex items-center gap-3 border-t border-slate-200 pt-4 ${className}`} {...props} />
+  <div className={`mt-6 flex items-center gap-3 border-t border-slate-200 dark:border-slate-800 pt-4 ${className}`} {...props} />
 );

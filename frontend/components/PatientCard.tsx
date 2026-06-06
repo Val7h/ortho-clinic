@@ -62,23 +62,23 @@ export default function PatientCard({ patient }: { patient: Patient }) {
 
         {/* Info */}
         <div className="flex-1 min-w-0">
-          <p className="font-semibold text-slate-900 truncate text-[15px] leading-tight">
+          <p className="font-semibold text-slate-900 dark:text-slate-50 truncate text-[15px] leading-tight">
             {patient.name}
           </p>
           <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
             {patient.birthdate && (
-              <span className="text-xs text-slate-500 font-medium">
+              <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">
                 {calcAge(patient.birthdate)}
               </span>
             )}
             {patient.phone && (
-              <span className="text-xs text-slate-400 flex items-center gap-1">
+              <span className="text-xs text-slate-400 dark:text-slate-500 flex items-center gap-1">
                 <Phone className="w-3 h-3" />
                 {patient.phone}
               </span>
             )}
             {patient.insurance && (
-              <span className="text-xs text-slate-400 flex items-center gap-1">
+              <span className="text-xs text-slate-400 dark:text-slate-500 flex items-center gap-1">
                 <Shield className="w-3 h-3" />
                 {patient.insurance}
               </span>
@@ -89,11 +89,11 @@ export default function PatientCard({ patient }: { patient: Patient }) {
         {/* Right side */}
         <div className="flex items-center gap-2 flex-shrink-0">
           {patient.consultation_count !== undefined && patient.consultation_count > 0 && (
-            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-brand-50 text-brand-600 border border-brand-100">
+            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-brand-50 dark:bg-brand-900/40 text-brand-600 dark:text-brand-300 border border-brand-100 dark:border-brand-700">
               {patient.consultation_count}×
             </span>
           )}
-          <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-slate-500 transition-colors" />
+          <ChevronRight className="w-4 h-4 text-slate-300 dark:text-slate-600 group-hover:text-slate-500 dark:group-hover:text-slate-400 transition-colors" />
         </div>
 
       </div>

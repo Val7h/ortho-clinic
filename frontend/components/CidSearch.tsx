@@ -107,7 +107,7 @@ export default function CidSearch({ value, onChange }: Props) {
   return (
     <div ref={ref} className="relative">
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500 pointer-events-none" />
         <input
           type="text"
           className="input pl-9 pr-8"
@@ -121,7 +121,7 @@ export default function CidSearch({ value, onChange }: Props) {
           <button
             type="button"
             onClick={handleClear}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-400"
           >
             <X className="w-3.5 h-3.5" />
           </button>
@@ -129,18 +129,18 @@ export default function CidSearch({ value, onChange }: Props) {
       </div>
 
       {open && filtered.length > 0 && (
-        <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
+        <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white dark:bg-slate-950 border border-gray-200 dark:border-slate-800 rounded-xl shadow-lg overflow-hidden">
           {filtered.map((c) => (
             <button
               key={c.code}
               type="button"
               onMouseDown={() => handleSelect(c.code, c.desc)}
-              className="w-full text-left px-4 py-2.5 hover:bg-brand-50 transition-colors flex items-center gap-3 border-b border-gray-50 last:border-0"
+              className="w-full text-left px-4 py-2.5 hover:bg-brand-50 dark:hover:bg-slate-900 transition-colors flex items-center gap-3 border-b border-gray-50 dark:border-slate-800 last:border-0"
             >
-              <span className="text-xs font-bold text-brand-600 bg-brand-50 rounded-md px-2 py-0.5 flex-shrink-0 font-mono">
+              <span className="text-xs font-bold text-brand-600 dark:text-brand-300 bg-brand-50 dark:bg-brand-900/40 rounded-md px-2 py-0.5 flex-shrink-0 font-mono">
                 {c.code}
               </span>
-              <span className="text-sm text-gray-700 truncate">{c.desc}</span>
+              <span className="text-sm text-gray-700 dark:text-slate-300 truncate">{c.desc}</span>
             </button>
           ))}
         </div>

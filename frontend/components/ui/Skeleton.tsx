@@ -24,7 +24,7 @@ export const Skeleton = React.forwardRef<HTMLDivElement, SkeletonProps>(
     ref
   ) => {
     const baseStyles =
-      'animate-pulse bg-gradient-to-r from-slate-200 via-slate-100 to-slate-200';
+      'animate-pulse bg-gradient-to-r from-slate-200 via-slate-100 to-slate-200 dark:from-slate-800 dark:via-slate-700 dark:to-slate-800';
 
     const variantStyles = {
       text: 'h-4 w-full rounded',
@@ -59,7 +59,7 @@ Skeleton.displayName = 'Skeleton';
 // ── Common skeleton patterns ──────────────────────────────
 
 export const CardSkeleton = () => (
-  <div className="space-y-4 rounded-lg border border-slate-200 p-6">
+  <div className="space-y-4 rounded-lg border border-slate-200 dark:border-slate-800 p-6">
     <Skeleton variant="text" width="60%" />
     <div className="space-y-2">
       <Skeleton variant="line" />
@@ -73,7 +73,7 @@ export const CardSkeleton = () => (
 export const ListSkeleton = ({ count = 3 }: { count?: number }) => (
   <div className="space-y-3">
     {Array.from({ length: count }).map((_, i) => (
-      <div key={i} className="flex items-center gap-4 rounded-lg border border-slate-200 p-4">
+      <div key={i} className="flex items-center gap-4 rounded-lg border border-slate-200 dark:border-slate-800 p-4">
         <Skeleton variant="avatar" />
         <div className="flex-1 space-y-2">
           <Skeleton variant="text" width="60%" />
@@ -85,14 +85,14 @@ export const ListSkeleton = ({ count = 3 }: { count?: number }) => (
 );
 
 export const TableSkeleton = ({ rows = 5 }: { rows?: number }) => (
-  <div className="space-y-2 rounded-lg border border-slate-200 p-4">
+  <div className="space-y-2 rounded-lg border border-slate-200 dark:border-slate-800 p-4">
     <div className="flex gap-4">
       <Skeleton width="20%" height={20} />
       <Skeleton width="30%" height={20} />
       <Skeleton width="30%" height={20} />
       <Skeleton width="20%" height={20} />
     </div>
-    <div className="space-y-2 border-t border-slate-200 pt-4">
+    <div className="space-y-2 border-t border-slate-200 dark:border-slate-800 pt-4">
       {Array.from({ length: rows }).map((_, i) => (
         <div key={i} className="flex gap-4">
           <Skeleton variant="line" width="20%" />

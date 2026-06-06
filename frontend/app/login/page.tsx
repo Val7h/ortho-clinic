@@ -63,14 +63,14 @@ export default function LoginPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-brand-50">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-200 border-t-brand-600" />
+      <div className="flex min-h-screen items-center justify-center bg-brand-50 dark:bg-slate-950">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-200 dark:border-brand-800 border-t-brand-600" />
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-brand-600 via-brand-500 to-accent-500 px-4 py-12">
+    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-brand-600 via-brand-500 to-accent-500 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 px-4 py-12">
       <div className="w-full max-w-sm animate-fade-in">
         {/* Logo & Branding */}
         <div className="mb-10 text-center">
@@ -85,7 +85,7 @@ export default function LoginPage() {
 
         {/* Login Card */}
         <Card padding="lg" shadow="lg" className="mb-6">
-          <h2 className="mb-8 text-center text-2xl font-bold text-slate-900">Bem-vindo!</h2>
+          <h2 className="mb-8 text-center text-2xl font-bold text-slate-900 dark:text-slate-50">Bem-vindo!</h2>
 
           <form onSubmit={handleSubmit} className="space-y-6">
             <Input
@@ -97,6 +97,7 @@ export default function LoginPage() {
               icon={<Mail className="h-5 w-5" />}
               iconPosition="left"
               required
+              aria-required="true"
               disabled={submitting}
             />
 
@@ -109,13 +110,14 @@ export default function LoginPage() {
               icon={<Lock className="h-5 w-5" />}
               iconPosition="left"
               required
+              aria-required="true"
               disabled={submitting}
             />
 
             {error && (
-              <div className="flex items-start gap-3 rounded-lg bg-error-50 p-4 border border-error-200">
-                <AlertCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-error-600" />
-                <p className="text-sm font-medium text-error-700">{error}</p>
+              <div className="flex items-start gap-3 rounded-lg bg-error-50 dark:bg-error-950/40 p-4 border border-error-200 dark:border-error-700">
+                <AlertCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-error-600 dark:text-error-400" />
+                <p className="text-sm font-medium text-error-700 dark:text-error-300">{error}</p>
               </div>
             )}
 
@@ -125,8 +127,8 @@ export default function LoginPage() {
           </form>
 
           {/* Demo Credentials */}
-          <div className="mt-8 border-t border-slate-200 pt-6">
-            <p className="mb-4 text-center text-xs font-bold uppercase tracking-wider text-slate-500">
+          <div className="mt-8 border-t border-slate-200 dark:border-slate-800 pt-6">
+            <p className="mb-4 text-center text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
               Demonstração
             </p>
             <div className="grid grid-cols-2 gap-3">
@@ -143,12 +145,12 @@ export default function LoginPage() {
                     setEmail(u.email);
                     setPassword(u.pass);
                   }}
-                  className="flex flex-col gap-1 rounded-lg bg-brand-50 p-3 text-left transition-all hover:bg-brand-100 hover:shadow-sm border border-brand-200"
+                  className="flex flex-col gap-1 rounded-lg bg-brand-50 dark:bg-brand-900/40 p-3 text-left transition-all hover:bg-brand-100 dark:hover:bg-brand-900/60 hover:shadow-sm border border-brand-200 dark:border-brand-700"
                 >
-                  <span className="text-xs font-bold uppercase tracking-wider text-brand-700">
+                  <span className="text-xs font-bold uppercase tracking-wider text-brand-700 dark:text-brand-300">
                     {ROLE_LABELS[u.role]}
                   </span>
-                  <span className="truncate text-xs text-slate-600 font-mono">{u.email}</span>
+                  <span className="truncate text-xs text-slate-600 dark:text-slate-400 font-mono">{u.email}</span>
                 </button>
               ))}
             </div>

@@ -141,7 +141,9 @@ export default function ClinicasPage() {
               {/* Header */}
               <button
                 onClick={() => toggleClinic(clinic.id)}
-                className="w-full flex items-center gap-4 p-6 text-left"
+                className="w-full flex items-center gap-4 p-6 text-left focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-inset rounded"
+                aria-expanded={isOpen}
+                aria-label={`${isOpen ? "Fechar" : "Abrir"} detalhes de ${clinic.name}`}
               >
                 {/* Color dot */}
                 <div
@@ -204,6 +206,7 @@ export default function ClinicasPage() {
                         icon={<Copy className="w-4 h-4" />}
                         style={{ backgroundColor: clinic.color, borderColor: clinic.color }}
                         className="text-white flex-shrink-0"
+                        ariaLabel={`Copiar link de agendamento de ${clinic.name}`}
                       />
                     </div>
                     {!hasOnlineBooking && (
@@ -224,6 +227,8 @@ export default function ClinicasPage() {
                           variant="tertiary"
                           size="sm"
                           icon={apptLoading === clinic.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                          ariaLabel={`Atualizar agendamentos de ${clinic.name}`}
+                          disabled={apptLoading === clinic.id}
                         />
                       </div>
 
@@ -292,6 +297,7 @@ export default function ClinicasPage() {
                                         size="sm"
                                         fullWidth
                                         icon={<CheckCircle className="w-4 h-4" />}
+                                        ariaLabel={`Confirmar agendamento de ${a.patient_name}`}
                                       >
                                         Confirmar
                                       </Button>
@@ -301,6 +307,7 @@ export default function ClinicasPage() {
                                         size="sm"
                                         fullWidth
                                         icon={<XCircle className="w-4 h-4" />}
+                                        ariaLabel={`Cancelar agendamento de ${a.patient_name}`}
                                       >
                                         Cancelar
                                       </Button>
@@ -314,6 +321,7 @@ export default function ClinicasPage() {
                                         size="sm"
                                         fullWidth
                                         icon={<CheckCircle className="w-4 h-4" />}
+                                        ariaLabel={`Marcar como realizado agendamento de ${a.patient_name}`}
                                       >
                                         Marcar realizado
                                       </Button>
@@ -322,6 +330,7 @@ export default function ClinicasPage() {
                                         variant="tertiary"
                                         size="sm"
                                         icon={<XCircle className="w-4 h-4" />}
+                                        ariaLabel={`Cancelar agendamento de ${a.patient_name}`}
                                       />
                                     </div>
                                   )}

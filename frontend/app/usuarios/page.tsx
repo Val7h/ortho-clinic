@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import {
   Users, Plus, Pencil, Trash2, X, Check,
   Loader2, Eye, EyeOff, Shield, User, Building2,
@@ -47,6 +47,14 @@ export default function UsuariosPage() {
   const [form, setForm] = useState<UserForm>(EMPTY);
   const [showPass, setShowPass] = useState(false);
   const [saving, setSaving] = useState(false);
+  const firstInputRef = useRef<HTMLInputElement>(null);
+
+  // Auto-focus first input when modal opens
+  useEffect(() => {
+    if ((modal === "create" || modal === "edit") && firstInputRef.current) {
+      setTimeout(() => firstInputRef.current?.focus(), 0);
+    }
+  }, [modal]);
 
   const loadUsers = async () => {
     try {
@@ -243,6 +251,7 @@ export default function UsuariosPage() {
                       size="sm"
                       icon={<Pencil className="w-4 h-4" />}
                       className="text-slate-600"
+                      ariaLabel={`Editar usuário ${u.name}`}
                     />
                     {u.id !== me.id && u.active && (
                       <Button
@@ -251,6 +260,7 @@ export default function UsuariosPage() {
                         size="sm"
                         icon={<Trash2 className="w-4 h-4" />}
                         className="text-error-600"
+                        ariaLabel={`Remover usuário ${u.name}`}
                       />
                     )}
                   </div>
@@ -289,6 +299,7 @@ export default function UsuariosPage() {
       >
         <div className="space-y-4">
           <Input
+            ref={firstInputRef}
             label="Nome completo"
             type="text"
             value={form.name}
@@ -318,7 +329,8 @@ export default function UsuariosPage() {
               <button
                 type="button"
                 onClick={() => setShowPass((v) => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-700"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 rounded"
+                aria-label={showPass ? "Ocultar senha" : "Mostrar senha"}
               >
                 {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>

@@ -12,28 +12,28 @@ interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
 
 const variantStyles: Record<BadgeVariant, { filled: string; outlined: string }> = {
   brand: {
-    filled: 'bg-brand-100 text-brand-800',
-    outlined: 'border border-brand-300 bg-white text-brand-700',
+    filled: 'bg-brand-100 dark:bg-brand-900/40 text-brand-800 dark:text-brand-200',
+    outlined: 'border border-brand-300 dark:border-brand-700 bg-white dark:bg-slate-900 text-brand-700 dark:text-brand-300',
   },
   accent: {
-    filled: 'bg-accent-100 text-accent-800',
-    outlined: 'border border-accent-300 bg-white text-accent-700',
+    filled: 'bg-accent-100 dark:bg-accent-900/40 text-accent-800 dark:text-accent-200',
+    outlined: 'border border-accent-300 dark:border-accent-700 bg-white dark:bg-slate-900 text-accent-700 dark:text-accent-300',
   },
   success: {
-    filled: 'bg-success-100 text-success-800',
-    outlined: 'border border-success-300 bg-white text-success-700',
+    filled: 'bg-success-100 dark:bg-success-900/40 text-success-800 dark:text-success-200',
+    outlined: 'border border-success-300 dark:border-success-700 bg-white dark:bg-slate-900 text-success-700 dark:text-success-300',
   },
   warning: {
-    filled: 'bg-warning-100 text-warning-800',
-    outlined: 'border border-warning-300 bg-white text-warning-700',
+    filled: 'bg-warning-100 dark:bg-warning-900/40 text-warning-800 dark:text-warning-200',
+    outlined: 'border border-warning-300 dark:border-warning-700 bg-white dark:bg-slate-900 text-warning-700 dark:text-warning-300',
   },
   error: {
-    filled: 'bg-error-100 text-error-800',
-    outlined: 'border border-error-300 bg-white text-error-700',
+    filled: 'bg-error-100 dark:bg-error-900/40 text-error-800 dark:text-error-200',
+    outlined: 'border border-error-300 dark:border-error-700 bg-white dark:bg-slate-900 text-error-700 dark:text-error-300',
   },
   neutral: {
-    filled: 'bg-slate-100 text-slate-800',
-    outlined: 'border border-slate-300 bg-white text-slate-700',
+    filled: 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200',
+    outlined: 'border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300',
   },
 };
 

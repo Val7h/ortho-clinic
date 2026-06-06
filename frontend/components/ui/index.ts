@@ -15,3 +15,5 @@ export { Select } from './Select';
 export { Modal, useModal } from './Modal';
 
 export { Skeleton, CardSkeleton, ListSkeleton, TableSkeleton } from './Skeleton';
+
+export { ThemeToggle } from './ThemeToggle';

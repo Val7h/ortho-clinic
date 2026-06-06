@@ -12,19 +12,20 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   fullWidth?: boolean;
   icon?: React.ReactNode;
   iconPosition?: 'left' | 'right';
+  ariaLabel?: string;
 }
 
 const variantStyles: Record<ButtonVariant, string> = {
   primary:
-    'bg-brand-600 text-white hover:bg-brand-700 active:bg-brand-800 disabled:bg-slate-300 disabled:text-slate-500',
+    'bg-brand-600 text-white hover:bg-brand-700 active:bg-brand-800 disabled:bg-slate-300 dark:disabled:bg-slate-600 disabled:text-slate-500 dark:disabled:text-slate-400',
   secondary:
-    'bg-slate-100 text-slate-900 hover:bg-slate-200 active:bg-slate-300 disabled:bg-slate-100 disabled:text-slate-400',
+    'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-50 hover:bg-slate-200 dark:hover:bg-slate-700 active:bg-slate-300 dark:active:bg-slate-600 disabled:bg-slate-100 dark:disabled:bg-slate-800 disabled:text-slate-400 dark:disabled:text-slate-500',
   tertiary:
-    'bg-transparent text-brand-600 hover:bg-brand-50 active:bg-brand-100 disabled:text-slate-400',
+    'bg-transparent text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-900/20 active:bg-brand-100 dark:active:bg-brand-900/40 disabled:text-slate-400',
   danger:
-    'bg-error-600 text-white hover:bg-error-700 active:bg-error-800 disabled:bg-slate-300 disabled:text-slate-500',
+    'bg-error-600 text-white hover:bg-error-700 active:bg-error-800 disabled:bg-slate-300 dark:disabled:bg-slate-600 disabled:text-slate-500 dark:disabled:text-slate-400',
   success:
-    'bg-success-600 text-white hover:bg-success-700 active:bg-success-800 disabled:bg-slate-300 disabled:text-slate-500',
+    'bg-success-600 text-white hover:bg-success-700 active:bg-success-800 disabled:bg-slate-300 dark:disabled:bg-slate-600 disabled:text-slate-500 dark:disabled:text-slate-400',
 };
 
 const sizeStyles: Record<ButtonSize, string> = {
@@ -45,6 +46,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       disabled,
       className = '',
       children,
+      ariaLabel,
       ...props
     },
     ref
@@ -53,9 +55,10 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       <button
         ref={ref}
         disabled={disabled || isLoading}
+        aria-label={ariaLabel}
         className={`
           rounded-lg font-medium transition-all duration-200
-          focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-500
+          focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-slate-950 focus:ring-brand-500
           disabled:cursor-not-allowed disabled:opacity-60
           ${variantStyles[variant]}
           ${sizeStyles[size]}

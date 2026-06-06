@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import {
   DollarSign,
   Plus,
@@ -44,6 +44,7 @@ function formatDate(iso: string) {
 export default function FinanceiroPage() {
   const { user } = useProtectedPage();
   const { open: showForm, onOpenChange: setShowForm } = useModal();
+  const firstInputRef = useRef<HTMLSelectElement>(null);
   const today = new Date();
   const [month, setMonth] = useState(today.getMonth() + 1);
   const [year, setYear] = useState(today.getFullYear());
@@ -60,6 +61,14 @@ export default function FinanceiroPage() {
     date: today.toISOString().slice(0, 10),
     notes: "",
   });
+
+  // Auto-focus first input when modal opens
+  useEffect(() => {
+    if (showForm && firstInputRef.current) {
+      // Use setTimeout to ensure modal is rendered before focusing
+      setTimeout(() => firstInputRef.current?.focus(), 0);
+    }
+  }, [showForm]);
 
   const load = () => {
     financialApi.summary({ month, year }).then(setSummary).catch(() => {});
@@ -130,7 +139,8 @@ export default function FinanceiroPage() {
           <div className="flex items-center justify-between p-4">
             <button
               onClick={prevMonth}
-              className="rounded-lg p-2 hover:bg-slate-100 transition-colors"
+              className="rounded-lg p-2 hover:bg-slate-100 transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2"
+              aria-label="Mês anterior"
             >
               <ChevronDown className="h-5 w-5 rotate-90 text-slate-500" />
             </button>
@@ -139,7 +149,8 @@ export default function FinanceiroPage() {
             </span>
             <button
               onClick={nextMonth}
-              className="rounded-lg p-2 hover:bg-slate-100 transition-colors"
+              className="rounded-lg p-2 hover:bg-slate-100 transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2"
+              aria-label="Próximo mês"
             >
               <ChevronDown className="h-5 w-5 -rotate-90 text-slate-500" />
             </button>
@@ -295,7 +306,8 @@ export default function FinanceiroPage() {
                       </div>
                       <button
                         onClick={() => handleDelete(r.id)}
-                        className="rounded-lg p-2 text-slate-300 transition-colors hover:bg-error-50 hover:text-error-600"
+                        className="rounded-lg p-2 text-slate-300 transition-colors hover:bg-error-50 hover:text-error-600 focus:outline-none focus:ring-2 focus:ring-error-500 focus:ring-offset-2"
+                        aria-label={`Remover pagamento de ${patients.find((p) => p.id === r.patient_id)?.name || `Paciente #${r.patient_id}`}`}
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
@@ -337,6 +349,7 @@ export default function FinanceiroPage() {
       >
         <form onSubmit={handleSubmit} data-financeiro-form className="space-y-5">
           <Select
+            ref={firstInputRef}
             label="Paciente"
             options={patients.map((p) => ({ value: p.id, label: p.name }))}
             value={form.patient_id}

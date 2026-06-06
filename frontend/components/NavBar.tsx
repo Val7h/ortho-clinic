@@ -3,6 +3,7 @@ import { ChevronLeft, LogOut, Users, ChevronDown, User } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/components/AuthProvider";
+import { ThemeToggle } from "./ui/ThemeToggle";
 
 interface NavBarProps {
   title: string;
@@ -46,7 +47,9 @@ function UserMenu() {
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/15 hover:bg-white/25 transition-colors border border-white/20"
+        aria-label={open ? "Fechar menu de usuário" : "Abrir menu de usuário"}
+        aria-expanded={open}
+        className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/15 hover:bg-white/25 transition-colors border border-white/20 focus:outline-none focus:ring-2 focus:ring-white/50"
       >
         <div className="w-6 h-6 rounded-full bg-white/25 flex items-center justify-center">
           <User className="w-3.5 h-3.5 text-white" />
@@ -58,12 +61,12 @@ function UserMenu() {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-xl shadow-xl border border-slate-100 overflow-hidden z-50">
+        <div className="absolute right-0 top-full mt-2 w-56 bg-white dark:bg-slate-950 rounded-xl shadow-xl border border-slate-100 dark:border-slate-800 overflow-hidden z-50" role="menu">
           {/* User info */}
-          <div className="px-4 py-3 bg-slate-50 border-b border-slate-100">
-            <p className="text-sm font-bold text-slate-800 truncate">{user.name}</p>
-            <p className="text-xs text-slate-500 truncate">{user.email}</p>
-            <span className="inline-block mt-1 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wide bg-brand-50 text-brand-700">
+          <div className="px-4 py-3 bg-slate-50 dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800">
+            <p className="text-sm font-bold text-slate-800 dark:text-slate-50 truncate">{user.name}</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{user.email}</p>
+            <span className="inline-block mt-1 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wide bg-brand-50 dark:bg-brand-900/40 text-brand-700 dark:text-brand-300">
               {ROLE_LABEL[user.role] || user.role}
             </span>
           </div>
@@ -73,15 +76,17 @@ function UserMenu() {
             {isAdmin && (
               <button
                 onClick={() => { setOpen(false); router.push("/usuarios"); }}
-                className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-900 transition-colors focus:outline-none focus:bg-slate-50 dark:focus:bg-slate-900"
+                role="menuitem"
               >
-                <Users className="w-4 h-4 text-slate-400" />
+                <Users className="w-4 h-4 text-slate-400 dark:text-slate-500" />
                 Gerenciar usuários
               </button>
             )}
             <button
               onClick={() => { setOpen(false); logout(); }}
-              className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
+              className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors focus:outline-none focus:bg-red-50 dark:focus:bg-red-950/30"
+              role="menuitem"
             >
               <LogOut className="w-4 h-4" />
               Sair
@@ -138,6 +143,7 @@ export default function NavBar({ title, subtitle, back, actions }: NavBarProps) 
 
         <div className="flex items-center gap-2 text-white">
           {actions}
+          <ThemeToggle />
           <UserMenu />
         </div>
       </div>
