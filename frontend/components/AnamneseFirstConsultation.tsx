@@ -2,8 +2,8 @@
 
 import React, { useState, useMemo, useCallback } from 'react';
 import { Save, AlertCircle, CheckCircle2 } from 'lucide-react';
-import Button from '@/components/ui/Button';
-import Modal, { useModal } from '@/components/ui/Modal';
+import { Button } from '@/components/ui/Button';
+import { Modal, useModal } from '@/components/ui/Modal';
 import toast from 'react-hot-toast';
 import { MedicationSelector } from '@/components/MedicationSelector';
 import type {

@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { Check, ArrowRight, Lightbulb } from 'lucide-react';
-import Button from '@/components/ui/Button';
+import { Button } from '@/components/ui/Button';
 
 type TemplateType = 'first_consultation' | 'follow_up';
 
