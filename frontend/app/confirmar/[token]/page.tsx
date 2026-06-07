@@ -61,7 +61,9 @@ const STATUS_MESSAGES: Record<string, { icon: any; title: string; text: string; 
 };
 
 export default function ConfirmarPage() {
-  const { token } = useParams<{ token: string }>();
+  const params = useParams();
+  const token = params?.token as string;
+  if (!token) return <div>Token inválido</div>;
   const [appt, setAppt] = useState<AppointmentInfo | null>(null);
   const [phase, setPhase] = useState<Phase>("loading");
   const [error, setError] = useState("");

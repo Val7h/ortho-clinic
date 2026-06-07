@@ -3,7 +3,7 @@
  * Reutilizáveis em múltiplos componentes
  */
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 /**
  * Hook para search com debounce
@@ -13,8 +13,8 @@ export function useDebouncedSearch(
   searchFn: (term: string) => Promise<any>,
   delay = 300
 ) {
-  const [results, setResults] = useState([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [results, setResults] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const search = useCallback(
@@ -50,8 +50,8 @@ export function useDebouncedSearch(
  * Hook para gerenciar interações medicamentosas
  */
 export function useMedicationInteractions(apiUrl: string) {
-  const [interactions, setInteractions] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [interactions, setInteractions] = useState<any[]>([]);
+  const [loading, setLoading] = useState<boolean>(false);
 
   const fetchInteractions = useCallback(
     async (medicationId: string, currentMedications: string[]) => {
@@ -88,7 +88,7 @@ export function useMedicationInteractions(apiUrl: string) {
  * Hook para validar contraindicações com alergias
  */
 export function useContraindicationCheck() {
-  const [hasContraindication, setHasContraindication] = useState(false);
+  const [hasContraindication, setHasContraindication] = useState<boolean>(false);
 
   const checkContraindication = useCallback(
     (medicationName: string, allergies: string[]) => {
@@ -111,7 +111,7 @@ export function useContraindicationCheck() {
  * Hook para gerenciar lista de medicações selecionadas
  */
 export function useSelectedMedications() {
-  const [medications, setMedications] = useState([]);
+  const [medications, setMedications] = useState<any[]>([]);
 
   const addMedication = useCallback((medication: any) => {
     setMedications((prev) => [...prev, { ...medication, id: Date.now().toString() }]);
@@ -132,13 +132,18 @@ export function useSelectedMedications() {
  * Hook para buscar dados da fila em tempo real
  */
 export function useQueueData(apiUrl: string, pollInterval = 5000) {
-  const [data, setData] = useState({
+  const [data, setData] = useState<{
+    totalAguardando: number;
+    pacienteAtual: any | null;
+    proximosPacientes: any[];
+    lastUpdate: Date | null;
+  }>({
     totalAguardando: 0,
     pacienteAtual: null,
     proximosPacientes: [],
-    lastUpdate: null,
+    lastUpdate: null as Date | null,
   });
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchQueueData = useCallback(async () => {
@@ -162,7 +167,7 @@ export function useQueueData(apiUrl: string, pollInterval = 5000) {
   }, [apiUrl]);
 
   // Setup inicial e polling
-  React.useEffect(() => {
+  useEffect(() => {
     fetchQueueData();
     const interval = setInterval(fetchQueueData, pollInterval);
 
@@ -180,7 +185,7 @@ export function useWebSocketQueue(
   onMessage: (data: any) => void,
   onConnectionChange?: (connected: boolean) => void
 ) {
-  const [isConnected, setIsConnected] = useState(false);
+  const [isConnected, setIsConnected] = useState<boolean>(false);
   const wsRef = useRef<WebSocket | null>(null);
 
   const connect = useCallback(() => {
@@ -220,7 +225,7 @@ export function useWebSocketQueue(
     }
   }, [wsUrl, onMessage, onConnectionChange]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     connect();
 
     return () => {

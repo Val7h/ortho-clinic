@@ -14,7 +14,8 @@ function toISO(d: Date) { return d.toISOString().slice(0, 10); }
 
 export default function AgendarPage() {
   const params = useParams();
-  const slug = params.slug as string;
+  const slug = params?.slug as string;
+  if (!slug) return <div>Clínica não encontrada</div>;
 
   const [clinic, setClinic] = useState<any>(null);
   const [loading, setLoading] = useState(true);

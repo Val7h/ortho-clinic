@@ -6,9 +6,7 @@ import Link from 'next/link';
 import NavBar from '@/components/NavBar';
 import { agendaApi, clinicApi } from '@/lib/api';
 import { useProtectedPage } from '@/components/AuthProvider';
-import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
-import { Badge } from '@/components/ui/Badge';
+import { Button, Card, Badge } from '@/components/ui';
 
 const CONSULT_TYPES: Record<string, { label: string; color: string }> = {
   primeira_consulta:  { label: "1ª Consulta",   color: "#0F2D5E" },

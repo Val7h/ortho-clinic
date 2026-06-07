@@ -24,7 +24,9 @@ const MEDIA_TYPES = [
 ];
 
 export default function ConsultationPage() {
-  const { id } = useParams<{ id: string }>();
+  const params = useParams();
+  const id = params?.id as string;
+  if (!id) return <div>Paciente não encontrado</div>;
   const pid = Number(id);
   const router = useRouter();
 

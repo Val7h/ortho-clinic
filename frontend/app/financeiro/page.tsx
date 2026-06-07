@@ -15,12 +15,7 @@ import NavBar from '@/components/NavBar';
 import { financialApi, patientsApi } from '@/lib/api';
 import { useProtectedPage } from '@/components/AuthProvider';
 import toast from 'react-hot-toast';
-import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
-import { Input } from '@/components/ui/Input';
-import { Select } from '@/components/ui/Select';
-import { Badge } from '@/components/ui/Badge';
-import { Modal, useModal } from '@/components/ui/Modal';
+import { Button, Card, Input, Select, Badge, Modal, useModal } from '@/components/ui';
 
 const METHODS: Record<string, { label: string; icon: any; color: string }> = {
   pix: { label: "Pix", icon: Smartphone, color: "text-teal-600 bg-teal-50" },

@@ -2,8 +2,7 @@
 
 import React, { useState, useMemo, useCallback } from 'react';
 import { Save, AlertCircle, CheckCircle2 } from 'lucide-react';
-import { Button } from '@/components/ui/Button';
-import { Modal, useModal } from '@/components/ui/Modal';
+import { Button, Modal, useModal } from '@/components/ui';
 import toast from 'react-hot-toast';
 import { MedicationSelector } from '@/components/MedicationSelector';
 import type {
@@ -557,7 +556,7 @@ export const AnamneseFirstConsultation: React.FC<AnamneseFirstConsultationProps>
                           `Consumo de álcool: ${
                             formData.alcohol_consumption === 'occasional' ? 'Ocasional' : 'Regular'
                           }`,
-                      ].filter(Boolean)}
+                      ].filter(Boolean) as string[]}
                     />
                   )}
 
@@ -572,7 +571,7 @@ export const AnamneseFirstConsultation: React.FC<AnamneseFirstConsultationProps>
                         formData.range_of_motion && 'Amplitude de movimento avaliada',
                         formData.specific_tests && 'Testes específicos realizados',
                         formData.inflammation && 'Inflamação presente',
-                      ].filter(Boolean)}
+                      ].filter(Boolean) as string[]}
                     />
                   )}
 

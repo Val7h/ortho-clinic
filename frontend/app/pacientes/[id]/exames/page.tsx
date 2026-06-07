@@ -29,7 +29,9 @@ const COMMON_EXAMS = [
 ];
 
 export default function ExamsPage() {
-  const { id } = useParams<{ id: string }>();
+  const params = useParams();
+  const id = params?.id as string;
+  if (!id) return <div>Paciente não encontrado</div>;
   const pid = Number(id);
   const [patient, setPatient] = useState<any>(null);
   const [exams, setExams] = useState<any[]>([]);

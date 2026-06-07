@@ -2,8 +2,7 @@
 
 import React, { useState, useCallback } from 'react';
 import { Save, TrendingDown, TrendingUp, CheckCircle2, AlertCircle } from 'lucide-react';
-import { Button } from '@/components/ui/Button';
-import { Modal, useModal } from '@/components/ui/Modal';
+import { Button, Modal, useModal } from '@/components/ui';
 import toast from 'react-hot-toast';
 import type { AnamneseFollowUpData, AnamneseFollowUpProps } from '@/types/anamnese';
 import { PAIN_COLORS, AnamneseUtils } from '@/types/anamnese';

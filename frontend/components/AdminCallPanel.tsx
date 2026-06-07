@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Phone, Clock, AlertCircle, Check } from 'lucide-react';
-import { Button } from './ui/Button';
+import { Button } from '@/components/ui';
 import toast from 'react-hot-toast';
 
 interface QueuePatient {

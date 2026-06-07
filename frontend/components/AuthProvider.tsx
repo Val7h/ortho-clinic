@@ -29,7 +29,7 @@ interface AuthContextType {
   isSuperAdmin: boolean;
 }
 
-const AuthContext = createContext<AuthContextType | null>(null);
+export const AuthContext = createContext<AuthContextType | null>(null);
 
 const TOKEN_KEY = "ortho_token";
 const USER_KEY = "ortho_user";

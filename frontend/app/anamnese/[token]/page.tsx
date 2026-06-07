@@ -11,7 +11,9 @@ const PAIN_COLORS = [
 ];
 
 export default function AnamnesePage() {
-  const { token } = useParams<{ token: string }>();
+  const params = useParams();
+  const token = params?.token as string;
+  if (!token) return <div>Token inválido</div>;
 
   const [info, setInfo] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);

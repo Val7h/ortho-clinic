@@ -23,9 +23,7 @@ import { DashboardAnalytics } from '@/components/DashboardAnalytics';
 import { dashboardApi } from '@/lib/api';
 import { formatDateTime } from '@/lib/utils';
 import { useAuth } from '@/components/AuthProvider';
-import { Card, CardContent } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
-import { Badge } from '@/components/ui/Badge';
+import { Card, CardContent, Button, Badge } from '@/components/ui';
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -115,40 +113,74 @@ export default function Dashboard() {
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {[
               {
-                title: 'Pacientes',
+                label: 'Pacientes',
                 icon: Users,
                 description: 'Gerenciar pacientes e histórico',
                 href: '/pacientes',
+                color: 'bg-blue-500',
               },
               {
-                title: 'Consultas',
+                label: 'Consultas',
                 icon: Calendar,
                 description: 'Agendar e gerenciar consultas',
                 href: '/agenda',
+                color: 'bg-green-500',
               },
               {
-                title: 'Anamnese',
+                label: 'Anamnese',
                 icon: BookOpen,
                 description: 'Registros de saúde dos pacientes',
                 href: '/anamnese',
+                color: 'bg-purple-500',
               },
               {
-                title: 'Receitas',
+                label: 'Receitas',
                 icon: FileText,
                 description: 'Prescrições médicas',
-                href: '/pacientes',
+                href: '/receitas',
+                color: 'bg-red-500',
               },
               {
-                title: 'Financeiro',
+                label: 'Financeiro',
                 icon: DollarSign,
                 description: 'Relatórios e análises financeiras',
                 href: '/financeiro',
+                color: 'bg-yellow-500',
               },
               {
-                title: 'Usuários',
+                label: 'Usuários',
                 icon: Shield,
                 description: 'Gerenciar permissões e papéis',
                 href: '/usuarios',
+                color: 'bg-indigo-500',
+              },
+              {
+                label: 'Mensagens',
+                icon: MessageSquare,
+                description: 'Comunicação com pacientes',
+                href: '/mensagens',
+                color: 'bg-cyan-500',
+              },
+              {
+                label: 'Documentos',
+                icon: FileText,
+                description: 'Gestão de arquivos e documentos',
+                href: '/documentos',
+                color: 'bg-orange-500',
+              },
+              {
+                label: 'Relatórios',
+                icon: TrendingUp,
+                description: 'Análises e relatórios clínicos',
+                href: '/relatorios',
+                color: 'bg-pink-500',
+              },
+              {
+                label: 'Localização',
+                icon: MapPin,
+                description: 'Localização e endereço da clínica',
+                href: '/localizacao',
+                color: 'bg-teal-500',
               },
             ].map((module) => (
               <Link key={module.href} href={module.href}>

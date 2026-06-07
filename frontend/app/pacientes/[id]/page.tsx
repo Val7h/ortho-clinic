@@ -27,7 +27,9 @@ const WA_TYPES = [
 ] as const;
 
 export default function PatientPage() {
-  const { id } = useParams<{ id: string }>();
+  const params = useParams();
+  const id = params?.id as string;
+  if (!id) return <div>Paciente não encontrado</div>;
   const pid = Number(id);
   const router = useRouter();
 

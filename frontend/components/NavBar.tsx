@@ -3,7 +3,7 @@ import { ChevronLeft, LogOut, Users, ChevronDown, User } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/components/AuthProvider";
-import { ThemeToggle } from "./ui/ThemeToggle";
+import { ThemeToggle } from "@/components/ui";
 import { Logo } from "./Logo";
 
 interface NavBarProps {

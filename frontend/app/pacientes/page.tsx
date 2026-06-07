@@ -7,9 +7,7 @@ import { ProtectedPageLayout } from '@/components/ProtectedPageLayout';
 import PatientCard from '@/components/PatientCard';
 import { patientsApi } from '@/lib/api';
 import { useAuth } from '@/components/AuthProvider';
-import { Input } from '@/components/ui/Input';
-import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
+import { Input, Button, Card } from '@/components/ui';
 
 export default function PatientsPage() {
   const { user } = useAuth();

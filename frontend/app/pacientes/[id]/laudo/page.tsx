@@ -25,7 +25,9 @@ const TEMPLATES: Record<string, string> = {
 };
 
 export default function ReportPage() {
-  const { id } = useParams<{ id: string }>();
+  const params = useParams();
+  const id = params?.id as string;
+  if (!id) return <div>Paciente não encontrado</div>;
   const pid = Number(id);
   const [patient, setPatient] = useState<any>(null);
   const [reports, setReports] = useState<any[]>([]);

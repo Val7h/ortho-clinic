@@ -3,9 +3,10 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { AnamneseTemplateSelector } from '@/components/AnamneseTemplateSelector';
-import { AnamneseFirstConsultation, AnamneseFirstConsultationData } from '@/components/AnamneseFirstConsultation';
-import { AnamneseFollowUp, AnamneseFollowUpData } from '@/components/AnamneseFollowUp';
+import { AnamneseFirstConsultation } from '@/components/AnamneseFirstConsultation';
+import { AnamneseFollowUp } from '@/components/AnamneseFollowUp';
 import { Card, Button } from '@/components/ui';
+import type { AnamneseFirstConsultationData, AnamneseFollowUpData } from '@/types/anamnese';
 import {
   ArrowLeft,
   Plus,
@@ -34,7 +35,9 @@ interface AnamneseHistory {
 }
 
 export default function PatientAnamnesePage() {
-  const { id } = useParams<{ id: string }>();
+  const params = useParams();
+  const id = params?.id as string;
+  if (!id) return <div>Paciente não encontrado</div>;
   const [patient, setPatient] = useState<PatientData | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedTemplate, setSelectedTemplate] = useState<'first_consultation' | 'follow_up' | null>(null);
