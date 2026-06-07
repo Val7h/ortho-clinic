@@ -12,17 +12,18 @@ RUN npm ci
 # Copiar código
 COPY frontend/ .
 
-# Build do Next.js (ignorar warnings)
-RUN npm run build || true
+# Build do Next.js (FALHAR se houver erro!)
+RUN npm run build
 
 # ===== ESTÁGIO 2: Runtime com FastAPI =====
 FROM python:3.11-slim
 
 WORKDIR /app
 
-# Instalar dependências do sistema
+# Instalar dependências do sistema (compilação + SSL)
 RUN apt-get update && apt-get install -y \
-    gcc \
+    build-essential \
+    libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Copiar requirements do backend
