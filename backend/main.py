@@ -92,9 +92,18 @@ def health():
 from pathlib import Path
 from fastapi.responses import FileResponse
 
-frontend_dir = Path(__file__).parent.parent / "frontend"
-nextjs_static = frontend_dir / ".next" / "static"
-public_dir = frontend_dir / "public"
+# Em Docker: /app/main.py → /app = raiz do app
+# Em local: backend/main.py → backend = parent, frontend = sibling
+app_dir = Path(__file__).parent  # /app (em Docker) ou backend/ (local)
+nextjs_dir = app_dir / ".next"   # /app/.next (Docker) ou backend/.next (local)
+public_dir = app_dir / "public"  # /app/public (Docker) ou backend/public (local)
+
+# Se não encontrar em app_dir, tenta no parent (para compatibilidade local)
+if not nextjs_dir.exists() and (app_dir.parent / "frontend" / ".next").exists():
+    nextjs_dir = app_dir.parent / "frontend" / ".next"
+    public_dir = app_dir.parent / "frontend" / "public"
+
+nextjs_static = nextjs_dir / "static"
 
 if nextjs_static.exists():
     app.mount("/_next/static", StaticFiles(directory=nextjs_static), name="nextjs-static")
@@ -109,13 +118,17 @@ async def serve_frontend(full_path: str):
     if full_path.startswith("api/") or full_path.startswith("auth/"):
         return {"error": "Not found"}
 
-    # Serve o index.html do Next.js
-    index_html = frontend_dir / ".next" / "server" / "pages" / "_document.html"
-    if not index_html.exists():
-        index_html = frontend_dir / ".next" / "server" / "app" / "layout.html"
+    # Serve o index.html padrão do Next.js
+    # Next.js 13+ app router coloca output em .next/server/
+    possible_files = [
+        nextjs_dir / "server" / "app.js",
+        nextjs_dir / "server" / "app-page.js",
+        nextjs_dir / "standalone" / "main.js",
+    ]
 
-    if index_html.exists():
-        return FileResponse(index_html)
+    for file_path in possible_files:
+        if file_path.exists():
+            return FileResponse(file_path)
 
-    # Fallback
-    return {"error": "Frontend not found"}
+    # Último recurso: retorna erro
+    return {"error": "Frontend not properly built"}

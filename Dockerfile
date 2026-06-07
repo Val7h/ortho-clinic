@@ -34,11 +34,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copiar código backend
 COPY backend/ .
 
-# Copiar o frontend buildado do estágio anterior
-COPY --from=frontend-builder /app/frontend/.next ./frontend/.next
-COPY --from=frontend-builder /app/frontend/public ./frontend/public
-COPY --from=frontend-builder /app/frontend/node_modules ./frontend/node_modules
-COPY --from=frontend-builder /app/frontend/package.json ./frontend/
+# Copiar o frontend buildado do estágio anterior (PARA RAIZ DO APP)
+COPY --from=frontend-builder /app/frontend/.next ./.next
+COPY --from=frontend-builder /app/frontend/public ./public
+COPY --from=frontend-builder /app/frontend/node_modules ./node_modules
+COPY --from=frontend-builder /app/frontend/package.json ./
 
 # Port
 EXPOSE 8000
