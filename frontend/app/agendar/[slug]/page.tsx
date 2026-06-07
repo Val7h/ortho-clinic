@@ -13,7 +13,8 @@ const DOW_NAMES = ["Segunda","Terça","Quarta","Quinta","Sexta","Sábado","Domin
 function toISO(d: Date) { return d.toISOString().slice(0, 10); }
 
 export default function AgendarPage() {
-  const { slug } = useParams<{ slug: string }>();
+  const params = useParams();
+  const slug = params.slug as string;
 
   const [clinic, setClinic] = useState<any>(null);
   const [loading, setLoading] = useState(true);
