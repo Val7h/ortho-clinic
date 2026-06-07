@@ -1,0 +1,33 @@
+# Dockerfile de teste - versao simplificada sem banco de dados
+
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Instalar dependências do sistema
+RUN apt-get update && apt-get install -y \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copiar requirements
+COPY backend/requirements.txt .
+
+# Instalar dependências Python
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copiar backend (mas usar main_simple.py)
+COPY backend/ .
+
+# Renomear para usar versao simples
+RUN mv main_simple.py app_simple.py && \
+    echo "from app_simple import app" > main.py
+
+# Port
+EXPOSE 8000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" || exit 1
+
+# Start FastAPI
+CMD ["uvicorn", "app_simple:app", "--host", "0.0.0.0", "--port", "8000"]
