@@ -1,0 +1,49 @@
+{
+  "title": "Dashboard",
+  "welcome": "Welcome to OrthoClinic",
+  "welcome_message": "Here's a summary of your clinic",
+  "quick_stats": {
+    "title": "Quick Stats",
+    "total_patients": "Total Patients",
+    "consultations_today": "Consultations Today",
+    "pending_approvals": "Pending Approvals",
+    "revenue_month": "Revenue This Month",
+    "no_data": "No data"
+  },
+  "upcoming_consultations": {
+    "title": "Upcoming Consultations",
+    "time": "Time",
+    "patient": "Patient",
+    "doctor": "Doctor",
+    "room": "Room",
+    "no_consultations": "No consultations scheduled for today",
+    "view_all": "View All"
+  },
+  "recent_patients": {
+    "title": "Recent Patients",
+    "name": "Name",
+    "email": "Email",
+    "phone": "Phone",
+    "last_visit": "Last Visit",
+    "no_patients": "No recent patients"
+  },
+  "financial_overview": {
+    "title": "Financial Overview",
+    "total_revenue": "Total Revenue",
+    "pending_payments": "Pending Payments",
+    "expenses": "Expenses",
+    "balance": "Balance"
+  },
+  "calendar": {
+    "title": "Calendar",
+    "today": "Today",
+    "week": "Week",
+    "month": "Month"
+  },
+  "notifications": {
+    "title": "Notifications",
+    "no_notifications": "No notifications",
+    "mark_all_read": "Mark all as read",
+    "view_all": "View All"
+  }
+}

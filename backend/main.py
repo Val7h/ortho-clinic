@@ -19,6 +19,7 @@ from routers.consultations import agenda_router
 from routers.clinic import router as clinic_router, public_router as clinic_public_router
 from routers.auth import router as auth_router
 from routers.queue import router as queue_router
+from routers.analytics import router as analytics_router
 
 app = FastAPI(
     title="OrthoClinic API",
@@ -69,6 +70,7 @@ app.include_router(media_router)
 app.include_router(anamnesis_router)
 app.include_router(agenda_router)
 app.include_router(queue_router)
+app.include_router(analytics_router)
 include_all(app)
 
 

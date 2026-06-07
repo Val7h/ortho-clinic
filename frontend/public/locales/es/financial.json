@@ -1,0 +1,113 @@
+{
+  "title": "Financiero",
+  "dashboard": "Panel Financiero",
+  "invoices": "Facturas",
+  "payments": "Pagos",
+  "expenses": "Gastos",
+  "reports": "Reportes",
+  "add_invoice": "Nueva Factura",
+  "add_payment": "Nuevo Pago",
+  "add_expense": "Nuevo Gasto",
+  "overview": {
+    "total_revenue": "Ingresos Totales",
+    "total_expenses": "Gastos Totales",
+    "net_profit": "Ganancia Neta",
+    "pending_payments": "Pagos Pendientes",
+    "outstanding_invoices": "Facturas Pendientes",
+    "growth": "Crecimiento"
+  },
+  "invoice": {
+    "title": "Factura",
+    "invoice_number": "Número de Factura",
+    "invoice_date": "Fecha de Factura",
+    "due_date": "Fecha de Vencimiento",
+    "patient": "Paciente",
+    "items": "Artículos",
+    "amount": "Monto",
+    "tax": "Impuesto",
+    "total": "Total",
+    "status": "Estado",
+    "notes": "Notas",
+    "send_invoice": "Enviar Factura",
+    "mark_as_paid": "Marcar como Pagada",
+    "regenerate": "Regenerar PDF"
+  },
+  "payment": {
+    "title": "Pago",
+    "date": "Fecha de Pago",
+    "method": "Método de Pago",
+    "amount": "Monto",
+    "reference": "Referencia",
+    "notes": "Notas",
+    "status": "Estado"
+  },
+  "expense": {
+    "title": "Gasto",
+    "date": "Fecha de Gasto",
+    "category": "Categoría",
+    "description": "Descripción",
+    "amount": "Monto",
+    "supplier": "Proveedor",
+    "status": "Estado",
+    "receipt": "Recibo"
+  },
+  "expense_category": {
+    "supplies": "Suministros",
+    "equipment": "Equipo",
+    "maintenance": "Mantenimiento",
+    "utilities": "Servicios",
+    "staff": "Personal",
+    "rent": "Alquiler",
+    "insurance": "Seguro",
+    "other": "Otro"
+  },
+  "payment_method": {
+    "cash": "Efectivo",
+    "credit_card": "Tarjeta de Crédito",
+    "debit_card": "Tarjeta de Débito",
+    "check": "Cheque",
+    "transfer": "Transferencia",
+    "pix": "PIX",
+    "other": "Otro"
+  },
+  "status": {
+    "draft": "Borrador",
+    "sent": "Enviada",
+    "pending": "Pendiente",
+    "paid": "Pagada",
+    "partially_paid": "Parcialmente Pagada",
+    "overdue": "Vencida",
+    "cancelled": "Cancelada"
+  },
+  "table": {
+    "number": "Número",
+    "patient": "Paciente",
+    "date": "Fecha",
+    "due_date": "Vencimiento",
+    "amount": "Monto",
+    "status": "Estado",
+    "actions": "Acciones"
+  },
+  "messages": {
+    "invoice_created": "Factura creada con éxito",
+    "invoice_updated": "Factura actualizada con éxito",
+    "invoice_deleted": "Factura eliminada con éxito",
+    "invoice_sent": "Factura enviada con éxito",
+    "payment_recorded": "Pago registrado con éxito",
+    "expense_added": "Gasto agregado con éxito",
+    "no_invoices": "No se encontraron facturas"
+  },
+  "filters": {
+    "search_placeholder": "Buscar por paciente o número",
+    "filter_by_status": "Filtrar por Estado",
+    "filter_by_date_range": "Filtrar por Período"
+  },
+  "period": {
+    "today": "Hoy",
+    "this_week": "Esta Semana",
+    "this_month": "Este Mes",
+    "this_quarter": "Este Trimestre",
+    "this_year": "Este Año",
+    "custom_range": "Período Personalizado"
+  }
+}

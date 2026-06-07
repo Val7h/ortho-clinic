@@ -1,0 +1,113 @@
+{
+  "title": "Finances",
+  "dashboard": "Tableau de Bord Financier",
+  "invoices": "Factures",
+  "payments": "Paiements",
+  "expenses": "Dépenses",
+  "reports": "Rapports",
+  "add_invoice": "Nouvelle Facture",
+  "add_payment": "Nouveau Paiement",
+  "add_expense": "Nouvelle Dépense",
+  "overview": {
+    "total_revenue": "Revenus Totaux",
+    "total_expenses": "Dépenses Totales",
+    "net_profit": "Bénéfice Net",
+    "pending_payments": "Paiements en Attente",
+    "outstanding_invoices": "Factures Impayées",
+    "growth": "Croissance"
+  },
+  "invoice": {
+    "title": "Facture",
+    "invoice_number": "Numéro de Facture",
+    "invoice_date": "Date de Facture",
+    "due_date": "Date d'Échéance",
+    "patient": "Patient",
+    "items": "Articles",
+    "amount": "Montant",
+    "tax": "Taxe",
+    "total": "Total",
+    "status": "Statut",
+    "notes": "Notes",
+    "send_invoice": "Envoyer Facture",
+    "mark_as_paid": "Marquer comme Payée",
+    "regenerate": "Régénérer PDF"
+  },
+  "payment": {
+    "title": "Paiement",
+    "date": "Date du Paiement",
+    "method": "Mode de Paiement",
+    "amount": "Montant",
+    "reference": "Référence",
+    "notes": "Notes",
+    "status": "Statut"
+  },
+  "expense": {
+    "title": "Dépense",
+    "date": "Date de la Dépense",
+    "category": "Catégorie",
+    "description": "Description",
+    "amount": "Montant",
+    "supplier": "Fournisseur",
+    "status": "Statut",
+    "receipt": "Reçu"
+  },
+  "expense_category": {
+    "supplies": "Fournitures",
+    "equipment": "Équipement",
+    "maintenance": "Maintenance",
+    "utilities": "Services Publics",
+    "staff": "Personnel",
+    "rent": "Loyer",
+    "insurance": "Assurance",
+    "other": "Autre"
+  },
+  "payment_method": {
+    "cash": "Espèces",
+    "credit_card": "Carte de Crédit",
+    "debit_card": "Carte de Débit",
+    "check": "Chèque",
+    "transfer": "Virement",
+    "pix": "PIX",
+    "other": "Autre"
+  },
+  "status": {
+    "draft": "Brouillon",
+    "sent": "Envoyée",
+    "pending": "En Attente",
+    "paid": "Payée",
+    "partially_paid": "Partiellement Payée",
+    "overdue": "Échue",
+    "cancelled": "Annulée"
+  },
+  "table": {
+    "number": "Numéro",
+    "patient": "Patient",
+    "date": "Date",
+    "due_date": "Échéance",
+    "amount": "Montant",
+    "status": "Statut",
+    "actions": "Actions"
+  },
+  "messages": {
+    "invoice_created": "Facture créée avec succès",
+    "invoice_updated": "Facture mise à jour avec succès",
+    "invoice_deleted": "Facture supprimée avec succès",
+    "invoice_sent": "Facture envoyée avec succès",
+    "payment_recorded": "Paiement enregistré avec succès",
+    "expense_added": "Dépense ajoutée avec succès",
+    "no_invoices": "Aucune facture trouvée"
+  },
+  "filters": {
+    "search_placeholder": "Rechercher par patient ou numéro",
+    "filter_by_status": "Filtrer par Statut",
+    "filter_by_date_range": "Filtrer par Période"
+  },
+  "period": {
+    "today": "Aujourd'hui",
+    "this_week": "Cette Semaine",
+    "this_month": "Ce Mois",
+    "this_quarter": "Ce Trimestre",
+    "this_year": "Cette Année",
+    "custom_range": "Période Personnalisée"
+  }
+}
