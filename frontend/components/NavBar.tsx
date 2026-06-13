@@ -1,10 +1,27 @@
 "use client";
-import { ChevronLeft, LogOut, Users, ChevronDown, User } from "lucide-react";
+import { ChevronLeft, LogOut, Users, ChevronDown, User, Menu } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, lazy, Suspense } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { ThemeToggle } from "@/components/ui";
 import { Logo } from "./Logo";
+import { useNavigation } from "@/components/navigation/NavigationProvider";
+import dynamic from "next/dynamic";
+
+/**
+ * NotificationCenter imports date-fns/locale/ptBR (~20KB) and the
+ * push-notifications lib. Lazy-loading it removes those bytes from the
+ * NavBar critical path and defers them until the bell icon is first rendered.
+ */
+const NotificationCenter = dynamic(
+  () => import("@/components/NotificationCenter"),
+  {
+    loading: () => (
+      <div className="w-8 h-8 rounded-lg bg-white/10 animate-pulse" />
+    ),
+    ssr: false,
+  }
+);
 
 interface NavBarProps {
   title: string;
@@ -101,6 +118,8 @@ function UserMenu() {
 
 export default function NavBar({ title, subtitle, back, actions }: NavBarProps) {
   const router = useRouter();
+  // NavigationProvider is always mounted in the root layout — safe to call unconditionally
+  const { toggleDrawer } = useNavigation();
 
   const handleBack = () => {
     if (typeof back === "string") router.push(back);
@@ -125,8 +144,19 @@ export default function NavBar({ title, subtitle, back, actions }: NavBarProps) 
             <ChevronLeft className="w-5 h-5 text-white" />
           </button>
         ) : (
-          <div className="flex items-center gap-2 mr-2">
-            <Logo width={45} height={45} />
+          <div className="flex items-center gap-1 mr-1">
+            {/* Hamburger — mobile only, hidden when sidebar is visible */}
+            <button
+              onClick={toggleDrawer}
+              aria-label="Abrir menu de navegação"
+              className="lg:hidden p-2 rounded-xl hover:bg-white/15 active:bg-white/25 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
+              data-testid="nav-hamburger"
+            >
+              <Menu className="w-5 h-5 text-white" aria-hidden="true" />
+            </button>
+            <span className="hidden lg:block">
+              <Logo width={45} height={45} />
+            </span>
           </div>
         )}
 
@@ -140,6 +170,7 @@ export default function NavBar({ title, subtitle, back, actions }: NavBarProps) 
         <div className="flex items-center gap-2 text-white">
           {actions}
           <ThemeToggle />
+          <NotificationCenter />
           <UserMenu />
         </div>
       </div>

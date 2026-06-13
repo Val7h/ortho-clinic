@@ -15,6 +15,17 @@ const API_URL =
 export const api = axios.create({
   baseURL: API_URL,
   headers: { "Content-Type": "application/json" },
+  // Aggressive timeout for mobile connections — don't hang forever
+  timeout: 15_000,
+});
+
+// ── Auth token injection ──────────────────────────────────────────────────────
+api.interceptors.request.use((config) => {
+  if (typeof window !== 'undefined') {
+    const token = localStorage.getItem('ortho_token');
+    if (token) config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
 });
 
 api.interceptors.response.use(
@@ -30,6 +41,48 @@ api.interceptors.response.use(
     return Promise.reject(err);
   }
 );
+
+// ── Request deduplication ────────────────────────────────────────────────────
+// Multiple components calling the same GET endpoint within the same tick
+// share a single in-flight promise. This eliminates N+1 fetches on
+// page mounts that compose many small hooks.
+
+const inflight = new Map<string, Promise<any>>();
+
+/**
+ * Deduplicated GET — identical URL+params combos made in the same event-loop
+ * tick reuse the same Axios promise. The entry is cleared once the request
+ * settles (success or error).
+ */
+export function dedupGet<T = any>(
+  url: string,
+  params?: Record<string, any>,
+  signal?: AbortSignal
+): Promise<T> {
+  const key = url + (params ? JSON.stringify(params) : '');
+
+  if (inflight.has(key)) return inflight.get(key)!;
+
+  const promise = api
+    .get<T>(url, { params, signal })
+    .then((r) => r.data)
+    .finally(() => inflight.delete(key));
+
+  inflight.set(key, promise);
+  return promise;
+}
+
+/**
+ * Returns an AbortController that is automatically aborted on React
+ * component unmount. Use the `.signal` in fetch/axios calls.
+ *
+ * Usage:
+ *   const { signal } = useAbortOnUnmount();
+ *   useEffect(() => { dedupGet('/patients', {}, signal); }, []);
+ */
+export function makeAbortController(): AbortController {
+  return new AbortController();
+}
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 export const authApi = {
@@ -170,6 +223,63 @@ export const clinicApi = {
     api.post(`/agendar/${slug}/book`, data).then((r) => r.data),
 };
 
+// ── Agendamentos internos (Sprint 6) ──────────────────────────────────────
+export const appointmentsApi = {
+  // Patient autocomplete
+  searchPatients: (q: string) =>
+    api.get("/appointments/patients/search", { params: { q } }).then((r) => r.data as Array<{ id: number; name: string; phone?: string; cpf?: string }>),
+
+  // Conflict detection
+  checkConflict: (data: { clinic_id: number; date: string; start_time: string; exclude_id?: number }) =>
+    api.post("/appointments/check-conflict", data).then((r) => r.data as { conflict: boolean; patient_name?: string; appointment_id?: number }),
+
+  // Doctor availability calendar
+  availability: (clinic_id: number, date_from: string, date_to: string) =>
+    api.get("/appointments/availability", { params: { clinic_id, date_from, date_to } }).then((r) => r.data as Array<{
+      date: string;
+      available: boolean;
+      slots: Array<{ time: string; end_time: string; available: boolean }>;
+      booked_count: number;
+      schedule_type: string;
+      start_time?: string;
+      end_time?: string;
+    }>),
+
+  // Create internal appointment
+  create: (data: {
+    clinic_id: number;
+    date: string;
+    start_time?: string;
+    patient_name: string;
+    patient_phone?: string;
+    patient_id?: number;
+    reason?: string;
+    appointment_type?: string;
+    notes?: string;
+  }) => api.post("/appointments", data).then((r) => r.data),
+
+  // Edit appointment
+  update: (id: number, data: {
+    date?: string;
+    start_time?: string;
+    patient_name?: string;
+    patient_phone?: string;
+    patient_id?: number;
+    reason?: string;
+    appointment_type?: string;
+    status?: string;
+    notes?: string;
+  }) => api.patch(`/appointments/${id}`, data).then((r) => r.data),
+
+  // Cancel
+  cancel: (id: number, reason?: string) =>
+    api.post(`/appointments/${id}/cancel`, null, { params: reason ? { reason } : {} }).then((r) => r.data),
+
+  // Schedule reminder
+  scheduleReminder: (appointment_id: number, remind_hours_before = 24) =>
+    api.post("/appointments/schedule-reminder", { appointment_id, remind_hours_before }).then((r) => r.data),
+};
+
 // ── Financeiro ────────────────────────────────────────────────────────────
 export const financialApi = {
   list: (params?: { month?: number; year?: number; patient_id?: number }) =>
@@ -208,6 +318,63 @@ export const anamnesisApi = {
     api.get(`/anamnese/${token}`).then((r) => r.data),
   fillPublic: (token: string, data: any) =>
     api.post(`/anamnese/${token}`, data).then((r) => r.data),
+};
+
+// ── Documentos do Paciente (Sprint 6 / Day 7) ────────────────────────────────
+export const patientDocsApi = {
+  list: (patientId: number, params?: { category?: string; q?: string; limit?: number; offset?: number }) =>
+    api.get(`/patients/${patientId}/documents`, { params }).then((r) => r.data),
+
+  categories: () =>
+    api.get("/patients/0/documents/categories").then((r) => r.data),
+
+  get: (patientId: number, docId: number) =>
+    api.get(`/patients/${patientId}/documents/${docId}`).then((r) => r.data),
+
+  upload: (patientId: number, formData: FormData) =>
+    api.post(`/patients/${patientId}/documents/upload`, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    }).then((r) => r.data),
+
+  uploadCamera: (patientId: number, formData: FormData) =>
+    api.post(`/patients/${patientId}/documents/camera`, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    }).then((r) => r.data),
+
+  linkGenerated: (patientId: number, data: {
+    title: string;
+    category: string;
+    date: string;
+    generated_doc_type: string;
+    generated_doc_id: number;
+    consultation_id?: number;
+    description?: string;
+    tags?: string[];
+  }) => api.post(`/patients/${patientId}/documents/link-generated`, data).then((r) => r.data),
+
+  update: (patientId: number, docId: number, data: {
+    title?: string;
+    category?: string;
+    description?: string;
+    tags?: string[];
+  }) => api.patch(`/patients/${patientId}/documents/${docId}`, data).then((r) => r.data),
+
+  delete: (patientId: number, docId: number) =>
+    api.delete(`/patients/${patientId}/documents/${docId}`),
+
+  sign: (patientId: number, docId: number, data: {
+    signature_data_url: string;
+    signed_by_name: string;
+  }) => api.post(`/patients/${patientId}/documents/${docId}/sign`, data).then((r) => r.data),
+
+  share: (patientId: number, docId: number, data: {
+    channel: "whatsapp" | "email" | "link";
+    recipient?: string;
+    expires_hours?: number;
+  }) => api.post(`/patients/${patientId}/documents/${docId}/share`, data).then((r) => r.data),
+
+  getPdfUrl: (patientId: number, docId: number) =>
+    `${api.defaults.baseURL}/patients/${patientId}/documents/${docId}/pdf`,
 };
 
 // ── WhatsApp ──────────────────────────────────────────────────────────────

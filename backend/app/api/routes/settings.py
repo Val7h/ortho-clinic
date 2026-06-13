@@ -613,6 +613,115 @@ async def update_notification_preferences(
 
 
 # ========================
+# Privacy Settings Endpoints
+# ========================
+
+@router.get("/privacy", response_model=dict)
+async def get_privacy_settings(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get user privacy settings"""
+    prefs = db.query(UserPreferences).filter(
+        UserPreferences.user_id == current_user.id
+    ).first()
+
+    if not prefs:
+        # Create default preferences
+        prefs = UserPreferences(user_id=current_user.id)
+        db.add(prefs)
+        db.commit()
+        db.refresh(prefs)
+
+    return {
+        "data_collection_allowed": prefs.data_collection_allowed if hasattr(prefs, 'data_collection_allowed') else True,
+        "marketing_emails": prefs.marketing_emails if hasattr(prefs, 'marketing_emails') else False,
+        "analytics_tracking": prefs.analytics_tracking if hasattr(prefs, 'analytics_tracking') else True,
+        "allow_patient_direct_messaging": prefs.allow_patient_direct_messaging if hasattr(prefs, 'allow_patient_direct_messaging') else True,
+        "share_calendar_with_team": prefs.share_calendar_with_team if hasattr(prefs, 'share_calendar_with_team') else False,
+        "terms_of_service_accepted_at": prefs.terms_of_service_accepted_at,
+        "privacy_policy_accepted_at": prefs.privacy_policy_accepted_at,
+        "cookie_policy_accepted_at": prefs.cookie_policy_accepted_at
+    }
+
+
+@router.put("/privacy")
+async def update_privacy_settings(
+    request_data: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    request: Request = Depends()
+):
+    """Update user privacy settings"""
+    prefs = db.query(UserPreferences).filter(
+        UserPreferences.user_id == current_user.id
+    ).first()
+
+    if not prefs:
+        prefs = UserPreferences(user_id=current_user.id)
+
+    old_values = {}
+    new_values = {}
+
+    # Update privacy-related fields
+    if "data_collection_allowed" in request_data:
+        if hasattr(prefs, 'data_collection_allowed'):
+            old_values["data_collection_allowed"] = prefs.data_collection_allowed
+            prefs.data_collection_allowed = request_data["data_collection_allowed"]
+            new_values["data_collection_allowed"] = request_data["data_collection_allowed"]
+
+    if "marketing_emails" in request_data:
+        if hasattr(prefs, 'marketing_emails'):
+            old_values["marketing_emails"] = prefs.marketing_emails
+            prefs.marketing_emails = request_data["marketing_emails"]
+            new_values["marketing_emails"] = request_data["marketing_emails"]
+
+    if "analytics_tracking" in request_data:
+        if hasattr(prefs, 'analytics_tracking'):
+            old_values["analytics_tracking"] = prefs.analytics_tracking
+            prefs.analytics_tracking = request_data["analytics_tracking"]
+            new_values["analytics_tracking"] = request_data["analytics_tracking"]
+
+    if "allow_patient_direct_messaging" in request_data:
+        if hasattr(prefs, 'allow_patient_direct_messaging'):
+            old_values["allow_patient_direct_messaging"] = prefs.allow_patient_direct_messaging
+            prefs.allow_patient_direct_messaging = request_data["allow_patient_direct_messaging"]
+            new_values["allow_patient_direct_messaging"] = request_data["allow_patient_direct_messaging"]
+
+    if "share_calendar_with_team" in request_data:
+        if hasattr(prefs, 'share_calendar_with_team'):
+            old_values["share_calendar_with_team"] = prefs.share_calendar_with_team
+            prefs.share_calendar_with_team = request_data["share_calendar_with_team"]
+            new_values["share_calendar_with_team"] = request_data["share_calendar_with_team"]
+
+    prefs.updated_at = datetime.utcnow()
+
+    log_activity(
+        db=db,
+        user_id=current_user.id,
+        action="privacy_settings_updated",
+        resource_type="user_preferences",
+        old_value=old_values or None,
+        new_value=new_values or None,
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent")
+    )
+
+    db.add(prefs)
+    db.commit()
+    db.refresh(prefs)
+
+    return {
+        "message": "Privacy settings updated",
+        "data_collection_allowed": getattr(prefs, 'data_collection_allowed', True),
+        "marketing_emails": getattr(prefs, 'marketing_emails', False),
+        "analytics_tracking": getattr(prefs, 'analytics_tracking', True),
+        "allow_patient_direct_messaging": getattr(prefs, 'allow_patient_direct_messaging', True),
+        "share_calendar_with_team": getattr(prefs, 'share_calendar_with_team', False)
+    }
+
+
+# ========================
 # Privacy & API Key Endpoints
 # ========================
 

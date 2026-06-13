@@ -1,11 +1,14 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
 from typing import List, Optional
 from datetime import date, datetime, timedelta
 from pydantic import BaseModel
 import secrets
 from database import get_db
 from models.clinic import Clinic, ClinicSchedule, Appointment
+from models.patient import Patient
+from models.organization import User
 from deps import get_current_user
 from services.whatsapp import send_whatsapp, build_booking_message, is_demo
 
@@ -500,4 +503,386 @@ def confirm_appointment(token: str, data: ConfirmAction, db: Session = Depends(g
         "queue_number": a.queue_number,
         "schedule_type": sched.schedule_type if sched else "appointment",
         "status": a.status,
+    }
+
+
+# ── Sprint 6: Internal appointment management ──────────────────────────────────
+
+class AppointmentCreateIn(BaseModel):
+    clinic_id: int
+    date: date
+    start_time: Optional[str] = None
+    patient_name: str
+    patient_phone: Optional[str] = None
+    patient_id: Optional[int] = None
+    reason: Optional[str] = None
+    appointment_type: Optional[str] = "consulta"   # consulta | retorno | procedimento | urgencia | teleconsulta
+    notes: Optional[str] = None
+
+
+class AppointmentUpdateIn(BaseModel):
+    date: Optional[date] = None
+    start_time: Optional[str] = None
+    patient_name: Optional[str] = None
+    patient_phone: Optional[str] = None
+    patient_id: Optional[int] = None
+    reason: Optional[str] = None
+    appointment_type: Optional[str] = None
+    status: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class AppointmentDetailOut(BaseModel):
+    id: int
+    clinic_id: int
+    clinic_name: str
+    clinic_color: str
+    date: date
+    start_time: str
+    end_time: str
+    patient_name: str
+    patient_phone: Optional[str] = None
+    patient_id: Optional[int] = None
+    reason: Optional[str] = None
+    appointment_type: Optional[str] = None
+    status: str
+    queue_number: Optional[int] = None
+    notes: Optional[str] = None
+    confirmation_token: Optional[str] = None
+    created_at: datetime
+    model_config = {"from_attributes": True}
+
+
+class ConflictCheckIn(BaseModel):
+    clinic_id: int
+    date: date
+    start_time: str
+    exclude_id: Optional[int] = None
+
+
+class DoctorAvailabilityOut(BaseModel):
+    date: str
+    available: bool
+    slots: list
+    booked_count: int
+    schedule_type: str
+
+
+class PatientSearchOut(BaseModel):
+    id: int
+    name: str
+    phone: Optional[str] = None
+    cpf: Optional[str] = None
+    model_config = {"from_attributes": True}
+
+
+# ── Patient autocomplete search ───────────────────────────────────────────────
+
+@router.get("/appointments/patients/search", response_model=List[PatientSearchOut])
+def search_patients_for_appointment(
+    q: str = Query(..., min_length=2),
+    limit: int = 10,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Autocomplete de pacientes para o formulário de agendamento."""
+    term = f"%{q}%"
+    query = db.query(Patient).filter(
+        Patient.active == True,
+        or_(
+            Patient.name.ilike(term),
+            Patient.cpf.ilike(term),
+            Patient.phone.ilike(term),
+        )
+    )
+    if current_user.role != "superadmin":
+        query = query.filter(Patient.organization_id == current_user.organization_id)
+    patients = query.order_by(Patient.name).limit(limit).all()
+    return [
+        PatientSearchOut(id=p.id, name=p.name, phone=p.phone, cpf=p.cpf)
+        for p in patients
+    ]
+
+
+# ── Conflict detection ─────────────────────────────────────────────────────────
+
+@router.post("/appointments/check-conflict")
+def check_conflict(data: ConflictCheckIn, db: Session = Depends(get_db)):
+    """Verifica se existe conflito de horário antes de criar/editar agendamento."""
+    q = db.query(Appointment).filter(
+        Appointment.clinic_id == data.clinic_id,
+        Appointment.date == data.date,
+        Appointment.start_time == data.start_time,
+        Appointment.status.in_(["pending", "confirmed", "blocked"]),
+    )
+    if data.exclude_id:
+        q = q.filter(Appointment.id != data.exclude_id)
+    conflict = q.first()
+    if conflict:
+        return {
+            "conflict": True,
+            "appointment_id": conflict.id,
+            "patient_name": conflict.patient_name,
+            "status": conflict.status,
+        }
+    return {"conflict": False}
+
+
+# ── Doctor availability for a date range ──────────────────────────────────────
+
+@router.get("/appointments/availability")
+def get_doctor_availability(
+    clinic_id: int,
+    date_from: date = Query(...),
+    date_to: date = Query(...),
+    db: Session = Depends(get_db),
+):
+    """Disponibilidade do médico por dia — usado pelo calendário."""
+    clinic = db.query(Clinic).filter(Clinic.id == clinic_id).first()
+    if not clinic:
+        raise HTTPException(404, "Clínica não encontrada")
+
+    result = []
+    current = date_from
+    today = date.today()
+    while current <= date_to:
+        dow = current.weekday()
+        sched = next((s for s in clinic.schedules if s.active and s.day_of_week == dow), None)
+        if not sched:
+            result.append({"date": current.isoformat(), "available": False, "slots": [], "booked_count": 0, "schedule_type": "none"})
+            current += timedelta(days=1)
+            continue
+
+        existing = db.query(Appointment).filter(
+            Appointment.clinic_id == clinic_id,
+            Appointment.date == current,
+            Appointment.status.in_(["pending", "confirmed", "blocked"]),
+        ).all()
+        booked_times = {a.start_time for a in existing}
+
+        if sched.schedule_type == "walk_in":
+            count = len([a for a in existing if a.start_time == sched.start_time])
+            result.append({
+                "date": current.isoformat(),
+                "available": count < MAX_WALK_IN and current >= today,
+                "slots": [],
+                "booked_count": count,
+                "schedule_type": "walk_in",
+                "start_time": sched.start_time,
+                "end_time": sched.end_time,
+            })
+        else:
+            slots = _generate_slots(sched.start_time, sched.end_time, sched.slot_duration, booked_times)
+            avail = sum(1 for s in slots if s["available"])
+            result.append({
+                "date": current.isoformat(),
+                "available": avail > 0 and current >= today,
+                "slots": slots,
+                "booked_count": len(booked_times),
+                "schedule_type": "appointment",
+                "start_time": sched.start_time,
+                "end_time": sched.end_time,
+            })
+        current += timedelta(days=1)
+    return result
+
+
+# ── Create appointment (internal, by doctor/secretary) ────────────────────────
+
+@router.post("/appointments", response_model=AppointmentDetailOut, status_code=201)
+def create_appointment_internal(
+    data: AppointmentCreateIn,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Cria agendamento interno (pelo médico ou secretária)."""
+    clinic = db.query(Clinic).filter(Clinic.id == data.clinic_id).first()
+    if not clinic:
+        raise HTTPException(404, "Clínica não encontrada")
+
+    dow = data.date.weekday()
+    sched = next((s for s in clinic.schedules if s.active and s.day_of_week == dow), None)
+
+    # Conflict check for timed appointments
+    if data.start_time and sched and sched.schedule_type == "appointment":
+        conflict = db.query(Appointment).filter(
+            Appointment.clinic_id == data.clinic_id,
+            Appointment.date == data.date,
+            Appointment.start_time == data.start_time,
+            Appointment.status.in_(["pending", "confirmed", "blocked"]),
+        ).first()
+        if conflict:
+            raise HTTPException(409, f"Horário {data.start_time} já ocupado por {conflict.patient_name}")
+
+    duration = sched.slot_duration if sched else 30
+    start = data.start_time or (sched.start_time if sched else "08:00")
+    end_time = _add_minutes(start, duration)
+    token = secrets.token_urlsafe(32)
+
+    # Walk-in queue number
+    queue_number = None
+    if sched and sched.schedule_type == "walk_in":
+        count = _walk_in_count(db, clinic.id, data.date, sched.start_time)
+        if count >= MAX_WALK_IN:
+            raise HTTPException(400, f"Vagas esgotadas — limite de {MAX_WALK_IN} atingido")
+        queue_number = count + 1
+
+    a = Appointment(
+        clinic_id=data.clinic_id,
+        date=data.date,
+        start_time=start,
+        end_time=end_time,
+        patient_name=data.patient_name,
+        patient_phone=data.patient_phone,
+        patient_id=data.patient_id,
+        reason=data.reason,
+        notes=data.notes,
+        status="confirmed",   # interno → já confirmado
+        queue_number=queue_number,
+        confirmation_token=token,
+    )
+    db.add(a)
+    db.commit()
+    db.refresh(a)
+
+    return AppointmentDetailOut(
+        id=a.id,
+        clinic_id=clinic.id,
+        clinic_name=clinic.name,
+        clinic_color=clinic.color,
+        date=a.date,
+        start_time=a.start_time,
+        end_time=a.end_time,
+        patient_name=a.patient_name,
+        patient_phone=a.patient_phone,
+        patient_id=a.patient_id,
+        reason=a.reason,
+        appointment_type=data.appointment_type,
+        status=a.status,
+        queue_number=a.queue_number,
+        notes=a.notes,
+        confirmation_token=a.confirmation_token,
+        created_at=a.created_at,
+    )
+
+
+# ── Edit appointment (internal) ────────────────────────────────────────────────
+
+@router.patch("/appointments/{appointment_id}", response_model=AppointmentDetailOut)
+def edit_appointment(
+    appointment_id: int,
+    data: AppointmentUpdateIn,
+    db: Session = Depends(get_db),
+):
+    a = db.query(Appointment).filter(Appointment.id == appointment_id).first()
+    if not a:
+        raise HTTPException(404, "Agendamento não encontrado")
+    if a.status in ("completed", "blocked"):
+        raise HTTPException(400, "Agendamento não pode ser editado")
+
+    # Conflict check if changing time
+    new_date = data.date or a.date
+    new_time = data.start_time or a.start_time
+    if (data.date or data.start_time) and new_time:
+        conflict = db.query(Appointment).filter(
+            Appointment.clinic_id == a.clinic_id,
+            Appointment.date == new_date,
+            Appointment.start_time == new_time,
+            Appointment.status.in_(["pending", "confirmed", "blocked"]),
+            Appointment.id != appointment_id,
+        ).first()
+        if conflict:
+            raise HTTPException(409, f"Horário {new_time} já ocupado por {conflict.patient_name}")
+
+    for field, value in data.model_dump(exclude_none=True).items():
+        if hasattr(a, field):
+            setattr(a, field, value)
+
+    # Recalculate end_time if start changed
+    if data.start_time:
+        clinic = db.query(Clinic).filter(Clinic.id == a.clinic_id).first()
+        sched = next((s for s in (clinic.schedules if clinic else []) if s.active), None)
+        duration = sched.slot_duration if sched else 30
+        a.end_time = _add_minutes(a.start_time, duration)
+
+    db.commit()
+    db.refresh(a)
+    clinic = db.query(Clinic).filter(Clinic.id == a.clinic_id).first()
+    return AppointmentDetailOut(
+        id=a.id,
+        clinic_id=a.clinic_id,
+        clinic_name=clinic.name if clinic else "",
+        clinic_color=clinic.color if clinic else "#0F2D5E",
+        date=a.date,
+        start_time=a.start_time,
+        end_time=a.end_time,
+        patient_name=a.patient_name,
+        patient_phone=a.patient_phone,
+        patient_id=a.patient_id,
+        reason=a.reason,
+        appointment_type=None,
+        status=a.status,
+        queue_number=a.queue_number,
+        notes=a.notes,
+        confirmation_token=a.confirmation_token,
+        created_at=a.created_at,
+    )
+
+
+# ── Cancel appointment ─────────────────────────────────────────────────────────
+
+@router.post("/appointments/{appointment_id}/cancel")
+def cancel_appointment(
+    appointment_id: int,
+    reason: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    a = db.query(Appointment).filter(Appointment.id == appointment_id).first()
+    if not a:
+        raise HTTPException(404, "Agendamento não encontrado")
+    if a.status in ("completed", "blocked", "cancelled"):
+        raise HTTPException(400, f"Agendamento já está {a.status}")
+    a.status = "cancelled"
+    if reason:
+        a.notes = (a.notes or "") + f"\n[Cancelado: {reason}]"
+    db.commit()
+    return {"ok": True, "id": appointment_id, "status": "cancelled"}
+
+
+# ── Notification scheduling endpoint ──────────────────────────────────────────
+
+class ReminderIn(BaseModel):
+    appointment_id: int
+    remind_hours_before: int = 24   # quantas horas antes enviar
+
+
+@router.post("/appointments/schedule-reminder")
+def schedule_reminder(
+    data: ReminderIn,
+    db: Session = Depends(get_db),
+):
+    """
+    Registra agendamento de lembrete por WhatsApp.
+    O envio real acontece via worker/cron que chama send_whatsapp
+    na hora certa. Aqui apenas valida e retorna metadados para
+    o cliente enfileirar localmente (Notification API / Service Worker).
+    """
+    a = db.query(Appointment).filter(Appointment.id == data.appointment_id).first()
+    if not a:
+        raise HTTPException(404, "Agendamento não encontrado")
+    if a.status == "cancelled":
+        raise HTTPException(400, "Agendamento cancelado — não faz sentido lembrar")
+
+    # Calcular timestamp do lembrete
+    appt_dt = datetime.combine(a.date, datetime.strptime(a.start_time, "%H:%M").time())
+    remind_at = appt_dt - timedelta(hours=data.remind_hours_before)
+
+    return {
+        "ok": True,
+        "appointment_id": a.id,
+        "patient_name": a.patient_name,
+        "patient_phone": a.patient_phone,
+        "remind_at": remind_at.isoformat(),
+        "remind_hours_before": data.remind_hours_before,
+        "appt_datetime": appt_dt.isoformat(),
     }

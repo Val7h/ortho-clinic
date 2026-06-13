@@ -8,6 +8,7 @@ if not _secret or "dev-secret" in _secret or len(_secret) < 32:
     print("AVISO: SECRET_KEY fraca ou nao configurada no Render!")
 
 from database import init_db, migrate_db
+import models.user_settings  # noqa: F401 — garante que UserSession seja registrado antes do mapper
 from routers import patients, consultations, dashboard
 from routers.documents import include_all
 from routers.memed import router as memed_router
@@ -20,6 +21,32 @@ from routers.clinic import router as clinic_router, public_router as clinic_publ
 from routers.auth import router as auth_router
 from routers.queue import router as queue_router
 from routers.analytics import router as analytics_router
+from routers.push_notifications import router as push_router
+from routers.patient_documents import router as patient_docs_router, public_router as patient_docs_public_router
+from routers.oauth2 import router as oauth2_router, well_known_router as oauth2_well_known_router
+from routers.pre_consulta import router as pre_consulta_router
+
+# SSO / SAML / OIDC / MFA / SCIM (Sprint 8)
+# python3-saml requer libxmlsec1 (não disponível em todos os ambientes)
+_SSO_AVAILABLE = False
+try:
+    from routers.sso import saml_router, oidc_router, mfa_router, sso_admin
+    from routers.scim import scim_router, scim_admin_router
+    _SSO_AVAILABLE = True
+except ImportError as _e:
+    import logging as _logging
+    _logging.getLogger(__name__).warning("SSO/SCIM desabilitado: %s", _e)
+
+# Enterprise Billing with Stripe (Sprint 8)
+from routers.billing import router as billing_router
+
+# Immutable Audit Log (Sprint 8)
+from routers.audit import router as audit_router
+from middleware.audit_middleware import AuditContextMiddleware
+
+# Public REST API v1 (Sprint 7)
+from api.v1.router import public_api_v1_router
+from api.v1.middleware import attach_public_api_middleware
 
 app = FastAPI(
     title="OrthoClinic API",
@@ -49,6 +76,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Public API middleware stack (RequestID, ResponseTime, RateLimit, AuditLog)
+attach_public_api_middleware(app)
+
+# Audit context middleware — injects request_id, session_id, actor_ip into request.state
+app.add_middleware(AuditContextMiddleware)
+
 os.makedirs("uploads/photos", exist_ok=True)
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
@@ -71,7 +104,35 @@ app.include_router(anamnesis_router)
 app.include_router(agenda_router)
 app.include_router(queue_router)
 app.include_router(analytics_router)
+app.include_router(push_router)
+app.include_router(patient_docs_router)
+app.include_router(patient_docs_public_router)
 include_all(app)
+
+# Formulário pré-consulta público (token HMAC — sem JWT)
+app.include_router(pre_consulta_router)
+
+# OAuth2 Authorization Server (Sprint 7)
+app.include_router(oauth2_router)
+app.include_router(oauth2_well_known_router)
+
+# SSO / SAML 2.0 / OIDC / MFA / SCIM 2.0 (Sprint 8)
+if _SSO_AVAILABLE:
+    app.include_router(saml_router)
+    app.include_router(oidc_router)
+    app.include_router(mfa_router)
+    app.include_router(sso_admin)
+    app.include_router(scim_router)
+    app.include_router(scim_admin_router)
+
+# Public REST API v1 (Sprint 7)
+app.include_router(public_api_v1_router)
+
+# Enterprise Billing (Sprint 8)
+app.include_router(billing_router)
+
+# Immutable Audit Log (Sprint 8)
+app.include_router(audit_router)
 
 
 @app.on_event("startup")

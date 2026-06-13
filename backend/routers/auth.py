@@ -1,5 +1,5 @@
 """Autenticação JWT e gerenciamento de usuários / organizações."""
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 from typing import Optional
@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from database import get_db
 from models.organization import User, Organization
 from deps import get_current_user, require_admin, require_superadmin, SECRET_KEY, ALGORITHM
+from services.audit_service import AuditLogService
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
@@ -86,12 +87,53 @@ def _make_token(user: User) -> str:
 # ── Auth endpoints ────────────────────────────────────────────────────────────
 
 @router.post("/login")
-def login(data: LoginIn, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == data.email.strip().lower(), User.active == True).first()
+def login(data: LoginIn, request: Request, db: Session = Depends(get_db)):
+    forwarded = request.headers.get("X-Forwarded-For", "")
+    actor_ip  = forwarded.split(",")[0].strip() if forwarded else (
+        request.client.host if request.client else None
+    )
+    actor_ua  = request.headers.get("User-Agent")
+    request_id = getattr(request.state, "request_id", None)
+
+    email = data.email.strip().lower()
+    user = db.query(User).filter(User.email == email, User.active == True).first()
+
     if not user or not pwd_context.verify(data.password, user.password_hash):
+        # Audit failed login (org_id=0 sentinel when user not found)
+        org_id   = user.organization_id if user else 1
+        actor_id = user.id if user else None
+        AuditLogService.record(
+            db=db,
+            organization_id=org_id,
+            actor_id=actor_id,
+            actor_ip=actor_ip,
+            actor_user_agent=actor_ua,
+            action="user.login_failed",
+            resource_type="user",
+            resource_id=email,
+            metadata={"email": email, "reason": "bad_credentials"},
+            request_id=request_id,
+        )
+        db.commit()
         raise HTTPException(401, "Email ou senha incorretos")
+
+    token = _make_token(user)
+    AuditLogService.record(
+        db=db,
+        organization_id=user.organization_id,
+        actor_id=user.id,
+        actor_ip=actor_ip,
+        actor_user_agent=actor_ua,
+        action="user.login",
+        resource_type="user",
+        resource_id=str(user.id),
+        metadata={"email": email},
+        request_id=request_id,
+    )
+    db.commit()
+
     return {
-        "access_token": _make_token(user),
+        "access_token": token,
         "token_type": "bearer",
         "user": UserOut.model_validate(user),
     }
@@ -105,12 +147,21 @@ def me(current_user: User = Depends(get_current_user)):
 @router.post("/change-password", status_code=204)
 def change_password(
     data: ChangePasswordIn,
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     if not pwd_context.verify(data.current_password, current_user.password_hash):
         raise HTTPException(400, "Senha atual incorreta")
     current_user.password_hash = pwd_context.hash(data.new_password)
+    AuditLogService.from_request(
+        db=db,
+        request=request,
+        current_user=current_user,
+        action="password.changed",
+        resource_type="user",
+        resource_id=str(current_user.id),
+    )
     db.commit()
 
 
@@ -130,6 +181,7 @@ def list_users(
 @router.post("/users", response_model=UserOut, status_code=201)
 def create_user(
     data: UserCreate,
+    request: Request,
     current_user: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
@@ -152,6 +204,16 @@ def create_user(
         role=data.role,
     )
     db.add(user)
+    db.flush()   # get user.id before audit
+    AuditLogService.from_request(
+        db=db,
+        request=request,
+        current_user=current_user,
+        action="user.invited",
+        resource_type="user",
+        resource_id=str(user.id),
+        after_state={"name": user.name, "email": email, "role": user.role, "organization_id": org_id},
+    )
     db.commit()
     db.refresh(user)
     return user
@@ -161,6 +223,7 @@ def create_user(
 def update_user(
     user_id: int,
     data: UserUpdate,
+    request: Request,
     current_user: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
@@ -169,11 +232,29 @@ def update_user(
         raise HTTPException(404, "Usuário não encontrado")
     if current_user.role != "superadmin" and user.organization_id != current_user.organization_id:
         raise HTTPException(403, "Sem permissão")
-    user.name = data.name
+
+    before = {"name": user.name, "email": user.email, "role": user.role}
+    old_role = user.role
+
+    user.name  = data.name
     user.email = data.email.strip().lower()
-    user.role = data.role
+    user.role  = data.role
     if data.password:
         user.password_hash = pwd_context.hash(data.password)
+
+    # Determine which specific audit action to use
+    audit_action = "user.role_changed" if old_role != data.role else "user.invited"
+
+    AuditLogService.from_request(
+        db=db,
+        request=request,
+        current_user=current_user,
+        action=audit_action,
+        resource_type="user",
+        resource_id=str(user_id),
+        before_state=before,
+        after_state={"name": user.name, "email": user.email, "role": user.role},
+    )
     db.commit()
     db.refresh(user)
     return user
@@ -182,6 +263,7 @@ def update_user(
 @router.delete("/users/{user_id}", status_code=204)
 def deactivate_user(
     user_id: int,
+    request: Request,
     current_user: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
@@ -193,6 +275,16 @@ def deactivate_user(
     if user.id == current_user.id:
         raise HTTPException(400, "Não é possível desativar sua própria conta")
     user.active = False
+    AuditLogService.from_request(
+        db=db,
+        request=request,
+        current_user=current_user,
+        action="user.deactivated",
+        resource_type="user",
+        resource_id=str(user_id),
+        before_state={"active": True, "email": user.email},
+        after_state={"active": False},
+    )
     db.commit()
 
 

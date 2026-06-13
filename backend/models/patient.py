@@ -76,3 +76,4 @@ class Patient(Base):
     financial_records = relationship("FinancialRecord", back_populates="patient", cascade="all, delete-orphan")
     media = relationship("ConsultationMedia", back_populates="patient", cascade="all, delete-orphan")
     anamneses = relationship("Anamnesis", back_populates="patient", cascade="all, delete-orphan")
+    patient_documents = relationship("PatientDocument", back_populates="patient", cascade="all, delete-orphan")

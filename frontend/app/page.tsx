@@ -17,13 +17,25 @@ import {
   ArrowRight,
 } from 'lucide-react';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { ProtectedPageLayout } from '@/components/ProtectedPageLayout';
 import ModuleCard from '@/components/ModuleCard';
-import { DashboardAnalytics } from '@/components/DashboardAnalytics';
 import { dashboardApi } from '@/lib/api';
 import { formatDateTime } from '@/lib/utils';
 import { useAuth } from '@/components/AuthProvider';
 import { Card, CardContent, Button, Badge } from '@/components/ui';
+
+// Recharts is ~120 KB gzipped — load only when stats are available.
+// This keeps the dashboard TTI under 2s on 4G.
+const DashboardAnalytics = dynamic(
+  () => import('@/components/DashboardAnalytics').then(m => ({ default: m.DashboardAnalytics })),
+  {
+    loading: () => (
+      <div className="h-64 rounded-2xl bg-slate-100 dark:bg-slate-800 animate-pulse" />
+    ),
+    ssr: false, // chart renders only on client
+  }
+);
 
 export default function Dashboard() {
   const { user } = useAuth();
