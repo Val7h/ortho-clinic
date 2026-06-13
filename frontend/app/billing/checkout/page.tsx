@@ -19,8 +19,8 @@ const PLAN_ANNUAL_LABELS: Record<string, string> = {
 function CheckoutContent() {
   const params = useSearchParams();
   const router = useRouter();
-  const plan  = params.get("plan") ?? "starter";
-  const cycle = (params.get("cycle") ?? "monthly") as "monthly" | "annual";
+  const plan  = params?.get("plan") ?? "starter";
+  const cycle = (params?.get("cycle") ?? "monthly") as "monthly" | "annual";
 
   const [paymentMethods, setPaymentMethods] = useState<string[]>(["card", "boleto"]);
   const [loading, setLoading] = useState(false);

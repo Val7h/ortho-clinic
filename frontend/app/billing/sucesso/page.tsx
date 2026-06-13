@@ -6,7 +6,7 @@ import { CheckCircle, ArrowRight, FileText, Zap } from "lucide-react";
 
 function SucessoContent() {
   const params = useSearchParams();
-  const sessionId = params.get("session_id");
+  const sessionId = params?.get("session_id");
 
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4 py-16">
