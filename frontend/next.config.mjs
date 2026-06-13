@@ -44,8 +44,6 @@ const nextConfig = {
   experimental: {
     // Partial pre-rendering: static shell + streaming dynamic parts
     ppr: false, // enable when Next 15 stable
-    // Inline critical CSS for faster FCP
-    optimizeCss: true,
     // Faster module resolution
     optimizePackageImports: [
       "lucide-react",
