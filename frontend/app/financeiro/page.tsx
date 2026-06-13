@@ -334,7 +334,7 @@ export default function FinanceiroPage() {
               isLoading={saving}
               onClick={() => {
                 const form_el = document.querySelector('form[data-financeiro-form]') as HTMLFormElement;
-                if (form_el) form_el.dispatchEvent(new Event('submit', { bubbles: true }));
+                if (form_el) form_el.requestSubmit();
               }}
             >
               {saving ? 'Salvando...' : 'Salvar'}
