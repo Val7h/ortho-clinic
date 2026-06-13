@@ -17,5 +17,15 @@
     "paths": { "@/*": ["./*"] }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules"]
+  "exclude": [
+    "node_modules",
+    "__tests__/**",
+    "components/__tests__/**",
+    "e2e/**",
+    "lib/i18n/**",
+    "lib/settings/**",
+    "components/Settings/**",
+    "components/LanguageSwitcher.tsx",
+    "app/i18n-provider.tsx"
+  ]
 }
