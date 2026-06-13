@@ -11,8 +11,8 @@ jobs:
     steps:
       - name: Ping OrthoClinic Backend
         run: |
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://ortho-backend.onrender.com/health)
-          echo "ortho-backend: $STATUS"
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://ortho-clinic-ldcd.onrender.com/health)
+          echo "ortho-clinic: $STATUS"
           if [ "$STATUS" = "200" ]; then echo "✅ Backend ativo"; else echo "⚠️ Backend retornou $STATUS"; fi
       - name: Ping OrthoClinic Frontend
         run: |

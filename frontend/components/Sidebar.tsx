@@ -12,11 +12,13 @@ export function Sidebar() {
   const { user, logout } = useAuth();
   const [isOpen, setIsOpen] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   useEffect(() => {
     // Detectar se está em mobile
     const handleResize = () => {
-      setIsMobile(window.innerWidth < 1024);
+      setIsMobile(window.innerWidth < 768);
     };
 
     handleResize();
@@ -55,7 +57,7 @@ export function Sidebar() {
     },
     {
       label: 'Receitas',
-      href: '/pacientes',
+      href: '/receitas',
       icon: '💊',
       roles: ['admin', 'doctor'],
     },
@@ -110,7 +112,7 @@ export function Sidebar() {
       {/* Botão toggle para mobile */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="fixed top-4 left-4 z-50 p-2 lg:hidden bg-blue-600 text-white rounded-md"
+        className="fixed top-4 left-4 z-50 p-2 md:hidden bg-blue-600 text-white rounded-md"
       >
         {isOpen ? '✕' : '☰'}
       </button>
@@ -119,7 +121,7 @@ export function Sidebar() {
       <aside
         className={`fixed left-0 top-0 h-screen w-64 bg-gradient-to-b from-blue-900 to-blue-800 text-white overflow-y-auto transition-all duration-300 ${
           isOpen ? 'translate-x-0' : '-translate-x-full'
-        } lg:translate-x-0 z-40`}
+        } md:translate-x-0 z-40`}
       >
         {/* Logo */}
         <div className="p-4 border-b border-blue-700 flex justify-center">
@@ -161,14 +163,18 @@ export function Sidebar() {
         <div className="p-4">
           <p className="text-xs font-semibold text-blue-300 mb-3 uppercase">Minha Conta</p>
 
-          <div className="bg-blue-700 rounded-lg p-3 mb-3">
-            <p className="text-sm font-semibold truncate">{user?.name}</p>
-            <p className="text-xs text-blue-200 truncate">{user?.email}</p>
-            <span className="inline-block mt-2 px-2 py-1 text-xs bg-blue-600 rounded">
-              {user?.role === 'doctor' && '👨‍⚕️ Médico'}
-              {user?.role === 'secretary' && '👩‍💼 Secretária'}
-              {user?.role === 'admin' && '⚙️ Admin'}
-            </span>
+          <div className="bg-blue-700 rounded-lg p-3 mb-3" suppressHydrationWarning>
+            {mounted && (
+              <>
+                <p className="text-sm font-semibold truncate">{user?.name}</p>
+                <p className="text-xs text-blue-200 truncate">{user?.email}</p>
+                <span className="inline-block mt-2 px-2 py-1 text-xs bg-blue-600 rounded">
+                  {user?.role === 'doctor' && '👨‍⚕️ Médico'}
+                  {user?.role === 'secretary' && '👩‍💼 Secretária'}
+                  {user?.role === 'admin' && '⚙️ Admin'}
+                </span>
+              </>
+            )}
           </div>
 
           {/* Botão Logout */}
@@ -190,7 +196,7 @@ export function Sidebar() {
       {/* Overlay para mobile */}
       {isOpen && (
         <div
-          className="fixed inset-0 bg-black bg-opacity-50 lg:hidden z-30"
+          className="fixed inset-0 bg-black bg-opacity-50 md:hidden z-30"
           onClick={() => setIsOpen(false)}
         />
       )}

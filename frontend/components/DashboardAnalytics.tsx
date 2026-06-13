@@ -214,7 +214,7 @@ export const DashboardAnalytics = ({ stats }: DashboardAnalyticsProps) => {
             <h3 className="font-bold text-slate-900 dark:text-slate-50 mb-4">
               📊 Tipo de Consulta
             </h3>
-            <ResponsiveContainer width="100%" height={300}>
+            <ResponsiveContainer key={`pie-${period}`} width="100%" height={300}>
               <PieChart>
                 <Pie
                   data={consultasData}

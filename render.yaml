@@ -23,7 +23,7 @@ services:
     startCommand: node .next/standalone/server.js
     envVars:
       - key: NEXT_PUBLIC_API_URL
-        value: https://ortho-backend.onrender.com
+        value: https://ortho-clinic-ldcd.onrender.com
       - key: NODE_VERSION
         value: "20"
       - key: PORT

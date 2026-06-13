@@ -139,7 +139,7 @@ export default function FinanceiroPage() {
             >
               <ChevronDown className="h-5 w-5 rotate-90 text-slate-500" />
             </button>
-            <span className="text-lg font-bold text-slate-900">
+            <span className="text-lg font-bold text-slate-900 dark:text-slate-50">
               {MONTHS_PT[month - 1]} {year}
             </span>
             <button
@@ -283,7 +283,7 @@ export default function FinanceiroPage() {
                       <Icon className="h-5 w-5" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="truncate text-sm font-semibold text-slate-900">
+                      <p className="truncate text-sm font-semibold text-slate-900 dark:text-slate-50">
                         {patients.find((p) => p.id === r.patient_id)?.name || `Paciente #${r.patient_id}`}
                       </p>
                       <p className="mt-0.5 truncate text-xs text-slate-600">

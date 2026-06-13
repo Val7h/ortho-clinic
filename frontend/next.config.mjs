@@ -9,7 +9,7 @@ const nextConfig = {
   images: {
     remotePatterns: [
       { protocol: "http",  hostname: "localhost" },
-      { protocol: "https", hostname: "ortho-backend.onrender.com" },
+      { protocol: "https", hostname: "ortho-clinic-ldcd.onrender.com" },
     ],
     // Prefer AVIF → WebP → original. Browser picks best supported format.
     formats: ["image/avif", "image/webp"],

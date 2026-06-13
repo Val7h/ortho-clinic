@@ -36,7 +36,7 @@ kombu>=5.3.0                    # Celery messaging library (transitive, made exp
 python3-saml==1.16.0           # SAML 2.0 Service Provider (python3-saml)
 pyotp==2.9.0                   # TOTP (RFC 6238) — Google Authenticator compatible
 qrcode[pil]==7.4.2             # QR code generation for TOTP enrollment
-py_webauthn==2.1.0             # WebAuthn / FIDO2 / Passkeys (FIDO2 level 2)
+webauthn==2.1.0                # WebAuthn / FIDO2 / Passkeys (FIDO2 level 2)
 cryptography>=43.0.0           # Fernet symmetric encryption for TOTP secrets (already transitive)
 
 # Enterprise Billing — Sprint 8

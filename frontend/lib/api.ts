@@ -9,8 +9,8 @@ const API_URL =
     window.location.hostname.startsWith('localhost:')
   )
     ? 'http://localhost:8003'
-    : 'https://ortho-backend.onrender.com') ||
-  'https://ortho-backend.onrender.com';
+    : 'https://ortho-clinic-ldcd.onrender.com') ||
+  'https://ortho-clinic-ldcd.onrender.com';
 
 export const api = axios.create({
   baseURL: API_URL,

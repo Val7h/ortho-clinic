@@ -53,67 +53,6 @@ export default function Dashboard() {
         {/* ── ANALYTICS DASHBOARD ───────────────────────────────────── */}
         {stats && <DashboardAnalytics stats={stats} />}
 
-        {/* ── Stats row ────── */}
-        {stats && (
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-            {[
-              {
-                label: 'Receita',
-                value: stats.revenue || 'R$ 0',
-                icon: DollarSign,
-                change: '+8%',
-                positive: true,
-              },
-              {
-                label: 'Consultas',
-                value: stats.appointments || 0,
-                icon: Calendar,
-                change: '+5%',
-                positive: true,
-              },
-              {
-                label: 'Pacientes',
-                value: stats.patients || 0,
-                icon: Users,
-                change: '+2%',
-                positive: true,
-              },
-              {
-                label: 'Taxa Retorno',
-                value: stats.returnRate || '0%',
-                icon: TrendingUp,
-                change: '-1%',
-                positive: false,
-              },
-            ].map((stat, idx) => {
-              const Icon = stat.icon;
-              return (
-                <Card key={idx} shadow="sm">
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
-                          {stat.label}
-                        </p>
-                        <p className="mt-1 text-xl font-bold text-slate-900 dark:text-white">
-                          {stat.value}
-                        </p>
-                      </div>
-                      <Icon className="h-8 w-8 text-slate-300 dark:text-slate-700" />
-                    </div>
-                    <Badge
-                      variant={stat.positive ? 'success' : 'warning'}
-                      className="mt-2"
-                    >
-                      {stat.change}
-                    </Badge>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        )}
-
         {/* ── Modules ────── */}
         <div>
           <div className="mb-4 flex items-center justify-between">
@@ -195,9 +134,7 @@ export default function Dashboard() {
                 color: 'bg-teal-500',
               },
             ].map((module) => (
-              <Link key={module.href} href={module.href}>
-                <ModuleCard {...module} />
-              </Link>
+              <ModuleCard key={module.href} {...module} />
             ))}
           </div>
         </div>

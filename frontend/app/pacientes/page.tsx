@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Plus, Search, Users, WifiOff, Filter, X,
   ChevronDown, QrCode,
@@ -36,6 +37,7 @@ const OVERSCAN = 5;    // extra rows rendered above/below viewport
 // ── Component ──────────────────────────────────────────────────────────────
 
 export default function PatientsPage() {
+  const router = useRouter();
   const { isOnline, putMany, search: cacheSearch } = usePatientCache();
   const signal = useAbortOnUnmount();
 
@@ -145,19 +147,16 @@ export default function PatientsPage() {
       back="/"
       actions={
         <div className="flex items-center gap-2">
-          <Link href="/pacientes/scanner">
-            <Button
-              variant="secondary"
-              size="sm"
-              icon={<QrCode className="h-4 w-4" />}
-              aria-label="Scanner QR/Código de barras"
-            />
-          </Link>
-          <Link href="/pacientes/novo">
-            <Button size="sm" icon={<Plus className="h-4 w-4" />}>
-              Novo
-            </Button>
-          </Link>
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={<QrCode className="h-4 w-4" />}
+            aria-label="Scanner QR/Código de barras"
+            onClick={() => router.push('/pacientes/scanner')}
+          />
+          <Button size="sm" icon={<Plus className="h-4 w-4" />} onClick={() => router.push('/pacientes/novo')}>
+            Novo
+          </Button>
         </div>
       }
     >
@@ -305,9 +304,13 @@ export default function PatientsPage() {
                 : 'Comece cadastrando seu primeiro paciente'}
             </p>
             {!rawSearch && activeFilterCount === 0 && (
-              <Link href="/pacientes/novo" className="mt-4 inline-block">
-                <Button variant="primary">Cadastrar primeiro paciente</Button>
-              </Link>
+              <Button
+                variant="primary"
+                className="mt-4"
+                onClick={() => router.push('/pacientes/novo')}
+              >
+                Cadastrar primeiro paciente
+              </Button>
             )}
           </div>
         ) : (
@@ -328,7 +331,7 @@ export default function PatientsPage() {
               ref={scrollRef}
               onScroll={handleScroll}
               className="relative overflow-y-auto"
-              style={{ maxHeight: 'calc(100vh - 260px)' }}
+              style={{ height: 'calc(100vh - 260px)' }}
             >
               {/* Total height spacer */}
               <div style={{ height: totalHeight, position: 'relative' }}>

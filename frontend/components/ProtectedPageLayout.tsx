@@ -5,7 +5,7 @@ import { Sidebar } from './Sidebar';
 import NavBar from './NavBar';
 import { useAuth } from './AuthProvider';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 
 interface ProtectedPageLayoutProps {
   title: string;
@@ -24,20 +24,14 @@ export function ProtectedPageLayout({
 }: ProtectedPageLayoutProps) {
   const { user, loading } = useAuth();
   const router = useRouter();
-  const [checked, setChecked] = useState(false);
 
-  // Redirecionar apenas UMA VEZ quando não autenticado
   useEffect(() => {
-    if (!loading && !user && checked === false) {
-      setChecked(true);
+    if (!loading && !user) {
       router.push('/login');
-    } else if (!loading && user) {
-      setChecked(true);
     }
-  }, [loading, user, router, checked]);
+  }, [loading, user, router]);
 
-  // Mostrar loading enquanto verifica autenticação
-  if (loading || !checked) {
+  if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-slate-50">
         <div className="text-center">
@@ -48,25 +42,19 @@ export function ProtectedPageLayout({
     );
   }
 
-  // Se não tem usuário e já foi verificado, redireciona
   if (!user) {
     return null;
   }
 
   return (
     <div className="flex h-screen bg-gray-100 overflow-hidden">
-      {/* Sidebar */}
-      <div className="hidden lg:block fixed left-0 top-0 h-screen w-64 z-40 border-r border-gray-200">
-        <Sidebar />
-      </div>
-
-      {/* Sidebar mobile */}
-      <div className="lg:hidden fixed left-0 top-0 h-screen w-64 z-40 border-r border-gray-200">
+      {/* Sidebar — montada uma única vez, visibilidade por CSS */}
+      <div className="hidden md:block fixed left-0 top-0 h-screen w-64 z-40 border-r border-gray-200">
         <Sidebar />
       </div>
 
       {/* Conteúdo Principal */}
-      <main className="flex-1 lg:ml-64 overflow-auto flex flex-col">
+      <main className="flex-1 md:ml-64 overflow-auto flex flex-col">
         <NavBar
           title={title}
           subtitle={subtitle}

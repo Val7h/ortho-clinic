@@ -46,12 +46,9 @@ def create_record(data: FinancialIn, db: Session = Depends(get_db), current_user
         raise HTTPException(404, "Paciente não encontrado")
     if current_user.role != "superadmin" and p.organization_id != current_user.organization_id:
         raise HTTPException(403, "Acesso negado: paciente não pertence à sua organização")
-    record = FinancialRecord(
-        **data.model_dump(exclude_none=False),
-        date=data.date or date.today(),
-    )
-    if data.date is None:
-        record.date = date.today()
+    dump = data.model_dump(exclude_none=False)
+    dump['date'] = data.date or date.today()
+    record = FinancialRecord(**dump)
     db.add(record)
     db.commit()
     db.refresh(record)

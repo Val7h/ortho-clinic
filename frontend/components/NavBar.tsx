@@ -118,6 +118,8 @@ function UserMenu() {
 
 export default function NavBar({ title, subtitle, back, actions }: NavBarProps) {
   const router = useRouter();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
   // NavigationProvider is always mounted in the root layout — safe to call unconditionally
   const { toggleDrawer } = useNavigation();
 
@@ -149,12 +151,12 @@ export default function NavBar({ title, subtitle, back, actions }: NavBarProps) 
             <button
               onClick={toggleDrawer}
               aria-label="Abrir menu de navegação"
-              className="lg:hidden p-2 rounded-xl hover:bg-white/15 active:bg-white/25 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
+              className="md:hidden p-2 rounded-xl hover:bg-white/15 active:bg-white/25 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
               data-testid="nav-hamburger"
             >
               <Menu className="w-5 h-5 text-white" aria-hidden="true" />
             </button>
-            <span className="hidden lg:block">
+            <span className="hidden md:block">
               <Logo width={45} height={45} />
             </span>
           </div>
@@ -167,11 +169,11 @@ export default function NavBar({ title, subtitle, back, actions }: NavBarProps) 
           )}
         </div>
 
-        <div className="flex items-center gap-2 text-white">
+        <div className="flex items-center gap-2 text-white" suppressHydrationWarning>
           {actions}
           <ThemeToggle />
           <NotificationCenter />
-          <UserMenu />
+          {mounted && <UserMenu />}
         </div>
       </div>
     </header>

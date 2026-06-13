@@ -13,7 +13,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { Phone, Shield, ChevronRight } from "lucide-react";
+import { Phone, Shield, ChevronRight, AlertCircle } from "lucide-react";
 import { calcAge } from "@/lib/utils";
 import { memo, useState } from "react";
 
@@ -54,7 +54,7 @@ function initials(name: string): string {
 }
 
 const API_URL =
-  process.env.NEXT_PUBLIC_API_URL || "https://ortho-backend.onrender.com";
+  process.env.NEXT_PUBLIC_API_URL || "https://ortho-clinic-ldcd.onrender.com";
 
 // ── Avatar — next/image for automatic WebP + lazy loading ─────────────────
 
@@ -131,6 +131,15 @@ function PatientCardBase({ patient }: { patient: Patient }) {
 
         {/* Right side */}
         <div className="flex items-center gap-2 flex-shrink-0">
+          {(!patient.phone || !patient.birthdate) && (
+            <span
+              title="Perfil incompleto — faltam dados obrigatórios"
+              className="flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-700"
+            >
+              <AlertCircle className="w-3 h-3" aria-hidden />
+              Incompleto
+            </span>
+          )}
           {!!patient.consultation_count && patient.consultation_count > 0 && (
             <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-brand-50 dark:bg-brand-900/40 text-brand-600 dark:text-brand-300 border border-brand-100 dark:border-brand-700">
               {patient.consultation_count}×
