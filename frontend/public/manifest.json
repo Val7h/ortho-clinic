@@ -1,0 +1,41 @@
+{
+  "name": "OrthoClinic",
+  "short_name": "OrthoClinic",
+  "description": "Sistema de gestão de consultório ortopédico",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f1f5f9",
+  "theme_color": "#0F2D5E",
+  "orientation": "portrait-primary",
+  "lang": "pt-BR",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Nova Consulta",
+      "short_name": "Agendar",
+      "description": "Agendar nova consulta rapidamente",
+      "url": "/agenda?nova=true",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Novo Paciente",
+      "short_name": "Paciente",
+      "description": "Cadastrar novo paciente",
+      "url": "/pacientes?novo=true",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}
