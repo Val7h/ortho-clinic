@@ -150,48 +150,57 @@ def health():
     return {"status": "ok", "app": "OrthoClinic", "version": "2.0.0"}
 
 
-# ===== SERVE NEXT.JS FRONTEND =====
-# Montar arquivos estáticos do Next.js
+# ===== SERVE NEXT.JS FRONTEND (static export) =====
 from pathlib import Path
 from fastapi.responses import FileResponse
 
-# Em Docker: /app/main.py → /app = raiz do app
-# Em local: backend/main.py → backend = parent, frontend = sibling
-app_dir = Path(__file__).parent  # /app (em Docker) ou backend/ (local)
-nextjs_dir = app_dir / ".next"   # /app/.next (Docker) ou backend/.next (local)
-public_dir = app_dir / "public"  # /app/public (Docker) ou backend/public (local)
+app_dir = Path(__file__).parent  # /app (Docker) or backend/ (local)
 
-# Se não encontrar em app_dir, tenta no parent (para compatibilidade local)
-if not nextjs_dir.exists() and (app_dir.parent / "frontend" / ".next").exists():
-    nextjs_dir = app_dir.parent / "frontend" / ".next"
-    public_dir = app_dir.parent / "frontend" / "public"
+# Docker: Dockerfile copies frontend/out → /app/frontend_out
+# Local dev: frontend/out built locally
+_out_candidates = [
+    app_dir / "frontend_out",                   # Docker path
+    app_dir.parent / "frontend" / "out",         # local dev path
+]
+out_dir: Path | None = next((p for p in _out_candidates if p.is_dir()), None)
 
-nextjs_static = nextjs_dir / "static"
+if out_dir:
+    # Serve /_next/static/ and public assets from within out/
+    _next_static = out_dir / "_next" / "static"
+    if _next_static.exists():
+        app.mount("/_next/static", StaticFiles(directory=_next_static), name="nextjs-static")
+    app.mount("/static", StaticFiles(directory=out_dir, html=True), name="nextjs-out")
 
-if nextjs_static.exists():
-    app.mount("/_next/static", StaticFiles(directory=nextjs_static), name="nextjs-static")
-
-if public_dir.exists():
-    app.mount("/public", StaticFiles(directory=public_dir), name="public")
-
-# Rota catch-all: serve o Next.js para qualquer rota não reconhecida
 @app.get("/{full_path:path}")
 async def serve_frontend(full_path: str):
-    # Se for requisição da API, deixa passar (já tratada pelos routers acima)
-    if full_path.startswith("api/") or full_path.startswith("auth/"):
+    if full_path.startswith(("api/", "auth/", "health", "docs", "openapi")):
         return {"error": "Not found"}
 
-    # Serve o index.html padrão do Next.js
-    # Next.js 13+ app router coloca output em .next/server/
-    possible_files = [
-        nextjs_dir / "server" / "app.js",
-        nextjs_dir / "server" / "app-page.js",
-        nextjs_dir / "standalone" / "main.js",
-    ]
+    if out_dir is None:
+        return {"error": "Frontend not properly built"}
 
-    for file_path in possible_files:
-        if file_path.exists():
-            return FileResponse(file_path)
+    # Try exact file match (e.g. /agenda → out/agenda.html or out/agenda/index.html)
+    for candidate in [
+        out_dir / full_path,
+        out_dir / full_path / "index.html",
+        out_dir / f"{full_path}.html",
+    ]:
+        if candidate.is_file():
+            return FileResponse(candidate)
 
-    # Último recurso: retorna erro
+    # Try replacing each dynamic segment with "_" placeholder to find the best shell
+    parts = [p for p in full_path.split("/") if p]
+    for i in range(len(parts)):
+        test_parts = parts.copy()
+        test_parts[i] = "_"
+        test_path = "/".join(test_parts)
+        candidate = out_dir / test_path / "index.html"
+        if candidate.is_file():
+            return FileResponse(candidate, media_type="text/html")
+
+    # SPA fallback: serve root index.html for all unmatched routes
+    root_index = out_dir / "index.html"
+    if root_index.exists():
+        return FileResponse(root_index, media_type="text/html")
+
     return {"error": "Frontend not properly built"}

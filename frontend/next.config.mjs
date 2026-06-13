@@ -1,24 +1,17 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: "standalone",
+  output: "export",
 
   // ── Compression ──────────────────────────────────────────────────────────
   compress: true,
 
   // ── Image optimisation ──────────────────────────────────────────────────
   images: {
+    unoptimized: true,
     remotePatterns: [
       { protocol: "http",  hostname: "localhost" },
       { protocol: "https", hostname: "ortho-clinic-ldcd.onrender.com" },
     ],
-    // Prefer AVIF → WebP → original. Browser picks best supported format.
-    formats: ["image/avif", "image/webp"],
-    // Serve device-appropriate resolutions for patient photos
-    deviceSizes: [320, 420, 640, 750, 828, 1080, 1200],
-    imageSizes: [48, 64, 96, 128, 192],
-    // Aggressive caching — medical app images rarely change
-    minimumCacheTTL: 3600,
-    // Keep svg unoptimized (logo etc)
     dangerouslyAllowSVG: true,
     contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
   },
