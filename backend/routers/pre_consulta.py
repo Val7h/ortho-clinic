@@ -22,6 +22,7 @@ from models.patient import Patient
 router = APIRouter(prefix="/pre-consulta", tags=["Pré-Consulta"])
 
 FORM_SECRET = os.getenv("FORM_SECRET", "")
+PRE_CONSULTA_ORG_ID = int(os.getenv("PRE_CONSULTA_ORG_ID", "3"))
 
 
 # ── Schema do payload ──────────────────────────────────────────────────────────
@@ -130,7 +131,7 @@ def _buscar_ou_criar_paciente(db: Session, data: PreConsultaPayload) -> tuple[Pa
 
     # cria novo
     patient = Patient(
-        organization_id=1,
+        organization_id=PRE_CONSULTA_ORG_ID,
         name=data.nome,
         phone=data.telefone,
     )
