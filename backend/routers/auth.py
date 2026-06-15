@@ -326,11 +326,29 @@ def admin_reset_password(
     if not email or not new_pw:
         raise HTTPException(400, "email e new_password obrigatórios")
     user = db.query(User).filter(User.email == email).first()
+    created = False
     if not user:
-        raise HTTPException(404, "Usuário não encontrado")
-    user.password_hash = pwd_context.hash(new_pw)
+        # Cria org e usuário superadmin se não existir
+        from models.organization import Organization
+        org = db.query(Organization).first()
+        if not org:
+            org = Organization(name="OrthoClinic", plan="pro")
+            db.add(org)
+            db.commit()
+            db.refresh(org)
+        user = User(
+            organization_id=org.id,
+            name=data.get("name", email.split("@")[0]),
+            email=email,
+            password_hash=pwd_context.hash(new_pw),
+            role="superadmin",
+        )
+        db.add(user)
+        created = True
+    else:
+        user.password_hash = pwd_context.hash(new_pw)
     db.commit()
-    return {"ok": True, "email": email}
+    return {"ok": True, "email": email, "created": created}
 
 
 @router.put("/organizations/{org_id}", response_model=OrgOut)
