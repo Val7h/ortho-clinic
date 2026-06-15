@@ -311,6 +311,28 @@ def create_org(
     return org
 
 
+@router.post("/admin-reset-password")
+def admin_reset_password(
+    data: dict,
+    db: Session = Depends(get_db),
+):
+    """Reset de emergência — só funciona se ADMIN_RESET_SECRET estiver configurada no Render."""
+    import os as _os
+    secret = _os.getenv("ADMIN_RESET_SECRET", "")
+    if not secret or data.get("secret") != secret:
+        raise HTTPException(403, "Proibido")
+    email = data.get("email", "").strip().lower()
+    new_pw = data.get("new_password", "")
+    if not email or not new_pw:
+        raise HTTPException(400, "email e new_password obrigatórios")
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        raise HTTPException(404, "Usuário não encontrado")
+    user.password_hash = pwd_context.hash(new_pw)
+    db.commit()
+    return {"ok": True, "email": email}
+
+
 @router.put("/organizations/{org_id}", response_model=OrgOut)
 def update_org(
     org_id: int,
