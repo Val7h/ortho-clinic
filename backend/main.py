@@ -166,10 +166,43 @@ app.include_router(audit_router)
 def startup():
     init_db()
     migrate_db()
-    # Seed desabilitado temporariamente - problema de argon2-cffi
-    # if os.getenv("ENVIRONMENT", "development") != "production":
-    #     from seed import seed
-    #     seed()
+    _ensure_superadmin()
+
+
+def _ensure_superadmin():
+    """Cria superadmin padrão se o banco estiver vazio (ex: SQLite sem disco persistente)."""
+    from database import SessionLocal
+    from models.organization import Organization, User
+    from passlib.context import CryptContext as _CryptContext
+
+    admin_email = os.getenv("SEED_ADMIN_EMAIL", "valthguime@gmail.com")
+    admin_pass  = os.getenv("SEED_ADMIN_PASSWORD", "Ortho2026!")
+
+    db = SessionLocal()
+    try:
+        if db.query(User).count() > 0:
+            return
+        org = db.query(Organization).first()
+        if not org:
+            org = Organization(name="OrthoClinic", plan="pro")
+            db.add(org)
+            db.commit()
+            db.refresh(org)
+        pw_ctx = _CryptContext(schemes=["bcrypt"], deprecated="auto")
+        user = User(
+            organization_id=org.id,
+            name="Dr. Valther",
+            email=admin_email,
+            password_hash=pw_ctx.hash(admin_pass),
+            role="superadmin",
+        )
+        db.add(user)
+        db.commit()
+        print(f"✓ Superadmin criado: {admin_email}")
+    except Exception as e:
+        print(f"! Erro ao criar superadmin: {e}")
+    finally:
+        db.close()
 
 
 @app.get("/health")
