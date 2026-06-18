@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import os
@@ -232,12 +232,31 @@ if out_dir:
     app.mount("/static", StaticFiles(directory=out_dir, html=True), name="nextjs-out")
 
 @app.get("/{full_path:path}")
-async def serve_frontend(full_path: str):
+async def serve_frontend(full_path: str, request: Request):
     if full_path.startswith(("api/", "auth/", "health", "docs", "openapi")):
         return {"error": "Not found"}
 
     if out_dir is None:
         return {"error": "Frontend not properly built"}
+
+    # Next.js RSC payload requests: *.txt?_rsc=... or ?_rsc= on any path.
+    # If we serve the root index.html here, Next.js interprets it as the root
+    # route RSC payload and renders the dashboard instead of the target page.
+    # Return 404 so Next.js falls back to a hard navigation, which correctly
+    # fetches the HTML shell for the target path.
+    is_rsc = full_path.endswith(".txt") or "_rsc" in request.query_params
+    if is_rsc:
+        # Try to serve the exact RSC file first (e.g. out/pacientes/_/index.txt)
+        rsc_base = full_path[:-4] if full_path.endswith(".txt") else full_path
+        parts = [p for p in rsc_base.split("/") if p]
+        for i in range(len(parts)):
+            test = parts.copy()
+            test[i] = "_"
+            candidate = out_dir / "/".join(test) / "index.txt"
+            if candidate.is_file():
+                return FileResponse(candidate, media_type="text/x-component")
+        from fastapi.responses import Response
+        return Response(status_code=404)
 
     # Try exact file match (e.g. /agenda → out/agenda.html or out/agenda/index.html)
     for candidate in [
