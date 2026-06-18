@@ -176,8 +176,8 @@ class OAuthToken(Base):
     revoked_at         = Column(DateTime(timezone=True), nullable=True)
     revocation_reason  = Column(String(100), nullable=True)  # "logout" | "rotation" | "admin"
 
-    # Refresh token rotation: link child → parent
-    parent_jti         = Column(String(64), ForeignKey("oauth_tokens.jti"), nullable=True)
+    # Refresh token rotation: link child → parent (no DB-level FK; jti lookup at app layer)
+    parent_jti         = Column(String(64), nullable=True, index=True)
 
     # IP / UA for audit
     ip_address         = Column(String(45), nullable=True)
