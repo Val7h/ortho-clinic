@@ -240,21 +240,25 @@ async def serve_frontend(full_path: str, request: Request):
         return {"error": "Frontend not properly built"}
 
     # Next.js RSC payload requests: *.txt?_rsc=... or ?_rsc= on any path.
-    # If we serve the root index.html here, Next.js interprets it as the root
-    # route RSC payload and renders the dashboard instead of the target page.
-    # Return 404 so Next.js falls back to a hard navigation, which correctly
-    # fetches the HTML shell for the target path.
+    # The static export generates _.txt (and _.html) for dynamic routes like [id].
+    # We serve the matching _ placeholder .txt so client-side navigation works.
+    # For unknown paths, return 404 — this causes Next.js to do a hard navigation
+    # instead of rendering the wrong component tree (e.g. the dashboard root).
     is_rsc = full_path.endswith(".txt") or "_rsc" in request.query_params
     if is_rsc:
-        # Try to serve the exact RSC file first (e.g. out/pacientes/_/index.txt)
         rsc_base = full_path[:-4] if full_path.endswith(".txt") else full_path
         parts = [p for p in rsc_base.split("/") if p]
         for i in range(len(parts)):
             test = parts.copy()
             test[i] = "_"
-            candidate = out_dir / "/".join(test) / "index.txt"
-            if candidate.is_file():
-                return FileResponse(candidate, media_type="text/x-component")
+            test_path = "/".join(test)
+            # Static export generates out/pacientes/_.txt (not out/pacientes/_/index.txt)
+            for candidate in [
+                out_dir / f"{test_path}.txt",
+                out_dir / test_path / "index.txt",
+            ]:
+                if candidate.is_file():
+                    return FileResponse(candidate, media_type="text/x-component")
         from fastapi.responses import Response
         return Response(status_code=404)
 
@@ -267,15 +271,20 @@ async def serve_frontend(full_path: str, request: Request):
         if candidate.is_file():
             return FileResponse(candidate)
 
-    # Try replacing each dynamic segment with "_" placeholder to find the best shell
+    # Try replacing each dynamic segment with "_" placeholder.
+    # Static export generates out/pacientes/_.html for /pacientes/[id]
+    # and out/pacientes/_/consulta.html for /pacientes/[id]/consulta.
     parts = [p for p in full_path.split("/") if p]
     for i in range(len(parts)):
         test_parts = parts.copy()
         test_parts[i] = "_"
         test_path = "/".join(test_parts)
-        candidate = out_dir / test_path / "index.html"
-        if candidate.is_file():
-            return FileResponse(candidate, media_type="text/html")
+        for candidate in [
+            out_dir / f"{test_path}.html",
+            out_dir / test_path / "index.html",
+        ]:
+            if candidate.is_file():
+                return FileResponse(candidate, media_type="text/html")
 
     # SPA fallback: serve root index.html for all unmatched routes
     root_index = out_dir / "index.html"
