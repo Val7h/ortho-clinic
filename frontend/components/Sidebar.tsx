@@ -14,60 +14,15 @@ export function Sidebar() {
   useEffect(() => setMounted(true), []);
 
   const menuItems = [
-    {
-      label: 'Dashboard',
-      href: '/',
-      icon: '📊',
-      roles: ['admin', 'doctor', 'secretary'],
-    },
-    {
-      label: 'Pacientes',
-      href: '/pacientes',
-      icon: '👥',
-      roles: ['admin', 'doctor', 'secretary'],
-    },
-    {
-      label: 'Consultas',
-      href: '/agenda',
-      icon: '📅',
-      roles: ['admin', 'doctor', 'secretary'],
-    },
-    {
-      label: 'Receitas',
-      href: '/receitas',
-      icon: '💊',
-      roles: ['admin', 'doctor'],
-    },
-    {
-      label: 'Anamnese',
-      href: '/anamnese',
-      icon: '📝',
-      roles: ['admin', 'doctor'],
-    },
-    {
-      label: 'Painel Atendimento',
-      href: '/painel',
-      icon: '⏱️',
-      roles: ['admin', 'doctor', 'secretary'],
-    },
-    {
-      label: 'Financeiro',
-      href: '/financeiro',
-      icon: '💰',
-      roles: ['admin'],
-    },
-    {
-      label: 'Usuários',
-      href: '/usuarios',
-      icon: '🔑',
-      roles: ['admin'],
-    },
-    {
-      label: 'Clínicas',
-      href: '/clinicas',
-      icon: '🏥',
-      roles: ['admin'],
-    },
+    // --- Fluxo clínico diário ---
+    { label: 'Agenda',       href: '/agenda',     icon: '📅', group: 'clinic', roles: ['admin', 'superadmin', 'doctor', 'secretary'] },
+    { label: 'Pacientes',    href: '/pacientes',  icon: '👥', group: 'clinic', roles: ['admin', 'superadmin', 'doctor', 'secretary'] },
+    { label: 'Atendimento',  href: '/painel',     icon: '⏱️', group: 'clinic', roles: ['admin', 'superadmin', 'doctor', 'secretary'] },
+    { label: 'Dashboard',    href: '/',           icon: '📊', group: 'clinic', roles: ['admin', 'superadmin', 'doctor'] },
+    // --- Administrativo ---
+    { label: 'Financeiro',   href: '/financeiro', icon: '💰', group: 'admin', roles: ['admin', 'superadmin'] },
+    { label: 'Equipe',       href: '/usuarios',   icon: '👤', group: 'admin', roles: ['admin', 'superadmin'] },
+    { label: 'Configurações',href: '/clinicas',   icon: '⚙️', group: 'admin', roles: ['admin', 'superadmin'] },
   ];
 
   const filteredMenuItems = menuItems.filter(
@@ -96,24 +51,35 @@ export function Sidebar() {
         </div>
 
         {/* Menu Principal */}
-        <nav className="p-4">
-          <p className="text-xs font-semibold text-blue-300 mb-3 uppercase">Menu Principal</p>
+        <nav className="p-4 flex-1">
+          <p className="text-xs font-semibold text-blue-300 mb-3 uppercase tracking-wider">Clínica</p>
 
-          <div className="space-y-2">
-            {filteredMenuItems.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
-                  isActive(item.href)
-                    ? 'bg-white text-blue-900 font-semibold shadow-lg'
-                    : 'text-blue-100 hover:bg-blue-700 hover:text-white'
-                }`}
-              >
-                <span className="text-xl">{item.icon}</span>
-                <span>{item.label}</span>
-              </Link>
-            ))}
+          <div className="space-y-1">
+            {filteredMenuItems.map((item, idx) => {
+              const isAdminItem = item.group === 'admin';
+              const prevIsNotAdmin = idx > 0 && filteredMenuItems[idx - 1].group !== 'admin';
+              return (
+                <div key={item.href}>
+                  {isAdminItem && prevIsNotAdmin && (
+                    <div className="pt-3 pb-2">
+                      <div className="border-t border-blue-700 mb-2" />
+                      <p className="text-xs font-semibold text-blue-400 uppercase tracking-wider px-1">Administração</p>
+                    </div>
+                  )}
+                  <Link
+                    href={item.href}
+                    className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-sm ${
+                      isActive(item.href)
+                        ? 'bg-white text-blue-900 font-semibold shadow-md'
+                        : 'text-blue-100 hover:bg-blue-700 hover:text-white'
+                    }`}
+                  >
+                    <span className="text-lg w-6 text-center">{item.icon}</span>
+                    <span>{item.label}</span>
+                  </Link>
+                </div>
+              );
+            })}
           </div>
         </nav>
 
