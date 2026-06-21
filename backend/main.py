@@ -85,11 +85,23 @@ app.add_middleware(AuditContextMiddleware)
 os.makedirs("uploads/photos", exist_ok=True)
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
-# Rotas públicas do frontend que colidem com handlers da API (mesmos paths).
-# Quando é um browser (Accept: text/html), serve o HTML shell antes dos handlers.
+# Rotas do frontend que colidem com handlers da API.
+# Prefixos com "/" = qualquer sub-path (ex: "anamnese/abc").
+# Sem "/" = exact ou sub-path (ex: "agenda" ou "agenda/2026-01-01").
+# Quando é um browser (Accept: text/html), serve o HTML shell.
 _FRONTEND_CONFLICT_PREFIXES = (
-    "anamnese/", "confirmar/", "agendar/", "documentos/publico/",
+    "agenda", "anamnese/", "confirmar/", "agendar/", "documentos/publico/",
 )
+
+def _is_frontend_conflict(path: str) -> bool:
+    for p in _FRONTEND_CONFLICT_PREFIXES:
+        if p.endswith("/"):
+            if path.startswith(p):
+                return True
+        else:
+            if path == p or path.startswith(p + "/"):
+                return True
+    return False
 
 @app.middleware("http")
 async def serve_frontend_for_browser(request, call_next):
@@ -98,15 +110,15 @@ async def serve_frontend_for_browser(request, call_next):
     if (
         request.method == "GET"
         and "text/html" in accept
-        and any(path.startswith(p) for p in _FRONTEND_CONFLICT_PREFIXES)
+        and _is_frontend_conflict(path)
         and out_dir is not None
     ):
         parts = [p for p in path.split("/") if p]
         for i in range(len(parts)):
             test = parts.copy(); test[i] = "_"
-            candidate = out_dir / "/".join(test) / "index.html"
-            if candidate.is_file():
-                return FileResponse(str(candidate), media_type="text/html")
+            for candidate in [out_dir / f"{'/'.join(test)}.html", out_dir / "/".join(test) / "index.html"]:
+                if candidate.is_file():
+                    return FileResponse(str(candidate), media_type="text/html")
         root = out_dir / "index.html"
         if root.exists():
             return FileResponse(str(root), media_type="text/html")
