@@ -10,31 +10,8 @@ export function Sidebar() {
   const router = useRouter();
   const pathname = usePathname();
   const { user, logout } = useAuth();
-  const [isOpen, setIsOpen] = useState(true);
-  const [isMobile, setIsMobile] = useState(false);
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
-
-  useEffect(() => {
-    // Detectar se está em mobile
-    const handleResize = () => {
-      setIsMobile(window.innerWidth < 768);
-    };
-
-    handleResize();
-    window.addEventListener('resize', handleResize);
-
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
-  useEffect(() => {
-    // Fechar sidebar em mobile ao navegar
-    if (isMobile) {
-      setIsOpen(false);
-    } else {
-      setIsOpen(true);
-    }
-  }, [pathname, isMobile]);
 
   const menuItems = [
     {
@@ -109,19 +86,9 @@ export function Sidebar() {
 
   return (
     <>
-      {/* Botão toggle para mobile */}
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="fixed top-4 left-4 z-50 p-2 md:hidden bg-blue-600 text-white rounded-md"
-      >
-        {isOpen ? '✕' : '☰'}
-      </button>
-
-      {/* Sidebar */}
+      {/* Sidebar — sempre visível */}
       <aside
-        className={`fixed left-0 top-0 h-screen w-64 bg-gradient-to-b from-blue-900 to-blue-800 text-white overflow-y-auto transition-all duration-300 ${
-          isOpen ? 'translate-x-0' : '-translate-x-full'
-        } md:translate-x-0 z-40`}
+        className="fixed left-0 top-0 h-screen w-64 bg-gradient-to-b from-blue-900 to-blue-800 text-white overflow-y-auto z-40"
       >
         {/* Logo */}
         <div className="p-4 border-b border-blue-700 flex justify-center">
@@ -137,12 +104,6 @@ export function Sidebar() {
               <Link
                 key={item.href}
                 href={item.href}
-                onClick={() => {
-                  // Fechar sidebar apenas em mobile ao navegar
-                  if (isMobile) {
-                    setIsOpen(false);
-                  }
-                }}
                 className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
                   isActive(item.href)
                     ? 'bg-white text-blue-900 font-semibold shadow-lg'
@@ -193,13 +154,6 @@ export function Sidebar() {
         </div>
       </aside>
 
-      {/* Overlay para mobile */}
-      {isOpen && (
-        <div
-          className="fixed inset-0 bg-black bg-opacity-50 md:hidden z-30"
-          onClick={() => setIsOpen(false)}
-        />
-      )}
     </>
   );
 }

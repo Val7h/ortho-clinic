@@ -48,13 +48,13 @@ export function ProtectedPageLayout({
 
   return (
     <div className="flex h-screen bg-gray-100 overflow-hidden">
-      {/* Sidebar — montada uma única vez, visibilidade por CSS */}
-      <div className="hidden md:block fixed left-0 top-0 h-screen w-64 z-40 border-r border-gray-200">
+      {/* Sidebar — sempre visível */}
+      <div className="fixed left-0 top-0 h-screen w-64 z-40">
         <Sidebar />
       </div>
 
       {/* Conteúdo Principal */}
-      <main className="flex-1 md:ml-64 overflow-auto flex flex-col">
+      <main className="flex-1 ml-64 overflow-auto flex flex-col">
         <NavBar
           title={title}
           subtitle={subtitle}

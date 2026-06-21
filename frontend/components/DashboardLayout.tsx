@@ -46,7 +46,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       <Sidebar />
 
       {/* Conteúdo Principal */}
-      <main className="flex-1 ml-0 lg:ml-64 overflow-auto">
+      <main className="flex-1 ml-64 overflow-auto">
         <div className="p-6">
           {children}
         </div>
