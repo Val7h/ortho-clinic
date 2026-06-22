@@ -1,0 +1,72 @@
+{
+  "app": {
+    "title": "OrthoClinic",
+    "description": "Système de gestion de cabinet orthodontique",
+    "copyright": "OrthoClinic · Premium Edition"
+  },
+  "common": {
+    "loading": "Chargement...",
+    "error": "Erreur",
+    "success": "Succès",
+    "warning": "Avertissement",
+    "info": "Information",
+    "confirm": "Confirmer",
+    "cancel": "Annuler",
+    "delete": "Supprimer",
+    "edit": "Modifier",
+    "save": "Enregistrer",
+    "close": "Fermer",
+    "back": "Retour",
+    "next": "Suivant",
+    "previous": "Précédent",
+    "export": "Exporter",
+    "import": "Importer",
+    "search": "Rechercher",
+    "filter": "Filtrer",
+    "sort": "Trier",
+    "more": "Plus",
+    "actions": "Actions",
+    "status": "Statut",
+    "created": "Créé",
+    "updated": "Mis à jour",
+    "deleted": "Supprimé",
+    "confirm_delete": "Êtes-vous sûr de vouloir supprimer cet élément?",
+    "confirm_delete_title": "Confirmer la suppression",
+    "operation_failed": "L'opération a échoué. Veuillez réessayer.",
+    "operation_success": "Opération terminée avec succès.",
+    "yes": "Oui",
+    "no": "Non",
+    "all": "Tous",
+    "none": "Aucun",
+    "optional": "Optionnel",
+    "required": "Obligatoire"
+  },
+  "pagination": {
+    "showing": "Affichage",
+    "of": "de",
+    "entries": "entrées",
+    "previous": "Précédent",
+    "next": "Suivant",
+    "first": "Première",
+    "last": "Dernière"
+  },
+  "time": {
+    "today": "Aujourd'hui",
+    "yesterday": "Hier",
+    "tomorrow": "Demain",
+    "this_week": "Cette semaine",
+    "last_week": "La semaine dernière",
+    "this_month": "Ce mois",
+    "last_month": "Le mois dernier",
+    "this_year": "Cette année",
+    "last_year": "L'année dernière"
+  },
+  "formatting": {
+    "currency_symbol": "€",
+    "decimal_separator": ",",
+    "thousands_separator": " ",
+    "date_format": "dd/MM/yyyy",
+    "time_format": "HH:mm",
+    "datetime_format": "dd/MM/yyyy HH:mm"
+  }
+}

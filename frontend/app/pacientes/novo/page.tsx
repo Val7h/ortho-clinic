@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import NavBar from "@/components/NavBar";
+import { PageWithSidebar } from "@/components/PageWithSidebar";
 import { patientsApi } from "@/lib/api";
 
 const BLOOD_TYPES = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"];
@@ -33,6 +34,7 @@ export default function NewPatientPage() {
   };
 
   return (
+    <PageWithSidebar>
     <div className="min-h-screen bg-slate-100">
       <NavBar title="Novo Paciente" back="/pacientes" />
 
@@ -189,5 +191,6 @@ export default function NewPatientPage() {
         </div>
       </form>
     </div>
+    </PageWithSidebar>
   );
 }

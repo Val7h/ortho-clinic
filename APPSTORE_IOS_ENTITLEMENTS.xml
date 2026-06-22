@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  OrthoClinic.entitlements
+  Bundle ID: com.orthoclinic.app
+  Sprint 6 - App Store Submission
+  Generated: 2026-06-12
+-->
+<plist version="1.0">
+<dict>
+
+  <!-- ============================= -->
+  <!-- PUSH NOTIFICATIONS            -->
+  <!-- ============================= -->
+  <!-- Purpose: Appointment reminders, confirmation alerts, clinic updates -->
+  <key>aps-environment</key>
+  <string>production</string>
+
+  <!-- ============================= -->
+  <!-- BACKGROUND FETCH              -->
+  <!-- ============================= -->
+  <!-- Purpose: Sync new appointments and patient updates when app is backgrounded -->
+  <key>com.apple.developer.background-task-scheduler</key>
+  <true/>
+
+  <!-- UIBackgroundModes must be set in Info.plist:         -->
+  <!--   <key>UIBackgroundModes</key>                       -->
+  <!--   <array>                                            -->
+  <!--     <string>fetch</string>                           -->
+  <!--     <string>remote-notification</string>             -->
+  <!--   </array>                                           -->
+
+  <!-- ============================= -->
+  <!-- KEYCHAIN SHARING              -->
+  <!-- ============================= -->
+  <!-- Purpose: Secure storage of auth tokens and biometric keys -->
+  <key>keychain-access-groups</key>
+  <array>
+    <string>$(AppIdentifierPrefix)com.orthoclinic.app</string>
+  </array>
+
+  <!-- ============================= -->
+  <!-- ASSOCIATED DOMAINS            -->
+  <!-- ============================= -->
+  <!-- Purpose: Universal Links for deep linking from WhatsApp confirmations -->
+  <key>com.apple.developer.associated-domains</key>
+  <array>
+    <string>applinks:orthoclinic.app</string>
+    <string>webcredentials:orthoclinic.app</string>
+  </array>
+
+</dict>
+</plist>

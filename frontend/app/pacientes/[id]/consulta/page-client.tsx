@@ -4,6 +4,7 @@ import { useParams, useRouter } from "next/navigation";
 import { Video, Upload, X, Image as ImageIcon, Trash2 } from "lucide-react";
 import toast from "react-hot-toast";
 import NavBar from "@/components/NavBar";
+import { PageWithSidebar } from "@/components/PageWithSidebar";
 import CidSearch from "@/components/CidSearch";
 import { consultationsApi, patientsApi, mediaApi } from "@/lib/api";
 
@@ -106,6 +107,7 @@ export default function ConsultationPage() {
   };
 
   return (
+    <PageWithSidebar>
     <div className="min-h-screen bg-slate-100">
       <NavBar
         title="Registro de Consulta"
@@ -423,5 +425,6 @@ export default function ConsultationPage() {
         </div>
       )}
     </div>
+    </PageWithSidebar>
   );
 }

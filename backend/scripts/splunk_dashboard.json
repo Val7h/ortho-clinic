@@ -1,0 +1,137 @@
+{
+  "title": "OrthoClinic Audit Log — Splunk Dashboard",
+  "description": "Pre-built Splunk dashboard for OrthoClinic audit log SIEM integration (Sprint 8)",
+  "version": "2.0",
+  "panels": [
+    {
+      "id": "panel_events_over_time",
+      "title": "Audit Events Over Time",
+      "type": "chart",
+      "search": "index=orthoclinic sourcetype=audit | timechart span=1h count by action",
+      "visualization": "line"
+    },
+    {
+      "id": "panel_top_actions",
+      "title": "Top 10 Audit Actions (Last 24h)",
+      "type": "chart",
+      "search": "index=orthoclinic sourcetype=audit earliest=-24h | top limit=10 action",
+      "visualization": "bar"
+    },
+    {
+      "id": "panel_failed_logins",
+      "title": "Failed Login Attempts",
+      "type": "timechart",
+      "search": "index=orthoclinic sourcetype=audit action=user.login_failed | timechart span=15m count",
+      "visualization": "column",
+      "alert": {
+        "condition": "count > 10",
+        "throttle_minutes": 15,
+        "severity": "high"
+      }
+    },
+    {
+      "id": "panel_patient_access",
+      "title": "Patient Record Access by Actor",
+      "type": "table",
+      "search": "index=orthoclinic sourcetype=audit action=patient.viewed | stats count by actor_id, resource_id | sort -count | head 50"
+    },
+    {
+      "id": "panel_bulk_exports",
+      "title": "Bulk Patient Exports (LGPD Alert)",
+      "type": "single_value",
+      "search": "index=orthoclinic sourcetype=audit action=patient.exported earliest=-1h | stats count",
+      "alert": {
+        "condition": "count >= 50",
+        "throttle_minutes": 60,
+        "severity": "critical",
+        "message": "Possible data exfiltration: {count} patient records exported in 1 hour"
+      }
+    },
+    {
+      "id": "panel_security_events",
+      "title": "Security Events",
+      "type": "table",
+      "search": "index=orthoclinic sourcetype=audit action IN (mfa.enabled, mfa.disabled, password.changed, sso.configured, ip_allowlist.changed) | table timestamp, actor_id, actor_ip, action, resource_id | sort -timestamp"
+    },
+    {
+      "id": "panel_geo_map",
+      "title": "Login Geo-Map",
+      "type": "map",
+      "search": "index=orthoclinic sourcetype=audit action=user.login | iplocation actor_ip | geostats count by Country"
+    },
+    {
+      "id": "panel_impossible_travel",
+      "title": "Impossible Travel Alerts",
+      "type": "table",
+      "search": "index=orthoclinic sourcetype=audit action=user.login | streamstats current=f last(actor_ip) AS prev_ip BY actor_id | where actor_ip!=prev_ip | table timestamp, actor_id, actor_ip, prev_ip"
+    },
+    {
+      "id": "panel_chain_integrity",
+      "title": "Chain Integrity Status",
+      "type": "single_value",
+      "search": "index=orthoclinic sourcetype=audit_chain_verify result=BROKEN | stats count",
+      "alert": {
+        "condition": "count > 0",
+        "throttle_minutes": 1440,
+        "severity": "critical",
+        "message": "AUDIT LOG TAMPER DETECTED — {count} organisations with broken HMAC chains"
+      }
+    },
+    {
+      "id": "panel_api_key_events",
+      "title": "API Key Lifecycle Events",
+      "type": "table",
+      "search": "index=orthoclinic sourcetype=audit action IN (api_key.created, api_key.rotated, api_key.revoked) | table timestamp, actor_id, action, resource_id | sort -timestamp | head 100"
+    },
+    {
+      "id": "panel_admin_changes",
+      "title": "Admin Configuration Changes",
+      "type": "table",
+      "search": "index=orthoclinic sourcetype=audit action IN (org.settings_changed, webhook.created, ip_allowlist.changed) | table timestamp, actor_id, actor_ip, action, organization_id, resource_id | sort -timestamp"
+    },
+    {
+      "id": "panel_monthly_volume",
+      "title": "Monthly Event Volume",
+      "type": "chart",
+      "search": "index=orthoclinic sourcetype=audit | timechart span=1month count",
+      "visualization": "column"
+    }
+  ],
+  "hec_config": {
+    "comment": "Configure Splunk HEC to receive from OrthoClinic SIEM_WEBHOOK_URL",
+    "source":     "orthoclinic",
+    "sourcetype": "audit",
+    "index":      "orthoclinic",
+    "endpoint":   "https://<splunk-host>:8088/services/collector/event",
+    "token":      "<HEC_TOKEN>",
+    "env_vars": {
+      "SIEM_WEBHOOK_URL":   "https://<splunk-host>:8088/services/collector/event",
+      "SIEM_WEBHOOK_TOKEN": "<HEC_TOKEN>",
+      "SIEM_CEF_ENABLED":   "0"
+    }
+  },
+  "datadog_config": {
+    "comment": "For Datadog Logs, set SIEM_WEBHOOK_URL to the Datadog log intake",
+    "endpoint":   "https://http-intake.logs.datadoghq.com/api/v2/logs",
+    "token_header": "DD-API-KEY",
+    "env_vars": {
+      "SIEM_WEBHOOK_URL":   "https://http-intake.logs.datadoghq.com/api/v2/logs",
+      "SIEM_WEBHOOK_TOKEN": "<DD_API_KEY>"
+    }
+  },
+  "elastic_config": {
+    "comment": "For Elastic SIEM, use Elastic Agent or the Elasticsearch ingest API",
+    "endpoint":   "https://<elastic-host>:9200/orthoclinic-audit/_doc",
+    "env_vars": {
+      "SIEM_WEBHOOK_URL":   "https://<elastic-host>:9200/orthoclinic-audit/_doc",
+      "SIEM_WEBHOOK_TOKEN": "<ELASTIC_API_KEY>"
+    }
+  },
+  "sentinel_config": {
+    "comment": "For Microsoft Sentinel, enable CEF syslog forwarding",
+    "env_vars": {
+      "SIEM_CEF_ENABLED": "1"
+    },
+    "syslog_forward": "rsyslog → Azure Monitor Agent → Log Analytics Workspace"
+  }
+}

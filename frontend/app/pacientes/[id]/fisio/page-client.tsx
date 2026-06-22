@@ -4,6 +4,7 @@ import { useParams } from "next/navigation";
 import { Trash2, Printer } from "lucide-react";
 import toast from "react-hot-toast";
 import NavBar from "@/components/NavBar";
+import { PageWithSidebar } from "@/components/PageWithSidebar";
 import { physioApi, patientsApi } from "@/lib/api";
 import { formatDate } from "@/lib/utils";
 
@@ -42,6 +43,7 @@ export default function PhysioPage() {
   };
 
   return (
+    <PageWithSidebar>
     <div className="min-h-screen bg-slate-100">
       <NavBar title="Encaminhamento de Fisioterapia" subtitle={patient?.name} back={`/pacientes/${pid}`} />
 
@@ -118,5 +120,6 @@ export default function PhysioPage() {
         )}
       </div>
     </div>
+    </PageWithSidebar>
   );
 }

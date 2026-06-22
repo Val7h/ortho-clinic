@@ -1,0 +1,31 @@
+{
+  "main": {
+    "dashboard": "Tableau de Bord",
+    "patients": "Patients",
+    "consultations": "Consultations",
+    "calendar": "Calendrier",
+    "financial": "Finances",
+    "clinics": "Cliniques",
+    "plans": "Plans",
+    "documents": "Documents",
+    "whatsapp": "WhatsApp",
+    "settings": "Paramètres",
+    "users": "Utilisateurs",
+    "reports": "Rapports"
+  },
+  "submenu": {
+    "my_profile": "Mon Profil",
+    "account_settings": "Paramètres du Compte",
+    "general_settings": "Paramètres Généraux",
+    "help": "Aide",
+    "documentation": "Documentation",
+    "logout": "Déconnexion"
+  },
+  "breadcrumb": {
+    "home": "Accueil"
+  },
+  "mobile": {
+    "menu": "Menu",
+    "close": "Fermer"
+  }
+}

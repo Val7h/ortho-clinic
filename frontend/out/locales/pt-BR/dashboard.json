@@ -1,0 +1,49 @@
+{
+  "title": "Painel",
+  "welcome": "Bem-vindo ao OrthoClinic",
+  "welcome_message": "Aqui está um resumo da sua clínica",
+  "quick_stats": {
+    "title": "Estatísticas Rápidas",
+    "total_patients": "Total de Pacientes",
+    "consultations_today": "Consultas Hoje",
+    "pending_approvals": "Aprovações Pendentes",
+    "revenue_month": "Receita Este Mês",
+    "no_data": "Sem dados"
+  },
+  "upcoming_consultations": {
+    "title": "Próximas Consultas",
+    "time": "Horário",
+    "patient": "Paciente",
+    "doctor": "Médico",
+    "room": "Sala",
+    "no_consultations": "Nenhuma consulta marcada para hoje",
+    "view_all": "Ver todas"
+  },
+  "recent_patients": {
+    "title": "Pacientes Recentes",
+    "name": "Nome",
+    "email": "E-mail",
+    "phone": "Telefone",
+    "last_visit": "Última Visita",
+    "no_patients": "Nenhum paciente recente"
+  },
+  "financial_overview": {
+    "title": "Visão Geral Financeira",
+    "total_revenue": "Receita Total",
+    "pending_payments": "Pagamentos Pendentes",
+    "expenses": "Despesas",
+    "balance": "Saldo"
+  },
+  "calendar": {
+    "title": "Calendário",
+    "today": "Hoje",
+    "week": "Semana",
+    "month": "Mês"
+  },
+  "notifications": {
+    "title": "Notificações",
+    "no_notifications": "Sem notificações",
+    "mark_all_read": "Marcar todas como lidas",
+    "view_all": "Ver todas"
+  }
+}

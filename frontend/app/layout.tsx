@@ -72,7 +72,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
      *                           without this React warns about className mismatch.
      */
     <html lang="pt-BR" dir="ltr" className={inter.variable} suppressHydrationWarning>
-      <body>
+      <body suppressHydrationWarning>
         {/*
          * Skip-to-content link (WCAG 2.4.1 — Bypass Blocks).
          * Visually hidden until focused; keyboard users can jump past the NavBar.

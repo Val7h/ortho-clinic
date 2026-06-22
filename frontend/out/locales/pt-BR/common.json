@@ -1,0 +1,72 @@
+{
+  "app": {
+    "title": "OrthoClinic",
+    "description": "Sistema de gestão de consultório ortopédico",
+    "copyright": "OrthoClinic · Premium Edition"
+  },
+  "common": {
+    "loading": "Carregando...",
+    "error": "Erro",
+    "success": "Sucesso",
+    "warning": "Aviso",
+    "info": "Informação",
+    "confirm": "Confirmar",
+    "cancel": "Cancelar",
+    "delete": "Deletar",
+    "edit": "Editar",
+    "save": "Salvar",
+    "close": "Fechar",
+    "back": "Voltar",
+    "next": "Próximo",
+    "previous": "Anterior",
+    "export": "Exportar",
+    "import": "Importar",
+    "search": "Buscar",
+    "filter": "Filtrar",
+    "sort": "Ordenar",
+    "more": "Mais",
+    "actions": "Ações",
+    "status": "Status",
+    "created": "Criado",
+    "updated": "Atualizado",
+    "deleted": "Deletado",
+    "confirm_delete": "Tem certeza que deseja deletar este item?",
+    "confirm_delete_title": "Confirmar exclusão",
+    "operation_failed": "A operação falhou. Por favor, tente novamente.",
+    "operation_success": "Operação realizada com sucesso.",
+    "yes": "Sim",
+    "no": "Não",
+    "all": "Todos",
+    "none": "Nenhum",
+    "optional": "Opcional",
+    "required": "Obrigatório"
+  },
+  "pagination": {
+    "showing": "Mostrando",
+    "of": "de",
+    "entries": "entradas",
+    "previous": "Anterior",
+    "next": "Próximo",
+    "first": "Primeira",
+    "last": "Última"
+  },
+  "time": {
+    "today": "Hoje",
+    "yesterday": "Ontem",
+    "tomorrow": "Amanhã",
+    "this_week": "Esta semana",
+    "last_week": "Semana passada",
+    "this_month": "Este mês",
+    "last_month": "Mês passado",
+    "this_year": "Este ano",
+    "last_year": "Ano passado"
+  },
+  "formatting": {
+    "currency_symbol": "R$",
+    "decimal_separator": ",",
+    "thousands_separator": ".",
+    "date_format": "dd/MM/yyyy",
+    "time_format": "HH:mm",
+    "datetime_format": "dd/MM/yyyy HH:mm"
+  }
+}

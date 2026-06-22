@@ -1,0 +1,11 @@
+{
+  "title": "Dashboard",
+  "welcome": "Willkommen zu OrthoClinic",
+  "welcome_message": "Hier ist eine Zusammenfassung Ihrer Klinik",
+  "quick_stats": {"title": "Schnellstatistiken", "total_patients": "Gesamtzahl der Patienten", "consultations_today": "Konsultationen heute", "pending_approvals": "Ausstehende Genehmigungen", "revenue_month": "Umsatz diesen Monat", "no_data": "Keine Daten"},
+  "upcoming_consultations": {"title": "Bevorstehende Konsultationen", "time": "Zeit", "patient": "Patient", "doctor": "Zahnarzt", "room": "Zimmer", "no_consultations": "Keine Konsultationen für heute geplant", "view_all": "Alle anzeigen"},
+  "recent_patients": {"title": "Aktuelle Patienten", "name": "Name", "email": "E-Mail", "phone": "Telefon", "last_visit": "Letzter Besuch", "no_patients": "Keine aktuellen Patienten"},
+  "financial_overview": {"title": "Finanzübersicht", "total_revenue": "Gesamtumsatz", "pending_payments": "Ausstehende Zahlungen", "expenses": "Ausgaben", "balance": "Bilanz"},
+  "calendar": {"title": "Kalender", "today": "Heute", "week": "Woche", "month": "Monat"},
+  "notifications": {"title": "Benachrichtigungen", "no_notifications": "Keine Benachrichtigungen", "mark_all_read": "Alle als gelesen markieren", "view_all": "Alle anzeigen"}
+}

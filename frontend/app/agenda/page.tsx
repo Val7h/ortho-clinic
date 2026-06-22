@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import NavBar from '@/components/NavBar';
+import { PageWithSidebar } from '@/components/PageWithSidebar';
 import { AppointmentFormModal } from '@/components/AppointmentFormModal';
 import { agendaApi, appointmentsApi, clinicApi } from '@/lib/api';
 import { useProtectedPage } from '@/components/AuthProvider';
@@ -334,6 +335,7 @@ export default function AgendaPage() {
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
+    <PageWithSidebar>
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
       <NavBar
         title="Agenda"
@@ -683,5 +685,6 @@ export default function AgendaPage() {
         />
       )}
     </div>
+    </PageWithSidebar>
   );
 }

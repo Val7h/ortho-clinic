@@ -5,6 +5,7 @@ import {
   Loader2, Eye, EyeOff, Shield, User, Building2,
 } from "lucide-react";
 import NavBar from "@/components/NavBar";
+import { PageWithSidebar } from "@/components/PageWithSidebar";
 import { Card, CardHeader, Badge, Button, Input, Modal, useModal } from "@/components/ui";
 import { authApi } from "@/lib/api";
 import { useProtectedPage } from "@/components/AuthProvider";
@@ -140,6 +141,7 @@ export default function UsuariosPage() {
 
   if (!isAdmin) {
     return (
+      <PageWithSidebar>
       <div className="min-h-screen bg-slate-50">
         <NavBar title="Usuários" back="/" />
         <div className="max-w-xl mx-auto px-4 py-20 text-center">
@@ -147,10 +149,12 @@ export default function UsuariosPage() {
           <p className="text-slate-600 font-medium">Acesso restrito a administradores.</p>
         </div>
       </div>
+      </PageWithSidebar>
     );
   }
 
   return (
+    <PageWithSidebar>
     <div className="min-h-screen bg-slate-50">
       <NavBar
         title="Usuários"
@@ -361,5 +365,6 @@ export default function UsuariosPage() {
         </div>
       </Modal>
     </div>
+    </PageWithSidebar>
   );
 }

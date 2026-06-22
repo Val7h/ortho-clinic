@@ -1,0 +1,182 @@
+{
+  "_comment": "OrthoClinic - Google Play Data Safety Form",
+  "_bundle": "com.orthoclinic.app",
+  "_sprint": "Sprint 6 - App Store Submission",
+  "_generated": "2026-06-12",
+  "_instructions": "Complete this form manually in Play Console > Store Presence > Data Safety. Use this file as reference. Estimated time: 30 minutes.",
+
+  "data_collected": {
+    "personal_info": {
+      "name": {
+        "collected": true,
+        "shared_with_third_parties": false,
+        "required_or_optional": "Required",
+        "collection_purpose": ["App functionality"],
+        "user_can_delete": true
+      },
+      "email_address": {
+        "collected": true,
+        "shared_with_third_parties": false,
+        "required_or_optional": "Required",
+        "collection_purpose": ["Account management", "App functionality"],
+        "user_can_delete": true
+      },
+      "phone_number": {
+        "collected": true,
+        "shared_with_third_parties": false,
+        "required_or_optional": "Required",
+        "collection_purpose": ["App functionality"],
+        "user_can_delete": true
+      },
+      "other_info": {
+        "description": "Professional registration number (CRM), clinic/practice name",
+        "collected": true,
+        "shared_with_third_parties": false,
+        "required_or_optional": "Required",
+        "collection_purpose": ["App functionality"],
+        "user_can_delete": true
+      }
+    },
+
+    "health_and_fitness": {
+      "health_info": {
+        "description": "Patient medical records, consultation notes, diagnoses, prescriptions, anamnesis data",
+        "collected": true,
+        "shared_with_third_parties": false,
+        "required_or_optional": "Required",
+        "collection_purpose": ["App functionality"],
+        "user_can_delete": true,
+        "note": "This data belongs to the clinic (B2B). Patients themselves do not use the app."
+      }
+    },
+
+    "financial_info": {
+      "purchase_history": {
+        "description": "Subscription plan, billing history",
+        "collected": true,
+        "shared_with_third_parties": true,
+        "third_party_name": "Stripe (payment processor)",
+        "required_or_optional": "Required",
+        "collection_purpose": ["Account management"],
+        "user_can_delete": false,
+        "note": "Required for payment processing. Stripe is PCI-DSS compliant."
+      },
+      "other_financial": {
+        "description": "Clinic revenue records, patient billing data entered by clinic staff",
+        "collected": true,
+        "shared_with_third_parties": false,
+        "required_or_optional": "Required",
+        "collection_purpose": ["App functionality"],
+        "user_can_delete": true
+      }
+    },
+
+    "photos_and_videos": {
+      "photos": {
+        "description": "Patient photos uploaded by clinic staff to patient records",
+        "collected": true,
+        "shared_with_third_parties": false,
+        "required_or_optional": "Optional",
+        "collection_purpose": ["App functionality"],
+        "user_can_delete": true
+      }
+    },
+
+    "files_and_docs": {
+      "files": {
+        "description": "Medical documents, exam results, signed contracts uploaded to patient records",
+        "collected": true,
+        "shared_with_third_parties": false,
+        "required_or_optional": "Optional",
+        "collection_purpose": ["App functionality"],
+        "user_can_delete": true
+      }
+    },
+
+    "app_activity": {
+      "app_interactions": {
+        "description": "Screen views, button taps, feature usage for UX improvement",
+        "collected": true,
+        "shared_with_third_parties": false,
+        "required_or_optional": "Optional",
+        "collection_purpose": ["Analytics", "App functionality"],
+        "user_can_delete": false
+      },
+      "crash_logs": {
+        "description": "Crash reports and stack traces via Firebase Crashlytics",
+        "collected": true,
+        "shared_with_third_parties": true,
+        "third_party_name": "Google Firebase (Crashlytics)",
+        "required_or_optional": "Optional",
+        "collection_purpose": ["Analytics"],
+        "user_can_delete": false
+      },
+      "diagnostics": {
+        "description": "App performance data, loading times",
+        "collected": true,
+        "shared_with_third_parties": false,
+        "required_or_optional": "Optional",
+        "collection_purpose": ["Analytics"],
+        "user_can_delete": false
+      }
+    }
+  },
+
+  "data_NOT_collected": [
+    "Location (precise or approximate)",
+    "Contacts (system address book)",
+    "SMS or call logs",
+    "Web browsing history",
+    "Search history",
+    "Installed apps list",
+    "Device identifiers (IDFA/GAID) — HIPAA consideration",
+    "User messages outside the app",
+    "Biometric data (fingerprint/face data — processed on-device only, never transmitted)"
+  ],
+
+  "security_practices": {
+    "data_encrypted_in_transit": true,
+    "encryption_standard_transit": "TLS 1.3",
+    "data_encrypted_at_rest": true,
+    "encryption_standard_rest": "AES-256",
+    "users_can_request_deletion": true,
+    "deletion_contact": "suporte@orthoclinic.app",
+    "deletion_sla": "30 days per LGPD",
+    "committed_to_play_families_policy": false,
+    "independent_security_review": false,
+    "complies_with_families_policy": false
+  },
+
+  "third_parties_summary": [
+    {
+      "name": "Stripe",
+      "purpose": "Payment processing",
+      "data_shared": "Payment info only",
+      "privacy_policy": "https://stripe.com/privacy"
+    },
+    {
+      "name": "Google Firebase (Crashlytics)",
+      "purpose": "Crash reporting and app stability",
+      "data_shared": "Anonymous crash logs",
+      "privacy_policy": "https://firebase.google.com/support/privacy"
+    },
+    {
+      "name": "ClickSign",
+      "purpose": "Digital document signing",
+      "data_shared": "Document metadata only (no patient PHI in document titles)",
+      "privacy_policy": "https://www.clicksign.com/politica-de-privacidade/"
+    }
+  ],
+
+  "play_console_sections": {
+    "note": "In Play Console, navigate to: Store presence > Data safety > Start. Fill in each section using the data above. The form has these main sections:",
+    "sections": [
+      "1. Does your app collect or share any of the required user data types? → YES",
+      "2. Is all of the user data collected by your app encrypted in transit? → YES",
+      "3. Do you provide a way for users to request that their data be deleted? → YES",
+      "4. Identify each data type collected (loop through data_collected above)",
+      "5. For each data type: purpose, required/optional, shared or not",
+      "6. Review and submit"
+    ]
+  }
+}

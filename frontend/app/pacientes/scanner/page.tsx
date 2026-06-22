@@ -23,6 +23,7 @@ import { QrCode, AlertCircle, Keyboard, ArrowLeft, Loader2 } from 'lucide-react'
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 import NavBar from '@/components/NavBar';
+import { PageWithSidebar } from '@/components/PageWithSidebar';
 import { Button, Input } from '@/components/ui';
 import { patientsApi } from '@/lib/api';
 
@@ -182,6 +183,7 @@ export default function PatientScannerPage() {
   // ── Render ─────────────────────────────────────────────────────────────
 
   return (
+    <PageWithSidebar>
     <div className="min-h-screen bg-slate-950">
       <NavBar title="Scanner de paciente" back="/pacientes" />
 
@@ -312,5 +314,6 @@ export default function PatientScannerPage() {
 
       </main>
     </div>
+    </PageWithSidebar>
   );
 }

@@ -12,6 +12,7 @@ import {
   ChevronDown,
 } from 'lucide-react';
 import NavBar from '@/components/NavBar';
+import { PageWithSidebar } from '@/components/PageWithSidebar';
 import { financialApi, patientsApi } from '@/lib/api';
 import { useProtectedPage } from '@/components/AuthProvider';
 import toast from 'react-hot-toast';
@@ -116,6 +117,7 @@ export default function FinanceiroPage() {
   };
 
   return (
+    <PageWithSidebar>
     <div className="min-h-screen bg-slate-50">
       <NavBar
         title="Financeiro"
@@ -414,5 +416,6 @@ export default function FinanceiroPage() {
         </form>
       </Modal>
     </div>
+    </PageWithSidebar>
   );
 }

@@ -1,0 +1,91 @@
+{
+  "_title": "OrthoClinic - TestFlight Beta Configuration",
+  "_bundle_id": "com.orthoclinic.app",
+  "_sprint": "Sprint 6, Days 12-13",
+  "_generated": "2026-06-12",
+
+  "internal_group": {
+    "name": "Internal Team",
+    "max_testers": 100,
+    "testers": [
+      { "role": "iOS Developer", "count": 3 },
+      { "role": "Backend Developer", "count": 2 },
+      { "role": "QA Engineer", "count": 3 },
+      { "role": "Product Manager", "count": 1 },
+      { "role": "UX Designer", "count": 1 }
+    ],
+    "total": 10,
+    "auto_notify": true,
+    "auto_distribute": true
+  },
+
+  "external_group_A": {
+    "name": "Clínicas Piloto - Onda 1",
+    "max_testers": 10000,
+    "current_testers": 50,
+    "test_duration_days": 5,
+    "start_date": "2026-06-13",
+    "end_date": "2026-06-17",
+    "requires_apple_review": true,
+    "beta_app_description": {
+      "pt_BR": "Versão beta do OrthoClinic para clínicas ortopédicas parceiras. Inclui gestão de pacientes, agenda, prontuário eletrônico e módulo financeiro. Use suas credenciais normais da clínica.",
+      "en": "OrthoClinic beta for partner orthopedic clinics. Includes patient management, scheduling, EMR, and financial module. Use your regular clinic credentials."
+    },
+    "beta_feedback_email": "beta@orthoclinic.app",
+    "what_to_test": {
+      "pt_BR": "Por favor, concentre seus testes em:\n\n1. AGENDAMENTO: Criar, editar e cancelar consultas\n2. PACIENTES: Cadastrar novo paciente, buscar existente, editar dados\n3. PRONTUÁRIO: Criar nota SOAP, visualizar histórico\n4. NOTIFICAÇÕES: Verificar se chegam corretamente\n5. MODO OFFLINE: Abrir o app sem internet e verificar se dados locais aparecem\n6. FACE ID: Configurar e usar biometria para login\n\nReporte qualquer bug pelo 'shake' do dispositivo ou pelo e-mail beta@orthoclinic.app",
+      "en": "Please focus your testing on:\n\n1. SCHEDULING: Create, edit, cancel appointments\n2. PATIENTS: Add new patient, search existing, edit data\n3. EMR: Create SOAP note, view history\n4. NOTIFICATIONS: Verify they arrive correctly\n5. OFFLINE MODE: Open app without internet, check local data loads\n6. FACE ID: Set up and use biometric login\n\nReport bugs via device shake or email beta@orthoclinic.app"
+    },
+    "clinic_groups": [
+      {
+        "group_name": "São Paulo - Grupo A",
+        "clinic_count": 2,
+        "tester_count": 20
+      },
+      {
+        "group_name": "Rio de Janeiro - Grupo A",
+        "clinic_count": 2,
+        "tester_count": 20
+      },
+      {
+        "group_name": "Outros estados",
+        "clinic_count": 1,
+        "tester_count": 10
+      }
+    ]
+  },
+
+  "build_settings": {
+    "version": "1.0.0",
+    "build_number": "1",
+    "min_ios_version": "15.0",
+    "supported_devices": ["iPhone", "iPad"],
+    "required_capabilities": [
+      "arm64"
+    ],
+    "symbols_uploaded": true,
+    "bitcode_enabled": false,
+    "export_compliance": {
+      "uses_encryption": true,
+      "encryption_type": "Standard encryption (HTTPS/TLS only)",
+      "exempt_from_review": true,
+      "ITSAppUsesNonExemptEncryption": false,
+      "note": "App uses standard HTTPS/TLS only. No custom encryption. Exempt from US Export Compliance review per 15 CFR 740.17(b)(3)."
+    }
+  },
+
+  "reviewer_account": {
+    "email": "apple.reviewer@orthoclinic.app",
+    "password": "Review2026!",
+    "pin_backup": "123456",
+    "clinic_name": "Clínica Demo OrthoClinic",
+    "pre_populated_data": {
+      "patients": 15,
+      "appointments": 10,
+      "consultations": 5,
+      "note": "All data is fictional. Patients: Maria Silva, João Santos, Ana Oliveira, etc."
+    },
+    "whatsapp_test_number": "+55 11 99999-9999",
+    "action_required": "Create this account in production backend BEFORE Day 12 submission"
+  }
+}

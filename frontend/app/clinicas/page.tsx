@@ -6,6 +6,7 @@ import {
   Link as LinkIcon, Copy, RefreshCw, Loader2,
 } from "lucide-react";
 import NavBar from "@/components/NavBar";
+import { PageWithSidebar } from "@/components/PageWithSidebar";
 import { Card, Badge, Button } from "@/components/ui";
 import { clinicApi } from "@/lib/api";
 import { useProtectedPage } from "@/components/AuthProvider";
@@ -104,6 +105,7 @@ export default function ClinicasPage() {
   );
 
   return (
+    <PageWithSidebar>
     <div className="min-h-screen bg-slate-50">
       <NavBar title="Clínicas" subtitle="Agendamentos e horários" back="/" />
 
@@ -347,5 +349,6 @@ export default function ClinicasPage() {
         })}
       </main>
     </div>
+    </PageWithSidebar>
   );
 }

@@ -6,6 +6,7 @@ import {
   Plus, Trash2, Play, Pause, StopCircle, XCircle
 } from 'lucide-react';
 import NavBar from '@/components/NavBar';
+import { PageWithSidebar } from '@/components/PageWithSidebar';
 import { Card, CardContent, Badge, Button, Modal, useModal } from '@/components/ui';
 import { patientsApi, consultationsApi } from '@/lib/api';
 import toast from 'react-hot-toast';
@@ -192,6 +193,7 @@ export default function PanelPage() {
   if (loading) return <div>Carregando...</div>;
 
   return (
+    <PageWithSidebar>
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
       <NavBar
         title="Painel de Atendimento"
@@ -485,5 +487,6 @@ export default function PanelPage() {
         </div>
       </Modal>
     </div>
+    </PageWithSidebar>
   );
 }

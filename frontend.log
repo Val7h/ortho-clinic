@@ -1,0 +1,13 @@
+
+> orthoclinic-frontend@1.0.0 dev
+> next dev --port 3000
+
+   ▲ Next.js 14.0.4
+   - Local:        http://localhost:3000
+   - Experiments (use at your own risk):
+     · optimizeCss
+
+ ✓ Ready in 2.1s
+ ○ Compiling /not-found ...
+ ✓ Compiled / in 4.8s (3545 modules)
+[?25h

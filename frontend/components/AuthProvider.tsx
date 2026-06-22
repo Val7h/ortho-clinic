@@ -54,25 +54,12 @@ function readStoredToken(): string | null {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(() => {
-    const storedUser = readStoredUser();
-    const storedToken = readStoredToken();
-    if (storedUser && storedToken) {
-      // Set Authorization header synchronously so the first API call is authenticated
-      api.defaults.headers.common["Authorization"] = `Bearer ${storedToken}`;
-    }
-    return storedUser;
-  });
-  const [loading, setLoading] = useState(() => {
-    // If we already have a user from localStorage, skip the loading state
-    if (typeof window === "undefined") return true;
-    const hasToken = !!localStorage.getItem(TOKEN_KEY);
-    const hasUser = !!localStorage.getItem(USER_KEY);
-    return !(hasToken && hasUser);
-  });
+  // Always start null/true to match server-rendered HTML (no localStorage on server).
+  // useEffect reads localStorage on the client after hydration completes.
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [loading, setLoading] = useState(true);
   const router = useRouter();
 
-  // Only needed to handle edge cases (e.g. token present but user missing, or invalid JSON)
   useEffect(() => {
     const token = localStorage.getItem(TOKEN_KEY);
     const raw = localStorage.getItem(USER_KEY);

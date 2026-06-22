@@ -1,46 +1,1339 @@
+INFO:     Will watch for changes in these directories: ['C:\\Users\\Admin\\ortho-clinic\\backend']
+INFO:     Uvicorn running on http://127.0.0.1:8003 (Press CTRL+C to quit)
+INFO:     Started reloader process [39444] using WatchFiles
+SSO/SCIM desabilitado: No module named 'onelogin'
+INFO:     Started server process [481836]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
 AVISO: SECRET_KEY fraca ou nao configurada no Render!
-INFO:     127.0.0.1:64834 - "POST /auth/login HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52318 - "POST /auth/login HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59630 - "GET /health HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59631 - "POST /auth/login HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59638 - "GET /auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59639 - "GET /auth/users HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59640 - "GET /patients HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59641 - "POST /patients HTTP/1.1" 400 Bad Request
-INFO:     127.0.0.1:59642 - "GET /patients HTTP/1.1" 401 Unauthorized
-INFO:     127.0.0.1:59646 - "POST /auth/login HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59647 - "POST /patients HTTP/1.1" 201 Created
-INFO:     127.0.0.1:59653 - "POST /auth/login HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59654 - "GET /patients HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59655 - "GET /dashboard HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59656 - "GET /clinics HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54679 - "POST /auth/login HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54680 - "GET /health HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54681 - "GET /auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54682 - "GET /patients HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54684 - "GET /dashboard HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54685 - "GET /auth/users HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54686 - "POST /auth/login HTTP/1.1" 401 Unauthorized
-INFO:     127.0.0.1:54687 - "GET /auth/organizations HTTP/1.1" 403 Forbidden
-INFO:     127.0.0.1:61533 - "GET /health HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54470 - "POST /auth/login HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54474 - "GET /auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54476 - "GET /patients HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54477 - "POST /patients HTTP/1.1" 201 Created
-INFO:     127.0.0.1:54478 - "GET /dashboard HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59613 - "OPTIONS /auth/login HTTP/1.1" 400 Bad Request
-INFO:     127.0.0.1:55218 - "GET /health HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55238 - "POST /auth/login HTTP/1.1" 200 OK
-INFO:     127.0.0.1:63238 - "OPTIONS /auth/login HTTP/1.1" 400 Bad Request
-INFO:     127.0.0.1:60889 - "OPTIONS /auth/login HTTP/1.1" 400 Bad Request
-INFO:     127.0.0.1:64006 - "OPTIONS /auth/login HTTP/1.1" 400 Bad Request
-INFO:     127.0.0.1:64007 - "POST /auth/login HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60828 - "GET /health HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57488 - "GET /health HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57489 - "POST /auth/login HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49445 - "OPTIONS /auth/login HTTP/1.1" 400 Bad Request
-INFO:     127.0.0.1:50284 - "POST /auth/login HTTP/1.1" 401 Unauthorized
-INFO:     127.0.0.1:54046 - "POST /auth/login HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54047 - "POST /auth/login HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54048 - "POST /auth/login HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60647 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49833 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55271 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:55271 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:63028 - "OPTIONS /auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52421 - "POST /auth/login HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\default.py", line 941, in do_execute
+    cursor.execute(statement, parameters)
+sqlite3.OperationalError: no such column: users.phone
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\uvicorn\protocols\http\httptools_impl.py", line 411, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\uvicorn\middleware\proxy_headers.py", line 69, in __call__
+    return await self.app(scope, receive, send)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\fastapi\applications.py", line 1054, in __call__
+    await super().__call__(scope, receive, send)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\applications.py", line 123, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\errors.py", line 186, in __call__
+    raise exc
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 189, in __call__
+    with collapse_excgroups():
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\contextlib.py", line 153, in __exit__
+    self.gen.throw(typ, value, traceback)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\_utils.py", line 93, in collapse_excgroups
+    raise exc
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 191, in __call__
+    response = await self.dispatch_func(request, call_next)
+  File "C:\Users\Admin\ortho-clinic\backend\middleware\audit_middleware.py", line 63, in dispatch
+    response = await call_next(request)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 165, in call_next
+    raise app_exc
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 151, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 189, in __call__
+    with collapse_excgroups():
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\contextlib.py", line 153, in __exit__
+    self.gen.throw(typ, value, traceback)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\_utils.py", line 93, in collapse_excgroups
+    raise exc
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 191, in __call__
+    response = await self.dispatch_func(request, call_next)
+  File "C:\Users\Admin\ortho-clinic\backend\api\v1\middleware.py", line 87, in dispatch
+    response = await call_next(request)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 165, in call_next
+    raise app_exc
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 151, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 189, in __call__
+    with collapse_excgroups():
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\contextlib.py", line 153, in __exit__
+    self.gen.throw(typ, value, traceback)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\_utils.py", line 93, in collapse_excgroups
+    raise exc
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 191, in __call__
+    response = await self.dispatch_func(request, call_next)
+  File "C:\Users\Admin\ortho-clinic\backend\api\v1\middleware.py", line 101, in dispatch
+    response = await call_next(request)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 165, in call_next
+    raise app_exc
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 151, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 189, in __call__
+    with collapse_excgroups():
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\contextlib.py", line 153, in __exit__
+    self.gen.throw(typ, value, traceback)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\_utils.py", line 93, in collapse_excgroups
+    raise exc
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 191, in __call__
+    response = await self.dispatch_func(request, call_next)
+  File "C:\Users\Admin\ortho-clinic\backend\api\v1\middleware.py", line 136, in dispatch
+    return await call_next(request)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 165, in call_next
+    raise app_exc
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 151, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 189, in __call__
+    with collapse_excgroups():
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\contextlib.py", line 153, in __exit__
+    self.gen.throw(typ, value, traceback)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\_utils.py", line 93, in collapse_excgroups
+    raise exc
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 191, in __call__
+    response = await self.dispatch_func(request, call_next)
+  File "C:\Users\Admin\ortho-clinic\backend\api\v1\middleware.py", line 225, in dispatch
+    return await call_next(request)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 165, in call_next
+    raise app_exc
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 151, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\cors.py", line 93, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\cors.py", line 148, in simple_response
+    await self.app(scope, receive, send)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\exceptions.py", line 65, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\_exception_handler.py", line 64, in wrapped_app
+    raise exc
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\routing.py", line 756, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\routing.py", line 776, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\routing.py", line 297, in handle
+    await self.app(scope, receive, send)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\routing.py", line 77, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\_exception_handler.py", line 64, in wrapped_app
+    raise exc
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\routing.py", line 72, in app
+    response = await func(request)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\fastapi\routing.py", line 278, in app
+    raw_response = await run_endpoint_function(
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\fastapi\routing.py", line 193, in run_endpoint_function
+    return await run_in_threadpool(dependant.call, **values)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\concurrency.py", line 42, in run_in_threadpool
+    return await anyio.to_thread.run_sync(func, *args)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\anyio\to_thread.py", line 63, in run_sync
+    return await get_async_backend().run_sync_in_worker_thread(
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\anyio\_backends\_asyncio.py", line 2518, in run_sync_in_worker_thread
+    return await future
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\anyio\_backends\_asyncio.py", line 1002, in run
+    result = context.run(func, *args)
+  File "C:\Users\Admin\ortho-clinic\backend\routers\auth.py", line 99, in login
+    user = db.query(User).filter(User.email == email, User.active == True).first()
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\query.py", line 2728, in first
+    return self.limit(1)._iter().first()  # type: ignore
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\query.py", line 2827, in _iter
+    result: Union[ScalarResult[_T], Result[_T]] = self.session.execute(
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py", line 2362, in execute
+    return self._execute_internal(
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py", line 2247, in _execute_internal
+    result: Result[Any] = compile_state_cls.orm_execute_statement(
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\context.py", line 305, in orm_execute_statement
+    result = conn.execute(
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py", line 1418, in execute
+    return meth(
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\sql\elements.py", line 515, in _execute_on_connection
+    return connection._execute_clauseelement(
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py", line 1640, in _execute_clauseelement
+    ret = self._execute_context(
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py", line 1846, in _execute_context
+    return self._exec_single_context(
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py", line 1986, in _exec_single_context
+    self._handle_dbapi_exception(
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py", line 2355, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\default.py", line 941, in do_execute
+    cursor.execute(statement, parameters)
+sqlalchemy.exc.OperationalError: (sqlite3.OperationalError) no such column: users.phone
+[SQL: SELECT users.id AS users_id, users.organization_id AS users_organization_id, users.name AS users_name, users.email AS users_email, users.phone AS users_phone, users.bio AS users_bio, users.profile_picture_url AS users_profile_picture_url, users.password_hash AS users_password_hash, users.password_changed_at AS users_password_changed_at, users.role AS users_role, users.is_verified AS users_is_verified, users.is_two_fa_enabled AS users_is_two_fa_enabled, users.two_fa_secret AS users_two_fa_secret, users.language AS users_language, users.theme AS users_theme, users.timezone AS users_timezone, users.currency AS users_currency, users.active AS users_active, users.is_suspended AS users_is_suspended, users.suspension_reason AS users_suspension_reason, users.created_at AS users_created_at, users.updated_at AS users_updated_at, users.last_login_at AS users_last_login_at, users.last_ip_address AS users_last_ip_address 
+FROM users 
+WHERE users.email = ? AND users.active = 1
+ LIMIT ? OFFSET ?]
+[parameters: ('admin@test.com', 1, 0)]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+INFO:     127.0.0.1:55778 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52428 - "POST /auth/login HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\default.py", line 941, in do_execute
+    cursor.execute(statement, parameters)
+sqlite3.OperationalError: no such column: users.phone
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\uvicorn\protocols\http\httptools_impl.py", line 411, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\uvicorn\middleware\proxy_headers.py", line 69, in __call__
+    return await self.app(scope, receive, send)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\fastapi\applications.py", line 1054, in __call__
+    await super().__call__(scope, receive, send)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\applications.py", line 123, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\errors.py", line 186, in __call__
+    raise exc
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 189, in __call__
+    with collapse_excgroups():
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\contextlib.py", line 153, in __exit__
+    self.gen.throw(typ, value, traceback)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\_utils.py", line 93, in collapse_excgroups
+    raise exc
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 191, in __call__
+    response = await self.dispatch_func(request, call_next)
+  File "C:\Users\Admin\ortho-clinic\backend\middleware\audit_middleware.py", line 63, in dispatch
+    response = await call_next(request)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 165, in call_next
+    raise app_exc
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 151, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 189, in __call__
+    with collapse_excgroups():
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\contextlib.py", line 153, in __exit__
+    self.gen.throw(typ, value, traceback)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\_utils.py", line 93, in collapse_excgroups
+    raise exc
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 191, in __call__
+    response = await self.dispatch_func(request, call_next)
+  File "C:\Users\Admin\ortho-clinic\backend\api\v1\middleware.py", line 87, in dispatch
+    response = await call_next(request)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 165, in call_next
+    raise app_exc
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 151, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 189, in __call__
+    with collapse_excgroups():
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\contextlib.py", line 153, in __exit__
+    self.gen.throw(typ, value, traceback)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\_utils.py", line 93, in collapse_excgroups
+    raise exc
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 191, in __call__
+    response = await self.dispatch_func(request, call_next)
+  File "C:\Users\Admin\ortho-clinic\backend\api\v1\middleware.py", line 101, in dispatch
+    response = await call_next(request)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 165, in call_next
+    raise app_exc
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 151, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 189, in __call__
+    with collapse_excgroups():
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\contextlib.py", line 153, in __exit__
+    self.gen.throw(typ, value, traceback)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\_utils.py", line 93, in collapse_excgroups
+    raise exc
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 191, in __call__
+    response = await self.dispatch_func(request, call_next)
+  File "C:\Users\Admin\ortho-clinic\backend\api\v1\middleware.py", line 136, in dispatch
+    return await call_next(request)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 165, in call_next
+    raise app_exc
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 151, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 189, in __call__
+    with collapse_excgroups():
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\contextlib.py", line 153, in __exit__
+    self.gen.throw(typ, value, traceback)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\_utils.py", line 93, in collapse_excgroups
+    raise exc
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 191, in __call__
+    response = await self.dispatch_func(request, call_next)
+  File "C:\Users\Admin\ortho-clinic\backend\api\v1\middleware.py", line 225, in dispatch
+    return await call_next(request)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 165, in call_next
+    raise app_exc
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 151, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\cors.py", line 85, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\exceptions.py", line 65, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\_exception_handler.py", line 64, in wrapped_app
+    raise exc
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\routing.py", line 756, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\routing.py", line 776, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\routing.py", line 297, in handle
+    await self.app(scope, receive, send)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\routing.py", line 77, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\_exception_handler.py", line 64, in wrapped_app
+    raise exc
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\routing.py", line 72, in app
+    response = await func(request)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\fastapi\routing.py", line 278, in app
+    raw_response = await run_endpoint_function(
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\fastapi\routing.py", line 193, in run_endpoint_function
+    return await run_in_threadpool(dependant.call, **values)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\concurrency.py", line 42, in run_in_threadpool
+    return await anyio.to_thread.run_sync(func, *args)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\anyio\to_thread.py", line 63, in run_sync
+    return await get_async_backend().run_sync_in_worker_thread(
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\anyio\_backends\_asyncio.py", line 2518, in run_sync_in_worker_thread
+    return await future
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\anyio\_backends\_asyncio.py", line 1002, in run
+    result = context.run(func, *args)
+  File "C:\Users\Admin\ortho-clinic\backend\routers\auth.py", line 99, in login
+    user = db.query(User).filter(User.email == email, User.active == True).first()
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\query.py", line 2728, in first
+    return self.limit(1)._iter().first()  # type: ignore
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\query.py", line 2827, in _iter
+    result: Union[ScalarResult[_T], Result[_T]] = self.session.execute(
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py", line 2362, in execute
+    return self._execute_internal(
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py", line 2247, in _execute_internal
+    result: Result[Any] = compile_state_cls.orm_execute_statement(
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\context.py", line 305, in orm_execute_statement
+    result = conn.execute(
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py", line 1418, in execute
+    return meth(
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\sql\elements.py", line 515, in _execute_on_connection
+    return connection._execute_clauseelement(
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py", line 1640, in _execute_clauseelement
+    ret = self._execute_context(
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py", line 1846, in _execute_context
+    return self._exec_single_context(
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py", line 1986, in _exec_single_context
+    self._handle_dbapi_exception(
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py", line 2355, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\default.py", line 941, in do_execute
+    cursor.execute(statement, parameters)
+sqlalchemy.exc.OperationalError: (sqlite3.OperationalError) no such column: users.phone
+[SQL: SELECT users.id AS users_id, users.organization_id AS users_organization_id, users.name AS users_name, users.email AS users_email, users.phone AS users_phone, users.bio AS users_bio, users.profile_picture_url AS users_profile_picture_url, users.password_hash AS users_password_hash, users.password_changed_at AS users_password_changed_at, users.role AS users_role, users.is_verified AS users_is_verified, users.is_two_fa_enabled AS users_is_two_fa_enabled, users.two_fa_secret AS users_two_fa_secret, users.language AS users_language, users.theme AS users_theme, users.timezone AS users_timezone, users.currency AS users_currency, users.active AS users_active, users.is_suspended AS users_is_suspended, users.suspension_reason AS users_suspension_reason, users.created_at AS users_created_at, users.updated_at AS users_updated_at, users.last_login_at AS users_last_login_at, users.last_ip_address AS users_last_ip_address 
+FROM users 
+WHERE users.email = ? AND users.active = 1
+ LIMIT ? OFFSET ?]
+[parameters: ('admin@test.com', 1, 0)]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+INFO:     127.0.0.1:52430 - "POST /auth/login HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\default.py", line 941, in do_execute
+    cursor.execute(statement, parameters)
+sqlite3.OperationalError: no such column: users.phone
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\uvicorn\protocols\http\httptools_impl.py", line 411, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\uvicorn\middleware\proxy_headers.py", line 69, in __call__
+    return await self.app(scope, receive, send)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\fastapi\applications.py", line 1054, in __call__
+    await super().__call__(scope, receive, send)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\applications.py", line 123, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\errors.py", line 186, in __call__
+    raise exc
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 189, in __call__
+    with collapse_excgroups():
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\contextlib.py", line 153, in __exit__
+    self.gen.throw(typ, value, traceback)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\_utils.py", line 93, in collapse_excgroups
+    raise exc
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 191, in __call__
+    response = await self.dispatch_func(request, call_next)
+  File "C:\Users\Admin\ortho-clinic\backend\middleware\audit_middleware.py", line 63, in dispatch
+    response = await call_next(request)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 165, in call_next
+    raise app_exc
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 151, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 189, in __call__
+    with collapse_excgroups():
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\contextlib.py", line 153, in __exit__
+    self.gen.throw(typ, value, traceback)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\_utils.py", line 93, in collapse_excgroups
+    raise exc
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 191, in __call__
+    response = await self.dispatch_func(request, call_next)
+  File "C:\Users\Admin\ortho-clinic\backend\api\v1\middleware.py", line 87, in dispatch
+    response = await call_next(request)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 165, in call_next
+    raise app_exc
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 151, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 189, in __call__
+    with collapse_excgroups():
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\contextlib.py", line 153, in __exit__
+    self.gen.throw(typ, value, traceback)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\_utils.py", line 93, in collapse_excgroups
+    raise exc
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 191, in __call__
+    response = await self.dispatch_func(request, call_next)
+  File "C:\Users\Admin\ortho-clinic\backend\api\v1\middleware.py", line 101, in dispatch
+    response = await call_next(request)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 165, in call_next
+    raise app_exc
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 151, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 189, in __call__
+    with collapse_excgroups():
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\contextlib.py", line 153, in __exit__
+    self.gen.throw(typ, value, traceback)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\_utils.py", line 93, in collapse_excgroups
+    raise exc
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 191, in __call__
+    response = await self.dispatch_func(request, call_next)
+  File "C:\Users\Admin\ortho-clinic\backend\api\v1\middleware.py", line 136, in dispatch
+    return await call_next(request)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 165, in call_next
+    raise app_exc
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 151, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 189, in __call__
+    with collapse_excgroups():
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\contextlib.py", line 153, in __exit__
+    self.gen.throw(typ, value, traceback)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\_utils.py", line 93, in collapse_excgroups
+    raise exc
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 191, in __call__
+    response = await self.dispatch_func(request, call_next)
+  File "C:\Users\Admin\ortho-clinic\backend\api\v1\middleware.py", line 225, in dispatch
+    return await call_next(request)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 165, in call_next
+    raise app_exc
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 151, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\cors.py", line 85, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\exceptions.py", line 65, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\_exception_handler.py", line 64, in wrapped_app
+    raise exc
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\routing.py", line 756, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\routing.py", line 776, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\routing.py", line 297, in handle
+    await self.app(scope, receive, send)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\routing.py", line 77, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\_exception_handler.py", line 64, in wrapped_app
+    raise exc
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\routing.py", line 72, in app
+    response = await func(request)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\fastapi\routing.py", line 278, in app
+    raw_response = await run_endpoint_function(
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\fastapi\routing.py", line 193, in run_endpoint_function
+    return await run_in_threadpool(dependant.call, **values)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\concurrency.py", line 42, in run_in_threadpool
+    return await anyio.to_thread.run_sync(func, *args)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\anyio\to_thread.py", line 63, in run_sync
+    return await get_async_backend().run_sync_in_worker_thread(
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\anyio\_backends\_asyncio.py", line 2518, in run_sync_in_worker_thread
+    return await future
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\anyio\_backends\_asyncio.py", line 1002, in run
+    result = context.run(func, *args)
+  File "C:\Users\Admin\ortho-clinic\backend\routers\auth.py", line 99, in login
+    user = db.query(User).filter(User.email == email, User.active == True).first()
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\query.py", line 2728, in first
+    return self.limit(1)._iter().first()  # type: ignore
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\query.py", line 2827, in _iter
+    result: Union[ScalarResult[_T], Result[_T]] = self.session.execute(
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py", line 2362, in execute
+    return self._execute_internal(
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py", line 2247, in _execute_internal
+    result: Result[Any] = compile_state_cls.orm_execute_statement(
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\context.py", line 305, in orm_execute_statement
+    result = conn.execute(
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py", line 1418, in execute
+    return meth(
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\sql\elements.py", line 515, in _execute_on_connection
+    return connection._execute_clauseelement(
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py", line 1640, in _execute_clauseelement
+    ret = self._execute_context(
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py", line 1846, in _execute_context
+    return self._exec_single_context(
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py", line 1986, in _exec_single_context
+    self._handle_dbapi_exception(
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py", line 2355, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\default.py", line 941, in do_execute
+    cursor.execute(statement, parameters)
+sqlalchemy.exc.OperationalError: (sqlite3.OperationalError) no such column: users.phone
+[SQL: SELECT users.id AS users_id, users.organization_id AS users_organization_id, users.name AS users_name, users.email AS users_email, users.phone AS users_phone, users.bio AS users_bio, users.profile_picture_url AS users_profile_picture_url, users.password_hash AS users_password_hash, users.password_changed_at AS users_password_changed_at, users.role AS users_role, users.is_verified AS users_is_verified, users.is_two_fa_enabled AS users_is_two_fa_enabled, users.two_fa_secret AS users_two_fa_secret, users.language AS users_language, users.theme AS users_theme, users.timezone AS users_timezone, users.currency AS users_currency, users.active AS users_active, users.is_suspended AS users_is_suspended, users.suspension_reason AS users_suspension_reason, users.created_at AS users_created_at, users.updated_at AS users_updated_at, users.last_login_at AS users_last_login_at, users.last_ip_address AS users_last_ip_address 
+FROM users 
+WHERE users.email = ? AND users.active = 1
+ LIMIT ? OFFSET ?]
+[parameters: ('admin@test.com', 1, 0)]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+INFO:     127.0.0.1:50393 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:51722 - "POST /auth/login HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\default.py", line 941, in do_execute
+    cursor.execute(statement, parameters)
+sqlite3.OperationalError: no such column: users.phone
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\uvicorn\protocols\http\httptools_impl.py", line 411, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\uvicorn\middleware\proxy_headers.py", line 69, in __call__
+    return await self.app(scope, receive, send)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\fastapi\applications.py", line 1054, in __call__
+    await super().__call__(scope, receive, send)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\applications.py", line 123, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\errors.py", line 186, in __call__
+    raise exc
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 189, in __call__
+    with collapse_excgroups():
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\contextlib.py", line 153, in __exit__
+    self.gen.throw(typ, value, traceback)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\_utils.py", line 93, in collapse_excgroups
+    raise exc
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 191, in __call__
+    response = await self.dispatch_func(request, call_next)
+  File "C:\Users\Admin\ortho-clinic\backend\middleware\audit_middleware.py", line 63, in dispatch
+    response = await call_next(request)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 165, in call_next
+    raise app_exc
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 151, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 189, in __call__
+    with collapse_excgroups():
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\contextlib.py", line 153, in __exit__
+    self.gen.throw(typ, value, traceback)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\_utils.py", line 93, in collapse_excgroups
+    raise exc
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 191, in __call__
+    response = await self.dispatch_func(request, call_next)
+  File "C:\Users\Admin\ortho-clinic\backend\api\v1\middleware.py", line 87, in dispatch
+    response = await call_next(request)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 165, in call_next
+    raise app_exc
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 151, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 189, in __call__
+    with collapse_excgroups():
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\contextlib.py", line 153, in __exit__
+    self.gen.throw(typ, value, traceback)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\_utils.py", line 93, in collapse_excgroups
+    raise exc
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 191, in __call__
+    response = await self.dispatch_func(request, call_next)
+  File "C:\Users\Admin\ortho-clinic\backend\api\v1\middleware.py", line 101, in dispatch
+    response = await call_next(request)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 165, in call_next
+    raise app_exc
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 151, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 189, in __call__
+    with collapse_excgroups():
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\contextlib.py", line 153, in __exit__
+    self.gen.throw(typ, value, traceback)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\_utils.py", line 93, in collapse_excgroups
+    raise exc
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 191, in __call__
+    response = await self.dispatch_func(request, call_next)
+  File "C:\Users\Admin\ortho-clinic\backend\api\v1\middleware.py", line 136, in dispatch
+    return await call_next(request)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 165, in call_next
+    raise app_exc
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 151, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 189, in __call__
+    with collapse_excgroups():
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\contextlib.py", line 153, in __exit__
+    self.gen.throw(typ, value, traceback)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\_utils.py", line 93, in collapse_excgroups
+    raise exc
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 191, in __call__
+    response = await self.dispatch_func(request, call_next)
+  File "C:\Users\Admin\ortho-clinic\backend\api\v1\middleware.py", line 225, in dispatch
+    return await call_next(request)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 165, in call_next
+    raise app_exc
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\base.py", line 151, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\cors.py", line 85, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\middleware\exceptions.py", line 65, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\_exception_handler.py", line 64, in wrapped_app
+    raise exc
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\routing.py", line 756, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\routing.py", line 776, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\routing.py", line 297, in handle
+    await self.app(scope, receive, send)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\routing.py", line 77, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\_exception_handler.py", line 64, in wrapped_app
+    raise exc
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\routing.py", line 72, in app
+    response = await func(request)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\fastapi\routing.py", line 278, in app
+    raw_response = await run_endpoint_function(
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\fastapi\routing.py", line 193, in run_endpoint_function
+    return await run_in_threadpool(dependant.call, **values)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\starlette\concurrency.py", line 42, in run_in_threadpool
+    return await anyio.to_thread.run_sync(func, *args)
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\anyio\to_thread.py", line 63, in run_sync
+    return await get_async_backend().run_sync_in_worker_thread(
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\anyio\_backends\_asyncio.py", line 2518, in run_sync_in_worker_thread
+    return await future
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\anyio\_backends\_asyncio.py", line 1002, in run
+    result = context.run(func, *args)
+  File "C:\Users\Admin\ortho-clinic\backend\routers\auth.py", line 99, in login
+    user = db.query(User).filter(User.email == email, User.active == True).first()
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\query.py", line 2728, in first
+    return self.limit(1)._iter().first()  # type: ignore
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\query.py", line 2827, in _iter
+    result: Union[ScalarResult[_T], Result[_T]] = self.session.execute(
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py", line 2362, in execute
+    return self._execute_internal(
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py", line 2247, in _execute_internal
+    result: Result[Any] = compile_state_cls.orm_execute_statement(
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\context.py", line 305, in orm_execute_statement
+    result = conn.execute(
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py", line 1418, in execute
+    return meth(
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\sql\elements.py", line 515, in _execute_on_connection
+    return connection._execute_clauseelement(
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py", line 1640, in _execute_clauseelement
+    ret = self._execute_context(
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py", line 1846, in _execute_context
+    return self._exec_single_context(
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py", line 1986, in _exec_single_context
+    self._handle_dbapi_exception(
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py", line 2355, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+  File "C:\Users\Admin\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\default.py", line 941, in do_execute
+    cursor.execute(statement, parameters)
+sqlalchemy.exc.OperationalError: (sqlite3.OperationalError) no such column: users.phone
+[SQL: SELECT users.id AS users_id, users.organization_id AS users_organization_id, users.name AS users_name, users.email AS users_email, users.phone AS users_phone, users.bio AS users_bio, users.profile_picture_url AS users_profile_picture_url, users.password_hash AS users_password_hash, users.password_changed_at AS users_password_changed_at, users.role AS users_role, users.is_verified AS users_is_verified, users.is_two_fa_enabled AS users_is_two_fa_enabled, users.two_fa_secret AS users_two_fa_secret, users.language AS users_language, users.theme AS users_theme, users.timezone AS users_timezone, users.currency AS users_currency, users.active AS users_active, users.is_suspended AS users_is_suspended, users.suspension_reason AS users_suspension_reason, users.created_at AS users_created_at, users.updated_at AS users_updated_at, users.last_login_at AS users_last_login_at, users.last_ip_address AS users_last_ip_address 
+FROM users 
+WHERE users.email = ? AND users.active = 1
+ LIMIT ? OFFSET ?]
+[parameters: ('admin@test.com', 1, 0)]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+INFO:     127.0.0.1:52751 - "POST /auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51719 - "POST /auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51719 - "OPTIONS /dashboard HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53508 - "OPTIONS /dashboard HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64757 - "GET /dashboard HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64757 - "GET /dashboard HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64757 - "OPTIONS /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54017 - "OPTIONS /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56051 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49387 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59434 - "OPTIONS /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+C:\Users\Admin\ortho-clinic\backend\routers\consultations.py:74: SAWarning: Coercing Subquery object into a select() for use in IN(); please pass a select() construct explicitly
+  Consultation.patient_id.in_(org_patient_ids),
+C:\Users\Admin\ortho-clinic\backend\routers\consultations.py:100: SAWarning: Coercing Subquery object into a select() for use in IN(); please pass a select() construct explicitly
+  Consultation.patient_id.in_(org_patient_ids),
+INFO:     127.0.0.1:59434 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59246 - "OPTIONS /appointments/week?start=2026-06-08&end=2026-06-14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62052 - "OPTIONS /appointments/week?start=2026-06-08&end=2026-06-14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62090 - "OPTIONS /agenda?start=2026-06-08&end=2026-06-14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51915 - "OPTIONS /agenda?start=2026-06-08&end=2026-06-14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56051 - "OPTIONS /clinics HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57482 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57482 - "OPTIONS /clinics HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61173 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60592 - "GET /agenda?start=2026-06-08&end=2026-06-14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60375 - "GET /appointments/week?start=2026-06-08&end=2026-06-14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63634 - "GET /clinics HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60592 - "GET /appointments/week?start=2026-06-08&end=2026-06-14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61173 - "GET /agenda?start=2026-06-08&end=2026-06-14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65085 - "GET /clinics HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56710 - "GET /clinics HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58010 - "GET /appointments/week?start=2026-06-08&end=2026-06-14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50728 - "GET /agenda?start=2026-06-08&end=2026-06-14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56710 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50728 - "GET /clinics HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58010 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56710 - "GET /appointments/week?start=2026-06-08&end=2026-06-14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50728 - "GET /agenda?start=2026-06-08&end=2026-06-14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56710 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58010 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52754 - "POST /auth/login HTTP/1.1" 422 Unprocessable Entity
+INFO:     127.0.0.1:52757 - "GET /patients HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:54065 - "POST /auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54067 - "GET /patients HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61515 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50741 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54596 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56400 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50261 - "OPTIONS /patients HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61365 - "GET /patients HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61365 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61365 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61365 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61543 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50839 - "GET /patients HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49603 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49603 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55774 - "GET /dashboard HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55774 - "GET /dashboard HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55774 - "GET /dashboard HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55774 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55774 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55774 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50407 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64922 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64922 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58612 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58612 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53027 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53027 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51906 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51906 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61053 - "GET /dashboard HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56509 - "GET /dashboard HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56509 - "GET /dashboard HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56509 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61053 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61053 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56509 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57769 - "POST /auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57769 - "GET /dashboard HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64572 - "GET /dashboard HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64572 - "GET /dashboard HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64572 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57769 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57769 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64572 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61138 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58484 - "GET /agenda?start=2026-06-08&end=2026-06-14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50061 - "GET /appointments/week?start=2026-06-08&end=2026-06-14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54037 - "GET /clinics HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61138 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50061 - "GET /appointments/week?start=2026-06-08&end=2026-06-14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58484 - "GET /agenda?start=2026-06-08&end=2026-06-14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54037 - "GET /clinics HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60130 - "GET /dashboard HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53756 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53756 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60130 - "GET /dashboard HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57250 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51037 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59449 - "OPTIONS /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56050 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54452 - "OPTIONS /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54717 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55295 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63927 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59818 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62415 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61642 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54377 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49828 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53025 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53518 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56186 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61238 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61238 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50083 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50083 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63740 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63740 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61020 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61020 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58808 - "OPTIONS /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51767 - "OPTIONS /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51921 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51921 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58408 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58408 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50751 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50751 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60946 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60946 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50418 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50418 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49671 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49671 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52866 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52866 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59383 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59383 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54371 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54371 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55779 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55779 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50572 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50572 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63039 - "OPTIONS /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62445 - "OPTIONS /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52286 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52286 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54588 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54588 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56197 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56197 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62602 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62602 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49224 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49224 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63792 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63792 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61946 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61946 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57656 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57656 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52805 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52805 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51020 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51020 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64740 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64740 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50697 - "OPTIONS /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56730 - "OPTIONS /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58031 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58031 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54434 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54434 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56957 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56957 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50565 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50565 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50902 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50902 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54013 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54013 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65525 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65525 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56440 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56440 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52519 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52519 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61306 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61306 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63237 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63237 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56164 - "OPTIONS /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50378 - "OPTIONS /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64174 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64174 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56146 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56146 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59121 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59121 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63485 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63485 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56218 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56218 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63700 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63700 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61578 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61578 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54696 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54696 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49250 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49250 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62638 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62638 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55774 - "OPTIONS /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49288 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56320 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56690 - "OPTIONS /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50766 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50766 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60968 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49573 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51036 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54905 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53822 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53822 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61535 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61535 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60006 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60006 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61355 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61355 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54068 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54068 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59100 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59100 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62148 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62148 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50289 - "OPTIONS /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63729 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56734 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50478 - "OPTIONS /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60588 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60588 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63587 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62405 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63947 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52474 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50386 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50386 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52063 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52063 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55124 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55124 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53058 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53058 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50415 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50415 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58542 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58542 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51267 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51267 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61643 - "OPTIONS /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60839 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54879 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60351 - "OPTIONS /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64052 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60351 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61496 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61496 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53165 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53165 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56102 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56102 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62864 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62864 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49828 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49828 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64817 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64817 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57529 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57529 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54913 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54913 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63017 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63017 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63042 - "OPTIONS /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57178 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59670 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64258 - "OPTIONS /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61308 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61308 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55482 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61459 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49828 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50957 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53840 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53840 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56802 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56802 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54373 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54373 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49484 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49484 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64858 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64858 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65470 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65470 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60988 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60988 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61472 - "OPTIONS /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64087 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53965 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56388 - "OPTIONS /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54615 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54615 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56435 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60779 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49469 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56051 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53507 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53507 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58394 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58394 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63610 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63610 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51381 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51381 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54747 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54747 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51221 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51221 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54386 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54386 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52096 - "OPTIONS /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51718 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53786 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56051 - "OPTIONS /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56232 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56232 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52187 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54371 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53984 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63416 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64134 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64134 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50507 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50507 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64215 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52776 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59151 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59151 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54432 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64092 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56149 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56149 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54050 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54050 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51168 - "OPTIONS /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49917 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50887 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52015 - "OPTIONS /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62864 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62864 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55861 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52318 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49987 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55848 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57567 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57567 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53739 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53739 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57167 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57167 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55823 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55823 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61339 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61339 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63188 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63188 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63019 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63019 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64166 - "OPTIONS /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62975 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52225 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59767 - "OPTIONS /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52311 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52311 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50124 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55545 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58611 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65530 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57522 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57522 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50060 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50060 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58920 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58920 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56547 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56547 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56047 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56047 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60127 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60127 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64758 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64758 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59050 - "OPTIONS /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60112 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49520 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59069 - "OPTIONS /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59065 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59065 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61511 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53793 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65070 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58088 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57604 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57604 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52789 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52789 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59805 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59805 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59749 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59749 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60126 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60126 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50943 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50943 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65041 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65041 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52682 - "OPTIONS /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58811 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64915 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56074 - "OPTIONS /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49959 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49959 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56743 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60121 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57785 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56505 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63177 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63177 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65234 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65234 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64168 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64168 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61194 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61194 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49536 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49536 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54572 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54572 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54711 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54711 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49987 - "OPTIONS /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60663 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51718 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57895 - "OPTIONS /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57280 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57280 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64589 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61216 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49537 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51366 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57101 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57101 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49368 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49368 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50833 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50833 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53768 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53768 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60270 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60270 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57356 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57356 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56412 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56412 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55135 - "OPTIONS /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59444 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63933 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58414 - "OPTIONS /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59990 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59990 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55390 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62686 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53996 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57717 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62693 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62693 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63587 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63587 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63146 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63146 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63275 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63275 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51818 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51818 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60521 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60521 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53365 - "OPTIONS /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51147 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65195 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55777 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61646 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53284 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53284 - "OPTIONS /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59644 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61136 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61136 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56904 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56904 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56013 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56013 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63180 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63180 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55939 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55939 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65376 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65376 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62941 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62941 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62014 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62014 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54448 - "OPTIONS /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56641 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56641 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60805 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50454 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61613 - "OPTIONS /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56873 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56873 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55776 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59161 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52563 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62626 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50335 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50335 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52466 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52466 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52248 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52248 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50585 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50585 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63456 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63456 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51819 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60711 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64940 - "OPTIONS /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60240 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51165 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49932 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60593 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54772 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54772 - "OPTIONS /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64443 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51386 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51386 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64336 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64336 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62280 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62280 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60432 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60432 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60469 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60469 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54371 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54371 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59050 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59050 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52180 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52180 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58992 - "OPTIONS /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56798 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50482 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58201 - "OPTIONS /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61199 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61199 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61767 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62687 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62287 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51372 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55119 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55119 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57326 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57326 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59055 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59055 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52578 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52578 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54370 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54370 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61919 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61919 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63099 - "OPTIONS /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53278 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49386 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59730 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54845 - "OPTIONS /patients HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52539 - "GET /patients HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52539 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52539 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52539 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52539 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54586 - "OPTIONS /dashboard HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59659 - "OPTIONS /dashboard HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59659 - "GET /dashboard HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54586 - "GET /dashboard HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59659 - "GET /dashboard HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54586 - "OPTIONS /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59659 - "OPTIONS /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56662 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64568 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64568 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56662 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49385 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49385 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63652 - "GET /dashboard HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63652 - "GET /dashboard HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63652 - "GET /dashboard HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53157 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53157 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53157 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53157 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53817 - "OPTIONS /auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50646 - "POST /auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55024 - "GET /dashboard HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55024 - "GET /dashboard HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55024 - "GET /dashboard HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62489 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49621 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49621 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62489 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62568 - "POST /auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60435 - "GET /patients HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60435 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57606 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57606 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60435 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54370 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59882 - "GET /dashboard HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59882 - "GET /dashboard HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59882 - "GET /dashboard HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56686 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50714 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50714 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56686 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55353 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63645 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59638 - "OPTIONS /appointments/week?start=2026-06-08&end=2026-06-14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53787 - "OPTIONS /clinics HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53805 - "OPTIONS /clinics HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55445 - "OPTIONS /agenda?start=2026-06-08&end=2026-06-14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64210 - "OPTIONS /agenda?start=2026-06-08&end=2026-06-14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54371 - "OPTIONS /appointments/week?start=2026-06-08&end=2026-06-14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64210 - "GET /appointments/week?start=2026-06-08&end=2026-06-14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64210 - "GET /clinics HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64210 - "GET /agenda?start=2026-06-08&end=2026-06-14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64210 - "GET /appointments/week?start=2026-06-08&end=2026-06-14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64210 - "GET /clinics HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64210 - "GET /agenda?start=2026-06-08&end=2026-06-14 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63356 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54514 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49484 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56726 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51599 - "GET /push/notifications/badge HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59633 - "OPTIONS /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62866 - "GET /agenda?start=2026-06-13&end=2026-06-13 HTTP/1.1" 200 OK

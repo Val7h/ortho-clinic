@@ -11,6 +11,7 @@ import {
 import Link from "next/link";
 import toast from "react-hot-toast";
 import NavBar from "@/components/NavBar";
+import { PageWithSidebar } from "@/components/PageWithSidebar";
 import MedicalHistoryTimeline from "@/components/MedicalHistoryTimeline";
 import PatientQuickActions from "@/components/PatientQuickActions";
 import PatientPhotoCapture from "@/components/PatientPhotoCapture";
@@ -217,17 +218,20 @@ export default function PatientPage() {
 
   if (loading && !patient) {
     return (
+      <PageWithSidebar>
       <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
         <NavBar title="Carregando..." back="/pacientes" />
         <main className="max-w-3xl mx-auto px-4 py-8">
           <CardSkeleton />
         </main>
       </div>
+      </PageWithSidebar>
     );
   }
 
   if (error && !patient) {
     return (
+      <PageWithSidebar>
       <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
         <NavBar title="Paciente não encontrado" back="/pacientes" />
         <main className="max-w-3xl mx-auto px-4 py-8">
@@ -241,6 +245,7 @@ export default function PatientPage() {
           </Card>
         </main>
       </div>
+      </PageWithSidebar>
     );
   }
 
@@ -251,6 +256,7 @@ export default function PatientPage() {
   ];
 
   return (
+    <PageWithSidebar>
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
       <NavBar
         title={patient.name}
@@ -615,6 +621,7 @@ export default function PatientPage() {
         </div>
       )}
     </div>
+    </PageWithSidebar>
   );
 }
 

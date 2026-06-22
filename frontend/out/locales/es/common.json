@@ -1,0 +1,72 @@
+{
+  "app": {
+    "title": "OrthoClinic",
+    "description": "Sistema de gestión de clínica ortodóncica",
+    "copyright": "OrthoClinic · Premium Edition"
+  },
+  "common": {
+    "loading": "Cargando...",
+    "error": "Error",
+    "success": "Éxito",
+    "warning": "Advertencia",
+    "info": "Información",
+    "confirm": "Confirmar",
+    "cancel": "Cancelar",
+    "delete": "Eliminar",
+    "edit": "Editar",
+    "save": "Guardar",
+    "close": "Cerrar",
+    "back": "Atrás",
+    "next": "Siguiente",
+    "previous": "Anterior",
+    "export": "Exportar",
+    "import": "Importar",
+    "search": "Buscar",
+    "filter": "Filtrar",
+    "sort": "Ordenar",
+    "more": "Más",
+    "actions": "Acciones",
+    "status": "Estado",
+    "created": "Creado",
+    "updated": "Actualizado",
+    "deleted": "Eliminado",
+    "confirm_delete": "¿Está seguro de que desea eliminar este elemento?",
+    "confirm_delete_title": "Confirmar eliminación",
+    "operation_failed": "La operación falló. Por favor, inténtelo de nuevo.",
+    "operation_success": "Operación completada con éxito.",
+    "yes": "Sí",
+    "no": "No",
+    "all": "Todos",
+    "none": "Ninguno",
+    "optional": "Opcional",
+    "required": "Requerido"
+  },
+  "pagination": {
+    "showing": "Mostrando",
+    "of": "de",
+    "entries": "entradas",
+    "previous": "Anterior",
+    "next": "Siguiente",
+    "first": "Primera",
+    "last": "Última"
+  },
+  "time": {
+    "today": "Hoy",
+    "yesterday": "Ayer",
+    "tomorrow": "Mañana",
+    "this_week": "Esta semana",
+    "last_week": "La semana pasada",
+    "this_month": "Este mes",
+    "last_month": "El mes pasado",
+    "this_year": "Este año",
+    "last_year": "El año pasado"
+  },
+  "formatting": {
+    "currency_symbol": "€",
+    "decimal_separator": ",",
+    "thousands_separator": ".",
+    "date_format": "dd/MM/yyyy",
+    "time_format": "HH:mm",
+    "datetime_format": "dd/MM/yyyy HH:mm"
+  }
+}

@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Info.plist additions for OrthoClinic iOS
+  Bundle ID: com.orthoclinic.app
+  Sprint 6 - App Store Submission
+  Generated: 2026-06-12
+
+  Add these keys to your existing Info.plist.
+  Required for App Store approval.
+-->
+<plist version="1.0">
+<dict>
+
+  <!-- ============================= -->
+  <!-- USAGE DESCRIPTIONS (Required) -->
+  <!-- ============================= -->
+
+  <!-- Camera - Patient photo + document scanning -->
+  <key>NSCameraUsageDescription</key>
+  <string>OrthoClinic usa a câmera para fotografar pacientes e digitalizar documentos clínicos como laudos e radiografias.</string>
+
+  <!-- Photo Library - Attach images to patient records -->
+  <key>NSPhotoLibraryUsageDescription</key>
+  <string>OrthoClinic acessa sua galeria para anexar imagens de exames e documentos ao prontuário do paciente.</string>
+
+  <!-- Photo Library Write - Save exported reports -->
+  <key>NSPhotoLibraryAddUsageDescription</key>
+  <string>OrthoClinic pode salvar documentos e relatórios exportados na sua galeria de fotos.</string>
+
+  <!-- Face ID - Biometric login -->
+  <key>NSFaceIDUsageDescription</key>
+  <string>OrthoClinic usa Face ID para proteger o acesso aos dados confidenciais dos seus pacientes. Seus dados de saúde são sensíveis e exigem autenticação segura.</string>
+
+  <!-- Microphone - Optional voice-to-text for SOAP notes -->
+  <key>NSMicrophoneUsageDescription</key>
+  <string>OrthoClinic pode usar o microfone para ditado de notas clínicas via reconhecimento de voz, agilizando o preenchimento do prontuário.</string>
+
+  <!-- ============================= -->
+  <!-- BACKGROUND MODES              -->
+  <!-- ============================= -->
+  <key>UIBackgroundModes</key>
+  <array>
+    <string>fetch</string>
+    <string>remote-notification</string>
+  </array>
+
+  <!-- ============================= -->
+  <!-- APP TRANSPORT SECURITY        -->
+  <!-- ============================= -->
+  <!-- Allow only secure HTTPS connections -->
+  <key>NSAppTransportSecurity</key>
+  <dict>
+    <key>NSAllowsArbitraryLoads</key>
+    <false/>
+    <!-- Exception for local development API only (remove in production build) -->
+    <!-- <key>NSExceptionDomains</key>
+    <dict>
+      <key>localhost</key>
+      <dict>
+        <key>NSExceptionAllowsInsecureHTTPLoads</key>
+        <true/>
+      </dict>
+    </dict> -->
+  </dict>
+
+  <!-- ============================= -->
+  <!-- APP METADATA                  -->
+  <!-- ============================= -->
+  <key>CFBundleDisplayName</key>
+  <string>OrthoClinic</string>
+
+  <key>CFBundleVersion</key>
+  <string>1</string>
+
+  <key>CFBundleShortVersionString</key>
+  <string>1.0.0</string>
+
+  <!-- Supported orientations (iPhone) -->
+  <key>UISupportedInterfaceOrientations</key>
+  <array>
+    <string>UIInterfaceOrientationPortrait</string>
+    <string>UIInterfaceOrientationPortraitUpsideDown</string>
+  </array>
+
+  <!-- Supported orientations (iPad) -->
+  <key>UISupportedInterfaceOrientations~ipad</key>
+  <array>
+    <string>UIInterfaceOrientationPortrait</string>
+    <string>UIInterfaceOrientationPortraitUpsideDown</string>
+    <string>UIInterfaceOrientationLandscapeLeft</string>
+    <string>UIInterfaceOrientationLandscapeRight</string>
+  </array>
+
+  <!-- ============================= -->
+  <!-- URL SCHEMES (Deep Linking)    -->
+  <!-- ============================= -->
+  <key>CFBundleURLTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleURLSchemes</key>
+      <array>
+        <string>orthoclinic</string>
+      </array>
+      <key>CFBundleURLName</key>
+      <string>com.orthoclinic.app</string>
+    </dict>
+  </array>
+
+  <!-- ============================= -->
+  <!-- QUERIED URL SCHEMES           -->
+  <!-- ============================= -->
+  <!-- Apps we may open (WhatsApp for confirmations) -->
+  <key>LSApplicationQueriesSchemes</key>
+  <array>
+    <string>whatsapp</string>
+  </array>
+
+</dict>
+</plist>

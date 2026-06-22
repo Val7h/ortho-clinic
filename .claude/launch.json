@@ -1,0 +1,13 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "orthoclinic-frontend",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "cwd": "C:/Users/Admin/ortho-clinic/frontend",
+      "port": 3000,
+      "autoPort": false
+    }
+  ]
+}

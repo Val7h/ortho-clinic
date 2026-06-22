@@ -1,0 +1,64 @@
+{
+  "error": "Erreur",
+  "errors": {
+    "400": "Mauvaise Requête",
+    "401": "Non Autorisé",
+    "403": "Interdit",
+    "404": "Non Trouvé",
+    "409": "Conflit",
+    "422": "Entité Non Traitable",
+    "429": "Trop de Requêtes",
+    "500": "Erreur Interne du Serveur",
+    "502": "Mauvaise Passerelle",
+    "503": "Service Indisponible",
+    "504": "Délai d'Expiration de la Passerelle",
+    "generic": "Erreur inconnue. Veuillez réessayer.",
+    "network": "Erreur de connexion. Vérifiez votre connexion.",
+    "timeout": "Délai de requête dépassé."
+  },
+  "validation": {
+    "required_field": "Ce champ est obligatoire",
+    "invalid_email": "E-mail invalide",
+    "invalid_phone": "Numéro de téléphone invalide",
+    "invalid_cpf": "CPF invalide",
+    "invalid_date": "Date invalide",
+    "password_too_short": "Mot de passe trop court",
+    "password_mismatch": "Les mots de passe ne correspondent pas",
+    "email_already_exists": "Cet e-mail est déjà enregistré",
+    "minimum_length": "Doit comporter au moins {{count}} caractères",
+    "maximum_length": "Ne doit pas dépasser {{count}} caractères",
+    "pattern_mismatch": "Format invalide",
+    "invalid_number": "Nombre invalide"
+  },
+  "auth": {
+    "unauthorized": "Vous n'avez pas la permission d'accéder à cette ressource",
+    "session_expired": "Votre session a expiré. Veuillez vous reconnecter",
+    "invalid_credentials": "E-mail ou mot de passe invalide",
+    "account_locked": "Votre compte a été verrouillé. Contactez le support",
+    "account_disabled": "Votre compte a été désactivé",
+    "email_not_verified": "Veuillez vérifier votre e-mail",
+    "two_factor_required": "Authentification à deux facteurs requise",
+    "invalid_token": "Jeton invalide ou expiré"
+  },
+  "data": {
+    "not_found": "Ressource non trouvée",
+    "already_exists": "Cette ressource existe déjà",
+    "cannot_delete": "Impossible de supprimer cette ressource",
+    "cannot_update": "Impossible de mettre à jour cette ressource",
+    "conflict": "Conflit lors du traitement des données",
+    "invalid_operation": "Opération invalide"
+  },
+  "file": {
+    "upload_failed": "Échec du téléchargement du fichier",
+    "file_too_large": "Fichier trop volumineux",
+    "invalid_file_type": "Type de fichier invalide",
+    "file_not_found": "Fichier non trouvé",
+    "download_failed": "Échec du téléchargement"
+  },
+  "messages": {
+    "try_again": "Veuillez réessayer",
+    "contact_support": "Contactez le support pour obtenir de l'aide",
+    "go_back": "Retour",
+    "reload_page": "Recharger la Page"
+  }
+}

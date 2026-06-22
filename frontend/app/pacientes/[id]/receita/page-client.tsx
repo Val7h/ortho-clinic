@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 import NavBar from "@/components/NavBar";
+import { PageWithSidebar } from "@/components/PageWithSidebar";
 import { api, prescriptionsApi, patientsApi } from "@/lib/api";
 import { formatDate } from "@/lib/utils";
 
@@ -369,6 +370,7 @@ export default function PrescriptionPage() {
   if (!patient) return <div className="flex justify-center items-center h-screen"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600" /></div>;
 
   return (
+    <PageWithSidebar>
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
       <NavBar title="Prescrições" subtitle={patient?.name} back={`/pacientes/${pid}`} />
 
@@ -681,6 +683,7 @@ Via Branca - Paciente`}
         )}
       </div>
     </div>
+    </PageWithSidebar>
   );
 }
 

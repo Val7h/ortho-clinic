@@ -1,0 +1,113 @@
+{
+  "title": "Financial",
+  "dashboard": "Financial Dashboard",
+  "invoices": "Invoices",
+  "payments": "Payments",
+  "expenses": "Expenses",
+  "reports": "Reports",
+  "add_invoice": "New Invoice",
+  "add_payment": "New Payment",
+  "add_expense": "New Expense",
+  "overview": {
+    "total_revenue": "Total Revenue",
+    "total_expenses": "Total Expenses",
+    "net_profit": "Net Profit",
+    "pending_payments": "Pending Payments",
+    "outstanding_invoices": "Outstanding Invoices",
+    "growth": "Growth"
+  },
+  "invoice": {
+    "title": "Invoice",
+    "invoice_number": "Invoice Number",
+    "invoice_date": "Invoice Date",
+    "due_date": "Due Date",
+    "patient": "Patient",
+    "items": "Items",
+    "amount": "Amount",
+    "tax": "Tax",
+    "total": "Total",
+    "status": "Status",
+    "notes": "Notes",
+    "send_invoice": "Send Invoice",
+    "mark_as_paid": "Mark as Paid",
+    "regenerate": "Regenerate PDF"
+  },
+  "payment": {
+    "title": "Payment",
+    "date": "Payment Date",
+    "method": "Payment Method",
+    "amount": "Amount",
+    "reference": "Reference",
+    "notes": "Notes",
+    "status": "Status"
+  },
+  "expense": {
+    "title": "Expense",
+    "date": "Expense Date",
+    "category": "Category",
+    "description": "Description",
+    "amount": "Amount",
+    "supplier": "Supplier",
+    "status": "Status",
+    "receipt": "Receipt"
+  },
+  "expense_category": {
+    "supplies": "Supplies",
+    "equipment": "Equipment",
+    "maintenance": "Maintenance",
+    "utilities": "Utilities",
+    "staff": "Staff",
+    "rent": "Rent",
+    "insurance": "Insurance",
+    "other": "Other"
+  },
+  "payment_method": {
+    "cash": "Cash",
+    "credit_card": "Credit Card",
+    "debit_card": "Debit Card",
+    "check": "Check",
+    "transfer": "Transfer",
+    "pix": "PIX",
+    "other": "Other"
+  },
+  "status": {
+    "draft": "Draft",
+    "sent": "Sent",
+    "pending": "Pending",
+    "paid": "Paid",
+    "partially_paid": "Partially Paid",
+    "overdue": "Overdue",
+    "cancelled": "Cancelled"
+  },
+  "table": {
+    "number": "Number",
+    "patient": "Patient",
+    "date": "Date",
+    "due_date": "Due Date",
+    "amount": "Amount",
+    "status": "Status",
+    "actions": "Actions"
+  },
+  "messages": {
+    "invoice_created": "Invoice created successfully",
+    "invoice_updated": "Invoice updated successfully",
+    "invoice_deleted": "Invoice deleted successfully",
+    "invoice_sent": "Invoice sent successfully",
+    "payment_recorded": "Payment recorded successfully",
+    "expense_added": "Expense added successfully",
+    "no_invoices": "No invoices found"
+  },
+  "filters": {
+    "search_placeholder": "Search by patient or number",
+    "filter_by_status": "Filter by Status",
+    "filter_by_date_range": "Filter by Date Range"
+  },
+  "period": {
+    "today": "Today",
+    "this_week": "This Week",
+    "this_month": "This Month",
+    "this_quarter": "This Quarter",
+    "this_year": "This Year",
+    "custom_range": "Custom Range"
+  }
+}

@@ -1,0 +1,64 @@
+{
+  "error": "Error",
+  "errors": {
+    "400": "Solicitud Inválida",
+    "401": "No Autorizado",
+    "403": "Prohibido",
+    "404": "No Encontrado",
+    "409": "Conflicto",
+    "422": "Entidad No Procesable",
+    "429": "Demasiadas Solicitudes",
+    "500": "Error Interno del Servidor",
+    "502": "Puerta de Enlace Inválida",
+    "503": "Servicio No Disponible",
+    "504": "Tiempo de Puerta de Enlace Agotado",
+    "generic": "Error desconocido. Por favor, inténtelo de nuevo.",
+    "network": "Error de conexión. Verifique su conexión.",
+    "timeout": "Tiempo de solicitud agotado."
+  },
+  "validation": {
+    "required_field": "Este campo es obligatorio",
+    "invalid_email": "Correo electrónico inválido",
+    "invalid_phone": "Teléfono inválido",
+    "invalid_cpf": "CPF inválido",
+    "invalid_date": "Fecha inválida",
+    "password_too_short": "Contraseña demasiado corta",
+    "password_mismatch": "Las contraseñas no coinciden",
+    "email_already_exists": "Este correo electrónico ya está registrado",
+    "minimum_length": "Debe tener al menos {{count}} caracteres",
+    "maximum_length": "No debe tener más de {{count}} caracteres",
+    "pattern_mismatch": "Formato inválido",
+    "invalid_number": "Número inválido"
+  },
+  "auth": {
+    "unauthorized": "No tiene permiso para acceder a este recurso",
+    "session_expired": "Su sesión ha expirado. Por favor, inicie sesión de nuevo",
+    "invalid_credentials": "Correo electrónico o contraseña inválidos",
+    "account_locked": "Su cuenta ha sido bloqueada. Póngase en contacto con soporte",
+    "account_disabled": "Su cuenta ha sido desactivada",
+    "email_not_verified": "Por favor, verifique su correo electrónico",
+    "two_factor_required": "Autenticación de dos factores requerida",
+    "invalid_token": "Token inválido o expirado"
+  },
+  "data": {
+    "not_found": "Recurso no encontrado",
+    "already_exists": "Este recurso ya existe",
+    "cannot_delete": "No se puede eliminar este recurso",
+    "cannot_update": "No se puede actualizar este recurso",
+    "conflict": "Conflicto al procesar datos",
+    "invalid_operation": "Operación inválida"
+  },
+  "file": {
+    "upload_failed": "Error al subir el archivo",
+    "file_too_large": "Archivo demasiado grande",
+    "invalid_file_type": "Tipo de archivo inválido",
+    "file_not_found": "Archivo no encontrado",
+    "download_failed": "Error al descargar el archivo"
+  },
+  "messages": {
+    "try_again": "Por favor, inténtelo de nuevo",
+    "contact_support": "Póngase en contacto con soporte para obtener ayuda",
+    "go_back": "Volver",
+    "reload_page": "Recargar Página"
+  }
+}
