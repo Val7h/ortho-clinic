@@ -1,5 +1,6 @@
 """Popula o banco com dados de exemplo para demonstração."""
 from datetime import date, datetime, timedelta
+import models.user_settings  # noqa — registra UserSession antes do mapper
 from database import SessionLocal, init_db
 from models.patient import Patient
 from models.consultation import Consultation
