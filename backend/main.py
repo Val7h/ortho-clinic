@@ -179,6 +179,7 @@ def startup():
     init_db()
     migrate_db()
     _ensure_superadmin()
+    _ensure_default_clinic()
 
 
 def _ensure_superadmin():
@@ -213,6 +214,46 @@ def _ensure_superadmin():
         print(f"✓ Superadmin criado: {admin_email}")
     except Exception as e:
         print(f"! Erro ao criar superadmin: {e}")
+    finally:
+        db.close()
+
+
+def _ensure_default_clinic():
+    """Cria clínica e horários padrão se não existir nenhuma."""
+    from database import SessionLocal
+    from models.clinic import Clinic, ClinicSchedule
+
+    db = SessionLocal()
+    try:
+        if db.query(Clinic).count() > 0:
+            return
+        clinic = Clinic(
+            name=os.getenv("SEED_CLINIC_NAME", "Clínica Dr. Valther"),
+            slug=os.getenv("SEED_CLINIC_SLUG", "dr-valther"),
+            city=os.getenv("SEED_CLINIC_CITY", "São Paulo"),
+            state=os.getenv("SEED_CLINIC_STATE", "SP"),
+            address=os.getenv("SEED_CLINIC_ADDRESS", ""),
+            color="#0F2D5E",
+            active=True,
+        )
+        db.add(clinic)
+        db.commit()
+        db.refresh(clinic)
+        # Seg–Sex 08:00–18:00, consultas de 30 min
+        for dow in range(5):
+            db.add(ClinicSchedule(
+                clinic_id=clinic.id,
+                day_of_week=dow,
+                start_time="08:00",
+                end_time="18:00",
+                schedule_type="appointment",
+                slot_duration=30,
+                active=True,
+            ))
+        db.commit()
+        print(f"✓ Clínica padrão criada: {clinic.name} (slug={clinic.slug})")
+    except Exception as e:
+        print(f"! Erro ao criar clínica padrão: {e}")
     finally:
         db.close()
 
