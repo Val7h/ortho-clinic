@@ -219,17 +219,37 @@ def _ensure_superadmin():
 
 
 def _ensure_default_clinic():
-    """Cria clínica e horários padrão se não existir nenhuma."""
+    """Cria ou corrige a clínica padrão e seus horários."""
     from database import SessionLocal
     from models.clinic import Clinic, ClinicSchedule
 
+    CLINIC_NAME = os.getenv("SEED_CLINIC_NAME", "Dr. Valth Guimarães")
+    CLINIC_SLUG = os.getenv("SEED_CLINIC_SLUG", "dr-valth")
+    SLOT_MIN    = int(os.getenv("SEED_SLOT_DURATION", "12"))  # 5 consultas/hora
+
     db = SessionLocal()
     try:
-        if db.query(Clinic).count() > 0:
+        clinic = db.query(Clinic).first()
+        if clinic:
+            # Corrige nome/slug/cor se estiver desatualizado
+            changed = False
+            if clinic.name != CLINIC_NAME:
+                clinic.name = CLINIC_NAME; changed = True
+            if clinic.slug != CLINIC_SLUG:
+                clinic.slug = CLINIC_SLUG; changed = True
+            if changed:
+                db.commit()
+                print(f"✓ Clínica atualizada: {CLINIC_NAME}")
+            # Corrige slot_duration em todos os horários
+            for s in db.query(ClinicSchedule).filter_by(clinic_id=clinic.id).all():
+                if s.slot_duration != SLOT_MIN:
+                    s.slot_duration = SLOT_MIN
+            db.commit()
+            print(f"✓ Horários: slot={SLOT_MIN}min")
             return
         clinic = Clinic(
-            name=os.getenv("SEED_CLINIC_NAME", "Clínica Dr. Valther"),
-            slug=os.getenv("SEED_CLINIC_SLUG", "dr-valther"),
+            name=os.getenv("SEED_CLINIC_NAME", "Dr. Valth Guimarães"),
+            slug=os.getenv("SEED_CLINIC_SLUG", "dr-valth"),
             city=os.getenv("SEED_CLINIC_CITY", "São Paulo"),
             state=os.getenv("SEED_CLINIC_STATE", "SP"),
             address=os.getenv("SEED_CLINIC_ADDRESS", ""),
@@ -239,7 +259,7 @@ def _ensure_default_clinic():
         db.add(clinic)
         db.commit()
         db.refresh(clinic)
-        # Seg–Sex 08:00–18:00, consultas de 30 min
+        # Seg–Sex 08:00–18:00, 5 consultas/hora = 12 min por slot
         for dow in range(5):
             db.add(ClinicSchedule(
                 clinic_id=clinic.id,
@@ -247,7 +267,7 @@ def _ensure_default_clinic():
                 start_time="08:00",
                 end_time="18:00",
                 schedule_type="appointment",
-                slot_duration=30,
+                slot_duration=12,
                 active=True,
             ))
         db.commit()
