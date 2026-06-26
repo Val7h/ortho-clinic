@@ -60,6 +60,22 @@ class AppointmentOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class ClinicUpdate(BaseModel):
+    name: str
+    slug: str
+    city: Optional[str] = None
+    state: Optional[str] = None
+    address: Optional[str] = None
+    color: Optional[str] = None
+
+
+class ScheduleUpdate(BaseModel):
+    slot_duration: Optional[int] = None
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+    active: Optional[bool] = None
+
+
 class BookIn(BaseModel):
     date: date
     start_time: Optional[str] = None
@@ -111,6 +127,56 @@ def _walk_in_count(db: Session, clinic_id: int, appt_date: date, start_time: str
 @router.get("/clinics", response_model=List[ClinicOut])
 def list_clinics(db: Session = Depends(get_db)):
     return db.query(Clinic).filter(Clinic.active == True).order_by(Clinic.name).all()
+
+
+@router.put("/clinics/{clinic_id}", response_model=ClinicOut)
+def update_clinic(
+    clinic_id: int,
+    data: ClinicUpdate,
+    db: Session = Depends(get_db),
+):
+    clinic = db.query(Clinic).filter(Clinic.id == clinic_id).first()
+    if not clinic:
+        raise HTTPException(404, "Clínica não encontrada")
+    clinic.name = data.name
+    clinic.slug = data.slug
+    if data.city is not None:
+        clinic.city = data.city
+    if data.state is not None:
+        clinic.state = data.state
+    if data.address is not None:
+        clinic.address = data.address
+    if data.color is not None:
+        clinic.color = data.color
+    db.commit()
+    db.refresh(clinic)
+    return clinic
+
+
+@router.put("/clinics/{clinic_id}/schedules/{schedule_id}", response_model=ScheduleOut)
+def update_schedule(
+    clinic_id: int,
+    schedule_id: int,
+    data: ScheduleUpdate,
+    db: Session = Depends(get_db),
+):
+    sched = db.query(ClinicSchedule).filter(
+        ClinicSchedule.id == schedule_id,
+        ClinicSchedule.clinic_id == clinic_id,
+    ).first()
+    if not sched:
+        raise HTTPException(404, "Horário não encontrado")
+    if data.slot_duration is not None:
+        sched.slot_duration = data.slot_duration
+    if data.start_time is not None:
+        sched.start_time = data.start_time
+    if data.end_time is not None:
+        sched.end_time = data.end_time
+    if data.active is not None:
+        sched.active = data.active
+    db.commit()
+    db.refresh(sched)
+    return sched
 
 
 @router.get("/clinics/{clinic_id}/appointments", response_model=List[AppointmentOut])

@@ -215,6 +215,11 @@ export const clinicApi = {
   deleteAppointment: (id: number) => api.delete(`/appointments/${id}`),
   blockSlot: (clinicId: number, data: { date: string; start_time: string; reason?: string }) =>
     api.post(`/clinics/${clinicId}/block`, { ...data, patient_name: "[BLOQUEADO]" }).then((r) => r.data),
+  // Edit clinic
+  updateClinic: (clinicId: number, data: { name: string; slug: string; city?: string; state?: string; address?: string; color?: string }) =>
+    api.put(`/clinics/${clinicId}`, data).then((r) => r.data),
+  updateSchedule: (clinicId: number, scheduleId: number, data: { slot_duration?: number; start_time?: string; end_time?: string; active?: boolean }) =>
+    api.put(`/clinics/${clinicId}/schedules/${scheduleId}`, data).then((r) => r.data),
   // Public
   getPublic: (slug: string) => api.get(`/agendar/${slug}`).then((r) => r.data),
   slots: (slug: string, date: string) =>

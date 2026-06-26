@@ -1,10 +1,10 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
 from datetime import date, datetime
 
 
 class ConsultationBase(BaseModel):
-    date: datetime
+    date: datetime = Field(default_factory=datetime.now)
     type: Optional[str] = "retorno"
     chief_complaint: Optional[str] = None
     history_of_illness: Optional[str] = None

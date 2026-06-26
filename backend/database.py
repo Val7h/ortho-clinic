@@ -26,7 +26,7 @@ def get_db():
 
 
 def init_db():
-    from models import patient, consultation, documents, whatsapp, financial, media, anamnesis, clinic, organization, queue, push_notification, patient_documents, oauth2  # noqa
+    from models import patient, consultation, documents, whatsapp, financial, media, anamnesis, clinic, organization, queue, push_notification, patient_documents, oauth2, patient_rx  # noqa
     from models import webhook  # noqa — WebhookEndpoint, WebhookDeliveryLog, WebhookDeadLetter
     from models import billing  # noqa — Sprint 8 Enterprise Billing
     from models import audit_log  # noqa — Sprint 8 Immutable Audit Log
@@ -137,6 +137,24 @@ def migrate_db():
                 document_id INTEGER NOT NULL UNIQUE,
                 cached_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 cache_key VARCHAR(200)
+            )
+        """),
+    ]:
+        if table_name not in existing_tables:
+            migrations.append(ddl)
+
+    # Patient prescriptions (patient-scoped, simple model)
+    for table_name, ddl in [
+        ("patient_prescriptions", """
+            CREATE TABLE IF NOT EXISTS patient_prescriptions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                patient_id INTEGER NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+                date DATE NOT NULL,
+                medications JSON DEFAULT '[]',
+                instructions TEXT,
+                memed_id VARCHAR(100),
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME
             )
         """),
     ]:

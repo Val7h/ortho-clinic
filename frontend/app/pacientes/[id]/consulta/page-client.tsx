@@ -59,6 +59,10 @@ export default function ConsultationPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!form.date) {
+      toast.error("Informe a data da consulta");
+      return;
+    }
     setSaving(true);
     try {
       const result = await consultationsApi.create(pid, {
