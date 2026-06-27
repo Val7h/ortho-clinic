@@ -25,13 +25,21 @@ router = APIRouter(prefix="/pre-consulta", tags=["Pré-Consulta"])
 FORM_SECRET = os.getenv("FORM_SECRET", "")
 PRE_CONSULTA_ORG_ID = int(os.getenv("PRE_CONSULTA_ORG_ID", "3"))
 
-_HTML_PATH = os.path.join(os.path.dirname(__file__), "..", "static", "pre-consulta.html")
+_HERE = os.path.dirname(__file__)
+_HTML_CANDIDATES = [
+    os.path.join(_HERE, "..", "static", "pre-consulta.html"),          # Docker: /app/static/
+    os.path.join(_HERE, "..", "frontend_out", "pre-consulta", "index.html"),  # Docker: /app/frontend_out/
+    os.path.join(_HERE, "..", "..", "frontend", "public", "pre-consulta", "index.html"),  # local dev
+]
 
 
 @router.get("", response_class=HTMLResponse, include_in_schema=False)
 def formulario_pre_consulta():
-    with open(_HTML_PATH, encoding="utf-8") as f:
-        return f.read()
+    for path in _HTML_CANDIDATES:
+        if os.path.isfile(path):
+            with open(path, encoding="utf-8") as f:
+                return f.read()
+    raise HTTPException(status_code=404, detail="Formulário não encontrado")
 
 
 # ── Schema do payload ──────────────────────────────────────────────────────────
