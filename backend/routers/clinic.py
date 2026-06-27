@@ -60,6 +60,15 @@ class AppointmentOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class ClinicCreate(BaseModel):
+    name: str
+    slug: str
+    city: Optional[str] = None
+    state: Optional[str] = None
+    address: Optional[str] = None
+    color: Optional[str] = "#0F2D5E"
+
+
 class ClinicUpdate(BaseModel):
     name: str
     slug: str
@@ -127,6 +136,31 @@ def _walk_in_count(db: Session, clinic_id: int, appt_date: date, start_time: str
 @router.get("/clinics", response_model=List[ClinicOut])
 def list_clinics(db: Session = Depends(get_db)):
     return db.query(Clinic).filter(Clinic.active == True).order_by(Clinic.name).all()
+
+
+@router.post("/clinics", response_model=ClinicOut, status_code=201)
+def create_clinic(
+    data: ClinicCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Cria uma nova clínica (superadmin/admin)."""
+    existing = db.query(Clinic).filter(Clinic.slug == data.slug).first()
+    if existing:
+        raise HTTPException(409, f"Já existe uma clínica com slug '{data.slug}'")
+    clinic = Clinic(
+        name=data.name,
+        slug=data.slug,
+        city=data.city or "",
+        state=data.state or "",
+        address=data.address or "",
+        color=data.color or "#0F2D5E",
+        active=True,
+    )
+    db.add(clinic)
+    db.commit()
+    db.refresh(clinic)
+    return clinic
 
 
 @router.put("/clinics/{clinic_id}", response_model=ClinicOut)

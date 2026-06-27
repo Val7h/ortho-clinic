@@ -4,6 +4,7 @@ import {
   MapPin, Calendar, Clock, CheckCircle, XCircle,
   User, Phone, FileText, ChevronDown, ChevronUp,
   Link as LinkIcon, Copy, RefreshCw, Loader2, Pencil,
+  Building2, Timer,
 } from "lucide-react";
 import NavBar from "@/components/NavBar";
 import { PageWithSidebar } from "@/components/PageWithSidebar";
@@ -40,6 +41,16 @@ function getNextDates(dayOfWeek: number, count = 4): string[] {
     if (dow === dayOfWeek) results.push(d.toISOString().slice(0, 10));
   }
   return results;
+}
+
+// Calculate approximate consultations per day from a schedule
+function consultasPerDay(schedule: any): number {
+  if (!schedule) return 0;
+  const slotMin = schedule.slot_duration ?? 12;
+  const [startH, startM] = (schedule.start_time ?? "08:00").split(":").map(Number);
+  const [endH, endM] = (schedule.end_time ?? "18:00").split(":").map(Number);
+  const totalMin = (endH * 60 + endM) - (startH * 60 + startM);
+  return Math.floor(totalMin / slotMin);
 }
 
 export default function ClinicasPage() {
@@ -167,7 +178,11 @@ export default function ClinicasPage() {
   return (
     <PageWithSidebar>
     <div className="min-h-screen bg-slate-50">
-      <NavBar title="Clínicas" subtitle="Agendamentos e horários" back="/" />
+      <NavBar
+        title="Clínicas"
+        subtitle={`${clinics.length} unidade${clinics.length !== 1 ? "s" : ""} configurada${clinics.length !== 1 ? "s" : ""}`}
+        back="/"
+      />
 
       {/* Edit Clinic Modal */}
       <Modal
@@ -181,12 +196,21 @@ export default function ClinicasPage() {
               Cancelar
             </Button>
             <Button variant="primary" size="sm" onClick={handleEditSave} disabled={editSaving}>
-              {editSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Salvar"}
+              {editSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Salvar alterações"}
             </Button>
           </div>
         }
       >
         <div className="space-y-4">
+          {/* Color preview banner */}
+          {editForm.color && (
+            <div
+              className="h-10 rounded-lg w-full flex items-center justify-center text-white text-sm font-semibold opacity-90"
+              style={{ backgroundColor: editForm.color }}
+            >
+              {editForm.name || "Nome da clínica"}
+            </div>
+          )}
           <Input
             label="Nome"
             value={editForm.name}
@@ -216,13 +240,16 @@ export default function ClinicasPage() {
           />
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-slate-700">Cor</label>
-              <input
-                type="color"
-                value={editForm.color}
-                onChange={(e) => setEditForm((f) => ({ ...f, color: e.target.value }))}
-                className="h-10 w-full cursor-pointer rounded-lg border border-slate-300 px-1 py-1"
-              />
+              <label className="mb-1.5 block text-sm font-medium text-slate-700">Cor da clínica</label>
+              <div className="flex items-center gap-3">
+                <input
+                  type="color"
+                  value={editForm.color}
+                  onChange={(e) => setEditForm((f) => ({ ...f, color: e.target.value }))}
+                  className="h-10 w-14 cursor-pointer rounded-lg border border-slate-300 px-1 py-1"
+                />
+                <span className="text-xs font-mono text-slate-500">{editForm.color}</span>
+              </div>
             </div>
             <Input
               label="Minutos por consulta"
@@ -236,26 +263,26 @@ export default function ClinicasPage() {
         </div>
       </Modal>
 
-      <main className="max-w-3xl mx-auto px-4 py-5 space-y-4">
+      <main className="max-w-3xl mx-auto px-4 py-6 space-y-5">
 
         {/* Summary row */}
         <div className="grid grid-cols-3 gap-3">
-          <Card padding="md" className="border-l-4 border-brand-500">
-            <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Clínicas</p>
-            <p className="text-3xl font-bold text-brand-600 mt-2">{clinics.length}</p>
-          </Card>
-          <Card padding="md" className="border-l-4 border-accent-500">
-            <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Com agendamento</p>
-            <p className="text-3xl font-bold text-accent-600 mt-2">
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Unidades</p>
+            <p className="text-3xl font-bold text-slate-800">{clinics.length}</p>
+          </div>
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Agendamento</p>
+            <p className="text-3xl font-bold text-brand-600">
               {clinics.filter(c => c.schedules.some((s: any) => s.schedule_type === "appointment")).length}
             </p>
-          </Card>
-          <Card padding="md" className="border-l-4 border-warning-500">
-            <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Ordem chegada</p>
-            <p className="text-3xl font-bold text-warning-600 mt-2">
+          </div>
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Ordem chegada</p>
+            <p className="text-3xl font-bold text-orange-500">
               {clinics.filter(c => c.schedules.some((s: any) => s.schedule_type === "walk_in")).length}
             </p>
-          </Card>
+          </div>
         </div>
 
         {/* Clinic cards */}
@@ -264,71 +291,124 @@ export default function ClinicasPage() {
           const hasOnlineBooking = clinic.schedules.some((s: any) => s.schedule_type === "appointment");
           const appts = apptsByClinic[clinic.id] || [];
           const pending = appts.filter((a: any) => a.status === "pending").length;
+          const clinicColor = clinic.color || "#0F2D5E";
+
+          // Build schedule summary
+          const scheduleLines = clinic.schedules.map((s: any, i: number) => (
+            `${DOW[s.day_of_week]} ${s.start_time}–${s.end_time}`
+          ));
+
+          // Consultations per day estimate (from first schedule)
+          const firstSched = clinic.schedules[0];
+          const consultasDia = consultasPerDay(firstSched);
 
           return (
-            <Card key={clinic.id} hoverable>
-              {/* Header */}
-              <div className="flex items-center gap-2 pr-2">
+            <div
+              key={clinic.id}
+              className="bg-white rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden"
+            >
+              {/* Color banner strip at top */}
+              <div
+                className="h-2 w-full"
+                style={{ backgroundColor: clinicColor }}
+              />
+
+              {/* Card header */}
+              <div className="flex items-start gap-0">
                 <button
                   onClick={() => toggleClinic(clinic.id)}
-                  className="flex-1 flex items-center gap-4 p-6 text-left focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-inset rounded"
+                  className="flex-1 flex items-start gap-4 p-5 text-left focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-inset rounded"
                   aria-expanded={isOpen}
                   aria-label={`${isOpen ? "Fechar" : "Abrir"} detalhes de ${clinic.name}`}
                 >
-                  {/* Color dot */}
+                  {/* Clinic icon */}
                   <div
-                    className="w-12 h-12 rounded-lg flex-shrink-0 flex items-center justify-center text-white font-bold text-sm"
-                    style={{ backgroundColor: clinic.color }}
+                    className="w-12 h-12 rounded-xl flex-shrink-0 flex items-center justify-center text-white font-bold text-base shadow-sm mt-0.5"
+                    style={{ backgroundColor: clinicColor }}
                   >
                     {clinic.name.slice(0, 2).toUpperCase()}
                   </div>
 
                   <div className="flex-1 min-w-0">
+                    {/* Name + badges */}
                     <div className="flex items-center gap-2 flex-wrap mb-2">
-                      <p className="font-semibold text-slate-900">{clinic.name}</p>
-                      <Badge variant={hasOnlineBooking ? "brand" : "warning"} size="sm">
-                        {hasOnlineBooking ? "Agendamento" : "Ordem de chegada"}
-                      </Badge>
+                      <p className="font-bold text-slate-900 text-base">{clinic.name}</p>
+                      <span
+                        className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold ${
+                          hasOnlineBooking
+                            ? "bg-brand-100 text-brand-700"
+                            : "bg-orange-100 text-orange-700"
+                        }`}
+                      >
+                        {hasOnlineBooking ? "Agendamento online" : "Ordem de chegada"}
+                      </span>
                       {pending > 0 && (
-                        <Badge variant="warning" size="sm">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-yellow-100 text-yellow-700 border border-yellow-200">
                           {pending} pendente{pending > 1 ? "s" : ""}
-                        </Badge>
+                        </span>
                       )}
                     </div>
-                    <div className="flex items-center gap-1.5 text-xs text-slate-600">
-                      <MapPin className="w-3.5 h-3.5 flex-shrink-0" />
-                      <span>{clinic.city}/{clinic.state}</span>
-                      <span className="text-slate-300">·</span>
+
+                    {/* Location */}
+                    {(clinic.city || clinic.state) && (
+                      <div className="flex items-center gap-1.5 text-xs text-slate-600 mb-2">
+                        <MapPin className="w-3.5 h-3.5 flex-shrink-0 text-slate-400" />
+                        <span>{[clinic.city, clinic.state].filter(Boolean).join(", ")}</span>
+                        {clinic.address && (
+                          <>
+                            <span className="text-slate-300">·</span>
+                            <span className="truncate text-slate-500">{clinic.address}</span>
+                          </>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Schedule pills */}
+                    <div className="flex flex-wrap gap-1.5">
                       {clinic.schedules.map((s: any, i: number) => (
-                        <span key={i} className="text-slate-600">
+                        <span
+                          key={i}
+                          className="inline-flex items-center gap-1 px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-xs"
+                        >
+                          <Clock className="w-3 h-3 flex-shrink-0" />
                           {DOW[s.day_of_week]} {s.start_time}–{s.end_time}
-                          {i < clinic.schedules.length - 1 ? ", " : ""}
                         </span>
                       ))}
+                      {consultasDia > 0 && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-50 text-green-700 rounded text-xs font-medium">
+                          <Timer className="w-3 h-3 flex-shrink-0" />
+                          ~{consultasDia} consultas/dia
+                        </span>
+                      )}
                     </div>
                   </div>
 
                   {isOpen
-                    ? <ChevronUp className="w-5 h-5 text-slate-400 flex-shrink-0" />
-                    : <ChevronDown className="w-5 h-5 text-slate-400 flex-shrink-0" />
+                    ? <ChevronUp className="w-5 h-5 text-slate-400 flex-shrink-0 mt-1" />
+                    : <ChevronDown className="w-5 h-5 text-slate-400 flex-shrink-0 mt-1" />
                   }
                 </button>
-                <Button
-                  onClick={(e) => openEdit(clinic, e)}
-                  variant="tertiary"
-                  size="sm"
-                  icon={<Pencil className="w-4 h-4" />}
-                  ariaLabel={`Editar ${clinic.name}`}
-                />
+
+                {/* Edit button — always visible, styled prominently */}
+                <div className="p-4 pt-5">
+                  <button
+                    onClick={(e) => openEdit(clinic, e)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:text-brand-700 hover:bg-brand-50 border border-slate-200 hover:border-brand-300 transition-all"
+                    title={`Editar ${clinic.name}`}
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                    Editar
+                  </button>
+                </div>
               </div>
 
               {/* Expanded content */}
               {isOpen && (
-                <div className="border-t border-slate-200 pt-6">
+                <div className="border-t border-slate-200 pt-5">
 
-                  {/* Link público — todas as clínicas têm agora */}
-                  <div className="px-6 pb-6 border-b border-slate-200">
-                    <p className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-3">
+                  {/* Link público */}
+                  <div className="px-5 pb-5 border-b border-slate-200">
+                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-3">
                       Link de {hasOnlineBooking ? "agendamento" : "confirmação de presença"}
                     </p>
                     <div className="flex items-center gap-2">
@@ -338,149 +418,154 @@ export default function ClinicasPage() {
                         value={typeof window !== "undefined" ? `${window.location.origin}/agendar/${clinic.slug}` : `/agendar/${clinic.slug}`}
                         className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-700 font-mono truncate"
                       />
-                      <Button
+                      <button
                         onClick={() => copyLink(clinic.slug)}
-                        size="sm"
-                        icon={<Copy className="w-4 h-4" />}
-                        style={{ backgroundColor: clinic.color, borderColor: clinic.color }}
-                        className="text-white flex-shrink-0"
-                        ariaLabel={`Copiar link de agendamento de ${clinic.name}`}
-                      />
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold text-white flex-shrink-0 transition-opacity hover:opacity-90"
+                        style={{ backgroundColor: clinicColor }}
+                        aria-label={`Copiar link de agendamento de ${clinic.name}`}
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                        Copiar
+                      </button>
                     </div>
                     {!hasOnlineBooking && (
-                      <p className="text-xs text-slate-600 mt-3">
+                      <p className="text-xs text-slate-500 mt-2">
                         Ordem de chegada · Limite de 30 pacientes por turno
                       </p>
                     )}
                   </div>
 
-                  {/* Appointments list — all clinics */}
-                  <div className="px-6">
-                      <div className="flex items-center justify-between mb-4">
-                        <p className="text-xs font-semibold text-slate-700 uppercase tracking-wide">
-                          {hasOnlineBooking ? "Próximos agendamentos" : "Presenças confirmadas"}
-                        </p>
-                        <Button
-                          onClick={() => loadAppointments(clinic.id)}
-                          variant="tertiary"
-                          size="sm"
-                          icon={apptLoading === clinic.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-                          ariaLabel={`Atualizar agendamentos de ${clinic.name}`}
-                          disabled={apptLoading === clinic.id}
-                        />
-                      </div>
+                  {/* Appointments list */}
+                  <div className="px-5">
+                    <div className="flex items-center justify-between py-4">
+                      <p className="text-xs font-semibold text-slate-500 uppercase tracking-widest">
+                        {hasOnlineBooking ? "Próximos agendamentos" : "Presenças confirmadas"}
+                      </p>
+                      <button
+                        onClick={() => loadAppointments(clinic.id)}
+                        className="flex items-center gap-1 text-xs text-slate-500 hover:text-brand-600 transition-colors"
+                        disabled={apptLoading === clinic.id}
+                        aria-label={`Atualizar agendamentos de ${clinic.name}`}
+                      >
+                        {apptLoading === clinic.id
+                          ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          : <RefreshCw className="w-3.5 h-3.5" />
+                        }
+                        Atualizar
+                      </button>
+                    </div>
 
-                      {appts.filter((a: any) => a.status !== "blocked").length === 0 ? (
-                        <div className="text-center py-8">
-                          <Calendar className="w-10 h-10 text-slate-200 mx-auto mb-3" />
-                          <p className="text-sm text-slate-500">Nenhum agendamento nos próximos 30 dias</p>
-                        </div>
-                      ) : (
-                        <div className="space-y-3 pb-6">
-                          {appts
-                            .filter((a: any) => a.status !== "blocked")
-                            .map((a: any) => {
-                              const st = STATUS_CONFIG[a.status] || STATUS_CONFIG.pending;
-                              return (
-                                <div
-                                  key={a.id}
-                                  className="rounded-lg border border-slate-200 p-4 bg-slate-50"
-                                >
-                                  <div className="flex items-start justify-between gap-3">
-                                    <div className="flex-1 min-w-0">
-                                      <div className="flex items-center gap-2 flex-wrap mb-2">
-                                        {a.queue_number && (
-                                          <span
-                                            className="text-xs font-extrabold px-2.5 py-1 rounded text-white"
-                                            style={{ backgroundColor: clinic.color }}
-                                          >
-                                            #{a.queue_number}
-                                          </span>
-                                        )}
-                                        <p className="font-semibold text-slate-900 text-sm">{a.patient_name}</p>
-                                        <Badge variant={st.variant} size="sm">
-                                          {st.label}
-                                        </Badge>
-                                      </div>
-                                      <div className="flex flex-wrap gap-3">
-                                        <span className="flex items-center gap-1 text-xs text-slate-600">
-                                          <Calendar className="w-3.5 h-3.5 flex-shrink-0" />
-                                          {fmtDate(a.date)}
+                    {appts.filter((a: any) => a.status !== "blocked").length === 0 ? (
+                      <div className="text-center py-10 pb-6">
+                        <Calendar className="w-10 h-10 text-slate-200 mx-auto mb-3" />
+                        <p className="text-sm text-slate-500">Nenhum agendamento nos próximos 30 dias</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3 pb-5">
+                        {appts
+                          .filter((a: any) => a.status !== "blocked")
+                          .map((a: any) => {
+                            const st = STATUS_CONFIG[a.status] || STATUS_CONFIG.pending;
+                            return (
+                              <div
+                                key={a.id}
+                                className="rounded-xl border border-slate-200 p-4 bg-slate-50 hover:bg-white transition-colors"
+                              >
+                                <div className="flex items-start justify-between gap-3">
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2 flex-wrap mb-2">
+                                      {a.queue_number && (
+                                        <span
+                                          className="text-xs font-extrabold px-2.5 py-1 rounded text-white"
+                                          style={{ backgroundColor: clinicColor }}
+                                        >
+                                          #{a.queue_number}
                                         </span>
+                                      )}
+                                      <p className="font-semibold text-slate-900 text-sm">{a.patient_name}</p>
+                                      <Badge variant={st.variant} size="sm">
+                                        {st.label}
+                                      </Badge>
+                                    </div>
+                                    <div className="flex flex-wrap gap-3">
+                                      <span className="flex items-center gap-1 text-xs text-slate-600">
+                                        <Calendar className="w-3.5 h-3.5 flex-shrink-0 text-slate-400" />
+                                        {fmtDate(a.date)}
+                                      </span>
+                                      <span className="flex items-center gap-1 text-xs text-slate-600">
+                                        <Clock className="w-3.5 h-3.5 flex-shrink-0 text-slate-400" />
+                                        {a.queue_number ? `Turno ${a.start_time}–${a.end_time}` : `${a.start_time} – ${a.end_time}`}
+                                      </span>
+                                      {a.patient_phone && (
                                         <span className="flex items-center gap-1 text-xs text-slate-600">
-                                          <Clock className="w-3.5 h-3.5 flex-shrink-0" />
-                                          {a.queue_number ? `Turno ${a.start_time}–${a.end_time}` : `${a.start_time} – ${a.end_time}`}
+                                          <Phone className="w-3.5 h-3.5 flex-shrink-0 text-slate-400" />
+                                          {a.patient_phone}
                                         </span>
-                                        {a.patient_phone && (
-                                          <span className="flex items-center gap-1 text-xs text-slate-600">
-                                            <Phone className="w-3.5 h-3.5 flex-shrink-0" />
-                                            {a.patient_phone}
-                                          </span>
-                                        )}
-                                      </div>
-                                      {a.reason && (
-                                        <p className="text-xs text-slate-600 mt-2">
-                                          📋 {a.reason}
-                                        </p>
                                       )}
                                     </div>
+                                    {a.reason && (
+                                      <p className="text-xs text-slate-500 mt-2 bg-white rounded px-2 py-1 border border-slate-100">
+                                        {a.reason}
+                                      </p>
+                                    )}
                                   </div>
-
-                                  {/* Action buttons */}
-                                  {a.status === "pending" && (
-                                    <div className="flex gap-2 mt-3">
-                                      <Button
-                                        onClick={() => handleStatus(a.id, "confirmed", clinic.id)}
-                                        variant="success"
-                                        size="sm"
-                                        fullWidth
-                                        icon={<CheckCircle className="w-4 h-4" />}
-                                        ariaLabel={`Confirmar agendamento de ${a.patient_name}`}
-                                      >
-                                        Confirmar
-                                      </Button>
-                                      <Button
-                                        onClick={() => handleStatus(a.id, "cancelled", clinic.id)}
-                                        variant="danger"
-                                        size="sm"
-                                        fullWidth
-                                        icon={<XCircle className="w-4 h-4" />}
-                                        ariaLabel={`Cancelar agendamento de ${a.patient_name}`}
-                                      >
-                                        Cancelar
-                                      </Button>
-                                    </div>
-                                  )}
-                                  {a.status === "confirmed" && (
-                                    <div className="flex gap-2 mt-3">
-                                      <Button
-                                        onClick={() => handleStatus(a.id, "completed", clinic.id)}
-                                        variant="primary"
-                                        size="sm"
-                                        fullWidth
-                                        icon={<CheckCircle className="w-4 h-4" />}
-                                        ariaLabel={`Marcar como realizado agendamento de ${a.patient_name}`}
-                                      >
-                                        Marcar realizado
-                                      </Button>
-                                      <Button
-                                        onClick={() => handleStatus(a.id, "cancelled", clinic.id)}
-                                        variant="tertiary"
-                                        size="sm"
-                                        icon={<XCircle className="w-4 h-4" />}
-                                        ariaLabel={`Cancelar agendamento de ${a.patient_name}`}
-                                      />
-                                    </div>
-                                  )}
                                 </div>
-                              );
-                            })}
-                        </div>
-                      )}
-                    </div>
+
+                                {/* Action buttons */}
+                                {a.status === "pending" && (
+                                  <div className="flex gap-2 mt-3">
+                                    <Button
+                                      onClick={() => handleStatus(a.id, "confirmed", clinic.id)}
+                                      variant="success"
+                                      size="sm"
+                                      fullWidth
+                                      icon={<CheckCircle className="w-4 h-4" />}
+                                      ariaLabel={`Confirmar agendamento de ${a.patient_name}`}
+                                    >
+                                      Confirmar
+                                    </Button>
+                                    <Button
+                                      onClick={() => handleStatus(a.id, "cancelled", clinic.id)}
+                                      variant="danger"
+                                      size="sm"
+                                      fullWidth
+                                      icon={<XCircle className="w-4 h-4" />}
+                                      ariaLabel={`Cancelar agendamento de ${a.patient_name}`}
+                                    >
+                                      Cancelar
+                                    </Button>
+                                  </div>
+                                )}
+                                {a.status === "confirmed" && (
+                                  <div className="flex gap-2 mt-3">
+                                    <Button
+                                      onClick={() => handleStatus(a.id, "completed", clinic.id)}
+                                      variant="primary"
+                                      size="sm"
+                                      fullWidth
+                                      icon={<CheckCircle className="w-4 h-4" />}
+                                      ariaLabel={`Marcar como realizado agendamento de ${a.patient_name}`}
+                                    >
+                                      Marcar realizado
+                                    </Button>
+                                    <Button
+                                      onClick={() => handleStatus(a.id, "cancelled", clinic.id)}
+                                      variant="tertiary"
+                                      size="sm"
+                                      icon={<XCircle className="w-4 h-4" />}
+                                      ariaLabel={`Cancelar agendamento de ${a.patient_name}`}
+                                    />
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
-            </Card>
+            </div>
           );
         })}
       </main>

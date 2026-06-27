@@ -182,6 +182,7 @@ def startup():
     migrate_db()
     _ensure_superadmin()
     _ensure_default_clinic()
+    _ensure_clinics()
 
 
 def _ensure_superadmin():
@@ -206,7 +207,7 @@ def _ensure_superadmin():
         pw_ctx = _CryptContext(schemes=["bcrypt"], deprecated="auto")
         user = User(
             organization_id=org.id,
-            name="Dr. Valther",
+            name="Dr. Valth",
             email=admin_email,
             password_hash=pw_ctx.hash(admin_pass),
             role="superadmin",
@@ -276,6 +277,42 @@ def _ensure_default_clinic():
         print(f"✓ Clínica padrão criada: {clinic.name} (slug={clinic.slug})")
     except Exception as e:
         print(f"! Erro ao criar clínica padrão: {e}")
+    finally:
+        db.close()
+
+
+def _ensure_clinics():
+    """Cria as 3 clínicas padrão do Dr. Valth se ainda não existirem."""
+    from database import SessionLocal
+    from models.clinic import Clinic
+
+    CLINICS = [
+        {"name": "Dr. Valth - Caruaru",       "slug": "caruaru",       "city": "Caruaru",       "state": "PE", "color": "#0F2D5E"},
+        {"name": "Dr. Valth - Campina Grande", "slug": "campina-grande","city": "Campina Grande","state": "PB", "color": "#0F2D5E"},
+        {"name": "Dr. Valth - Palmares",       "slug": "palmares",      "city": "Palmares",      "state": "PE", "color": "#0F2D5E"},
+    ]
+
+    db = SessionLocal()
+    try:
+        for c in CLINICS:
+            existing = db.query(Clinic).filter(Clinic.slug == c["slug"]).first()
+            if not existing:
+                clinic = Clinic(
+                    name=c["name"],
+                    slug=c["slug"],
+                    city=c["city"],
+                    state=c["state"],
+                    address="",
+                    color=c["color"],
+                    active=True,
+                )
+                db.add(clinic)
+                db.commit()
+                print(f"✓ Clínica criada: {c['name']}")
+            else:
+                print(f"✓ Clínica já existe: {c['name']}")
+    except Exception as e:
+        print(f"! Erro ao criar clínicas: {e}")
     finally:
         db.close()
 

@@ -12,18 +12,40 @@ import { useProtectedPage } from "@/components/AuthProvider";
 import toast from "react-hot-toast";
 
 const ROLES = [
-  { value: "secretary", label: "Secretária", variant: "neutral" as const },
-  { value: "doctor",    label: "Médico",      variant: "brand" as const },
-  { value: "admin",     label: "Admin",       variant: "accent" as const },
-  { value: "superadmin",label: "Super Admin", variant: "error" as const },
+  { value: "secretary", label: "Secretária", variant: "neutral" as const, color: "bg-blue-100 text-blue-700 border-blue-200" },
+  { value: "doctor",    label: "Médico",      variant: "brand" as const,   color: "bg-green-100 text-green-700 border-green-200" },
+  { value: "admin",     label: "Admin",       variant: "accent" as const,  color: "bg-orange-100 text-orange-700 border-orange-200" },
+  { value: "superadmin",label: "Super Admin", variant: "error" as const,   color: "bg-purple-100 text-purple-700 border-purple-200" },
 ];
+
+// Generate a consistent color for avatar based on name
+function avatarColor(name: string): string {
+  const colors = [
+    "bg-blue-500", "bg-green-500", "bg-purple-500", "bg-orange-500",
+    "bg-pink-500", "bg-teal-500", "bg-indigo-500", "bg-rose-500",
+  ];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return colors[Math.abs(hash) % colors.length];
+}
+
+function initials(name: string): string {
+  return name
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0].toUpperCase())
+    .join("");
+}
 
 function roleBadge(role: string) {
   const r = ROLES.find((x) => x.value === role) || ROLES[0];
   return (
-    <Badge variant={r.variant} size="sm">
+    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold border ${r.color}`}>
       {r.label}
-    </Badge>
+    </span>
   );
 }
 
@@ -153,37 +175,38 @@ export default function UsuariosPage() {
     );
   }
 
+  const activeUsers = users.filter((u) => u.active);
+  const inactiveUsers = users.filter((u) => !u.active);
+
   return (
     <PageWithSidebar>
     <div className="min-h-screen bg-slate-50">
       <NavBar
-        title="Usuários"
-        subtitle="Gerenciar equipe"
+        title="Equipe"
+        subtitle={`${activeUsers.length} membro${activeUsers.length !== 1 ? "s" : ""} ativo${activeUsers.length !== 1 ? "s" : ""}`}
         back="/"
         actions={
-          <Button
+          <button
             onClick={openCreate}
-            variant="secondary"
-            size="sm"
-            icon={<Plus className="w-4 h-4" />}
-            className="text-white bg-white/15 hover:bg-white/25 border border-white/20"
+            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold bg-white text-brand-700 hover:bg-brand-50 border border-white/30 shadow-sm transition-all"
           >
-            Novo
-          </Button>
+            <Plus className="w-4 h-4" />
+            Convidar membro
+          </button>
         }
       />
 
-      <main className="max-w-2xl mx-auto px-4 py-5 space-y-4">
+      <main className="max-w-3xl mx-auto px-4 py-6 space-y-5">
 
-        {/* Summary */}
-        <div className="grid grid-cols-3 gap-3">
+        {/* Summary cards */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {ROLES.filter((r) => r.value !== "superadmin" || me.role === "superadmin").map((r) => {
             const count = users.filter((u) => u.role === r.value && u.active).length;
             return (
-              <Card key={r.value} padding="md" className="border-l-4 border-brand-500">
-                <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide">{r.label}</p>
-                <p className="text-3xl font-bold text-brand-600 mt-2">{count}</p>
-              </Card>
+              <div key={r.value} className={`bg-white rounded-xl border border-slate-200 shadow-sm p-4`}>
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">{r.label}</p>
+                <p className="text-3xl font-bold text-slate-800">{count}</p>
+              </div>
             );
           })}
         </div>
@@ -211,75 +234,126 @@ export default function UsuariosPage() {
           </Card>
         )}
 
-        {/* Users list */}
-        <Card>
-          <div className="flex items-center gap-2 mb-4 pb-4 border-b border-slate-200">
-            <Users className="w-5 h-5 text-slate-400" />
-            <p className="text-sm font-semibold text-slate-900">Equipe</p>
-            <span className="ml-auto text-xs text-slate-600 font-medium">{users.length} usuário{users.length !== 1 ? "s" : ""}</span>
+        {/* Users grid */}
+        {loading ? (
+          <div className="flex justify-center py-16">
+            <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
           </div>
+        ) : users.length === 0 ? (
+          <div className="text-center py-16">
+            <Users className="w-12 h-12 text-slate-200 mx-auto mb-3" />
+            <p className="text-sm text-slate-500">Nenhum usuário cadastrado</p>
+          </div>
+        ) : (
+          <>
+            {/* Section title */}
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-widest">Membros ativos</p>
+              <span className="text-xs text-slate-400">{activeUsers.length} pessoa{activeUsers.length !== 1 ? "s" : ""}</span>
+            </div>
 
-          {loading ? (
-            <div className="flex justify-center py-12">
-              <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
-            </div>
-          ) : users.length === 0 ? (
-            <div className="text-center py-12">
-              <Users className="w-10 h-10 text-slate-200 mx-auto mb-3" />
-              <p className="text-sm text-slate-500">Nenhum usuário cadastrado</p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {users.map((u) => (
-                <div key={u.id} className={`flex items-center gap-3 p-4 bg-slate-50 rounded-lg transition-opacity ${!u.active ? "opacity-50" : ""}`}>
-                  <div className="w-10 h-10 rounded-lg bg-brand-100 flex items-center justify-center flex-shrink-0">
-                    <User className="w-5 h-5 text-brand-600" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap mb-1">
-                      <p className="font-semibold text-slate-900 text-sm">{u.name}</p>
-                      {roleBadge(u.role)}
-                      {!u.active && (
-                        <Badge variant="error" size="sm">Inativo</Badge>
-                      )}
-                      {u.id === me.id && (
-                        <Badge variant="brand" size="sm">Você</Badge>
-                      )}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {activeUsers.map((u) => {
+                const bgColor = avatarColor(u.name);
+                const inits = initials(u.name);
+                const isMe = u.id === me.id;
+
+                return (
+                  <div
+                    key={u.id}
+                    className="bg-white rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden group"
+                  >
+                    {/* Top accent strip */}
+                    <div className={`h-1.5 w-full ${bgColor}`} />
+
+                    <div className="p-5">
+                      {/* Avatar + actions row */}
+                      <div className="flex items-start justify-between mb-4">
+                        <div className="relative">
+                          <div className={`w-14 h-14 rounded-full ${bgColor} flex items-center justify-center text-white font-bold text-lg shadow-sm`}>
+                            {inits}
+                          </div>
+                          {/* Online/Active indicator */}
+                          <span className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-green-400 border-2 border-white" title="Ativo" />
+                        </div>
+
+                        {/* Edit / Delete */}
+                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={() => openEdit(u)}
+                            className="p-1.5 rounded-lg text-slate-500 hover:text-brand-600 hover:bg-brand-50 transition-colors"
+                            title={`Editar ${u.name}`}
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                          {!isMe && (
+                            <button
+                              onClick={() => handleDeactivate(u)}
+                              className="p-1.5 rounded-lg text-slate-500 hover:text-red-600 hover:bg-red-50 transition-colors"
+                              title={`Desativar ${u.name}`}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Name + badges */}
+                      <div className="space-y-1.5">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="font-semibold text-slate-900 text-sm leading-tight">{u.name}</p>
+                          {isMe && (
+                            <span className="text-xs bg-brand-100 text-brand-700 px-1.5 py-0.5 rounded font-medium">Você</span>
+                          )}
+                        </div>
+                        <p className="text-xs text-slate-500 truncate">{u.email}</p>
+                      </div>
+
+                      {/* Role badge */}
+                      <div className="mt-3">
+                        {roleBadge(u.role)}
+                      </div>
                     </div>
-                    <p className="text-xs text-slate-600 truncate">{u.email}</p>
                   </div>
-                  <div className="flex items-center gap-1 flex-shrink-0">
-                    <Button
-                      onClick={() => openEdit(u)}
-                      variant="tertiary"
-                      size="sm"
-                      icon={<Pencil className="w-4 h-4" />}
-                      className="text-slate-600"
-                      ariaLabel={`Editar usuário ${u.name}`}
-                    />
-                    {u.id !== me.id && u.active && (
-                      <Button
-                        onClick={() => handleDeactivate(u)}
-                        variant="danger"
-                        size="sm"
-                        icon={<Trash2 className="w-4 h-4" />}
-                        className="text-error-600"
-                        ariaLabel={`Remover usuário ${u.name}`}
-                      />
-                    )}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
-          )}
-        </Card>
+
+            {/* Inactive users (collapsed) */}
+            {inactiveUsers.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-3">Inativos ({inactiveUsers.length})</p>
+                <div className="space-y-2">
+                  {inactiveUsers.map((u) => (
+                    <div key={u.id} className="flex items-center gap-3 p-3 bg-white rounded-lg border border-slate-200 opacity-50">
+                      <div className={`w-8 h-8 rounded-full ${avatarColor(u.name)} flex items-center justify-center text-white text-xs font-bold`}>
+                        {initials(u.name)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-slate-700">{u.name}</p>
+                        <p className="text-xs text-slate-500 truncate">{u.email}</p>
+                      </div>
+                      {roleBadge(u.role)}
+                      <button
+                        onClick={() => openEdit(u)}
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-brand-600 hover:bg-brand-50 transition-colors"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        )}
       </main>
 
       {/* Modal */}
       <Modal
         open={modal === "create" || modal === "edit"}
         onOpenChange={(open) => !open && closeModal()}
-        title={modal === "create" ? "Novo usuário" : "Editar usuário"}
+        title={modal === "create" ? "Convidar membro" : "Editar membro"}
         size="md"
         footer={
           <div className="flex gap-3">
@@ -341,7 +415,7 @@ export default function UsuariosPage() {
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-900 mb-2">Perfil</label>
+            <label className="block text-sm font-medium text-slate-900 mb-2">Perfil de acesso</label>
             <div className="grid grid-cols-2 gap-2">
               {ROLES.filter((r) => r.value !== "superadmin" || me.role === "superadmin").map((r) => (
                 <button
@@ -358,8 +432,8 @@ export default function UsuariosPage() {
                 </button>
               ))}
             </div>
-            <p className="text-xs text-slate-600 mt-3">
-              Secretária: agendamentos • Médico: clínico completo • Admin: + usuários
+            <p className="text-xs text-slate-500 mt-3 bg-slate-50 rounded-lg px-3 py-2">
+              Secretária: agendamentos · Médico: clínico completo · Admin: + usuários
             </p>
           </div>
         </div>
