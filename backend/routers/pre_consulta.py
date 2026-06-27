@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -23,6 +24,14 @@ router = APIRouter(prefix="/pre-consulta", tags=["Pré-Consulta"])
 
 FORM_SECRET = os.getenv("FORM_SECRET", "")
 PRE_CONSULTA_ORG_ID = int(os.getenv("PRE_CONSULTA_ORG_ID", "3"))
+
+_HTML_PATH = os.path.join(os.path.dirname(__file__), "..", "static", "pre-consulta.html")
+
+
+@router.get("", response_class=HTMLResponse, include_in_schema=False)
+def formulario_pre_consulta():
+    with open(_HTML_PATH, encoding="utf-8") as f:
+        return f.read()
 
 
 # ── Schema do payload ──────────────────────────────────────────────────────────
