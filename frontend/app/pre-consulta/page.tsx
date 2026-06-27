@@ -659,7 +659,7 @@ async function uploadArquivo(arquivo) {
     const form = new FormData();
     form.append('arquivo', arquivo);
     const res = await fetch(
-      'http://2.25.147.8:3030/upload-exame?token=' + TOKEN + '&exp=' + EXP + '&agendamento_id=' + AID,
+      '/pre-consulta/upload-exame?token=' + TOKEN + '&exp=' + EXP + '&agendamento_id=' + AID,
       { method: 'POST', body: form }
     );
     if (!res.ok) {

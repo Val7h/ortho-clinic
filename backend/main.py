@@ -343,6 +343,11 @@ if out_dir:
         app.mount("/_next/static", StaticFiles(directory=_next_static), name="nextjs-static")
     app.mount("/static", StaticFiles(directory=out_dir, html=True), name="nextjs-out")
 
+# Uploads de exames do formulário pré-consulta
+_uploads_exames = app_dir / "uploads" / "exames"
+_uploads_exames.mkdir(parents=True, exist_ok=True)
+app.mount("/uploads/exames", StaticFiles(directory=_uploads_exames), name="uploads-exames")
+
 @app.get("/{full_path:path}")
 async def serve_frontend(full_path: str, request: Request):
     if full_path.startswith(("api/", "auth/", "health", "docs", "openapi")):

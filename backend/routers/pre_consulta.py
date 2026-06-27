@@ -7,11 +7,14 @@ Não exige JWT — é chamado antes da consulta, pelo próprio paciente.
 import hmac
 import hashlib
 import os
+import shutil
 import time
+import uuid
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -191,6 +194,26 @@ def _atualizar_paciente(patient: Patient, data: PreConsultaPayload) -> None:
 
 
 # ── Endpoint ───────────────────────────────────────────────────────────────────
+
+_UPLOADS_DIR = Path(os.getenv("UPLOADS_DIR", "/app/uploads/exames"))
+
+@router.post("/upload-exame")
+async def upload_exame(
+    arquivo: UploadFile = File(...),
+    token: str = "",
+    exp: str = "",
+    agendamento_id: str = "",
+):
+    _validar_token(agendamento_id, exp, token)
+    _UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+    suffix = Path(arquivo.filename or "file.bin").suffix or ".bin"
+    nome = f"{uuid.uuid4()}{suffix}"
+    dest = _UPLOADS_DIR / nome
+    with dest.open("wb") as f:
+        shutil.copyfileobj(arquivo.file, f)
+    url = f"/uploads/exames/{nome}"
+    return {"url": url, "nome": arquivo.filename}
+
 
 @router.post("/submit", response_model=PreConsultaOut)
 def submit_pre_consulta(data: PreConsultaPayload, db: Session = Depends(get_db)):
