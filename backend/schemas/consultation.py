@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 from typing import Optional
-from datetime import date, datetime
+from datetime import date as _date, datetime
 
 
 class ConsultationBase(BaseModel):
@@ -24,7 +24,7 @@ class ConsultationBase(BaseModel):
     treatment_plan: Optional[str] = None
     evolution: Optional[str] = None
     procedure_performed: Optional[str] = None
-    next_appointment: Optional[date] = None
+    next_appointment: Optional[_date] = None
     next_appointment_notes: Optional[str] = None
     doctor_private_notes: Optional[str] = None
     teleconsult_url: Optional[str] = None
