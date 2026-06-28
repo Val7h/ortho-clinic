@@ -149,9 +149,16 @@ def _buscar_ou_criar_paciente(db: Session, data: PreConsultaPayload) -> tuple[Pa
         db.refresh(patient)
         return patient, False
 
-    # cria novo
+    # cria novo — resolve uma organização válida (evita FK violation se
+    # PRE_CONSULTA_ORG_ID não existir no banco; cai para a primeira org).
+    from models.organization import Organization
+    org_id = PRE_CONSULTA_ORG_ID
+    if not db.query(Organization.id).filter(Organization.id == org_id).first():
+        first_org = db.query(Organization).order_by(Organization.id).first()
+        if first_org:
+            org_id = first_org.id
     patient = Patient(
-        organization_id=PRE_CONSULTA_ORG_ID,
+        organization_id=org_id,
         name=data.nome,
         phone=data.telefone,
     )
