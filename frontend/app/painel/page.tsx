@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import {
   Clock, UserCheck, UserX, Play, CheckCircle, Timer,
-  Plus, Trash2, RefreshCw, Search, ChevronRight
+  Plus, Trash2, RefreshCw, Search, ChevronRight, Stethoscope,
 } from 'lucide-react';
 import Link from 'next/link';
 import NavBar from '@/components/NavBar';
@@ -11,23 +11,11 @@ import { PageWithSidebar } from '@/components/PageWithSidebar';
 import { Card, CardContent, Badge, Button, Modal, useModal } from '@/components/ui';
 import { patientsApi, waitingRoomApi, clinicApi } from '@/lib/api';
 import toast from 'react-hot-toast';
+import ConsultaDrawer, { WaitingRoomEntry } from './ConsultaDrawer';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
 type QueueStatus = 'waiting' | 'attending' | 'attended' | 'absent';
-
-interface WaitingEntry {
-  id: number;
-  patient_id: number;
-  patient_name: string;
-  patient_insurance: string | null;
-  clinic_id: number | null;
-  reason: string | null;
-  position: number;
-  arrived_at: string;
-  status: QueueStatus;
-  waited_minutes: number | null;
-}
 
 type Filter = 'all' | QueueStatus;
 
@@ -87,31 +75,41 @@ function insuranceColor(name: string | null): string {
 // ── Patient card ───────────────────────────────────────────────────────────
 
 interface PatientCardProps {
-  entry: WaitingEntry;
+  entry: WaitingRoomEntry;
   onStatusChange: (id: number, status: QueueStatus) => Promise<void>;
   onRemove: (id: number) => void;
+  onSelect: (entry: WaitingRoomEntry) => void;
   busy: boolean;
+  selected: boolean;
 }
 
-function PatientCard({ entry, onStatusChange, onRemove, busy }: PatientCardProps) {
+function PatientCard({ entry, onStatusChange, onRemove, onSelect, busy, selected }: PatientCardProps) {
   const isAttended = entry.status === 'attended';
   const isAbsent = entry.status === 'absent';
   const isDimmed = isAttended || isAbsent;
 
   return (
     <div
-      className={`relative rounded-xl border transition-all duration-200 ${
-        entry.status === 'attending'
+      className={`relative rounded-xl border transition-all duration-200 cursor-pointer ${
+        selected
+          ? 'border-blue-500 dark:border-blue-400 shadow-md shadow-blue-100 dark:shadow-blue-950 ring-2 ring-blue-500/30'
+          : entry.status === 'attending'
           ? 'border-green-400 dark:border-green-600 shadow-md shadow-green-100 dark:shadow-green-950'
           : entry.status === 'waiting'
           ? 'border-amber-300 dark:border-amber-700'
           : 'border-slate-200 dark:border-slate-700'
       } bg-white dark:bg-slate-900 ${isDimmed ? 'opacity-60' : ''}`}
+      onClick={() => onSelect(entry)}
     >
-      {entry.status === 'attending' && (
+      {entry.status === 'attending' && !selected && (
         <span className="absolute -top-1 -right-1 flex h-3 w-3">
           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
           <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500" />
+        </span>
+      )}
+      {selected && (
+        <span className="absolute -top-1 -right-1 flex h-3 w-3">
+          <span className="relative inline-flex rounded-full h-3 w-3 bg-blue-500" />
         </span>
       )}
 
@@ -120,7 +118,9 @@ function PatientCard({ entry, onStatusChange, onRemove, busy }: PatientCardProps
           <div className="flex items-center gap-3 min-w-0">
             <span
               className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
-                entry.status === 'attending'
+                selected
+                  ? 'bg-blue-500 text-white'
+                  : entry.status === 'attending'
                   ? 'bg-green-500 text-white'
                   : entry.status === 'waiting'
                   ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300'
@@ -130,14 +130,13 @@ function PatientCard({ entry, onStatusChange, onRemove, busy }: PatientCardProps
               {entry.position}
             </span>
             <div className="min-w-0">
-              <Link
-                href={`/pacientes/${entry.patient_id}`}
-                className={`font-semibold hover:underline text-slate-900 dark:text-slate-50 truncate block ${
+              <p
+                className={`font-semibold text-slate-900 dark:text-slate-50 truncate block ${
                   isAttended ? 'line-through text-slate-400 dark:text-slate-500' : ''
                 }`}
               >
                 {entry.patient_name}
-              </Link>
+              </p>
               {entry.reason && (
                 <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5">{entry.reason}</p>
               )}
@@ -175,9 +174,15 @@ function PatientCard({ entry, onStatusChange, onRemove, busy }: PatientCardProps
           <Badge variant={statusBadgeVariant(entry.status)} size="sm">
             {statusLabel(entry.status)}
           </Badge>
+          {selected && (
+            <span className="ml-auto text-xs text-blue-600 dark:text-blue-400 font-semibold flex items-center gap-1">
+              <Stethoscope className="w-3 h-3" /> Atendendo
+            </span>
+          )}
         </div>
 
-        <div className="flex items-center gap-2 mt-3 flex-wrap">
+        {/* Action buttons — stop propagation so they don't trigger onSelect */}
+        <div className="flex items-center gap-2 mt-3 flex-wrap" onClick={(e) => e.stopPropagation()}>
           {entry.status === 'waiting' && (
             <>
               <Button
@@ -225,7 +230,7 @@ function PatientCard({ entry, onStatusChange, onRemove, busy }: PatientCardProps
             </Button>
           )}
 
-          <Link href={`/pacientes/${entry.patient_id}`} className="ml-auto">
+          <Link href={`/pacientes/${entry.patient_id}`} className="ml-auto" onClick={(e) => e.stopPropagation()}>
             <Button size="sm" variant="tertiary" icon={<ChevronRight className="w-3.5 h-3.5" />}>
               Prontuário
             </Button>
@@ -248,13 +253,16 @@ function PatientCard({ entry, onStatusChange, onRemove, busy }: PatientCardProps
 // ── Main page ──────────────────────────────────────────────────────────────
 
 export default function SalaDeEsperaPage() {
-  const [entries, setEntries] = useState<WaitingEntry[]>([]);
+  const [entries, setEntries] = useState<WaitingRoomEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<Filter>('all');
   const [busyIds, setBusyIds] = useState<Set<number>>(new Set());
   const [clinics, setClinics] = useState<any[]>([]);
   const [selectedClinicId, setSelectedClinicId] = useState<number | undefined>(undefined);
+
+  // Drawer state
+  const [selectedEntry, setSelectedEntry] = useState<WaitingRoomEntry | null>(null);
 
   const checkinModal = useModal();
   const [allPatients, setAllPatients] = useState<any[]>([]);
@@ -272,6 +280,12 @@ export default function SalaDeEsperaPage() {
       try {
         const data = await waitingRoomApi.today(selectedClinicId);
         setEntries(data);
+        // Sync selected entry with fresh data
+        setSelectedEntry((prev) => {
+          if (!prev) return null;
+          const fresh = data.find((e: WaitingRoomEntry) => e.id === prev.id);
+          return fresh ?? null;
+        });
       } catch {
         if (!silent) toast.error('Erro ao carregar sala de espera');
       } finally {
@@ -328,6 +342,8 @@ export default function SalaDeEsperaPage() {
     try {
       const updated = await waitingRoomApi.updateStatus(id, newStatus);
       setEntries((prev) => prev.map((e) => (e.id === id ? { ...e, ...updated } : e)));
+      // Sync selected entry status
+      setSelectedEntry((prev) => (prev && prev.id === id ? { ...prev, ...updated } : prev));
       const labels: Record<QueueStatus, string> = {
         waiting: 'voltou para aguardando',
         attending: 'chamado para atendimento',
@@ -352,6 +368,7 @@ export default function SalaDeEsperaPage() {
     try {
       await waitingRoomApi.remove(id);
       setEntries((prev) => prev.filter((e) => e.id !== id));
+      setSelectedEntry((prev) => (prev && prev.id === id ? null : prev));
       toast.success('Paciente removido da fila');
     } catch {
       toast.error('Erro ao remover paciente');
@@ -389,6 +406,10 @@ export default function SalaDeEsperaPage() {
     }
   };
 
+  const handleSelectEntry = (entry: WaitingRoomEntry) => {
+    setSelectedEntry((prev) => (prev && prev.id === entry.id ? null : entry));
+  };
+
   const filteredPatients = patientSearch
     ? allPatients.filter(
         (p) =>
@@ -412,9 +433,11 @@ export default function SalaDeEsperaPage() {
     { key: 'absent', label: 'Ausentes', count: absentCount },
   ];
 
+  const drawerOpen = selectedEntry !== null;
+
   return (
     <PageWithSidebar>
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col">
         <NavBar
           title="Sala de Espera"
           subtitle={today}
@@ -456,102 +479,126 @@ export default function SalaDeEsperaPage() {
           }
         />
 
-        <main className="mx-auto max-w-5xl px-4 py-6 space-y-6">
-          {/* Stats */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {([
-              { label: 'Aguardando', count: waitingCount, colorClass: 'amber', icon: <Timer className="w-5 h-5" /> },
-              { label: 'Em Atendimento', count: attendingCount, colorClass: 'green', icon: <UserCheck className="w-5 h-5" /> },
-              { label: 'Atendidos', count: attendedCount, colorClass: 'blue', icon: <CheckCircle className="w-5 h-5" /> },
-              { label: 'Ausentes', count: absentCount, colorClass: 'red', icon: <UserX className="w-5 h-5" /> },
-            ] as const).map(({ label, count, colorClass, icon }) => (
-              <Card key={label} shadow="sm">
-                <CardContent className="flex items-center gap-3 pt-4 pb-4">
-                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 bg-${colorClass}-100 dark:bg-${colorClass}-900/30 text-${colorClass}-600 dark:text-${colorClass}-400`}>
-                    {icon}
-                  </div>
-                  <div>
-                    <p className={`text-2xl font-bold text-${colorClass}-600 dark:text-${colorClass}-400`}>
-                      {count}
-                    </p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">{label}</p>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-
-          {/* Filter tabs */}
-          <div className="flex gap-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-1">
-            {filterTabs.map(({ key, label, count }) => (
-              <button
-                key={key}
-                onClick={() => setFilter(key)}
-                className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                  filter === key
-                    ? 'bg-blue-600 text-white shadow-sm'
-                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-                }`}
-              >
-                {label}
-                <span
-                  className={`inline-flex items-center justify-center text-xs w-5 h-5 rounded-full ${
-                    filter === key
-                      ? 'bg-blue-500 text-white'
-                      : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
-                  }`}
-                >
-                  {count}
-                </span>
-              </button>
-            ))}
-          </div>
-
-          {/* Queue list */}
-          {loading ? (
-            <div className="space-y-3">
-              {[1, 2, 3].map((n) => (
-                <div
-                  key={n}
-                  className="h-32 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 animate-pulse"
-                />
-              ))}
-            </div>
-          ) : filtered.length === 0 ? (
-            <div className="text-center py-16">
-              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
-                <UserCheck className="w-8 h-8 text-slate-400" />
+        {/* Main layout: queue list + optional drawer */}
+        <div className="flex flex-1 overflow-hidden">
+          {/* ── Queue list ── */}
+          <main
+            className={`flex-shrink-0 overflow-y-auto transition-all duration-300 ${
+              drawerOpen ? 'w-[40%] min-w-[280px]' : 'w-full'
+            }`}
+          >
+            <div className="px-4 py-6 space-y-6">
+              {/* Stats */}
+              <div className={`grid gap-3 ${drawerOpen ? 'grid-cols-2' : 'grid-cols-2 sm:grid-cols-4'}`}>
+                {([
+                  { label: 'Aguardando', count: waitingCount, colorClass: 'amber', icon: <Timer className="w-5 h-5" /> },
+                  { label: 'Em Atendimento', count: attendingCount, colorClass: 'green', icon: <UserCheck className="w-5 h-5" /> },
+                  { label: 'Atendidos', count: attendedCount, colorClass: 'blue', icon: <CheckCircle className="w-5 h-5" /> },
+                  { label: 'Ausentes', count: absentCount, colorClass: 'red', icon: <UserX className="w-5 h-5" /> },
+                ] as const).map(({ label, count, colorClass, icon }) => (
+                  <Card key={label} shadow="sm">
+                    <CardContent className="flex items-center gap-3 pt-4 pb-4">
+                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 bg-${colorClass}-100 dark:bg-${colorClass}-900/30 text-${colorClass}-600 dark:text-${colorClass}-400`}>
+                        {icon}
+                      </div>
+                      <div>
+                        <p className={`text-2xl font-bold text-${colorClass}-600 dark:text-${colorClass}-400`}>
+                          {count}
+                        </p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">{label}</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
               </div>
-              <p className="text-slate-500 dark:text-slate-400 font-medium">
-                {filter === 'all'
-                  ? 'Nenhum paciente na fila hoje'
-                  : `Nenhum paciente com status "${statusLabel(filter as QueueStatus)}"`}
-              </p>
-              {filter === 'all' && (
-                <Button
-                  className="mt-4"
-                  variant="secondary"
-                  icon={<Plus className="w-4 h-4" />}
-                  onClick={() => checkinModal.onOpenChange(true)}
-                >
-                  Registrar primeiro paciente
-                </Button>
+
+              {/* Filter tabs */}
+              <div className="flex gap-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-1">
+                {filterTabs.map(({ key, label, count }) => (
+                  <button
+                    key={key}
+                    onClick={() => setFilter(key)}
+                    className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-xs font-medium transition-all ${
+                      filter === key
+                        ? 'bg-blue-600 text-white shadow-sm'
+                        : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                    }`}
+                  >
+                    {drawerOpen ? '' : label}
+                    {drawerOpen && <span title={label}>{label.slice(0, 3)}</span>}
+                    <span
+                      className={`inline-flex items-center justify-center text-xs w-5 h-5 rounded-full ${
+                        filter === key
+                          ? 'bg-blue-500 text-white'
+                          : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                      }`}
+                    >
+                      {count}
+                    </span>
+                  </button>
+                ))}
+              </div>
+
+              {/* Queue list */}
+              {loading ? (
+                <div className="space-y-3">
+                  {[1, 2, 3].map((n) => (
+                    <div
+                      key={n}
+                      className="h-32 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 animate-pulse"
+                    />
+                  ))}
+                </div>
+              ) : filtered.length === 0 ? (
+                <div className="text-center py-16">
+                  <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+                    <UserCheck className="w-8 h-8 text-slate-400" />
+                  </div>
+                  <p className="text-slate-500 dark:text-slate-400 font-medium">
+                    {filter === 'all'
+                      ? 'Nenhum paciente na fila hoje'
+                      : `Nenhum paciente com status "${statusLabel(filter as QueueStatus)}"`}
+                  </p>
+                  {filter === 'all' && (
+                    <Button
+                      className="mt-4"
+                      variant="secondary"
+                      icon={<Plus className="w-4 h-4" />}
+                      onClick={() => checkinModal.onOpenChange(true)}
+                    >
+                      Registrar primeiro paciente
+                    </Button>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {filtered.map((entry) => (
+                    <PatientCard
+                      key={entry.id}
+                      entry={entry}
+                      onStatusChange={handleStatusChange}
+                      onRemove={handleRemove}
+                      onSelect={handleSelectEntry}
+                      busy={busyIds.has(entry.id)}
+                      selected={selectedEntry?.id === entry.id}
+                    />
+                  ))}
+                </div>
               )}
             </div>
-          ) : (
-            <div className="space-y-3">
-              {filtered.map((entry) => (
-                <PatientCard
-                  key={entry.id}
-                  entry={entry}
-                  onStatusChange={handleStatusChange}
-                  onRemove={handleRemove}
-                  busy={busyIds.has(entry.id)}
-                />
-              ))}
+          </main>
+
+          {/* ── Drawer panel ── */}
+          {drawerOpen && selectedEntry && (
+            <div className="flex-1 border-l border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col">
+              <ConsultaDrawer
+                entry={selectedEntry}
+                onClose={() => setSelectedEntry(null)}
+                onStatusChange={handleStatusChange}
+              />
             </div>
           )}
-        </main>
+        </div>
 
         {/* Checkin Modal */}
         <Modal
