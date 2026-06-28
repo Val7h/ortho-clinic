@@ -27,6 +27,8 @@ class ConsultationBase(BaseModel):
     next_appointment: Optional[_date] = None
     next_appointment_notes: Optional[str] = None
     doctor_private_notes: Optional[str] = None
+    # Alias aceito pelo frontend; mapeado para doctor_private_notes ao salvar
+    notes: Optional[str] = None
     teleconsult_url: Optional[str] = None
 
 
@@ -41,6 +43,7 @@ class ConsultationUpdate(ConsultationBase):
 class ConsultationOut(ConsultationBase):
     id: int
     patient_id: int
+    doctor_id: Optional[int] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
 

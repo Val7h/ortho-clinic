@@ -178,11 +178,20 @@ app.include_router(audit_router)
 
 @app.on_event("startup")
 def startup():
+    from database import SessionLocal
+    from sqlalchemy import text as _text
     init_db()
     migrate_db()
     _ensure_superadmin()
     _ensure_default_clinic()
     _ensure_clinics()
+    # BUG-05: forçar inicialização do pool antes do primeiro request (warm-up)
+    try:
+        db = SessionLocal()
+        db.execute(_text("SELECT 1"))
+        db.close()
+    except Exception:
+        pass
 
 
 def _ensure_superadmin():

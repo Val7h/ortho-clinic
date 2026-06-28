@@ -3,7 +3,8 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams } from "next/navigation";
 import {
   Plus, Trash2, Printer, ChevronDown, ChevronUp,
-  ExternalLink, CheckCircle2, Search, X, Pill, AlertCircle, Copy,
+  ExternalLink, CheckCircle2, Search, X, Pill, AlertCircle,
+  AlertTriangle, Activity, Pill as PillIcon,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import NavBar from "@/components/NavBar";
@@ -45,9 +46,212 @@ const DEMO_CATALOG = [
   { name: "Pregabalina 75mg", dose: "1 cápsula", route: "oral", frequency: "12/12h", duration: "30 dias", instructions: "Não interromper abruptamente" },
 ];
 
+const ROUTE_OPTIONS = ["oral", "IM", "IV", "tópico", "inalatório", "sublingual", "retal"];
+
 const emptyMed = (): Medication => ({
-  name: "", dose: "", route: "", frequency: "", duration: "", instructions: "",
+  name: "", dose: "", route: "oral", frequency: "", duration: "", instructions: "",
 });
+
+// ─── Banners de alerta clínico ──────────────────────────────────────────────
+
+function AllergyBanners({ patient }: { patient: any }) {
+  const allergies: string[] = patient?.allergies
+    ? (typeof patient.allergies === "string"
+        ? patient.allergies.split(/[,;]+/).map((s: string) => s.trim()).filter(Boolean)
+        : Array.isArray(patient.allergies) ? patient.allergies : [])
+    : [];
+
+  const chronic: string[] = patient?.chronic_conditions
+    ? (typeof patient.chronic_conditions === "string"
+        ? patient.chronic_conditions.split(/[,;]+/).map((s: string) => s.trim()).filter(Boolean)
+        : Array.isArray(patient.chronic_conditions) ? patient.chronic_conditions : [])
+    : [];
+
+  const currentMeds: string[] = patient?.current_medications
+    ? (typeof patient.current_medications === "string"
+        ? patient.current_medications.split(/[,;]+/).map((s: string) => s.trim()).filter(Boolean)
+        : Array.isArray(patient.current_medications) ? patient.current_medications : [])
+    : [];
+
+  if (allergies.length === 0 && chronic.length === 0 && currentMeds.length === 0) return null;
+
+  return (
+    <div className="space-y-2 print:hidden">
+      {allergies.length > 0 && (
+        <div className="flex items-start gap-3 bg-red-50 dark:bg-red-900/20 border border-red-300 dark:border-red-700 rounded-lg px-4 py-3">
+          <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-bold text-red-800 dark:text-red-300 uppercase tracking-wide">
+              Atencao: Paciente Alergico
+            </p>
+            <p className="text-sm text-red-700 dark:text-red-400 mt-0.5">
+              {allergies.join(" · ")}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {chronic.length > 0 && (
+        <div className="flex items-start gap-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700 rounded-lg px-4 py-3">
+          <Activity className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-bold text-amber-800 dark:text-amber-300">Condicoes Cronicas</p>
+            <p className="text-sm text-amber-700 dark:text-amber-400 mt-0.5">
+              {chronic.join(" · ")}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {currentMeds.length > 0 && (
+        <div className="flex items-start gap-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-300 dark:border-blue-700 rounded-lg px-4 py-3">
+          <PillIcon className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-bold text-blue-800 dark:text-blue-300">Em Uso Atual</p>
+            <p className="text-sm text-blue-700 dark:text-blue-400 mt-0.5">
+              {currentMeds.join(" · ")}
+            </p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Modal de impressão de receita simples ────────────────────────────────────
+
+function PrintPrescriptionModal({
+  rx,
+  patient,
+  onClose,
+}: {
+  rx: { date: string; medications: Medication[]; instructions: string };
+  patient: any;
+  onClose: () => void;
+}) {
+  const handlePrint = () => window.print();
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 print:p-0" style={{ background: "rgba(0,0,0,0.55)" }}>
+      {/* Estilos de impressão embutidos */}
+      <style>{`
+        @media print {
+          body > *:not(#print-prescription-root) { display: none !important; }
+          #print-prescription-root {
+            position: fixed !important;
+            inset: 0 !important;
+            z-index: 9999 !important;
+            background: white !important;
+          }
+          .no-print { display: none !important; }
+          .print-page { page-break-after: always; }
+        }
+      `}</style>
+
+      <div id="print-prescription-root" className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[95vh] flex flex-col overflow-hidden">
+        {/* Header modal (some apenas na tela) */}
+        <div className="no-print px-5 pt-5 pb-4 border-b border-gray-200 dark:border-slate-700 flex items-center justify-between flex-shrink-0">
+          <h2 className="font-bold text-slate-900 dark:text-slate-50">Preview da Receita</h2>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handlePrint}
+              className="flex items-center gap-2 px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 font-semibold text-sm"
+            >
+              <Printer className="w-4 h-4" /> Imprimir
+            </button>
+            <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* Conteudo imprimivel */}
+        <div className="flex-1 overflow-y-auto p-6 bg-white">
+          <div className="print-page bg-white p-6 border border-gray-200 rounded-lg text-sm text-gray-900">
+            {/* Cabecalho */}
+            <div className="text-center border-b-2 border-blue-800 pb-4 mb-6">
+              <h1 className="text-xl font-bold text-blue-900">Dr. Valth Guimaraes</h1>
+              <p className="text-sm text-gray-600">Ortopedia e Traumatologia</p>
+              <p className="text-sm text-gray-600">CRM/PB 1234</p>
+            </div>
+
+            {/* Dados do paciente */}
+            <div className="grid grid-cols-2 gap-3 mb-6 text-xs">
+              <div>
+                <span className="font-bold text-gray-500 uppercase">Paciente:</span>
+                <p className="font-semibold">{patient?.name}</p>
+              </div>
+              <div>
+                <span className="font-bold text-gray-500 uppercase">Data:</span>
+                <p>{new Date(rx.date).toLocaleDateString("pt-BR")}</p>
+              </div>
+              {patient?.cpf && (
+                <div>
+                  <span className="font-bold text-gray-500 uppercase">CPF:</span>
+                  <p className="font-mono">{patient.cpf}</p>
+                </div>
+              )}
+              {patient?.birth_date && (
+                <div>
+                  <span className="font-bold text-gray-500 uppercase">Nasc.:</span>
+                  <p>{new Date(patient.birth_date).toLocaleDateString("pt-BR")}</p>
+                </div>
+              )}
+            </div>
+
+            {/* Medicamentos */}
+            <div className="mb-6">
+              <p className="font-bold text-gray-700 uppercase text-xs tracking-wider mb-3 border-b border-gray-200 pb-1">Prescricao</p>
+              <ol className="space-y-3">
+                {rx.medications.map((m, i) => (
+                  <li key={i} className="pl-2">
+                    <p className="font-semibold">
+                      {i + 1}. {m.name}
+                      {m.dose && <span className="font-normal text-gray-600"> — {m.dose}</span>}
+                    </p>
+                    <p className="text-gray-600 text-xs mt-0.5">
+                      {[m.route && `Via ${m.route}`, m.frequency, m.duration].filter(Boolean).join(" · ")}
+                    </p>
+                    {m.instructions && (
+                      <p className="text-gray-500 text-xs italic mt-0.5">Obs: {m.instructions}</p>
+                    )}
+                  </li>
+                ))}
+              </ol>
+            </div>
+
+            {/* Instrucoes gerais */}
+            {rx.instructions && (
+              <div className="mb-6 bg-gray-50 rounded p-3">
+                <p className="font-bold text-gray-700 text-xs uppercase tracking-wider mb-1">Orientacoes</p>
+                <p className="text-xs text-gray-700">{rx.instructions}</p>
+              </div>
+            )}
+
+            {/* Assinatura */}
+            <div className="mt-10 flex justify-end">
+              <div className="text-center w-56">
+                <div className="border-t-2 border-gray-800 mb-2 pt-2"></div>
+                <p className="text-xs font-bold">Dr. Valth Guimaraes</p>
+                <p className="text-xs text-gray-500">CRM/PB 1234</p>
+                <p className="text-xs text-gray-400 mt-1">
+                  {new Date(rx.date).toLocaleDateString("pt-BR")}
+                </p>
+              </div>
+            </div>
+
+            {/* Rodape */}
+            <div className="mt-8 pt-4 border-t border-gray-200 text-center text-[10px] text-gray-400">
+              <p>OrthoClinic — Ortopedia e Traumatologia</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Modal Memed Demo ─────────────────────────────────────────────────────────
 
 function MemedDemoModal({
   patient,
@@ -92,7 +296,7 @@ function MemedDemoModal({
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="font-bold text-gray-900 dark:text-slate-50 text-sm">Memed Prescrição</span>
+                <span className="font-bold text-gray-900 dark:text-slate-50 text-sm">Memed Prescricao</span>
                 <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 uppercase tracking-wide">Demo</span>
               </div>
               <p className="text-xs text-gray-500 dark:text-slate-400">
@@ -174,10 +378,88 @@ function MemedDemoModal({
   );
 }
 
+// ─── Componente de linha de medicamento ───────────────────────────────────────
+
+function MedRow({
+  med,
+  index,
+  total,
+  onChange,
+  onRemove,
+}: {
+  med: Medication;
+  index: number;
+  total: number;
+  onChange: (k: keyof Medication, v: string) => void;
+  onRemove: () => void;
+}) {
+  const inputCls = "w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-50 text-sm";
+
+  return (
+    <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-4 space-y-3">
+      <div className="flex justify-between items-center">
+        <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+          Medicamento {index + 1}
+        </span>
+        {total > 1 && (
+          <button
+            type="button"
+            onClick={onRemove}
+            className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 px-2 py-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20"
+          >
+            <Trash2 className="w-3.5 h-3.5" /> Remover
+          </button>
+        )}
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="col-span-2">
+          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Nome *</label>
+          <input
+            className={inputCls}
+            placeholder="Ex: Nimesulida 100mg"
+            value={med.name}
+            onChange={(e) => onChange("name", e.target.value)}
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Dose</label>
+          <input className={inputCls} placeholder="1 comprimido" value={med.dose} onChange={(e) => onChange("dose", e.target.value)} />
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Via</label>
+          <select
+            className={inputCls}
+            value={med.route}
+            onChange={(e) => onChange("route", e.target.value)}
+          >
+            {ROUTE_OPTIONS.map((r) => (
+              <option key={r} value={r}>{r}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Frequencia</label>
+          <input className={inputCls} placeholder="8/8h, 12/12h..." value={med.frequency} onChange={(e) => onChange("frequency", e.target.value)} />
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Duracao</label>
+          <input className={inputCls} placeholder="7 dias..." value={med.duration} onChange={(e) => onChange("duration", e.target.value)} />
+        </div>
+        <div className="col-span-2">
+          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Instrucoes / Observacoes</label>
+          <input className={inputCls} placeholder="Tomar apos as refeicoes..." value={med.instructions} onChange={(e) => onChange("instructions", e.target.value)} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Pagina principal ────────────────────────────────────────────────────────
+
 export default function PrescriptionPage() {
   const params = useParams();
   const id = params?.id as string;
-  if (!id) return <div>Paciente não encontrado</div>;
+  if (!id) return <div>Paciente nao encontrado</div>;
   const pid = Number(id);
 
   const [tab, setTab] = useState<"simples" | "controlada">("simples");
@@ -188,6 +470,7 @@ export default function PrescriptionPage() {
   const [instructions, setInstructions] = useState("");
   const [saving, setSaving] = useState(false);
   const [showManual, setShowManual] = useState(false);
+  const [printRx, setPrintRx] = useState<{ date: string; medications: Medication[]; instructions: string } | null>(null);
 
   const [controlledMeds, setControlledMeds] = useState<Medication[]>([emptyMed()]);
   const [controlledInstructions, setControlledInstructions] = useState("");
@@ -315,9 +598,8 @@ export default function PrescriptionPage() {
     loadRealMemed();
   };
 
-  const updateMed = (i: number, k: keyof Medication) =>
-    (e: React.ChangeEvent<HTMLInputElement>) =>
-      setMedications((ms) => ms.map((m, idx) => (idx === i ? { ...m, [k]: e.target.value } : m)));
+  const updateMed = (i: number, k: keyof Medication, v: string) =>
+    setMedications((ms) => ms.map((m, idx) => (idx === i ? { ...m, [k]: v } : m)));
 
   const updateControlledMed = (i: number, k: keyof Medication) =>
     (e: React.ChangeEvent<HTMLInputElement>) =>
@@ -345,6 +627,24 @@ export default function PrescriptionPage() {
     }
   };
 
+  const handlePrintManual = () => {
+    const validMeds = medications.filter((m) => m.name.trim());
+    if (validMeds.length === 0) { toast.error("Adicione pelo menos um medicamento para imprimir"); return; }
+    setPrintRx({
+      date: new Date().toISOString().split("T")[0],
+      medications: validMeds,
+      instructions,
+    });
+  };
+
+  const handlePrintExisting = (rx: any) => {
+    setPrintRx({
+      date: rx.date,
+      medications: rx.medications || [],
+      instructions: rx.instructions || "",
+    });
+  };
+
   const handleControlledSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const validMeds = controlledMeds.filter((m) => m.name.trim());
@@ -364,7 +664,7 @@ export default function PrescriptionPage() {
     if (!confirm("Excluir esta receita?")) return;
     await prescriptionsApi.delete(pid, rxId);
     setPrescriptions((prev) => prev.filter((r) => r.id !== rxId));
-    toast.success("Receita excluída");
+    toast.success("Receita excluida");
   };
 
   if (!patient) return <div className="flex justify-center items-center h-screen"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600" /></div>;
@@ -372,13 +672,22 @@ export default function PrescriptionPage() {
   return (
     <PageWithSidebar>
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
-      <NavBar title="Prescrições" subtitle={patient?.name} back={`/pacientes/${pid}`} />
+      <NavBar title="Prescricoes" subtitle={patient?.name} back={`/pacientes/${pid}`} />
 
       {showDemoModal && (
         <MemedDemoModal patient={patient} onConfirm={handleDemoConfirm} onClose={() => setShowDemoModal(false)} />
       )}
 
-      <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
+      {printRx && (
+        <PrintPrescriptionModal rx={printRx} patient={patient} onClose={() => setPrintRx(null)} />
+      )}
+
+      <div className="max-w-4xl mx-auto px-4 py-6 space-y-4">
+
+        {/* Banners de alerta clinico */}
+        <AllergyBanners patient={patient} />
+
+        {/* Abas */}
         <div className="flex gap-2 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-1">
           <button
             onClick={() => setTab("simples")}
@@ -388,7 +697,7 @@ export default function PrescriptionPage() {
                 : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-50"
             }`}
           >
-            📋 Receita Simples
+            Receita Simples
           </button>
           <button
             onClick={() => setTab("controlada")}
@@ -398,7 +707,7 @@ export default function PrescriptionPage() {
                 : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-50"
             }`}
           >
-            🔒 Receita Controlada
+            Receita Controlada
           </button>
         </div>
 
@@ -416,7 +725,7 @@ export default function PrescriptionPage() {
                       {isDemo && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">Demo</span>}
                     </div>
                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                      {isDemo ? "Simulação com validade legal" : "Prescrição digital com envio por WhatsApp"}
+                      {isDemo ? "Simulacao com validade legal" : "Prescricao digital com envio por WhatsApp"}
                     </p>
                   </div>
                 </div>
@@ -437,13 +746,14 @@ export default function PrescriptionPage() {
               </div>
             ) : (
               <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800 p-5">
-                <h3 className="font-semibold text-blue-900 dark:text-blue-200 mb-2">Integração Memed disponível</h3>
+                <h3 className="font-semibold text-blue-900 dark:text-blue-200 mb-2">Integracao Memed disponivel</h3>
                 <p className="text-sm text-blue-700 dark:text-blue-300">
                   Conecte o Memed para receitas digitais com validade legal.
                 </p>
               </div>
             )}
 
+            {/* Toggle receita manual */}
             <div className="flex items-center gap-3">
               <div className="flex-1 border-t border-slate-200 dark:border-slate-700" />
               <button
@@ -460,62 +770,57 @@ export default function PrescriptionPage() {
             {showManual && (
               <form onSubmit={handleSubmit} className="bg-white dark:bg-slate-800 rounded-lg shadow p-6 space-y-4">
                 <h3 className="font-bold text-slate-900 dark:text-slate-50">Receita Manual</h3>
+
                 {medications.map((med, i) => (
-                  <div key={i} className="border border-slate-200 dark:border-slate-700 rounded-lg p-4 space-y-3">
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Med. {i + 1}</span>
-                      {medications.length > 1 && (
-                        <button type="button" onClick={() => setMedications((ms) => ms.filter((_, idx) => idx !== i))}
-                          className="p-1 text-red-500 hover:text-red-700">
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      )}
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="col-span-2">
-                        <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Nome *</label>
-                        <input className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-50"
-                          placeholder="Ex: Nimesulida 100mg" value={med.name} onChange={updateMed(i, "name")} />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Dose</label>
-                        <input className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-50" placeholder="1 comprimido" value={med.dose} onChange={updateMed(i, "dose")} />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Via</label>
-                        <input className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-50" placeholder="Oral, tópica..." value={med.route} onChange={updateMed(i, "route")} />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Frequência</label>
-                        <input className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-50" placeholder="8/8h..." value={med.frequency} onChange={updateMed(i, "frequency")} />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Duração</label>
-                        <input className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-50" placeholder="7 dias..." value={med.duration} onChange={updateMed(i, "duration")} />
-                      </div>
-                      <div className="col-span-2">
-                        <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Observações</label>
-                        <input className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-50" placeholder="Tomar após as refeições..." value={med.instructions} onChange={updateMed(i, "instructions")} />
-                      </div>
-                    </div>
-                  </div>
+                  <MedRow
+                    key={i}
+                    med={med}
+                    index={i}
+                    total={medications.length}
+                    onChange={(k, v) => updateMed(i, k, v)}
+                    onRemove={() => setMedications((ms) => ms.filter((_, idx) => idx !== i))}
+                  />
                 ))}
-                <button type="button" onClick={() => setMedications((ms) => [...ms, emptyMed()])}
-                  className="w-full py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-slate-50 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center justify-center gap-2 text-sm font-semibold">
+
+                <button
+                  type="button"
+                  onClick={() => setMedications((ms) => [...ms, emptyMed()])}
+                  className="w-full py-2.5 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg text-slate-600 dark:text-slate-400 hover:border-brand-400 hover:text-brand-600 dark:hover:text-brand-400 flex items-center justify-center gap-2 text-sm font-semibold transition-colors"
+                >
                   <Plus className="w-4 h-4" /> Adicionar medicamento
                 </button>
+
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Orientações gerais</label>
-                  <textarea className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-50 resize-none"
-                    placeholder="Evitar álcool, repouso..." value={instructions} onChange={(e) => setInstructions(e.target.value)} rows={3} />
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Orientacoes gerais</label>
+                  <textarea
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-50 resize-none text-sm"
+                    placeholder="Evitar alcool, repouso, retorno em 7 dias..."
+                    value={instructions}
+                    onChange={(e) => setInstructions(e.target.value)}
+                    rows={3}
+                  />
                 </div>
-                <button type="submit" disabled={saving}
-                  className="w-full py-3 bg-brand-600 text-white rounded-lg hover:bg-brand-700 disabled:opacity-50 font-semibold">
-                  {saving ? "Salvando..." : "Salvar Receita Manual"}
-                </button>
+
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={handlePrintManual}
+                    className="flex-1 py-3 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 font-semibold flex items-center justify-center gap-2"
+                  >
+                    <Printer className="w-4 h-4" /> Imprimir Receita
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={saving}
+                    className="flex-1 py-3 bg-brand-600 text-white rounded-lg hover:bg-brand-700 disabled:opacity-50 font-semibold"
+                  >
+                    {saving ? "Salvando..." : "Salvar Receita"}
+                  </button>
+                </div>
               </form>
             )}
 
+            {/* Receitas anteriores */}
             {prescriptions.length > 0 && (
               <div className="space-y-3">
                 <h3 className="font-bold text-slate-900 dark:text-slate-50">Receitas anteriores</h3>
@@ -524,22 +829,46 @@ export default function PrescriptionPage() {
                     <div className="flex justify-between items-start">
                       <div>
                         <p className="text-sm font-semibold text-slate-900 dark:text-slate-50">{formatDate(rx.date)}</p>
-                        {rx.memed_id && <span className="text-xs bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 px-2 py-1 rounded mt-1 inline-block">Memed</span>}
+                        {rx.memed_id && (
+                          <span className="text-xs bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded mt-1 inline-block">
+                            Memed
+                          </span>
+                        )}
                       </div>
-                      <div className="flex gap-2">
-                        <button onClick={() => window.print()} className="p-2 text-slate-400 hover:text-brand-600"><Printer className="w-4 h-4" /></button>
-                        <button onClick={() => handleDelete(rx.id)} className="p-2 text-slate-400 hover:text-red-600"><Trash2 className="w-4 h-4" /></button>
+                      <div className="flex gap-1">
+                        <button
+                          onClick={() => handlePrintExisting(rx)}
+                          className="p-2 text-slate-400 hover:text-brand-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700"
+                          title="Imprimir"
+                        >
+                          <Printer className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(rx.id)}
+                          className="p-2 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20"
+                          title="Excluir"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </div>
                     </div>
-                    <div className="space-y-1 text-sm">
-                      {rx.medications?.map((m: any, i: number) => (
-                        <p key={i} className="text-slate-700 dark:text-slate-300">
+                    <div className="space-y-1">
+                      {rx.medications?.slice(0, 4).map((m: any, i: number) => (
+                        <p key={i} className="text-sm text-slate-700 dark:text-slate-300">
                           <span className="font-medium">{i + 1}. {m.name}</span>
                           {m.dose && <span className="text-slate-500 dark:text-slate-400"> — {m.dose}</span>}
                           {m.frequency && <span className="text-slate-500 dark:text-slate-400">, {m.frequency}</span>}
                         </p>
                       ))}
+                      {(rx.medications?.length || 0) > 4 && (
+                        <p className="text-xs text-slate-400">+ {rx.medications.length - 4} medicamento(s)...</p>
+                      )}
                     </div>
+                    {rx.instructions && (
+                      <p className="text-xs text-slate-500 dark:text-slate-400 italic border-t border-slate-100 dark:border-slate-700 pt-2">
+                        {rx.instructions}
+                      </p>
+                    )}
                   </div>
                 ))}
               </div>
@@ -551,18 +880,18 @@ export default function PrescriptionPage() {
           <div className="space-y-6">
             {!controlledRx ? (
               <form onSubmit={handleControlledSubmit} className="bg-white dark:bg-slate-800 rounded-lg shadow p-6 space-y-5">
-                <div className="space-y-3">
+                <div className="space-y-1">
                   <h3 className="font-bold text-slate-900 dark:text-slate-50">Gerar Receita Controlada</h3>
-                  <p className="text-sm text-slate-600 dark:text-slate-400">Com 2 vias para impressão (Via vermelha + Via branca)</p>
+                  <p className="text-sm text-slate-600 dark:text-slate-400">Com 2 vias para impressao (Via vermelha + Via branca)</p>
                 </div>
 
                 <div className="space-y-2">
                   <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300">Tipo de Receita *</label>
                   <div className="grid grid-cols-3 gap-2">
                     {[
-                      { value: "tarja_vermelha" as const, label: "🔴 Tarja Vermelha", desc: "Antibióticos, anti-inflamatórios" },
-                      { value: "tarja_preta" as const, label: "⚫ Tarja Preta", desc: "Controlados (ANVISA)" },
-                      { value: "controlada" as const, label: "🔒 Controlada", desc: "Receituário especial" },
+                      { value: "tarja_vermelha" as const, label: "Tarja Vermelha", desc: "Antibioticos, anti-inflamatorios" },
+                      { value: "tarja_preta" as const, label: "Tarja Preta", desc: "Controlados (ANVISA)" },
+                      { value: "controlada" as const, label: "Controlada", desc: "Receituario especial" },
                     ].map((opt) => (
                       <button key={opt.value} type="button" onClick={() => setControlType(opt.value)}
                         className={`p-3 border-2 rounded-lg transition-all text-left ${
@@ -596,8 +925,8 @@ export default function PrescriptionPage() {
                             placeholder="Nome do medicamento" value={med.name} onChange={updateControlledMed(i, "name")} />
                         </div>
                         <input className="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-50" placeholder="Dose" value={med.dose} onChange={updateControlledMed(i, "dose")} />
-                        <input className="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-50" placeholder="Frequência" value={med.frequency} onChange={updateControlledMed(i, "frequency")} />
-                        <input className="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-50" placeholder="Duração" value={med.duration} onChange={updateControlledMed(i, "duration")} />
+                        <input className="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-50" placeholder="Frequencia" value={med.frequency} onChange={updateControlledMed(i, "frequency")} />
+                        <input className="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-50" placeholder="Duracao" value={med.duration} onChange={updateControlledMed(i, "duration")} />
                         <input className="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-50" placeholder="Via" value={med.route} onChange={updateControlledMed(i, "route")} />
                       </div>
                     </div>
@@ -609,9 +938,9 @@ export default function PrescriptionPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Orientações</label>
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Orientacoes</label>
                   <textarea className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-50 resize-none"
-                    placeholder="Orientações gerais ao paciente..." value={controlledInstructions}
+                    placeholder="Orientacoes gerais ao paciente..." value={controlledInstructions}
                     onChange={(e) => setControlledInstructions(e.target.value)} rows={3} />
                 </div>
 
@@ -624,7 +953,7 @@ export default function PrescriptionPage() {
               <div className="space-y-4">
                 <div className="flex items-center justify-between bg-brand-50 dark:bg-brand-900/20 rounded-lg p-4 border border-brand-200 dark:border-brand-800">
                   <div>
-                    <p className="font-semibold text-brand-900 dark:text-brand-100">✅ Receita gerada com sucesso!</p>
+                    <p className="font-semibold text-brand-900 dark:text-brand-100">Receita gerada com sucesso!</p>
                     <p className="text-sm text-brand-700 dark:text-brand-200">ID: {controlledRx.id}</p>
                   </div>
                   <button onClick={() => { window.print(); }}
@@ -653,12 +982,12 @@ export default function PrescriptionPage() {
 
                 <div className="print:hidden bg-white dark:bg-slate-800 rounded-lg shadow p-6 space-y-4">
                   <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
-                    Preview para impressão (Clique em "Imprimir 2 Vias" para imprimir com corte no meio):
+                    Preview para impressao (Clique em "Imprimir 2 Vias" para imprimir com corte no meio):
                   </p>
                   <div className="border-2 border-dashed border-slate-300 dark:border-slate-700 rounded p-4 bg-slate-50 dark:bg-slate-900 text-xs overflow-x-auto">
                     <div className="whitespace-pre-wrap text-slate-800 dark:text-slate-100 font-mono text-[11px]">
                       {`╔═══════════════════════════════════════════╗
-║         RECEITA MÉDICA CONTROLADA        ║
+║         RECEITA MEDICA CONTROLADA        ║
 ║                                           ║
 ║  Paciente: ${patient?.name || "N/A"}
 ║  Data: ${new Date(controlledRx.date).toLocaleDateString("pt-BR")}
@@ -667,12 +996,12 @@ export default function PrescriptionPage() {
 ║  MEDICAMENTOS:                            ║
 ${controlledRx.medications.slice(0, 3).map((m, i) => `║  ${i + 1}. ${m.name.substring(0, 37)}║`).join("\n")}
 ║                                           ║
-║  [ESPAÇO PARA ASSINATURA DO MÉDICO]      ║
+║  [ESPACO PARA ASSINATURA DO MEDICO]      ║
 ║  __________ / __________ / __________    ║
-║  CRM nº: _____________                   ║
+║  CRM no: _____________                   ║
 ╚═══════════════════════════════════════════╝
 
-Via Vermelha - Farmácia
+Via Vermelha - Farmacia
 Via Branca - Paciente`}
                     </div>
                   </div>
@@ -694,11 +1023,13 @@ function ControlledPrescriptionPrint({ rx, patient }: { rx: ControlledPrescripti
         <div key={via} className="p-8 border-4 border-dashed border-gray-400 bg-white min-h-96 flex flex-col">
           <div className="flex justify-between items-start mb-6 pb-4 border-b-2 border-red-600">
             <div>
-              <h1 className="text-2xl font-bold">RECEITA MÉDICA</h1>
+              <h1 className="text-2xl font-bold">RECEITA MEDICA</h1>
               <p className="font-bold text-red-600">Via {via === 1 ? "VERMELHA" : "BRANCA"}</p>
             </div>
             <div className="text-right">
-              <p className="font-mono">{new Date(rx.date).toLocaleDateString("pt-BR")}</p>
+              <p className="text-sm font-bold">Dr. Valth Guimaraes</p>
+              <p className="text-xs text-gray-500">CRM/PB 1234</p>
+              <p className="font-mono text-xs">{new Date(rx.date).toLocaleDateString("pt-BR")}</p>
             </div>
           </div>
 
@@ -716,7 +1047,7 @@ function ControlledPrescriptionPrint({ rx, patient }: { rx: ControlledPrescripti
               <p className="font-mono">{patient?.cpf || "N/A"}</p>
             </div>
             <div>
-              <p className="font-bold text-gray-600">ENDEREÇO:</p>
+              <p className="font-bold text-gray-600">ENDERECO:</p>
               <p>{patient?.address_street || "N/A"}</p>
             </div>
           </div>
@@ -729,7 +1060,7 @@ function ControlledPrescriptionPrint({ rx, patient }: { rx: ControlledPrescripti
                   <th className="border px-2 py-1 text-left">Medicamento</th>
                   <th className="border px-2 py-1 text-left">Dose</th>
                   <th className="border px-2 py-1 text-left">Freq.</th>
-                  <th className="border px-2 py-1 text-left">Duração</th>
+                  <th className="border px-2 py-1 text-left">Duracao</th>
                 </tr>
               </thead>
               <tbody>
@@ -747,10 +1078,10 @@ function ControlledPrescriptionPrint({ rx, patient }: { rx: ControlledPrescripti
 
           <div className="mt-auto pt-6 border-t-2 border-gray-300">
             <div className="flex justify-between">
-              <div className="w-40">
+              <div className="w-48">
                 <div className="border-t border-gray-900 mb-1" style={{ height: "50px" }} />
-                <p className="text-xs font-bold">Assinatura e Carimbo</p>
-                <p className="text-xs">CRM / Data</p>
+                <p className="text-xs font-bold">Dr. Valth Guimaraes</p>
+                <p className="text-xs">CRM/PB 1234</p>
               </div>
             </div>
           </div>

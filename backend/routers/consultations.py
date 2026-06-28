@@ -6,6 +6,7 @@ import uuid
 from database import get_db
 from models.patient import Patient
 from models.consultation import Consultation
+from models.financial import FinancialRecord
 from models.organization import User
 from schemas.consultation import ConsultationCreate, ConsultationUpdate, ConsultationOut
 from deps import require_doctor, get_current_user
@@ -22,7 +23,12 @@ def list_consultations(patient_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("", response_model=ConsultationOut, status_code=201)
-def create_consultation(patient_id: int, data: ConsultationCreate, db: Session = Depends(get_db)):
+def create_consultation(
+    patient_id: int,
+    data: ConsultationCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_doctor),
+):
     patient = db.query(Patient).filter(Patient.id == patient_id).first()
     if not patient:
         raise HTTPException(404, "Paciente não encontrado")
@@ -31,13 +37,39 @@ def create_consultation(patient_id: int, data: ConsultationCreate, db: Session =
         consultation_type = "primeira_consulta"
     else:
         consultation_type = data.type or "retorno"
-    data_dict = {**data.model_dump(), "type": consultation_type}
+
+    data_dict = data.model_dump()
+
+    # BUG-08: campo "notes" é alias de doctor_private_notes; mesclar se necessário
+    if data_dict.get("notes") and not data_dict.get("doctor_private_notes"):
+        data_dict["doctor_private_notes"] = data_dict["notes"]
+    data_dict.pop("notes", None)  # remover alias antes de passar ao modelo
+
+    data_dict["type"] = consultation_type
+
     # Auto-generate Jitsi Meet URL for teleconsultas
     if consultation_type == "teleconsulta" and not data_dict.get("teleconsult_url"):
         room = str(uuid.uuid4()).replace("-", "")[:10]
         data_dict["teleconsult_url"] = f"https://meet.jit.si/OrthoClinic-{room}"
-    consultation = Consultation(patient_id=patient_id, **data_dict)
+
+    # BUG-03: gravar doctor_id do usuário autenticado
+    consultation = Consultation(patient_id=patient_id, doctor_id=current_user.id, **data_dict)
     db.add(consultation)
+    db.flush()  # garante que consultation.id está disponível antes do commit
+
+    # BUG-07: criar lançamento financeiro pendente automaticamente
+    financial_description = f"Consulta {consultation_type} — {data.diagnosis or 'a preencher'}"
+    financial_record = FinancialRecord(
+        patient_id=patient_id,
+        consultation_id=consultation.id,
+        amount=0.0,
+        payment_method="a_definir",
+        status="pending",
+        description=financial_description[:300],
+        date=datetime.utcnow().date(),
+    )
+    db.add(financial_record)
+
     db.commit()
     db.refresh(consultation)
     return consultation

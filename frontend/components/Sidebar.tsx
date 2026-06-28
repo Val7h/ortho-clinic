@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { useAuth } from './AuthProvider';
 import { Logo } from './Logo';
+import { Monitor } from 'lucide-react';
 
 export function Sidebar() {
   const router = useRouter();
@@ -15,14 +16,14 @@ export function Sidebar() {
 
   const menuItems = [
     // --- Fluxo clínico diário ---
-    { label: 'Agenda',       href: '/agenda',     icon: '📅', group: 'clinic', roles: ['admin', 'superadmin', 'doctor', 'secretary'] },
-    { label: 'Pacientes',    href: '/pacientes',  icon: '👥', group: 'clinic', roles: ['admin', 'superadmin', 'doctor', 'secretary'] },
-    { label: 'Atendimento',  href: '/painel',     icon: '⏱️', group: 'clinic', roles: ['admin', 'superadmin', 'doctor', 'secretary'] },
-    { label: 'Dashboard',    href: '/',           icon: '📊', group: 'clinic', roles: ['admin', 'superadmin', 'doctor'] },
+    { label: 'Agenda',        href: '/agenda',     icon: '📅', group: 'clinic', roles: ['admin', 'superadmin', 'doctor', 'secretary'] },
+    { label: 'Pacientes',     href: '/pacientes',  icon: '👥', group: 'clinic', roles: ['admin', 'superadmin', 'doctor', 'secretary'] },
+    { label: 'Sala de Espera',href: '/painel',     icon: null,  group: 'clinic', roles: ['admin', 'superadmin', 'doctor', 'secretary'] },
+    { label: 'Dashboard',     href: '/',           icon: '📊', group: 'clinic', roles: ['admin', 'superadmin', 'doctor'] },
     // --- Administrativo ---
-    { label: 'Financeiro',   href: '/financeiro', icon: '💰', group: 'admin', roles: ['admin', 'superadmin'] },
-    { label: 'Equipe',       href: '/usuarios',   icon: '👤', group: 'admin', roles: ['admin', 'superadmin'] },
-    { label: 'Configurações',href: '/clinicas',   icon: '⚙️', group: 'admin', roles: ['admin', 'superadmin'] },
+    { label: 'Financeiro',    href: '/financeiro', icon: '💰', group: 'admin', roles: ['admin', 'superadmin'] },
+    { label: 'Equipe',        href: '/usuarios',   icon: '👤', group: 'admin', roles: ['admin', 'superadmin'] },
+    { label: 'Configurações', href: '/clinicas',   icon: '⚙️', group: 'admin', roles: ['admin', 'superadmin'] },
   ];
 
   const filteredMenuItems = menuItems.filter(
@@ -74,7 +75,11 @@ export function Sidebar() {
                         : 'text-blue-100 hover:bg-blue-700 hover:text-white'
                     }`}
                   >
-                    <span className="text-lg w-6 text-center">{item.icon}</span>
+                    {item.icon === null ? (
+                      <Monitor className="w-5 h-5 flex-shrink-0" />
+                    ) : (
+                      <span className="text-lg w-6 text-center">{item.icon}</span>
+                    )}
                     <span>{item.label}</span>
                   </Link>
                 </div>

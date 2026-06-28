@@ -1,492 +1,655 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import {
-  Clock, CheckCircle, AlertCircle, Activity,
-  Plus, Trash2, Play, Pause, StopCircle, XCircle
+  Clock, UserCheck, UserX, Play, CheckCircle, Timer,
+  Plus, Trash2, RefreshCw, Search, ChevronRight
 } from 'lucide-react';
+import Link from 'next/link';
 import NavBar from '@/components/NavBar';
 import { PageWithSidebar } from '@/components/PageWithSidebar';
 import { Card, CardContent, Badge, Button, Modal, useModal } from '@/components/ui';
-import { patientsApi, consultationsApi } from '@/lib/api';
+import { patientsApi, waitingRoomApi, clinicApi } from '@/lib/api';
 import toast from 'react-hot-toast';
 
-type PatientStatus = 'waiting' | 'attending' | 'exam' | 'completed';
+// ── Types ──────────────────────────────────────────────────────────────────
 
-interface PanelPatient {
+type QueueStatus = 'waiting' | 'attending' | 'attended' | 'absent';
+
+interface WaitingEntry {
   id: number;
-  name: string;
-  status: PatientStatus;
-  consultationId?: number;
-  startTime?: number; // timestamp
-  pausedTime?: number; // accumulated paused time in seconds
-  isPaused?: boolean;
-  examReturn?: number; // timestamp when exam ends
+  patient_id: number;
+  patient_name: string;
+  patient_insurance: string | null;
+  clinic_id: number | null;
+  reason: string | null;
+  position: number;
+  arrived_at: string;
+  status: QueueStatus;
+  waited_minutes: number | null;
 }
 
-export default function PanelPage() {
-  const [patients, setPatients] = useState<PanelPatient[]>([]);
-  const [allPatients, setAllPatients] = useState<any[]>([]);
+type Filter = 'all' | QueueStatus;
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+
+function formatTime(isoStr: string): string {
+  try {
+    const d = new Date(isoStr);
+    return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  } catch {
+    return '--:--';
+  }
+}
+
+function formatWait(minutes: number | null): string {
+  if (minutes === null || minutes < 0) return '—';
+  if (minutes < 60) return `${minutes} min`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m > 0 ? `${h}h ${m}min` : `${h}h`;
+}
+
+function statusLabel(s: QueueStatus): string {
+  const map: Record<QueueStatus, string> = {
+    waiting: 'Aguardando',
+    attending: 'Em Atendimento',
+    attended: 'Atendido',
+    absent: 'Ausente',
+  };
+  return map[s] ?? s;
+}
+
+function statusBadgeVariant(s: QueueStatus): 'warning' | 'success' | 'neutral' | 'error' {
+  const map: Record<QueueStatus, 'warning' | 'success' | 'neutral' | 'error'> = {
+    waiting: 'warning',
+    attending: 'success',
+    attended: 'neutral',
+    absent: 'error',
+  };
+  return map[s] ?? 'neutral';
+}
+
+const INSURANCE_COLORS = [
+  'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200',
+  'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-200',
+  'bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-200',
+  'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-200',
+];
+
+function insuranceColor(name: string | null): string {
+  if (!name) return 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300';
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  return INSURANCE_COLORS[Math.abs(hash) % INSURANCE_COLORS.length];
+}
+
+// ── Patient card ───────────────────────────────────────────────────────────
+
+interface PatientCardProps {
+  entry: WaitingEntry;
+  onStatusChange: (id: number, status: QueueStatus) => Promise<void>;
+  onRemove: (id: number) => void;
+  busy: boolean;
+}
+
+function PatientCard({ entry, onStatusChange, onRemove, busy }: PatientCardProps) {
+  const isAttended = entry.status === 'attended';
+  const isAbsent = entry.status === 'absent';
+  const isDimmed = isAttended || isAbsent;
+
+  return (
+    <div
+      className={`relative rounded-xl border transition-all duration-200 ${
+        entry.status === 'attending'
+          ? 'border-green-400 dark:border-green-600 shadow-md shadow-green-100 dark:shadow-green-950'
+          : entry.status === 'waiting'
+          ? 'border-amber-300 dark:border-amber-700'
+          : 'border-slate-200 dark:border-slate-700'
+      } bg-white dark:bg-slate-900 ${isDimmed ? 'opacity-60' : ''}`}
+    >
+      {entry.status === 'attending' && (
+        <span className="absolute -top-1 -right-1 flex h-3 w-3">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+          <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500" />
+        </span>
+      )}
+
+      <div className="p-4">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex items-center gap-3 min-w-0">
+            <span
+              className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
+                entry.status === 'attending'
+                  ? 'bg-green-500 text-white'
+                  : entry.status === 'waiting'
+                  ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
+              }`}
+            >
+              {entry.position}
+            </span>
+            <div className="min-w-0">
+              <Link
+                href={`/pacientes/${entry.patient_id}`}
+                className={`font-semibold hover:underline text-slate-900 dark:text-slate-50 truncate block ${
+                  isAttended ? 'line-through text-slate-400 dark:text-slate-500' : ''
+                }`}
+              >
+                {entry.patient_name}
+              </Link>
+              {entry.reason && (
+                <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5">{entry.reason}</p>
+              )}
+            </div>
+          </div>
+
+          <div className="flex-shrink-0 text-right">
+            <div className="flex items-center gap-1 text-slate-600 dark:text-slate-300 text-sm">
+              <Clock className="w-3.5 h-3.5" />
+              <span>{formatTime(entry.arrived_at)}</span>
+            </div>
+            <div className="flex items-center gap-1 justify-end mt-0.5">
+              <Timer className="w-3 h-3 text-slate-400" />
+              <span
+                className={`text-xs font-medium ${
+                  (entry.waited_minutes ?? 0) > 30
+                    ? 'text-red-600 dark:text-red-400'
+                    : 'text-slate-500 dark:text-slate-400'
+                }`}
+              >
+                {formatWait(entry.waited_minutes)}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 mt-3">
+          <span
+            className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${insuranceColor(
+              entry.patient_insurance
+            )}`}
+          >
+            {entry.patient_insurance ?? 'Particular'}
+          </span>
+          <Badge variant={statusBadgeVariant(entry.status)} size="sm">
+            {statusLabel(entry.status)}
+          </Badge>
+        </div>
+
+        <div className="flex items-center gap-2 mt-3 flex-wrap">
+          {entry.status === 'waiting' && (
+            <>
+              <Button
+                size="sm"
+                variant="success"
+                icon={<Play className="w-3.5 h-3.5" />}
+                onClick={() => onStatusChange(entry.id, 'attending')}
+                disabled={busy}
+              >
+                Chamar
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                icon={<UserX className="w-3.5 h-3.5" />}
+                onClick={() => onStatusChange(entry.id, 'absent')}
+                disabled={busy}
+              >
+                Ausente
+              </Button>
+            </>
+          )}
+
+          {entry.status === 'attending' && (
+            <Button
+              size="sm"
+              variant="primary"
+              icon={<CheckCircle className="w-3.5 h-3.5" />}
+              onClick={() => onStatusChange(entry.id, 'attended')}
+              disabled={busy}
+            >
+              Concluir
+            </Button>
+          )}
+
+          {(entry.status === 'attended' || entry.status === 'absent') && (
+            <Button
+              size="sm"
+              variant="tertiary"
+              icon={<Play className="w-3.5 h-3.5" />}
+              onClick={() => onStatusChange(entry.id, 'waiting')}
+              disabled={busy}
+            >
+              Recolocar
+            </Button>
+          )}
+
+          <Link href={`/pacientes/${entry.patient_id}`} className="ml-auto">
+            <Button size="sm" variant="tertiary" icon={<ChevronRight className="w-3.5 h-3.5" />}>
+              Prontuário
+            </Button>
+          </Link>
+
+          <button
+            onClick={() => onRemove(entry.id)}
+            disabled={busy}
+            className="p-1.5 rounded text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950 transition-colors disabled:opacity-40"
+            title="Remover da fila"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Main page ──────────────────────────────────────────────────────────────
+
+export default function SalaDeEsperaPage() {
+  const [entries, setEntries] = useState<WaitingEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  const [currentTime, setCurrentTime] = useState(0);
-  const addModal = useModal();
+  const [refreshing, setRefreshing] = useState(false);
+  const [filter, setFilter] = useState<Filter>('all');
+  const [busyIds, setBusyIds] = useState<Set<number>>(new Set());
+  const [clinics, setClinics] = useState<any[]>([]);
+  const [selectedClinicId, setSelectedClinicId] = useState<number | undefined>(undefined);
+
+  const checkinModal = useModal();
+  const [allPatients, setAllPatients] = useState<any[]>([]);
+  const [patientSearch, setPatientSearch] = useState('');
   const [selectedPatient, setSelectedPatient] = useState<any>(null);
+  const [checkinReason, setCheckinReason] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
-  // Load all patients for adding
-  useEffect(() => {
-    patientsApi
-      .list()
-      .then(setAllPatients)
-      .catch(() => toast.error('Erro ao carregar pacientes'));
-  }, []);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Load panel from localStorage
-  useEffect(() => {
-    const saved = localStorage.getItem('painel_pacientes');
-    if (saved) {
+  const fetchQueue = useCallback(
+    async (silent = false) => {
+      if (!silent) setLoading(true);
+      else setRefreshing(true);
       try {
-        setPatients(JSON.parse(saved));
-      } catch (e) {
-        setPatients([]);
+        const data = await waitingRoomApi.today(selectedClinicId);
+        setEntries(data);
+      } catch {
+        if (!silent) toast.error('Erro ao carregar sala de espera');
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
       }
+    },
+    [selectedClinicId]
+  );
+
+  useEffect(() => {
+    fetchQueue();
+    intervalRef.current = setInterval(() => fetchQueue(true), 30_000);
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, [fetchQueue]);
+
+  // Update waited_minutes client-side every minute
+  useEffect(() => {
+    const tick = setInterval(() => {
+      setEntries((prev) =>
+        prev.map((e) => {
+          if (e.status === 'attended' || e.status === 'absent') return e;
+          const arrived = new Date(e.arrived_at);
+          const waited = Math.floor((Date.now() - arrived.getTime()) / 60_000);
+          return { ...e, waited_minutes: waited };
+        })
+      );
+    }, 60_000);
+    return () => clearInterval(tick);
+  }, []);
+
+  useEffect(() => {
+    clinicApi.list().then(setClinics).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (checkinModal.open) {
+      patientsApi.list().then(setAllPatients).catch(() => {});
     }
-    setLoading(false);
-  }, []);
+  }, [checkinModal.open]);
 
-  // Save to localStorage
-  useEffect(() => {
-    localStorage.setItem('painel_pacientes', JSON.stringify(patients));
-  }, [patients]);
+  const countBy = (s: QueueStatus) => entries.filter((e) => e.status === s).length;
+  const waitingCount = countBy('waiting');
+  const attendingCount = countBy('attending');
+  const attendedCount = countBy('attended');
+  const absentCount = countBy('absent');
 
-  // Timer for clock
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentTime(Date.now());
-    }, 1000);
-    return () => clearInterval(interval);
-  }, []);
+  const filtered = filter === 'all' ? entries : entries.filter((e) => e.status === filter);
 
-  // Add patient to panel
-  const addPatient = () => {
+  const handleStatusChange = async (id: number, newStatus: QueueStatus) => {
+    setBusyIds((prev) => new Set(prev).add(id));
+    try {
+      const updated = await waitingRoomApi.updateStatus(id, newStatus);
+      setEntries((prev) => prev.map((e) => (e.id === id ? { ...e, ...updated } : e)));
+      const labels: Record<QueueStatus, string> = {
+        waiting: 'voltou para aguardando',
+        attending: 'chamado para atendimento',
+        attended: 'atendimento concluído',
+        absent: 'marcado como ausente',
+      };
+      toast.success(`Paciente ${labels[newStatus]}`);
+    } catch {
+      toast.error('Erro ao atualizar status');
+    } finally {
+      setBusyIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    }
+  };
+
+  const handleRemove = async (id: number) => {
+    if (!confirm('Remover este paciente da fila?')) return;
+    setBusyIds((prev) => new Set(prev).add(id));
+    try {
+      await waitingRoomApi.remove(id);
+      setEntries((prev) => prev.filter((e) => e.id !== id));
+      toast.success('Paciente removido da fila');
+    } catch {
+      toast.error('Erro ao remover paciente');
+    } finally {
+      setBusyIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    }
+  };
+
+  const handleCheckin = async () => {
     if (!selectedPatient) {
       toast.error('Selecione um paciente');
       return;
     }
-
-    const exists = patients.some((p) => p.id === selectedPatient.id);
-    if (exists) {
-      toast.error('Paciente já está no painel');
-      return;
+    setSubmitting(true);
+    try {
+      const entry = await waitingRoomApi.checkin({
+        patient_id: selectedPatient.id,
+        clinic_id: selectedClinicId,
+        reason: checkinReason || undefined,
+      });
+      setEntries((prev) => [...prev, entry]);
+      checkinModal.onOpenChange(false);
+      setSelectedPatient(null);
+      setPatientSearch('');
+      setCheckinReason('');
+      toast.success(`${selectedPatient.name} registrado na fila`);
+    } catch {
+      toast.error('Erro ao registrar chegada');
+    } finally {
+      setSubmitting(false);
     }
-
-    setPatients([
-      ...patients,
-      {
-        id: selectedPatient.id,
-        name: selectedPatient.name,
-        status: 'waiting',
-      },
-    ]);
-    setSelectedPatient(null);
-    addModal.onOpenChange(false);
-    toast.success('Paciente adicionado ao painel');
   };
 
-  // Remove patient
-  const removePatient = (id: number) => {
-    setPatients(patients.filter((p) => p.id !== id));
-    toast.success('Paciente removido');
-  };
-
-  // Start attending
-  const startAttending = (id: number) => {
-    setPatients(
-      patients.map((p) =>
-        p.id === id
-          ? { ...p, status: 'attending' as const, startTime: Date.now(), pausedTime: 0, isPaused: false }
-          : p
+  const filteredPatients = patientSearch
+    ? allPatients.filter(
+        (p) =>
+          p.name?.toLowerCase().includes(patientSearch.toLowerCase()) ||
+          p.cpf?.includes(patientSearch)
       )
-    );
-    toast.success('Atendimento iniciado');
-  };
+    : allPatients;
 
-  // Pause/resume
-  const togglePause = (id: number) => {
-    setPatients(
-      patients.map((p) => {
-        if (p.id !== id) return p;
-        if (!p.isPaused) {
-          // Pause
-          return { ...p, isPaused: true };
-        } else {
-          // Resume - adjust startTime
-          const pausedDuration = (Date.now() - p.startTime!) / 1000 - (p.pausedTime || 0);
-          return {
-            ...p,
-            isPaused: false,
-            startTime: Date.now() - (p.pausedTime || 0) * 1000,
-          };
-        }
-      })
-    );
-  };
+  const today = new Date().toLocaleDateString('pt-BR', {
+    weekday: 'long',
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+  });
 
-  // Send to exam
-  const sendToExam = (id: number) => {
-    setPatients(
-      patients.map((p) =>
-        p.id === id
-          ? {
-              ...p,
-              status: 'exam' as const,
-              examReturn: Date.now() + 15 * 60 * 1000, // 15 min
-            }
-          : p
-      )
-    );
-    toast.success('Paciente enviado para exame (retorna em 15 min)');
-  };
-
-  // Complete attendance
-  const completeAttendance = (id: number) => {
-    setPatients(
-      patients.map((p) =>
-        p.id === id
-          ? { ...p, status: 'completed' as const, startTime: undefined, examReturn: undefined }
-          : p
-      )
-    );
-    toast.success('Atendimento finalizado');
-  };
-
-  // Get elapsed time for display
-  const getElapsedTime = (patient: PanelPatient): string => {
-    if (!patient.startTime || patient.status !== 'attending') return '00:00';
-
-    let elapsed = Math.floor((currentTime - patient.startTime) / 1000);
-
-    if (patient.isPaused) {
-      elapsed = Math.floor((patient.pausedTime || 0));
-    } else {
-      elapsed = Math.floor((currentTime - patient.startTime) / 1000);
-    }
-
-    const minutes = Math.floor(elapsed / 60);
-    const seconds = elapsed % 60;
-    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-  };
-
-  // Get exam return time
-  const getExamReturnTime = (patient: PanelPatient): string => {
-    if (!patient.examReturn) return '';
-    const timeLeft = Math.max(0, Math.floor((patient.examReturn - currentTime) / 1000));
-    const minutes = Math.floor(timeLeft / 60);
-    const seconds = timeLeft % 60;
-    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-  };
-
-  const waiting = patients.filter((p) => p.status === 'waiting');
-  const attending = patients.filter((p) => p.status === 'attending');
-  const exam = patients.filter((p) => p.status === 'exam');
-  const completed = patients.filter((p) => p.status === 'completed');
-
-  if (loading) return <div>Carregando...</div>;
+  const filterTabs: { key: Filter; label: string; count: number }[] = [
+    { key: 'all', label: 'Todos', count: entries.length },
+    { key: 'waiting', label: 'Aguardando', count: waitingCount },
+    { key: 'attending', label: 'Em Atendimento', count: attendingCount },
+    { key: 'attended', label: 'Atendidos', count: attendedCount },
+    { key: 'absent', label: 'Ausentes', count: absentCount },
+  ];
 
   return (
     <PageWithSidebar>
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
-      <NavBar
-        title="Painel de Atendimento"
-        subtitle={`${patients.length} pacientes | ${attending.length} em atendimento`}
-        actions={
-          <Button
-            size="md"
-            icon={<Plus className="h-5 w-5" />}
-            onClick={() => addModal.onOpenChange(true)}
-          >
-            Adicionar Paciente
-          </Button>
-        }
-      />
-
-      <main className="mx-auto max-w-7xl px-4 py-8 space-y-6">
-        {/* Stats */}
-        <div className="grid grid-cols-4 gap-4">
-          <Card shadow="sm">
-            <CardContent className="flex items-center gap-3 pt-4">
-              <div className="w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
-                <AlertCircle className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{waiting.length}</p>
-                <p className="text-xs text-slate-600 dark:text-slate-400">Aguardando</p>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card shadow="sm">
-            <CardContent className="flex items-center gap-3 pt-4">
-              <div className="w-10 h-10 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
-                <Activity className="w-5 h-5 text-amber-600 dark:text-amber-400" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">{attending.length}</p>
-                <p className="text-xs text-slate-600 dark:text-slate-400">Em atendimento</p>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card shadow="sm">
-            <CardContent className="flex items-center gap-3 pt-4">
-              <div className="w-10 h-10 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
-                <Clock className="w-5 h-5 text-purple-600 dark:text-purple-400" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">{exam.length}</p>
-                <p className="text-xs text-slate-600 dark:text-slate-400">Fazendo exame</p>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card shadow="sm">
-            <CardContent className="flex items-center gap-3 pt-4">
-              <div className="w-10 h-10 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
-                <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-green-600 dark:text-green-400">{completed.length}</p>
-                <p className="text-xs text-slate-600 dark:text-slate-400">Atendidos</p>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Layout: Waiting | Attending */}
-        <div className="grid grid-cols-3 gap-6">
-          {/* Waiting */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <AlertCircle className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-              <h2 className="font-bold text-slate-900 dark:text-slate-50">Aguardando ({waiting.length})</h2>
-            </div>
-            <div className="space-y-2">
-              {waiting.map((p) => (
-                <Card key={p.id} className="cursor-pointer hover:shadow-md transition-shadow">
-                  <CardContent className="p-4 space-y-3">
-                    <div>
-                      <p className="font-semibold text-slate-900 dark:text-slate-50">{p.name}</p>
-                      <p className="text-xs text-slate-500 dark:text-slate-400">ID: {p.id}</p>
-                    </div>
-                    <Button
-                      size="sm"
-                      fullWidth
-                      onClick={() => startAttending(p.id)}
-                      className="bg-amber-500 hover:bg-amber-600"
-                    >
-                      Iniciar Atendimento
-                    </Button>
-                  </CardContent>
-                </Card>
-              ))}
-              {waiting.length === 0 && (
-                <div className="text-center py-8 text-slate-500 dark:text-slate-400">
-                  Ninguém aguardando
-                </div>
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+        <NavBar
+          title="Sala de Espera"
+          subtitle={today}
+          actions={
+            <div className="flex items-center gap-3">
+              {clinics.length > 1 && (
+                <select
+                  value={selectedClinicId ?? ''}
+                  onChange={(e) =>
+                    setSelectedClinicId(e.target.value ? Number(e.target.value) : undefined)
+                  }
+                  className="px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-50"
+                >
+                  <option value="">Todas as clínicas</option>
+                  {clinics.map((c: any) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
               )}
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={<RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />}
+                onClick={() => fetchQueue(true)}
+                disabled={refreshing}
+              >
+                Atualizar
+              </Button>
+              <Button
+                size="md"
+                icon={<Plus className="w-5 h-5" />}
+                onClick={() => checkinModal.onOpenChange(true)}
+              >
+                Registrar Chegada
+              </Button>
             </div>
-          </div>
+          }
+        />
 
-          {/* Attending - Large */}
-          <div className="col-span-2 space-y-3">
-            <div className="flex items-center gap-2">
-              <Activity className="w-5 h-5 text-amber-600 dark:text-amber-400" />
-              <h2 className="font-bold text-slate-900 dark:text-slate-50">Em Atendimento ({attending.length})</h2>
-            </div>
-            <div className="space-y-3">
-              {attending.map((p) => (
-                <Card key={p.id} className="border-2 border-amber-300 dark:border-amber-700">
-                  <CardContent className="p-6 space-y-4">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <h3 className="text-xl font-bold text-slate-900 dark:text-slate-50">{p.name}</h3>
-                        <p className="text-sm text-slate-600 dark:text-slate-400">ID: {p.id}</p>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-4xl font-mono font-bold text-amber-600 dark:text-amber-400">
-                          {getElapsedTime(p)}
-                        </div>
-                        <p className="text-xs text-slate-500 dark:text-slate-400">Tempo decorrido</p>
-                      </div>
-                    </div>
-
-                    {/* Status badge */}
-                    {p.isPaused && (
-                      <Badge variant="warning" size="md">
-                        ⏸️ Pausado
-                      </Badge>
-                    )}
-
-                    {/* Action buttons */}
-                    <div className="flex gap-2 flex-wrap">
-                      <Button
-                        size="sm"
-                        variant={p.isPaused ? 'secondary' : 'tertiary'}
-                        icon={p.isPaused ? <Play className="w-4 h-4" /> : <Pause className="w-4 h-4" />}
-                        onClick={() => togglePause(p.id)}
-                      >
-                        {p.isPaused ? 'Retomar' : 'Pausar'}
-                      </Button>
-
-                      <Button
-                        size="sm"
-                        variant="tertiary"
-                        icon={<Clock className="w-4 h-4" />}
-                        onClick={() => sendToExam(p.id)}
-                      >
-                        Enviar para Exame
-                      </Button>
-
-                      <Button
-                        size="sm"
-                        variant="success"
-                        icon={<CheckCircle className="w-4 h-4" />}
-                        onClick={() => completeAttendance(p.id)}
-                      >
-                        Finalizar
-                      </Button>
-
-                      <Button
-                        size="sm"
-                        variant="danger"
-                        icon={<Trash2 className="w-4 h-4" />}
-                        onClick={() => removePatient(p.id)}
-                      >
-                        Remover
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-              {attending.length === 0 && (
-                <div className="text-center py-12 text-slate-500 dark:text-slate-400">
-                  Ninguém em atendimento
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Exam section */}
-        {exam.length > 0 && (
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <Clock className="w-5 h-5 text-purple-600 dark:text-purple-400" />
-              <h2 className="font-bold text-slate-900 dark:text-slate-50">Fazendo Exame ({exam.length})</h2>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              {exam.map((p) => (
-                <Card key={p.id} className="border-l-4 border-purple-500">
-                  <CardContent className="p-4 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-semibold text-slate-900 dark:text-slate-50">{p.name}</p>
-                        <p className="text-xs text-slate-500 dark:text-slate-400">Retorna em:</p>
-                      </div>
-                      <div className="text-2xl font-mono font-bold text-purple-600 dark:text-purple-400">
-                        {getExamReturnTime(p)}
-                      </div>
-                    </div>
-                    <Button
-                      size="sm"
-                      fullWidth
-                      variant="secondary"
-                      onClick={() =>
-                        setPatients(
-                          patients.map((patient) =>
-                            patient.id === p.id ? { ...patient, status: 'completed' as const } : patient
-                          )
-                        )
-                      }
-                    >
-                      Retornou
-                    </Button>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Completed section */}
-        {completed.length > 0 && (
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400" />
-              <h2 className="font-bold text-slate-900 dark:text-slate-50">Atendidos ({completed.length})</h2>
-            </div>
-            <div className="grid grid-cols-5 gap-2">
-              {completed.map((p) => (
-                <Card key={p.id} className="opacity-75">
-                  <CardContent className="p-3 text-center space-y-2">
-                    <p className="text-sm font-semibold text-slate-600 dark:text-slate-400 line-through">
-                      {p.name}
+        <main className="mx-auto max-w-5xl px-4 py-6 space-y-6">
+          {/* Stats */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {([
+              { label: 'Aguardando', count: waitingCount, colorClass: 'amber', icon: <Timer className="w-5 h-5" /> },
+              { label: 'Em Atendimento', count: attendingCount, colorClass: 'green', icon: <UserCheck className="w-5 h-5" /> },
+              { label: 'Atendidos', count: attendedCount, colorClass: 'blue', icon: <CheckCircle className="w-5 h-5" /> },
+              { label: 'Ausentes', count: absentCount, colorClass: 'red', icon: <UserX className="w-5 h-5" /> },
+            ] as const).map(({ label, count, colorClass, icon }) => (
+              <Card key={label} shadow="sm">
+                <CardContent className="flex items-center gap-3 pt-4 pb-4">
+                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 bg-${colorClass}-100 dark:bg-${colorClass}-900/30 text-${colorClass}-600 dark:text-${colorClass}-400`}>
+                    {icon}
+                  </div>
+                  <div>
+                    <p className={`text-2xl font-bold text-${colorClass}-600 dark:text-${colorClass}-400`}>
+                      {count}
                     </p>
-                    <Button
-                      size="sm"
-                      variant="tertiary"
-                      fullWidth
-                      icon={<Trash2 className="w-3 h-3" />}
-                      onClick={() => removePatient(p.id)}
-                    >
-                      Remover
-                    </Button>
-                  </CardContent>
-                </Card>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">{label}</p>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          {/* Filter tabs */}
+          <div className="flex gap-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-1">
+            {filterTabs.map(({ key, label, count }) => (
+              <button
+                key={key}
+                onClick={() => setFilter(key)}
+                className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                  filter === key
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                }`}
+              >
+                {label}
+                <span
+                  className={`inline-flex items-center justify-center text-xs w-5 h-5 rounded-full ${
+                    filter === key
+                      ? 'bg-blue-500 text-white'
+                      : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                  }`}
+                >
+                  {count}
+                </span>
+              </button>
+            ))}
+          </div>
+
+          {/* Queue list */}
+          {loading ? (
+            <div className="space-y-3">
+              {[1, 2, 3].map((n) => (
+                <div
+                  key={n}
+                  className="h-32 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 animate-pulse"
+                />
               ))}
             </div>
-          </div>
-        )}
-      </main>
-
-      {/* Modal Add Patient */}
-      <Modal
-        open={addModal.open}
-        onOpenChange={addModal.onOpenChange}
-        title="Adicionar Paciente ao Painel"
-        size="md"
-        footer={
-          <div className="flex gap-3 justify-end">
-            <Button variant="tertiary" onClick={() => addModal.onOpenChange(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={addPatient}>Adicionar</Button>
-          </div>
-        }
-      >
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-slate-900 dark:text-slate-50 mb-2">
-              Selecione o paciente
-            </label>
-            <select
-              value={selectedPatient?.id || ''}
-              onChange={(e) => {
-                const patient = allPatients.find((p) => p.id === Number(e.target.value));
-                setSelectedPatient(patient);
-              }}
-              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-50"
-            >
-              <option value="">Escolha um paciente...</option>
-              {allPatients.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
+          ) : filtered.length === 0 ? (
+            <div className="text-center py-16">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+                <UserCheck className="w-8 h-8 text-slate-400" />
+              </div>
+              <p className="text-slate-500 dark:text-slate-400 font-medium">
+                {filter === 'all'
+                  ? 'Nenhum paciente na fila hoje'
+                  : `Nenhum paciente com status "${statusLabel(filter as QueueStatus)}"`}
+              </p>
+              {filter === 'all' && (
+                <Button
+                  className="mt-4"
+                  variant="secondary"
+                  icon={<Plus className="w-4 h-4" />}
+                  onClick={() => checkinModal.onOpenChange(true)}
+                >
+                  Registrar primeiro paciente
+                </Button>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {filtered.map((entry) => (
+                <PatientCard
+                  key={entry.id}
+                  entry={entry}
+                  onStatusChange={handleStatusChange}
+                  onRemove={handleRemove}
+                  busy={busyIds.has(entry.id)}
+                />
               ))}
-            </select>
+            </div>
+          )}
+        </main>
+
+        {/* Checkin Modal */}
+        <Modal
+          open={checkinModal.open}
+          onOpenChange={checkinModal.onOpenChange}
+          title="Registrar Chegada"
+          size="md"
+          footer={
+            <div className="flex gap-3 justify-end">
+              <Button variant="tertiary" onClick={() => checkinModal.onOpenChange(false)}>
+                Cancelar
+              </Button>
+              <Button onClick={handleCheckin} isLoading={submitting}>
+                Registrar
+              </Button>
+            </div>
+          }
+        >
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-900 dark:text-slate-50 mb-1.5">
+                Buscar paciente
+              </label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Nome ou CPF..."
+                  value={patientSearch}
+                  onChange={(e) => {
+                    setPatientSearch(e.target.value);
+                    setSelectedPatient(null);
+                  }}
+                  className="w-full pl-9 pr-3 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-50 text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+
+            {!selectedPatient && (
+              <div className="max-h-52 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-lg divide-y divide-slate-100 dark:divide-slate-800">
+                {filteredPatients.slice(0, 30).map((p: any) => (
+                  <button
+                    key={p.id}
+                    onClick={() => {
+                      setSelectedPatient(p);
+                      setPatientSearch(p.name);
+                    }}
+                    className="w-full text-left px-4 py-2.5 hover:bg-blue-50 dark:hover:bg-blue-950 transition-colors"
+                  >
+                    <p className="text-sm font-medium text-slate-900 dark:text-slate-50">{p.name}</p>
+                    {p.cpf && (
+                      <p className="text-xs text-slate-500 dark:text-slate-400">CPF: {p.cpf}</p>
+                    )}
+                  </button>
+                ))}
+                {filteredPatients.length === 0 && (
+                  <p className="text-center py-6 text-sm text-slate-400">Nenhum paciente encontrado</p>
+                )}
+              </div>
+            )}
+
+            {selectedPatient && (
+              <div className="flex items-center justify-between px-4 py-3 rounded-lg bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800">
+                <div>
+                  <p className="text-sm font-semibold text-green-800 dark:text-green-200">
+                    {selectedPatient.name}
+                  </p>
+                  {selectedPatient.cpf && (
+                    <p className="text-xs text-green-600 dark:text-green-400">CPF: {selectedPatient.cpf}</p>
+                  )}
+                </div>
+                <button
+                  onClick={() => {
+                    setSelectedPatient(null);
+                    setPatientSearch('');
+                  }}
+                  className="text-xs text-green-600 dark:text-green-400 hover:underline"
+                >
+                  Trocar
+                </button>
+              </div>
+            )}
+
+            <div>
+              <label className="block text-sm font-medium text-slate-900 dark:text-slate-50 mb-1.5">
+                Motivo da visita <span className="font-normal text-slate-400">(opcional)</span>
+              </label>
+              <input
+                type="text"
+                placeholder="Ex: Retorno, Consulta, Curativo..."
+                value={checkinReason}
+                onChange={(e) => setCheckinReason(e.target.value)}
+                className="w-full px-3 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-50 text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
           </div>
-        </div>
-      </Modal>
-    </div>
+        </Modal>
+      </div>
     </PageWithSidebar>
   );
 }

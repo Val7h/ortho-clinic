@@ -1,6 +1,6 @@
 """Queue Management Models - Real-time waiting room tracking."""
 
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, JSON, Text
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, JSON, Text, Date
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from database import Base
@@ -35,6 +35,41 @@ class ClinicQueue(Base):
     clinic = relationship("Clinic")
     appointment = relationship("Appointment")
     patient = relationship("Patient")
+
+
+class WaitingRoomEntry(Base):
+    """
+    Sala de Espera — registro de chegada de paciente na clínica.
+    Modelo simples e independente de agendamento para uso operacional diário.
+    Statuses: waiting → attending → attended | absent
+    """
+    __tablename__ = "waiting_room_entries"
+
+    id = Column(Integer, primary_key=True, index=True)
+    patient_id = Column(Integer, ForeignKey("patients.id"), nullable=False, index=True)
+    clinic_id = Column(Integer, ForeignKey("clinics.id"), nullable=True, index=True)
+
+    # Motivo da visita (opcional)
+    reason = Column(String(300), nullable=True)
+
+    # Posição sequencial do dia (1, 2, 3…)
+    position = Column(Integer, nullable=False, default=1)
+
+    # Data do atendimento (facilita filtro por dia sem parsear arrived_at)
+    entry_date = Column(Date, nullable=False, index=True)
+
+    # Horário de chegada
+    arrived_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+    # Status: waiting | attending | attended | absent
+    status = Column(String(20), default="waiting", index=True, nullable=False)
+
+    notes = Column(Text, nullable=True)
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    # Relationships
+    patient = relationship("Patient")
+    clinic = relationship("Clinic")
 
 
 class PrescriptionSignature(Base):

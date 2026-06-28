@@ -6,13 +6,14 @@ Includes WebSocket support for real-time updates.
 from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
-from datetime import datetime, timedelta
-from typing import List, Dict, Set
+from datetime import datetime, timedelta, date
+from typing import List, Dict, Set, Optional
+from pydantic import BaseModel
 import json
 import logging
 
 from database import get_db
-from models.queue import ClinicQueue, PrescriptionSignature, AnamnesisTemplate
+from models.queue import ClinicQueue, PrescriptionSignature, AnamnesisTemplate, WaitingRoomEntry
 from models.clinic import Appointment, Clinic
 from models.patient import Patient
 from schemas.queue import (
@@ -574,3 +575,165 @@ async def delete_anamnesis_template(
     db.commit()
 
     return JSONResponse(content={"message": "Template deleted"})
+
+
+# ==================== SALA DE ESPERA ====================
+
+class CheckinRequest(BaseModel):
+    patient_id: int
+    clinic_id: Optional[int] = None
+    reason: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class WaitingRoomEntryOut(BaseModel):
+    id: int
+    patient_id: int
+    patient_name: str
+    patient_insurance: Optional[str]
+    clinic_id: Optional[int]
+    reason: Optional[str]
+    position: int
+    entry_date: date
+    arrived_at: datetime
+    status: str
+    notes: Optional[str]
+    waited_minutes: Optional[int]
+
+    class Config:
+        from_attributes = True
+
+
+class WaitingStatusUpdate(BaseModel):
+    status: str  # waiting | attending | attended | absent
+
+
+def _build_entry_out(entry: WaitingRoomEntry, patient: Patient, now: datetime) -> WaitingRoomEntryOut:
+    arrived = entry.arrived_at
+    # normalise timezone-aware vs naive comparison
+    if arrived and arrived.tzinfo is not None:
+        from datetime import timezone
+        now_aware = now.replace(tzinfo=timezone.utc)
+        waited = int((now_aware - arrived).total_seconds() / 60)
+    elif arrived:
+        waited = int((now - arrived).total_seconds() / 60)
+    else:
+        waited = None
+
+    return WaitingRoomEntryOut(
+        id=entry.id,
+        patient_id=entry.patient_id,
+        patient_name=patient.name if patient else "Desconhecido",
+        patient_insurance=patient.insurance if patient else None,
+        clinic_id=entry.clinic_id,
+        reason=entry.reason,
+        position=entry.position,
+        entry_date=entry.entry_date,
+        arrived_at=entry.arrived_at,
+        status=entry.status,
+        notes=entry.notes,
+        waited_minutes=waited,
+    )
+
+
+@router.post("/waiting-room/checkin", response_model=WaitingRoomEntryOut, status_code=201)
+async def checkin_patient(
+    request: CheckinRequest,
+    db: Session = Depends(get_db),
+):
+    """Registra chegada de um paciente na sala de espera."""
+    patient = db.query(Patient).filter(Patient.id == request.patient_id).first()
+    if not patient:
+        raise HTTPException(status_code=404, detail="Paciente não encontrado")
+
+    today = date.today()
+
+    # Calcula próxima posição do dia
+    last_position = (
+        db.query(WaitingRoomEntry)
+        .filter(WaitingRoomEntry.entry_date == today)
+        .count()
+    )
+    next_position = last_position + 1
+
+    entry = WaitingRoomEntry(
+        patient_id=request.patient_id,
+        clinic_id=request.clinic_id,
+        reason=request.reason,
+        notes=request.notes,
+        position=next_position,
+        entry_date=today,
+        arrived_at=datetime.utcnow(),
+        status="waiting",
+    )
+    db.add(entry)
+    db.commit()
+    db.refresh(entry)
+
+    now = datetime.utcnow()
+    return _build_entry_out(entry, patient, now)
+
+
+@router.get("/waiting-room/today", response_model=List[WaitingRoomEntryOut])
+async def get_today_queue(
+    clinic_id: Optional[int] = Query(None),
+    db: Session = Depends(get_db),
+):
+    """Lista todos os pacientes da fila do dia, ordenados por hora de chegada."""
+    today = date.today()
+    query = db.query(WaitingRoomEntry).filter(WaitingRoomEntry.entry_date == today)
+
+    if clinic_id is not None:
+        query = query.filter(WaitingRoomEntry.clinic_id == clinic_id)
+
+    entries = query.order_by(WaitingRoomEntry.arrived_at.asc()).all()
+
+    now = datetime.utcnow()
+    result = []
+    for entry in entries:
+        patient = db.query(Patient).filter(Patient.id == entry.patient_id).first()
+        result.append(_build_entry_out(entry, patient, now))
+
+    return result
+
+
+@router.patch("/waiting-room/{entry_id}/status", response_model=WaitingRoomEntryOut)
+async def update_waiting_status(
+    entry_id: int,
+    request: WaitingStatusUpdate,
+    db: Session = Depends(get_db),
+):
+    """Atualiza o status de uma entrada na sala de espera."""
+    valid_statuses = {"waiting", "attending", "attended", "absent"}
+    if request.status not in valid_statuses:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Status inválido. Use: {', '.join(valid_statuses)}",
+        )
+
+    entry = db.query(WaitingRoomEntry).filter(WaitingRoomEntry.id == entry_id).first()
+    if not entry:
+        raise HTTPException(status_code=404, detail="Entrada não encontrada")
+
+    entry.status = request.status
+    db.commit()
+    db.refresh(entry)
+
+    patient = db.query(Patient).filter(Patient.id == entry.patient_id).first()
+    now = datetime.utcnow()
+    return _build_entry_out(entry, patient, now)
+
+
+@router.delete("/waiting-room/{entry_id}", status_code=204)
+async def delete_waiting_entry(
+    entry_id: int,
+    db: Session = Depends(get_db),
+):
+    """Remove uma entrada da sala de espera."""
+    entry = db.query(WaitingRoomEntry).filter(WaitingRoomEntry.id == entry_id).first()
+    if not entry:
+        raise HTTPException(status_code=404, detail="Entrada não encontrada")
+
+    db.delete(entry)
+    db.commit()
+    return None

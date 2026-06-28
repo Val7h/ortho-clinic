@@ -48,6 +48,11 @@ def migrate_db():
     # Mapeamento: tabela → coluna a adicionar
     migrations = []
 
+    if "consultations" in existing_tables:
+        cons_cols = [c["name"] for c in inspector.get_columns("consultations")]
+        if "doctor_id" not in cons_cols:
+            migrations.append("ALTER TABLE consultations ADD COLUMN doctor_id INTEGER REFERENCES users(id)")
+
     if "patients" in existing_tables:
         cols = [c["name"] for c in inspector.get_columns("patients")]
         if "organization_id" not in cols:

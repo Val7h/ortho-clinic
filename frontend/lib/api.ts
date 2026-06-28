@@ -382,6 +382,21 @@ export const patientDocsApi = {
     `${api.defaults.baseURL}/patients/${patientId}/documents/${docId}/pdf`,
 };
 
+// ── Sala de Espera ────────────────────────────────────────────────────────
+export const waitingRoomApi = {
+  checkin: (data: { patient_id: number; clinic_id?: number; reason?: string; notes?: string }) =>
+    api.post("/api/clinic/waiting-room/checkin", data).then((r) => r.data),
+
+  today: (clinic_id?: number) =>
+    api.get("/api/clinic/waiting-room/today", { params: clinic_id ? { clinic_id } : {} }).then((r) => r.data),
+
+  updateStatus: (entry_id: number, status: "waiting" | "attending" | "attended" | "absent") =>
+    api.patch(`/api/clinic/waiting-room/${entry_id}/status`, { status }).then((r) => r.data),
+
+  remove: (entry_id: number) =>
+    api.delete(`/api/clinic/waiting-room/${entry_id}`),
+};
+
 // ── WhatsApp ──────────────────────────────────────────────────────────────
 export const whatsappApi = {
   config: () => api.get("/whatsapp/config").then((r) => r.data),

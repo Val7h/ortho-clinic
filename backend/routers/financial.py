@@ -88,61 +88,96 @@ def get_summary(
     m = month or today.month
     y = year or today.year
 
-    base_q = db.query(FinancialRecord)
-    if current_user.role != "superadmin":
-        base_q = base_q.join(Patient, FinancialRecord.patient_id == Patient.id).filter(
-            Patient.organization_id == current_user.organization_id
-        )
+    def _base_q():
+        q = db.query(FinancialRecord)
+        if current_user.role != "superadmin":
+            q = q.join(Patient, FinancialRecord.patient_id == Patient.id).filter(
+                Patient.organization_id == current_user.organization_id
+            )
+        return q
 
-    records = (
-        base_q.filter(
+    # ── Mês atual: paid ──────────────────────────────────────────────────────
+    month_paid_records = (
+        _base_q()
+        .filter(
             extract("year", FinancialRecord.date) == y,
             extract("month", FinancialRecord.date) == m,
             FinancialRecord.status == "paid",
         )
         .all()
     )
+    total_month_paid = sum(r.amount for r in month_paid_records)
 
-    total = sum(r.amount for r in records)
     by_method: dict = {}
-    for r in records:
+    for r in month_paid_records:
         by_method[r.payment_method] = by_method.get(r.payment_method, 0) + r.amount
 
-    # Year to date
-    ytd_base_q = db.query(FinancialRecord)
-    if current_user.role != "superadmin":
-        ytd_base_q = ytd_base_q.join(Patient, FinancialRecord.patient_id == Patient.id).filter(
-            Patient.organization_id == current_user.organization_id
+    # ── Mês atual: pending ───────────────────────────────────────────────────
+    month_pending_records = (
+        _base_q()
+        .filter(
+            extract("year", FinancialRecord.date) == y,
+            extract("month", FinancialRecord.date) == m,
+            FinancialRecord.status == "pending",
         )
-    ytd_records = (
-        ytd_base_q.filter(
+        .all()
+    )
+    total_month_pending = sum(r.amount for r in month_pending_records)
+    total_month = total_month_paid + total_month_pending
+
+    # ── Year-to-date: paid ───────────────────────────────────────────────────
+    ytd_paid_records = (
+        _base_q()
+        .filter(
             extract("year", FinancialRecord.date) == y,
             FinancialRecord.status == "paid",
         )
         .all()
     )
-    ytd_total = sum(r.amount for r in ytd_records)
+    ytd_paid = sum(r.amount for r in ytd_paid_records)
 
-    # Monthly totals for the year (chart data)
-    monthly = {}
-    for r in ytd_records:
+    # ── Year-to-date: pending ────────────────────────────────────────────────
+    ytd_pending_records = (
+        _base_q()
+        .filter(
+            extract("year", FinancialRecord.date) == y,
+            FinancialRecord.status == "pending",
+        )
+        .all()
+    )
+    ytd_pending = sum(r.amount for r in ytd_pending_records)
+    ytd_total = ytd_paid + ytd_pending
+
+    # ── Pending total (all-time, for receivable) ─────────────────────────────
+    all_pending_q = _base_q().filter(FinancialRecord.status == "pending")
+    total_pending = sum(r.amount for r in all_pending_q.all())
+
+    # ── Monthly totals for chart (paid + pending) ────────────────────────────
+    monthly: dict = {}
+    for r in ytd_paid_records + ytd_pending_records:
         k = r.date.month
         monthly[k] = monthly.get(k, 0) + r.amount
-
-    pending_q = db.query(func.sum(FinancialRecord.amount)).filter(FinancialRecord.status == "pending")
-    if current_user.role != "superadmin":
-        pending_q = pending_q.join(Patient, FinancialRecord.patient_id == Patient.id).filter(
-            Patient.organization_id == current_user.organization_id
-        )
-    pending = pending_q.scalar() or 0
 
     return {
         "month": m,
         "year": y,
-        "total_month": round(total, 2),
+        # Mês
+        "total_month": round(total_month, 2),
+        "total_month_paid": round(total_month_paid, 2),
+        "total_month_pending": round(total_month_pending, 2),
+        # Ano
         "total_ytd": round(ytd_total, 2),
-        "pending": round(pending, 2),
-        "count_month": len(records),
+        "total_ytd_paid": round(ytd_paid, 2),
+        "total_ytd_pending": round(ytd_pending, 2),
+        # Pendente (total histórico) e recebível
+        "pending": round(total_pending, 2),          # compat. legado
+        "total_pending": round(total_pending, 2),
+        "total_paid": round(ytd_paid, 2),
+        "total_receivable": round(ytd_paid + total_pending, 2),
+        # Detalhes
+        "count_month": len(month_paid_records) + len(month_pending_records),
+        "count_month_paid": len(month_paid_records),
+        "count_month_pending": len(month_pending_records),
         "by_method": {k: round(v, 2) for k, v in by_method.items()},
         "monthly_totals": {str(k): round(v, 2) for k, v in sorted(monthly.items())},
     }

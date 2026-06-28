@@ -11,6 +11,8 @@ class ConsultationType(str, enum.Enum):
     EMERGENCY = "urgencia"
     PROCEDURE = "procedimento"
     TELECONSULTA = "teleconsulta"
+    PRE_OP = "pre_operatorio"
+    POST_OP = "pos_operatorio"
 
 
 class Consultation(Base):
@@ -18,6 +20,7 @@ class Consultation(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     patient_id = Column(Integer, ForeignKey("patients.id"), nullable=False)
+    doctor_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     date = Column(DateTime(timezone=True), nullable=False)
     type = Column(String(30), default=ConsultationType.RETURN)
 
