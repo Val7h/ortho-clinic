@@ -829,7 +829,6 @@ const RX_TYPE_OPTIONS: { value: PrescriptionType; label: string; activeClass: st
   { value: "simples",           label: "Simples (Branca)",          activeClass: "border-slate-600 bg-slate-600 text-white" },
   { value: "controle_especial", label: "Controle Especial (RCE)",   activeClass: "border-amber-600 bg-amber-600 text-white" },
   { value: "antimicrobiano",    label: "Antimicrobiano (ATB)",       activeClass: "border-blue-600 bg-blue-600 text-white" },
-  { value: "notificacao_ab",    label: "Notificação A/B (SESA)",    activeClass: "border-red-500 bg-red-500 text-white" },
 ];
 
 function TabReceita({ patientId, patient }: { patientId: number; patient: any }) {
