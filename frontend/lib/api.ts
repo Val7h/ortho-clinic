@@ -154,6 +154,14 @@ export const examsApi = {
     api.delete(`/patients/${patientId}/exams/${id}`),
 };
 
+// ── Evoluções Clínicas (Prontuário em Folha Corrida) ─────────────────────────
+export const evolutionApi = {
+  list: (patientId: number) =>
+    api.get(`/patients/${patientId}/evolutions`).then((r) => r.data),
+  create: (patientId: number, data: { entry_date: string; content: string }) =>
+    api.post(`/patients/${patientId}/evolutions`, data).then((r) => r.data),
+};
+
 // ── Fisioterapia ──────────────────────────────────────────────────────────
 export const physioApi = {
   list: (patientId: number) =>

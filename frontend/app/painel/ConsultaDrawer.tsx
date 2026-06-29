@@ -7,7 +7,7 @@ import {
   Plus, Trash2, Printer, ChevronDown, ChevronUp, Save,
 } from "lucide-react";
 import toast from "react-hot-toast";
-import { patientsApi, consultationsApi, prescriptionsApi, examsApi } from "@/lib/api";
+import { patientsApi, consultationsApi, prescriptionsApi, examsApi, evolutionApi } from "@/lib/api";
 import { formatDate } from "@/lib/utils";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -376,314 +376,131 @@ function PrintModal({ rx, patient, onClose }: {
 
 // ── Tab: Prontuário ────────────────────────────────────────────────────────────
 
-function TabProntuario({ patientId, patient }: { patientId: number; patient: any }) {
-  const [consultType, setConsultType] = useState("retorno");
-  // Anamnese
-  const [chiefComplaint, setChiefComplaint] = useState("");
-  const [historyOfIllness, setHistoryOfIllness] = useState("");
-  const [painLocation, setPainLocation] = useState("");
-  const [durationQty, setDurationQty] = useState("");
-  const [durationUnit, setDurationUnit] = useState("semanas");
-  const [painScale, setPainScale] = useState<number | null>(null);
-  const [aggravating, setAggravating] = useState("");
-  const [relieving, setRelieving] = useState("");
-  const [previousTreatments, setPreviousTreatments] = useState("");
-  // Exame físico
-  const [bpSystolic, setBpSystolic] = useState("");
-  const [bpDiastolic, setBpDiastolic] = useState("");
-  const [heartRate, setHeartRate] = useState("");
-  const [temperature, setTemperature] = useState("");
-  const [weight, setWeight] = useState("");
-  const [height, setHeight] = useState("");
-  const imc = weight && height ? (parseFloat(weight) / Math.pow(parseFloat(height) / 100, 2)).toFixed(1) : null;
-  const [physicalExam, setPhysicalExam] = useState("");
-  // Testes ortopédicos
-  const [specialTestsMap, setSpecialTestsMap] = useState<Record<string, string>>({});
-  // Diagnóstico
-  const [cid10, setCid10] = useState("");
-  const [diagnosis, setDiagnosis] = useState("");
-  // Conduta
-  const [treatmentPlan, setTreatmentPlan] = useState("");
-  const [returnDays, setReturnDays] = useState("");
+const formatDateBR = (dateStr: string) => {
+  const d = new Date(dateStr + "T12:00:00");
+  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getFullYear()).slice(2)}`;
+};
 
+function TabProntuario({ patientId }: { patientId: number }) {
+  const [evolutions, setEvolutions] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [newText, setNewText] = useState("");
   const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const toggleTest = (key: string) =>
-    setSpecialTestsMap((prev) => {
-      const next = { ...prev };
-      if (next[key] !== undefined) delete next[key];
-      else next[key] = "nao_realizado";
-      return next;
-    });
+  const today = new Date();
+  const todayBR = `${String(today.getDate()).padStart(2, "0")}/${String(today.getMonth() + 1).padStart(2, "0")}/${String(today.getFullYear()).slice(2)}`;
+  const todayISO = today.toISOString().split("T")[0];
 
-  const testsByRegion: Record<string, typeof ORTHO_TESTS> = {};
-  ORTHO_TESTS.forEach((t) => {
-    if (!testsByRegion[t.region]) testsByRegion[t.region] = [];
-    testsByRegion[t.region].push(t);
-  });
-
-  const buildVitalSigns = () => {
-    const vs: Record<string, any> = {};
-    if (bpSystolic) vs.bp_systolic = parseInt(bpSystolic);
-    if (bpDiastolic) vs.bp_diastolic = parseInt(bpDiastolic);
-    if (heartRate) vs.hr = parseInt(heartRate);
-    if (temperature) vs.temperature = parseFloat(temperature);
-    if (weight) vs.weight = parseFloat(weight);
-    if (height) vs.height = parseFloat(height);
-    if (imc) vs.imc = parseFloat(imc);
-    return Object.keys(vs).length > 0 ? JSON.stringify(vs) : null;
-  };
-
-  const buildSpecialTests = () => {
-    const tests: Record<string, string> = {};
-    ORTHO_TESTS.forEach((t) => { if (specialTestsMap[t.key] !== undefined) tests[t.key] = specialTestsMap[t.key]; });
-    return Object.keys(tests).length > 0 ? JSON.stringify(tests) : null;
-  };
+  useEffect(() => {
+    setLoading(true);
+    setEvolutions([]);
+    evolutionApi
+      .list(patientId)
+      .then((data) => setEvolutions(data))
+      .catch(() => toast.error("Erro ao carregar evoluções"))
+      .finally(() => setLoading(false));
+  }, [patientId]);
 
   const handleSave = async () => {
-    if (!chiefComplaint.trim()) { toast.error("Preencha a queixa principal"); return; }
+    if (!newText.trim()) {
+      toast.error("Digite a evolução antes de salvar");
+      return;
+    }
     setSaving(true);
     try {
-      const payload: Record<string, any> = {
-        date: new Date().toISOString(),
-        type: consultType,
-        chief_complaint: chiefComplaint || undefined,
-        history_of_illness: historyOfIllness || undefined,
-        pain_location: painLocation || undefined,
-        symptom_duration: durationQty ? `${durationQty} ${durationUnit}` : undefined,
-        aggravating_factors: aggravating || undefined,
-        relieving_factors: relieving || undefined,
-        previous_treatments: previousTreatments || undefined,
-        pain_scale: painScale,
-        physical_exam: physicalExam || undefined,
-        vital_signs: buildVitalSigns(),
-        special_tests: buildSpecialTests(),
-        diagnosis: diagnosis || undefined,
-        cid10: cid10 || undefined,
-        treatment_plan: treatmentPlan || undefined,
-        next_appointment: returnDays
-          ? (() => { const d = new Date(); d.setDate(d.getDate() + parseInt(returnDays)); return d.toISOString().slice(0, 10); })()
-          : undefined,
-      };
-      await consultationsApi.create(patientId, payload);
-      toast.success("Prontuário salvo!");
-      setSaved(true);
+      const created = await evolutionApi.create(patientId, {
+        entry_date: todayISO,
+        content: newText.trim(),
+      });
+      setEvolutions((prev) => [...prev, created]);
+      setNewText("");
+      // Scroll para o final do documento após salvar
+      setTimeout(() => {
+        if (scrollRef.current) {
+          scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+        }
+      }, 50);
+      toast.success("Evolução registrada!");
     } catch (err: any) {
-      toast.error(err?.response?.data?.detail || "Erro ao salvar prontuário");
+      toast.error(err?.response?.data?.detail || "Erro ao salvar evolução");
     } finally {
       setSaving(false);
     }
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && e.ctrlKey) {
+      e.preventDefault();
+      handleSave();
+    }
+  };
+
   return (
-    <div className="space-y-5 px-5 pb-6">
-      {/* Tipo de consulta */}
-      <div>
-        <label className={lbl}>Tipo de consulta</label>
-        <select className={inp} value={consultType} onChange={(e) => setConsultType(e.target.value)}>
-          {CONSULT_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-        </select>
-      </div>
-
-      {/* ── Anamnese ── */}
-      <div className="space-y-3">
-        <p className={sectionTitle}>Anamnese</p>
-        <div>
-          <label className={lbl}>Queixa principal *</label>
-          <textarea className={inp + " min-h-[80px] resize-none"} placeholder="Motivo da consulta..." value={chiefComplaint} onChange={(e) => setChiefComplaint(e.target.value)} />
-        </div>
-        <div>
-          <label className={lbl}>História da doença atual</label>
-          <textarea className={inp + " min-h-[80px] resize-none"} placeholder="Início, evolução..." value={historyOfIllness} onChange={(e) => setHistoryOfIllness(e.target.value)} />
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="col-span-2">
-            <label className={lbl}>Localização da dor</label>
-            <input className={inp} placeholder="Joelho direito, lombar..." value={painLocation} onChange={(e) => setPainLocation(e.target.value)} />
+    <div className="flex flex-col h-full">
+      {/* ── Documento evolutivo (scrollável) ── */}
+      <div
+        ref={scrollRef}
+        className="flex-1 overflow-y-auto px-5 pt-2 pb-2 min-h-0"
+        style={{ maxHeight: "calc(100vh - 420px)", minHeight: "120px" }}
+      >
+        {loading ? (
+          <div className="flex items-center justify-center h-20">
+            <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
           </div>
-          <div>
-            <label className={lbl}>Duração</label>
-            <div className="flex gap-2">
-              <input type="number" min="1" className={inp + " w-20 flex-shrink-0"} placeholder="Qtd" value={durationQty} onChange={(e) => setDurationQty(e.target.value)} />
-              <select className={inp} value={durationUnit} onChange={(e) => setDurationUnit(e.target.value)}>
-                {DURATION_UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
-              </select>
-            </div>
-          </div>
-        </div>
-
-        {/* EVA */}
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <label className={lbl + " mb-0"}>Escala de dor (EVA)</label>
-            {painScale !== null ? (
-              <span className={`text-xs font-bold px-2 py-0.5 rounded-full text-white ${PAIN_COLORS[painScale]}`}>{painScale}/10</span>
-            ) : (
-              <span className="text-xs text-slate-400">não avaliado</span>
-            )}
-          </div>
-          <input
-            type="range" min="0" max="10" step="1"
-            className="w-full h-2 appearance-none rounded-full cursor-pointer"
-            style={{ background: painScale !== null ? `linear-gradient(to right, #ef4444 0%, #ef4444 ${painScale * 10}%, #e5e7eb ${painScale * 10}%, #e5e7eb 100%)` : "#e5e7eb" }}
-            value={painScale ?? 0}
-            onChange={(e) => setPainScale(parseInt(e.target.value))}
-            onMouseDown={() => { if (painScale === null) setPainScale(0); }}
-          />
-          <div className="flex justify-between text-[10px] text-slate-400 mt-1">
-            <span>Sem dor</span><span>Dor máxima</span>
-          </div>
-          {painScale !== null && (
-            <button type="button" onClick={() => setPainScale(null)} className="text-[10px] text-slate-400 underline mt-1">Limpar</button>
-          )}
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className={lbl}>Fatores de piora</label>
-            <textarea className={inp + " min-h-[60px] resize-none"} placeholder="Movimento, esforço..." value={aggravating} onChange={(e) => setAggravating(e.target.value)} />
-          </div>
-          <div>
-            <label className={lbl}>Fatores de melhora</label>
-            <textarea className={inp + " min-h-[60px] resize-none"} placeholder="Repouso, calor..." value={relieving} onChange={(e) => setRelieving(e.target.value)} />
-          </div>
-        </div>
-        <div>
-          <label className={lbl}>Tratamentos anteriores</label>
-          <textarea className={inp + " min-h-[60px] resize-none"} placeholder="Fisioterapia, cirurgias, medicamentos..." value={previousTreatments} onChange={(e) => setPreviousTreatments(e.target.value)} />
-        </div>
-      </div>
-
-      {/* ── Exame Físico ── */}
-      <div className="space-y-3">
-        <p className={sectionTitle}>Exame Físico</p>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="col-span-2">
-            <label className={lbl}>Pressão Arterial (mmHg)</label>
-            <div className="flex items-center gap-1.5">
-              <input type="number" className={inp} placeholder="120" value={bpSystolic} onChange={(e) => setBpSystolic(e.target.value)} />
-              <span className="text-slate-400 font-bold">/</span>
-              <input type="number" className={inp} placeholder="80" value={bpDiastolic} onChange={(e) => setBpDiastolic(e.target.value)} />
-            </div>
-          </div>
-          <div>
-            <label className={lbl}>FC (bpm)</label>
-            <input type="number" className={inp} placeholder="72" value={heartRate} onChange={(e) => setHeartRate(e.target.value)} />
-          </div>
-          <div>
-            <label className={lbl}>Temperatura (°C)</label>
-            <input type="number" step="0.1" className={inp} placeholder="36.5" value={temperature} onChange={(e) => setTemperature(e.target.value)} />
-          </div>
-          <div>
-            <label className={lbl}>Peso (kg)</label>
-            <input type="number" step="0.1" className={inp} placeholder="75" value={weight} onChange={(e) => setWeight(e.target.value)} />
-          </div>
-          <div>
-            <label className={lbl}>Altura (cm)</label>
-            <input type="number" className={inp} placeholder="175" value={height} onChange={(e) => setHeight(e.target.value)} />
-          </div>
-          <div>
-            <label className={lbl}>IMC</label>
-            <div className={inp + " flex items-center " + (imc ? "" : "text-slate-400")}>
-              <span>{imc ?? "—"}</span>
-              {imc && (
-                <span className="ml-2 text-[10px] font-semibold text-blue-600">
-                  {parseFloat(imc) < 18.5 ? "Abaixo peso" : parseFloat(imc) < 25 ? "Normal" : parseFloat(imc) < 30 ? "Sobrepeso" : "Obeso"}
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
-        <div>
-          <label className={lbl}>Inspeção / Palpação</label>
-          <textarea className={inp + " min-h-[70px] resize-none"} placeholder="Sem alterações / Edema leve..." value={physicalExam} onChange={(e) => setPhysicalExam(e.target.value)} />
-        </div>
-      </div>
-
-      {/* ── Testes Ortopédicos ── */}
-      <div className="space-y-2">
-        <p className={sectionTitle}>Testes Ortopédicos Especiais</p>
-        {Object.entries(testsByRegion).map(([region, tests]) => (
-          <div key={region}>
-            <p className="text-xs font-bold text-slate-400 mb-1.5">{region}</p>
-            <div className="space-y-1.5">
-              {tests.map((t) => {
-                const active = specialTestsMap[t.key] !== undefined;
-                return (
-                  <div key={t.key} className="flex items-center gap-2">
-                    <label className="flex items-center gap-2 cursor-pointer min-w-[140px]">
-                      <input type="checkbox" checked={active} onChange={() => toggleTest(t.key)} className="w-3.5 h-3.5 rounded text-blue-600 border-slate-300" />
-                      <span className="text-xs text-slate-700 dark:text-slate-300">{t.label}</span>
-                    </label>
-                    {active && (
-                      <select className={inp + " text-xs py-1"} value={specialTestsMap[t.key]} onChange={(e) => setSpecialTestsMap((prev) => ({ ...prev, [t.key]: e.target.value }))}>
-                        <option value="nao_realizado">Não realizado</option>
-                        <option value="negativo">Negativo</option>
-                        <option value="positivo">Positivo</option>
-                        <option value="duvidoso">Duvidoso</option>
-                      </select>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* ── Diagnóstico ── */}
-      <div className="space-y-3">
-        <p className={sectionTitle}>Diagnóstico</p>
-        <div>
-          <label className={lbl}>CID-10</label>
-          <CidSearch value={cid10} onChange={setCid10} />
-        </div>
-        <div>
-          <label className={lbl}>Hipótese diagnóstica</label>
-          <textarea className={inp + " min-h-[70px] resize-none"} placeholder="Diagnóstico principal e hipóteses..." value={diagnosis} onChange={(e) => setDiagnosis(e.target.value)} />
-        </div>
-      </div>
-
-      {/* ── Conduta ── */}
-      <div className="space-y-3">
-        <p className={sectionTitle}>Conduta</p>
-        <div>
-          <label className={lbl}>Plano de tratamento</label>
-          <textarea className={inp + " min-h-[90px] resize-none"} placeholder="Medicamentos, fisioterapia, cirurgia..." value={treatmentPlan} onChange={(e) => setTreatmentPlan(e.target.value)} />
-        </div>
-        <div>
-          <label className={lbl}>Retorno em (dias)</label>
-          <div className="flex items-center gap-3">
-            <input type="number" min="1" className={inp + " w-28"} placeholder="Ex: 30" value={returnDays} onChange={(e) => setReturnDays(e.target.value)} />
-            {returnDays && (
-              <span className="text-xs text-slate-500">
-                {new Date(Date.now() + parseInt(returnDays) * 86400000).toLocaleDateString("pt-BR")}
+        ) : evolutions.length === 0 ? (
+          <p className="text-xs text-slate-400 italic font-mono py-4">Nenhuma anotação anterior.</p>
+        ) : (
+          <div className="font-mono text-sm text-slate-900 dark:text-slate-100 leading-relaxed whitespace-pre-wrap">
+            {evolutions.map((ev, idx) => (
+              <span key={ev.id}>
+                <span className="font-semibold">{formatDateBR(ev.entry_date)}</span>
+                {" "}
+                {ev.content}
+                {idx < evolutions.length - 1 ? "\n" : ""}
               </span>
-            )}
+            ))}
           </div>
-        </div>
+        )}
       </div>
 
-      {/* Botão salvar */}
-      {saved ? (
-        <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-xl p-3 text-center">
-          <p className="text-emerald-700 dark:text-emerald-300 font-semibold text-sm">Prontuário salvo!</p>
+      {/* ── Área de nova entrada (fixa no bottom) ── */}
+      <div className="flex-shrink-0 border-t border-slate-200 dark:border-slate-700 px-5 pt-3 pb-4 bg-white dark:bg-slate-900">
+        {/* Label com data de hoje */}
+        <div className="flex items-center gap-1 mb-1.5">
+          <span className="font-mono text-sm font-semibold text-slate-700 dark:text-slate-300">
+            {todayBR}
+          </span>
+          <span className="text-xs text-slate-400 ml-1">(hoje)</span>
         </div>
-      ) : (
-        <button
-          type="button"
-          onClick={handleSave}
-          disabled={saving}
-          className="w-full py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 font-semibold flex items-center justify-center gap-2 text-sm"
-        >
-          {saving ? (
-            <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Salvando...</>
-          ) : (
-            <><Save className="w-4 h-4" /> Salvar Prontuário</>
-          )}
-        </button>
-      )}
+
+        <textarea
+          ref={textareaRef}
+          className="w-full font-mono text-sm text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 resize-none placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          rows={5}
+          placeholder="Digite a evolução clínica..."
+          value={newText}
+          onChange={(e) => setNewText(e.target.value)}
+          onKeyDown={handleKeyDown}
+        />
+
+        <div className="flex items-center justify-between mt-2">
+          <span className="text-[11px] text-slate-400">Ctrl+Enter para salvar</span>
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saving || !newText.trim()}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-40 font-semibold text-sm"
+          >
+            {saving ? (
+              <><div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> Salvando...</>
+            ) : (
+              <><Save className="w-3.5 h-3.5" /> Salvar</>
+            )}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -1153,7 +970,7 @@ export default function ConsultaDrawer({ entry, onClose, onStatusChange }: Consu
         ) : (
           <div className="pt-4">
             {activeTab === "prontuario" && (
-              <TabProntuario patientId={entry.patient_id} patient={patient} />
+              <TabProntuario patientId={entry.patient_id} />
             )}
             {activeTab === "receita" && (
               <TabReceita patientId={entry.patient_id} patient={patient} />
