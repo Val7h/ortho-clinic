@@ -40,6 +40,7 @@ class ClinicOut(BaseModel):
     slug: str
     active: bool
     address: Optional[str] = None
+    phone: Optional[str] = None
     schedules: List[ScheduleOut] = []
     model_config = {"from_attributes": True}
 
@@ -67,6 +68,7 @@ class ClinicCreate(BaseModel):
     state: Optional[str] = None
     address: Optional[str] = None
     color: Optional[str] = "#0F2D5E"
+    phone: Optional[str] = None
 
 
 class ClinicUpdate(BaseModel):
@@ -76,6 +78,7 @@ class ClinicUpdate(BaseModel):
     state: Optional[str] = None
     address: Optional[str] = None
     color: Optional[str] = None
+    phone: Optional[str] = None
 
 
 class ScheduleUpdate(BaseModel):
@@ -163,6 +166,14 @@ def create_clinic(
     return clinic
 
 
+@router.get("/clinics/{clinic_id}", response_model=ClinicOut)
+def get_clinic(clinic_id: int, db: Session = Depends(get_db)):
+    clinic = db.query(Clinic).filter(Clinic.id == clinic_id).first()
+    if not clinic:
+        raise HTTPException(404, "Clínica não encontrada")
+    return clinic
+
+
 @router.put("/clinics/{clinic_id}", response_model=ClinicOut)
 def update_clinic(
     clinic_id: int,
@@ -182,6 +193,8 @@ def update_clinic(
         clinic.address = data.address
     if data.color is not None:
         clinic.color = data.color
+    if data.phone is not None:
+        clinic.phone = data.phone
     db.commit()
     db.refresh(clinic)
     return clinic

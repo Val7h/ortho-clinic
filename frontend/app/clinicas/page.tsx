@@ -65,7 +65,7 @@ export default function ClinicasPage() {
   const editModal = useModal();
   const [editClinic, setEditClinic] = useState<any | null>(null);
   const [editForm, setEditForm] = useState({
-    name: "", slug: "", city: "", state: "", address: "", color: "", slot_duration: 12,
+    name: "", slug: "", city: "", state: "", address: "", color: "", slot_duration: 12, phone: "",
   });
   const [editSaving, setEditSaving] = useState(false);
 
@@ -131,6 +131,7 @@ export default function ClinicasPage() {
       address: clinic.address || "",
       color: clinic.color || "#0F2D5E",
       slot_duration: firstSlotDuration,
+      phone: clinic.phone || "",
     });
     editModal.openModal();
   };
@@ -146,6 +147,7 @@ export default function ClinicasPage() {
         state: editForm.state || undefined,
         address: editForm.address || undefined,
         color: editForm.color || undefined,
+        phone: editForm.phone || undefined,
       });
       // Update all schedules' slot_duration
       for (const sched of editClinic.schedules) {
@@ -237,6 +239,12 @@ export default function ClinicasPage() {
             label="Endereço"
             value={editForm.address}
             onChange={(e) => setEditForm((f) => ({ ...f, address: e.target.value }))}
+          />
+          <Input
+            label="Telefone da Clínica"
+            placeholder="(83) 3322-0000"
+            value={editForm.phone}
+            onChange={(e) => setEditForm((f) => ({ ...f, phone: e.target.value }))}
           />
           <div className="grid grid-cols-2 gap-3">
             <div>

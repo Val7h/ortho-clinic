@@ -234,7 +234,8 @@ export const clinicApi = {
   blockSlot: (clinicId: number, data: { date: string; start_time: string; reason?: string }) =>
     api.post(`/clinics/${clinicId}/block`, { ...data, patient_name: "[BLOQUEADO]" }).then((r) => r.data),
   // Edit clinic
-  updateClinic: (clinicId: number, data: { name: string; slug: string; city?: string; state?: string; address?: string; color?: string }) =>
+  get: (clinicId: number) => api.get(`/clinics/${clinicId}`).then((r) => r.data),
+  updateClinic: (clinicId: number, data: { name: string; slug: string; city?: string; state?: string; address?: string; color?: string; phone?: string }) =>
     api.put(`/clinics/${clinicId}`, data).then((r) => r.data),
   updateSchedule: (clinicId: number, scheduleId: number, data: { slot_duration?: number; start_time?: string; end_time?: string; active?: boolean }) =>
     api.put(`/clinics/${clinicId}/schedules/${scheduleId}`, data).then((r) => r.data),

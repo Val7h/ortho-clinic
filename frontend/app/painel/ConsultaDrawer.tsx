@@ -7,7 +7,7 @@ import {
   Plus, Trash2, Printer, ChevronDown, ChevronUp, Save,
 } from "lucide-react";
 import toast from "react-hot-toast";
-import { patientsApi, consultationsApi, prescriptionsApi, prescriptionTemplatesApi, examsApi, evolutionApi } from "@/lib/api";
+import { patientsApi, consultationsApi, prescriptionsApi, prescriptionTemplatesApi, examsApi, evolutionApi, clinicApi } from "@/lib/api";
 import { formatDate } from "@/lib/utils";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -338,7 +338,7 @@ const PRESCRIPTION_TYPE_LABELS: Record<PrescriptionType, string> = {
 };
 
 // Print prescription modal — 3 tipos que o médico pode imprimir + aviso para A/B
-function PrintModal({ rx, patient, onClose }: {
+function PrintModal({ rx, patient, clinic, onClose }: {
   rx: {
     date: string;
     medications: Medication[];
@@ -348,6 +348,7 @@ function PrintModal({ rx, patient, onClose }: {
     patientPhone?: string;
   };
   patient: any;
+  clinic?: any;
   onClose: () => void;
 }) {
   const type = normalizePrescriptionType(rx.prescription_type);
@@ -379,8 +380,8 @@ function PrintModal({ rx, patient, onClose }: {
           <div>
             <p style={{ fontWeight: 700, fontSize: "15px", margin: "0 0 1px 0", color: headerColor }}>Dr. Valth Guimarães</p>
             <p style={{ fontSize: "11px", color: "#555", margin: "0" }}>Ortopedia e Traumatologia</p>
-            <p style={{ fontSize: "11px", color: "#555", margin: "0" }}>CRM/PB 1234 | CRM/PE 5678</p>
-            <p style={{ fontSize: "11px", color: "#555", margin: "0" }}>Tel: (83) 99347-6410</p>
+            <p style={{ fontSize: "11px", color: "#555", margin: "0" }}>CRM/PB 6326 | CRM/PE 16551</p>
+            {clinic?.phone && <p style={{ fontSize: "11px", color: "#555", margin: "0" }}>Tel: {clinic.phone}</p>}
           </div>
           <div style={{ textAlign: "right" }}>
             <p style={{ fontWeight: 700, fontSize: "10px", color: headerColor, textTransform: "uppercase", letterSpacing: "0.5px", margin: "0 0 4px 0" }}>Receita de Controle Especial</p>
@@ -421,7 +422,7 @@ function PrintModal({ rx, patient, onClose }: {
           <p style={{ fontSize: "10px", color: "#888", margin: "0 0 4px 0" }}>_____________ , ___/___/______</p>
           <div style={{ borderTop: `1px solid ${headerColor}`, paddingTop: "4px" }}>
             <p style={{ fontSize: "11px", fontWeight: 700, margin: "0" }}>Dr. Valth Guimarães</p>
-            <p style={{ fontSize: "10px", color: "#666", margin: "0" }}>CRM/PB 1234 | CRM/PE 5678</p>
+            <p style={{ fontSize: "10px", color: "#666", margin: "0" }}>CRM/PB 6326 | CRM/PE 16551</p>
           </div>
         </div>
       </div>
@@ -448,8 +449,8 @@ function PrintModal({ rx, patient, onClose }: {
             <p style={{ fontWeight: 700, fontSize: "10px", color: "#555", textTransform: "uppercase", margin: "0 0 2px 0" }}>Prescritor</p>
             <p style={{ fontWeight: 700, fontSize: "14px", margin: "0 0 1px 0", color: headerColor }}>Dr. Valth Guimarães</p>
             <p style={{ fontSize: "10px", color: "#555", margin: "0" }}>Especialidade: Ortopedia e Traumatologia</p>
-            <p style={{ fontSize: "10px", color: "#555", margin: "0" }}>CRM/PB 1234 | CRM/PE 5678</p>
-            <p style={{ fontSize: "10px", color: "#555", margin: "0" }}>Tel: (83) 99347-6410</p>
+            <p style={{ fontSize: "10px", color: "#555", margin: "0" }}>CRM/PB 6326 | CRM/PE 16551</p>
+            {clinic?.phone && <p style={{ fontSize: "10px", color: "#555", margin: "0" }}>Tel: {clinic.phone}</p>}
           </div>
           <div style={{ textAlign: "right" }}>
             <p style={{ fontWeight: 700, fontSize: "11px", color: headerColor, margin: "0" }}>{viaLabel}</p>
@@ -488,7 +489,7 @@ function PrintModal({ rx, patient, onClose }: {
         <div style={{ textAlign: "center", width: "180px" }}>
           <div style={{ borderTop: `1px solid ${headerColor}`, paddingTop: "4px" }}>
             <p style={{ fontSize: "11px", fontWeight: 700, margin: "0" }}>Dr. Valth Guimarães</p>
-            <p style={{ fontSize: "10px", color: "#666", margin: "0" }}>CRM/PB 1234 | CRM/PE 5678</p>
+            <p style={{ fontSize: "10px", color: "#666", margin: "0" }}>CRM/PB 6326 | CRM/PE 16551</p>
           </div>
         </div>
       </div>
@@ -509,8 +510,8 @@ function PrintModal({ rx, patient, onClose }: {
       <div style={{ borderBottom: `2px solid ${headerColor}`, paddingBottom: "12px", marginBottom: "14px", textAlign: "center" }}>
         <h1 style={{ fontSize: "16px", fontWeight: 700, color: headerColor, margin: "0 0 2px 0" }}>Dr. Valth Guimarães</h1>
         <p style={{ fontSize: "11px", color: "#555", margin: "0" }}>Ortopedia e Traumatologia</p>
-        <p style={{ fontSize: "11px", color: "#555", margin: "0" }}>CRM/PB 1234 | CRM/PE 5678</p>
-        <p style={{ fontSize: "11px", color: "#555", margin: "0" }}>Tel: (83) 99347-6410</p>
+        <p style={{ fontSize: "11px", color: "#555", margin: "0" }}>CRM/PB 6326 | CRM/PE 16551</p>
+        {clinic?.phone && <p style={{ fontSize: "11px", color: "#555", margin: "0" }}>Tel: {clinic.phone}</p>}
       </div>
 
       {/* Dados do paciente */}
@@ -547,7 +548,7 @@ function PrintModal({ rx, patient, onClose }: {
         <div style={{ textAlign: "center", width: "200px" }}>
           <div style={{ borderTop: `2px solid ${headerColor}`, paddingTop: "6px", marginBottom: "2px" }}></div>
           <p style={{ fontSize: "12px", fontWeight: 700, margin: "0" }}>Dr. Valth Guimarães</p>
-          <p style={{ fontSize: "11px", color: "#666", margin: "0" }}>CRM/PB 1234 | CRM/PE 5678</p>
+          <p style={{ fontSize: "11px", color: "#666", margin: "0" }}>CRM/PB 6326 | CRM/PE 16551</p>
           <p style={{ fontSize: "10px", color: "#888", margin: "4px 0 0 0" }}>Válido por 30 dias</p>
         </div>
       </div>
@@ -846,7 +847,7 @@ const RX_TYPE_OPTIONS: { value: PrescriptionType; label: string; activeClass: st
   { value: "antimicrobiano",    label: "Antimicrobiano (ATB)",       activeClass: "border-blue-600 bg-blue-600 text-white" },
 ];
 
-function TabReceita({ patientId, patient }: { patientId: number; patient: any }) {
+function TabReceita({ patientId, patient, clinic }: { patientId: number; patient: any; clinic?: any }) {
   const [rxType, setRxType] = useState<PrescriptionType>("simples");
   const [medications, setMedications] = useState<Medication[]>([emptyMed()]);
   const [instructions, setInstructions] = useState("");
@@ -980,7 +981,7 @@ function TabReceita({ patientId, patient }: { patientId: number; patient: any })
 
   return (
     <div className="space-y-4 px-5 pb-6">
-      {printRx && <PrintModal rx={printRx} patient={patient} onClose={() => setPrintRx(null)} />}
+      {printRx && <PrintModal rx={printRx} patient={patient} clinic={clinic} onClose={() => setPrintRx(null)} />}
       {showMemed && <MemedModal onClose={() => setShowMemed(false)} />}
 
       {/* ── Tipo de Receita ── */}
@@ -1230,9 +1231,10 @@ function TabReceita({ patientId, patient }: { patientId: number; patient: any })
 // ── Tab: Exames ────────────────────────────────────────────────────────────────
 
 // Modal de impressão de pedido de exame
-function PrintExamModal({ text, patientName, onClose, fontSize = 14, lineHeight = "normal" }: {
+function PrintExamModal({ text, patientName, clinic, onClose, fontSize = 14, lineHeight = "normal" }: {
   text: string;
   patientName: string;
+  clinic?: any;
   onClose: () => void;
   fontSize?: 12 | 14 | 16;
   lineHeight?: "normal" | "relaxed";
@@ -1264,7 +1266,8 @@ function PrintExamModal({ text, patientName, onClose, fontSize = 14, lineHeight 
         <div className="p-6 bg-white" style={{ fontFamily: "monospace", fontSize: "13px", color: "#111" }}>
           <div style={{ borderBottom: "2px solid #0F2D5E", paddingBottom: "10px", marginBottom: "12px", textAlign: "center" }}>
             <p style={{ fontWeight: 700, fontSize: "15px", margin: "0 0 2px 0", color: "#0F2D5E" }}>Dr. Valth Guimarães</p>
-            <p style={{ fontSize: "11px", color: "#555", margin: "0" }}>Ortopedia e Traumatologia · CRM/PB 1234 | CRM/PE 5678</p>
+            <p style={{ fontSize: "11px", color: "#555", margin: "0" }}>Ortopedia e Traumatologia · CRM/PB 6326 | CRM/PE 16551</p>
+            {clinic?.phone && <p style={{ fontSize: "11px", color: "#555", margin: "0" }}>Tel: {clinic.phone}</p>}
           </div>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "12px", fontSize: "12px" }}>
             <span><strong>Paciente:</strong> {patientName}</span>
@@ -1277,7 +1280,7 @@ function PrintExamModal({ text, patientName, onClose, fontSize = 14, lineHeight 
             <div style={{ display: "inline-block", textAlign: "center", width: "220px" }}>
               <div style={{ borderTop: "1px solid #0F2D5E", paddingTop: "4px" }}>
                 <p style={{ fontSize: "12px", fontWeight: 700, margin: "0" }}>Dr. Valth Guimarães</p>
-                <p style={{ fontSize: "11px", color: "#666", margin: "0" }}>CRM/PB 1234 | CRM/PE 5678</p>
+                <p style={{ fontSize: "11px", color: "#666", margin: "0" }}>CRM/PB 6326 | CRM/PE 16551</p>
                 <p style={{ fontSize: "10px", color: "#999", margin: "4px 0 0 0" }}>Assinatura e Carimbo</p>
               </div>
             </div>
@@ -1288,7 +1291,7 @@ function PrintExamModal({ text, patientName, onClose, fontSize = 14, lineHeight 
   );
 }
 
-function TabExames({ patientId, patient }: { patientId: number; patient: any }) {
+function TabExames({ patientId, patient, clinic }: { patientId: number; patient: any; clinic?: any }) {
   const [freeText, setFreeText] = useState("");
   const [saving, setSaving] = useState(false);
   const [exams, setExams] = useState<any[]>([]);
@@ -1400,7 +1403,7 @@ function TabExames({ patientId, patient }: { patientId: number; patient: any }) 
   return (
     <div className="space-y-0 pb-6">
       {printText !== null && (
-        <PrintExamModal text={printText} patientName={patientName} onClose={() => setPrintText(null)} fontSize={fontSize} lineHeight={lineHeight} />
+        <PrintExamModal text={printText} patientName={patientName} clinic={clinic} onClose={() => setPrintText(null)} fontSize={fontSize} lineHeight={lineHeight} />
       )}
 
       {/* ── Seção: Modelos ── */}
@@ -1571,6 +1574,7 @@ export default function ConsultaDrawer({ entry, onClose, onStatusChange }: Consu
   const [patient, setPatient] = useState<any>(null);
   const [loadingPatient, setLoadingPatient] = useState(true);
   const [busyStatus, setBusyStatus] = useState(false);
+  const [clinic, setClinic] = useState<any>(null);
 
   useEffect(() => {
     setLoadingPatient(true);
@@ -1580,6 +1584,13 @@ export default function ConsultaDrawer({ entry, onClose, onStatusChange }: Consu
       .catch(() => toast.error("Erro ao carregar dados do paciente"))
       .finally(() => setLoadingPatient(false));
   }, [entry.patient_id]);
+
+  useEffect(() => {
+    if (!entry.clinic_id) return;
+    clinicApi.get(entry.clinic_id)
+      .then(setClinic)
+      .catch(() => {}); // silencioso — telefone é opcional
+  }, [entry.clinic_id]);
 
   const handleStatus = async (newStatus: QueueStatus) => {
     setBusyStatus(true);
@@ -1719,10 +1730,10 @@ export default function ConsultaDrawer({ entry, onClose, onStatusChange }: Consu
               <TabProntuario patientId={entry.patient_id} />
             )}
             {activeTab === "receita" && (
-              <TabReceita patientId={entry.patient_id} patient={patient} />
+              <TabReceita patientId={entry.patient_id} patient={patient} clinic={clinic} />
             )}
             {activeTab === "exames" && (
-              <TabExames patientId={entry.patient_id} patient={patient} />
+              <TabExames patientId={entry.patient_id} patient={patient} clinic={clinic} />
             )}
           </div>
         )}
