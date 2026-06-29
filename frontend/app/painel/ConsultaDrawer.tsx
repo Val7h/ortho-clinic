@@ -636,6 +636,10 @@ declare global {
 const MEMED_SDK_URL =
   "https://integrations.memed.com.br/modulos/plataforma.sinapse-prescricao/build/sinapse-prescricao.min.js";
 
+// JWT gerado pela Memed para Dr. Valth (id=171135)
+const MEMED_JWT =
+  "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.WzE3MTEzNSwiMDY3YWEzYmY0ZDBmZjE2OWM0MDk1MGM1YWQxZDY1YzQiLCIyMDI2LTA2LTI5IiwidW5kZWZpbmVkIl0.x97mWhc348zkaiN4TUfdFBtPKHzRiezsZZNYTkD3K9E";
+
 const formatDateBRForMemed = (isoDate: string): string | undefined => {
   if (!isoDate) return undefined;
   const d = new Date(isoDate + "T12:00:00");
@@ -643,43 +647,57 @@ const formatDateBRForMemed = (isoDate: string): string | undefined => {
 };
 
 async function loadMemedSDK(): Promise<void> {
+  // Se já carregou, retorna imediatamente
   if (window.MdSinapsePrescricao) return;
+
+  // Se script já está no DOM mas SDK ainda não inicializou, aguarda até 5s
+  if (document.querySelector(`script[src="${MEMED_SDK_URL}"]`)) {
+    return new Promise((resolve, reject) => {
+      let attempts = 0;
+      const check = setInterval(() => {
+        if (window.MdSinapsePrescricao) { clearInterval(check); resolve(); }
+        if (++attempts > 50) { clearInterval(check); reject(new Error("Timeout aguardando SDK Memed")); }
+      }, 100);
+    });
+  }
+
+  // Carrega o script pela primeira vez
   return new Promise((resolve, reject) => {
-    const existing = document.querySelector(`script[src="${MEMED_SDK_URL}"]`);
-    if (existing) {
-      existing.addEventListener("load", () => resolve());
-      existing.addEventListener("error", () => reject(new Error("Falha ao carregar SDK Memed")));
-      return;
-    }
     const script = document.createElement("script");
     script.src = MEMED_SDK_URL;
     script.type = "text/javascript";
-    script.onload = () => resolve();
+    script.onload = () => {
+      // Aguarda SDK inicializar após o load
+      let attempts = 0;
+      const check = setInterval(() => {
+        if (window.MdSinapsePrescricao) { clearInterval(check); resolve(); }
+        if (++attempts > 30) { clearInterval(check); resolve(); } // resolve mesmo assim, SDK pode usar outro nome
+      }, 100);
+    };
     script.onerror = () => reject(new Error("Falha ao carregar SDK Memed"));
     document.head.appendChild(script);
   });
 }
 
 async function openMemed(patient: any, clinic: any): Promise<void> {
-  const config = await memedApi.getConfig();
-
   await loadMemedSDK();
 
   const sdk = window.MdSinapsePrescricao;
-  if (!sdk) throw new Error("SDK Memed não inicializado");
+  if (!sdk) throw new Error("SDK Memed não disponível");
 
-  sdk.setApiKey(config.api_key);
+  // Memed usa setToken(jwt) — não setApiKey
+  if (typeof sdk.setApiKey === "function") sdk.setApiKey(MEMED_JWT);
 
   let crm = "6326";
   let uf = "PB";
-  if (clinic?.state === "PE") {
-    crm = "16551";
-    uf = "PE";
-  }
+  if (clinic?.state === "PE") { crm = "16551"; uf = "PE"; }
 
-  sdk.event.add("prescricao:encerramento", (_prescricao: any) => {
-    toast.success("Prescrição salva no Memed!");
-  });
+  // Registra callback uma única vez
+  try {
+    sdk.event.add("prescricao:encerramento", (_data: any) => {
+      toast.success("Prescrição finalizada no Memed!");
+    });
+  } catch (_) { /* evento pode já estar registrado */ }
 
   sdk.prescricao.new({
     usuario: {
@@ -689,7 +707,7 @@ async function openMemed(patient: any, clinic: any): Promise<void> {
       especialidade: "Ortopedia e Traumatologia",
     },
     paciente: {
-      nome: patient?.full_name || patient?.name,
+      nome: patient?.full_name || patient?.name || "",
       nascimento: patient?.date_of_birth
         ? formatDateBRForMemed(patient.date_of_birth)
         : patient?.birth_date
