@@ -1,4 +1,5 @@
 """Autenticação JWT e gerenciamento de usuários / organizações."""
+import logging
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
@@ -6,6 +7,8 @@ from typing import Optional
 from jose import jwt
 from passlib.context import CryptContext
 from pydantic import BaseModel
+
+logger = logging.getLogger("orthoclinic.auth")
 
 from database import get_db
 from models.organization import User, Organization
@@ -92,45 +95,55 @@ def login(data: LoginIn, request: Request, db: Session = Depends(get_db)):
     actor_ip  = forwarded.split(",")[0].strip() if forwarded else (
         request.client.host if request.client else None
     )
-    actor_ua  = request.headers.get("User-Agent")
+    # Truncate UA to the column limit to avoid DataError on PostgreSQL
+    actor_ua  = (request.headers.get("User-Agent") or "")[:1000] or None
     request_id = getattr(request.state, "request_id", None)
 
     email = data.email.strip().lower()
     user = db.query(User).filter(User.email == email, User.active == True).first()
 
     if not user or not pwd_context.verify(data.password, user.password_hash):
-        # Audit failed login (org_id=0 sentinel when user not found)
-        org_id   = user.organization_id if user else 1
+        org_id   = user.organization_id if user else None
         actor_id = user.id if user else None
-        AuditLogService.record(
-            db=db,
-            organization_id=org_id,
-            actor_id=actor_id,
-            actor_ip=actor_ip,
-            actor_user_agent=actor_ua,
-            action="user.login_failed",
-            resource_type="user",
-            resource_id=email,
-            metadata={"email": email, "reason": "bad_credentials"},
-            request_id=request_id,
-        )
-        db.commit()
+        # Audit is best-effort — a schema mismatch or FK issue must not block auth
+        if org_id is not None:
+            try:
+                AuditLogService.record(
+                    db=db,
+                    organization_id=org_id,
+                    actor_id=actor_id,
+                    actor_ip=actor_ip,
+                    actor_user_agent=actor_ua,
+                    action="user.login_failed",
+                    resource_type="user",
+                    resource_id=email,
+                    metadata={"email": email, "reason": "bad_credentials"},
+                    request_id=request_id,
+                )
+                db.commit()
+            except Exception as _audit_exc:
+                logger.warning("Audit (login_failed) non-fatal: %s", _audit_exc)
+                db.rollback()
         raise HTTPException(401, "Email ou senha incorretos")
 
     token = _make_token(user)
-    AuditLogService.record(
-        db=db,
-        organization_id=user.organization_id,
-        actor_id=user.id,
-        actor_ip=actor_ip,
-        actor_user_agent=actor_ua,
-        action="user.login",
-        resource_type="user",
-        resource_id=str(user.id),
-        metadata={"email": email},
-        request_id=request_id,
-    )
-    db.commit()
+    try:
+        AuditLogService.record(
+            db=db,
+            organization_id=user.organization_id,
+            actor_id=user.id,
+            actor_ip=actor_ip,
+            actor_user_agent=actor_ua,
+            action="user.login",
+            resource_type="user",
+            resource_id=str(user.id),
+            metadata={"email": email},
+            request_id=request_id,
+        )
+        db.commit()
+    except Exception as _audit_exc:
+        logger.warning("Audit (login) non-fatal: %s", _audit_exc)
+        db.rollback()
 
     return {
         "access_token": token,

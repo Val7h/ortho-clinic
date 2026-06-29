@@ -599,6 +599,15 @@ def migrate_db():
         if table_name not in existing_tables:
             migrations.append(ddl)
 
+    # Sprint 8 — audit_logs columns added mid-sprint; add if table pre-dates them
+    if "audit_logs" in existing_tables:
+        al_cols = [c["name"] for c in inspector.get_columns("audit_logs")]
+        if "request_id" not in al_cols:
+            migrations.append("ALTER TABLE audit_logs ADD COLUMN request_id VARCHAR(36)")
+        if "signature" not in al_cols:
+            # Existing rows get an empty placeholder; new rows always have the real HMAC
+            migrations.append("ALTER TABLE audit_logs ADD COLUMN signature VARCHAR(64) NOT NULL DEFAULT ''")
+
     if not migrations:
         return
 
