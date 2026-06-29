@@ -626,9 +626,9 @@ function PrintModal({ rx, patient, clinic, onClose }: {
 declare global {
   interface Window {
     MdSinapsePrescricao?: {
-      setApiKey: (key: string) => void;
       prescricao: { new: (opts: any) => void };
       event: { add: (event: string, cb: (data: any) => void) => void };
+      setToken?: (jwt: string) => void;
     };
   }
 }
@@ -646,35 +646,39 @@ const formatDateBRForMemed = (isoDate: string): string | undefined => {
   return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
 };
 
+// O SDK Memed lê o JWT do atributo data-token da sua própria tag <script>.
+// Após o download, ele carrega plataforma.hub e md-privacy dinamicamente
+// antes de expor window.MdSinapsePrescricao — por isso precisamos de 15s.
 async function loadMemedSDK(): Promise<void> {
-  // Se já carregou, retorna imediatamente
   if (window.MdSinapsePrescricao) return;
 
-  // Se script já está no DOM mas SDK ainda não inicializou, aguarda até 5s
-  if (document.querySelector(`script[src="${MEMED_SDK_URL}"]`)) {
+  // Script já no DOM: aguarda inicialização completa (até 15s)
+  const existingScript = document.querySelector(`script[src="${MEMED_SDK_URL}"]`);
+  if (existingScript) {
     return new Promise((resolve, reject) => {
-      let attempts = 0;
-      const check = setInterval(() => {
-        if (window.MdSinapsePrescricao) { clearInterval(check); resolve(); }
-        if (++attempts > 50) { clearInterval(check); reject(new Error("Timeout aguardando SDK Memed")); }
+      let n = 0;
+      const t = setInterval(() => {
+        if (window.MdSinapsePrescricao) { clearInterval(t); resolve(); return; }
+        if (++n > 150) { clearInterval(t); reject(new Error("Timeout aguardando SDK Memed")); }
       }, 100);
     });
   }
 
-  // Carrega o script pela primeira vez
+  // Primeira carga: cria <script data-token="JWT"> para autenticação automática
   return new Promise((resolve, reject) => {
     const script = document.createElement("script");
     script.src = MEMED_SDK_URL;
     script.type = "text/javascript";
+    script.setAttribute("data-token", MEMED_JWT); // ← autenticação via data-token
     script.onload = () => {
-      // Aguarda SDK inicializar após o load
-      let attempts = 0;
-      const check = setInterval(() => {
-        if (window.MdSinapsePrescricao) { clearInterval(check); resolve(); }
-        if (++attempts > 30) { clearInterval(check); resolve(); } // resolve mesmo assim, SDK pode usar outro nome
+      // SDK carrega MdHub e md-privacy dinamicamente; aguarda até 15s
+      let n = 0;
+      const t = setInterval(() => {
+        if (window.MdSinapsePrescricao) { clearInterval(t); resolve(); return; }
+        if (++n > 150) { clearInterval(t); reject(new Error("SDK Memed não inicializou (MdHub timeout)")); }
       }, 100);
     };
-    script.onerror = () => reject(new Error("Falha ao carregar SDK Memed"));
+    script.onerror = () => reject(new Error("Falha ao carregar SDK Memed (rede)"));
     document.head.appendChild(script);
   });
 }
@@ -685,14 +689,10 @@ async function openMemed(patient: any, clinic: any): Promise<void> {
   const sdk = window.MdSinapsePrescricao;
   if (!sdk) throw new Error("SDK Memed não disponível");
 
-  // Memed usa setToken(jwt) — não setApiKey
-  if (typeof sdk.setApiKey === "function") sdk.setApiKey(MEMED_JWT);
-
   let crm = "6326";
   let uf = "PB";
   if (clinic?.state === "PE") { crm = "16551"; uf = "PE"; }
 
-  // Registra callback uma única vez
   try {
     sdk.event.add("prescricao:encerramento", (_data: any) => {
       toast.success("Prescrição finalizada no Memed!");
