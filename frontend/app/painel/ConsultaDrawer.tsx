@@ -106,25 +106,6 @@ const ORTHO_CIDS = [
 
 const ROUTE_OPTIONS = ["oral", "IM", "IV", "tópico", "inalatório", "sublingual", "retal"];
 
-const DEFAULT_FREQUENT_EXAMS = [
-  "Raio-X coluna lombar (AP e perfil)",
-  "Raio-X joelho direito (AP, perfil e axial)",
-  "Raio-X joelho esquerdo (AP, perfil e axial)",
-  "Raio-X ombro direito (AP e perfil Y)",
-  "Ressonância magnética coluna lombar",
-  "Ressonância magnética joelho direito",
-  "Ressonância magnética joelho esquerdo",
-  "Ressonância magnética ombro direito",
-  "Tomografia computadorizada coluna lombar",
-  "Eletroneuromiografia membros inferiores",
-  "Densitometria óssea",
-  "Hemograma completo",
-  "PCR e VHS",
-  "Ácido úrico",
-  "Fator Reumatoide",
-];
-
-const LS_FREQUENT_EXAMS_KEY = "orthoclinic_frequent_exams";
 const LS_EXAM_TEMPLATES_KEY = "orthoclinic_exam_templates";
 const LS_EXAM_FONT_SIZE_KEY = "orthoclinic_exam_font_size";
 const LS_EXAM_LINE_HEIGHT_KEY = "orthoclinic_exam_line_height";
@@ -1248,21 +1229,6 @@ function TabReceita({ patientId, patient }: { patientId: number; patient: any })
 
 // ── Tab: Exames ────────────────────────────────────────────────────────────────
 
-function loadFrequentExams(): string[] {
-  if (typeof window === "undefined") return DEFAULT_FREQUENT_EXAMS;
-  try {
-    const stored = localStorage.getItem(LS_FREQUENT_EXAMS_KEY);
-    if (stored) return JSON.parse(stored) as string[];
-  } catch {}
-  return DEFAULT_FREQUENT_EXAMS;
-}
-
-function saveFrequentExams(list: string[]) {
-  try {
-    localStorage.setItem(LS_FREQUENT_EXAMS_KEY, JSON.stringify(list));
-  } catch {}
-}
-
 // Modal de impressão de pedido de exame
 function PrintExamModal({ text, patientName, onClose, fontSize = 14, lineHeight = "normal" }: {
   text: string;
@@ -1328,11 +1294,6 @@ function TabExames({ patientId, patient }: { patientId: number; patient: any }) 
   const [exams, setExams] = useState<any[]>([]);
   const [loadingEx, setLoadingEx] = useState(true);
 
-  // Exames frequentes
-  const [frequentExams, setFrequentExams] = useState<string[]>(() => loadFrequentExams());
-  const [editingFrequent, setEditingFrequent] = useState(false);
-  const [newExamInput, setNewExamInput] = useState("");
-
   // Modelos de solicitação
   const [examTemplates, setExamTemplates] = useState<ExamTemplate[]>(() => loadExamTemplates());
 
@@ -1358,37 +1319,6 @@ function TabExames({ patientId, patient }: { patientId: number; patient: any }) 
     if (!ta) return;
     ta.style.height = "auto";
     ta.style.height = `${Math.max(ta.scrollHeight, 160)}px`;
-  };
-
-  // Clicar num atalho: append ao textarea
-  const handleShortcut = (name: string) => {
-    const line = `SOLICITO: ${name}`;
-    setFreeText((prev) => {
-      const next = prev.trim() ? `${prev.trimEnd()}\n${line}` : line;
-      return next;
-    });
-    setTimeout(autoResize, 0);
-    textareaRef.current?.focus();
-  };
-
-  // Edição da lista de frequentes
-  const updateFrequent = (list: string[]) => {
-    setFrequentExams(list);
-    saveFrequentExams(list);
-  };
-
-  const handleAddFrequent = () => {
-    if (!newExamInput.trim()) return;
-    updateFrequent([...frequentExams, newExamInput.trim()]);
-    setNewExamInput("");
-  };
-
-  const handleRemoveFrequent = (idx: number) => {
-    updateFrequent(frequentExams.filter((_, i) => i !== idx));
-  };
-
-  const handleRestoreDefault = () => {
-    updateFrequent(DEFAULT_FREQUENT_EXAMS);
   };
 
   // Modelos
@@ -1473,104 +1403,43 @@ function TabExames({ patientId, patient }: { patientId: number; patient: any }) 
         <PrintExamModal text={printText} patientName={patientName} onClose={() => setPrintText(null)} fontSize={fontSize} lineHeight={lineHeight} />
       )}
 
-      {/* ── Seção: Exames Frequentes ── */}
+      {/* ── Seção: Modelos ── */}
       <div className="px-5 pt-1 pb-3 border-b border-slate-100 dark:border-slate-800">
-        <div className="flex items-center justify-between mb-2">
-          <p className={sectionTitle + " mb-0"}>Exames Frequentes</p>
-          {!editingFrequent ? (
-            <button
-              type="button"
-              onClick={() => setEditingFrequent(true)}
-              className="text-xs text-slate-500 hover:text-blue-600 flex items-center gap-1"
-            >
-              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-              Editar
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setEditingFrequent(false)}
-              className="text-xs text-blue-600 hover:text-blue-800 font-semibold"
-            >
-              Fechar edição
-            </button>
-          )}
-        </div>
-
-        {!editingFrequent ? (
-          <div className="flex flex-wrap gap-1.5">
-            {frequentExams.map((ex) => (
-              <button
-                key={ex}
-                type="button"
-                onClick={() => handleShortcut(ex)}
-                className="text-[11px] font-mono px-2 py-0.5 rounded border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors"
-              >
-                {ex}
-              </button>
-            ))}
-          </div>
+        <p className={sectionTitle + " mb-2"}>Modelos</p>
+        {examTemplates.length === 0 ? (
+          <p className="text-[11px] text-slate-400 italic">
+            Nenhum modelo salvo. Escreva um pedido e clique em 💾 para criar.
+          </p>
         ) : (
-          <div className="space-y-2">
-            <div className="space-y-1 max-h-48 overflow-y-auto">
-              {frequentExams.map((ex, idx) => (
-                <div key={idx} className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 rounded px-2 py-1">
-                  <span className="flex-1 text-xs font-mono text-slate-700 dark:text-slate-300 truncate">{ex}</span>
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveFrequent(idx)}
-                    className="text-red-400 hover:text-red-600 flex-shrink-0"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              ))}
-            </div>
-            <div className="flex gap-2">
-              <input
-                className={inp + " text-xs flex-1"}
-                placeholder="Nome do novo exame..."
-                value={newExamInput}
-                onChange={(e) => setNewExamInput(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleAddFrequent(); } }}
-              />
-              <button
-                type="button"
-                onClick={handleAddFrequent}
-                className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-semibold hover:bg-blue-700"
-              >
-                Adicionar
-              </button>
-            </div>
-            <button
-              type="button"
-              onClick={handleRestoreDefault}
-              className="text-xs text-slate-400 hover:text-slate-600 underline"
-            >
-              Restaurar padrão
-            </button>
-
-            {/* Modelos salvos (visível só no modo edição) */}
-            {examTemplates.length > 0 && (
-              <div className="mt-3 border-t border-slate-200 dark:border-slate-700 pt-3">
-                <p className="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">Modelos salvos</p>
-                <div className="space-y-1 max-h-36 overflow-y-auto">
-                  {examTemplates.map((tpl) => (
-                    <div key={tpl.id} className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 rounded px-2 py-1">
-                      <span className="flex-1 text-xs text-slate-700 dark:text-slate-300 truncate">{tpl.name}</span>
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteTemplate(tpl.id)}
-                        className="text-red-400 hover:text-red-600 flex-shrink-0"
-                        title="Excluir modelo"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
+          <div className="flex flex-wrap gap-1.5">
+            {examTemplates.map((tpl) => (
+              <div key={tpl.id} className="flex items-center gap-0.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFreeText(tpl.content);
+                    setTimeout(autoResize, 0);
+                    textareaRef.current?.focus();
+                  }}
+                  className="text-[11px] font-mono px-2 py-0.5 rounded-l border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors"
+                  title={tpl.content.slice(0, 120)}
+                >
+                  {tpl.name}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (window.confirm(`Excluir modelo "${tpl.name}"?`)) {
+                      handleDeleteTemplate(tpl.id);
+                    }
+                  }}
+                  className="text-[10px] px-1 py-0.5 rounded-r border border-l-0 border-blue-200 dark:border-blue-800 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                  title="Excluir modelo"
+                >
+                  ×
+                </button>
               </div>
-            )}
+            ))}
           </div>
         )}
       </div>
@@ -1578,22 +1447,6 @@ function TabExames({ patientId, patient }: { patientId: number; patient: any }) 
       {/* ── Seção: Solicitação ── */}
       <div className="px-5 pt-3 pb-3 border-b border-slate-100 dark:border-slate-800">
         <p className={sectionTitle}>Solicitação</p>
-
-        {/* Dropdown de modelos */}
-        {examTemplates.length > 0 && (
-          <div className="mb-2">
-            <select
-              className="w-full text-xs border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              defaultValue=""
-              onChange={(e) => { if (e.target.value) { handleLoadTemplate(e.target.value); e.target.value = ""; } }}
-            >
-              <option value="">📋 Carregar Modelo...</option>
-              {examTemplates.map((tpl) => (
-                <option key={tpl.id} value={tpl.id}>{tpl.name}</option>
-              ))}
-            </select>
-          </div>
-        )}
 
         {/* Controles de fonte */}
         <div className="flex items-center justify-end gap-3 mb-1.5">
