@@ -416,6 +416,11 @@ export const waitingRoomApi = {
     api.delete(`/api/clinic/waiting-room/${entry_id}`),
 };
 
+// ── Memed ─────────────────────────────────────────────────────────────────
+export const memedApi = {
+  getConfig: () => api.get<{ api_key: string; doctor_id: number }>("/memed/config").then((r) => r.data),
+};
+
 // ── WhatsApp ──────────────────────────────────────────────────────────────
 export const whatsappApi = {
   config: () => api.get("/whatsapp/config").then((r) => r.data),

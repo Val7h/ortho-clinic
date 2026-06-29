@@ -1,20 +1,19 @@
 from fastapi import APIRouter, Depends
-import os
 from deps import get_current_user
 
-router = APIRouter(prefix="/memed", tags=["Memed"], dependencies=[Depends(get_current_user)])
+router = APIRouter(prefix="/memed", tags=["Memed"])
+
+MEMED_API_KEY = "067aa3bf4d0ff169c40950c5ad1d65c4"
+MEMED_DOCTOR_ID = 171135
 
 
 @router.get("/config")
-def get_memed_config():
+def get_memed_config(current_user=Depends(get_current_user)):
     """
     Retorna configuração do Memed para o frontend.
-    O token é necessário no cliente para carregar o SDK JavaScript.
+    Endpoint autenticado — apenas usuários com JWT válido acessam.
     """
-    token = os.getenv("MEMED_TOKEN", "").strip()
-    sandbox = os.getenv("MEMED_SANDBOX", "true").lower() in ("true", "1", "yes")
     return {
-        "enabled": bool(token),
-        "token": token if token else None,
-        "sandbox": sandbox,
+        "api_key": MEMED_API_KEY,
+        "doctor_id": MEMED_DOCTOR_ID,
     }

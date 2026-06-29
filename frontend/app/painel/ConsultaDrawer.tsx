@@ -7,7 +7,7 @@ import {
   Plus, Trash2, Printer, ChevronDown, ChevronUp, Save,
 } from "lucide-react";
 import toast from "react-hot-toast";
-import { patientsApi, consultationsApi, prescriptionsApi, prescriptionTemplatesApi, examsApi, evolutionApi, clinicApi } from "@/lib/api";
+import { patientsApi, consultationsApi, prescriptionsApi, prescriptionTemplatesApi, examsApi, evolutionApi, clinicApi, memedApi } from "@/lib/api";
 import { formatDate } from "@/lib/utils";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -621,81 +621,84 @@ function PrintModal({ rx, patient, clinic, onClose }: {
   );
 }
 
-// ── Modal Memed ────────────────────────────────────────────────────────────────
+// ── Memed SDK Integration ───────────────────────────────────────────────────────
 
-function MemedModal({ onClose }: { onClose: () => void }) {
-  const [token, setToken] = useState(() => {
-    if (typeof window !== "undefined") return localStorage.getItem("memed_token") || "";
-    return "";
+declare global {
+  interface Window {
+    MdSinapsePrescricao?: {
+      setApiKey: (key: string) => void;
+      prescricao: { new: (opts: any) => void };
+      event: { add: (event: string, cb: (data: any) => void) => void };
+    };
+  }
+}
+
+const MEMED_SDK_URL =
+  "https://integrations.memed.com.br/modulos/plataforma.sinapse-prescricao/build/sinapse-prescricao.min.js";
+
+const formatDateBRForMemed = (isoDate: string): string | undefined => {
+  if (!isoDate) return undefined;
+  const d = new Date(isoDate + "T12:00:00");
+  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+};
+
+async function loadMemedSDK(): Promise<void> {
+  if (window.MdSinapsePrescricao) return;
+  return new Promise((resolve, reject) => {
+    const existing = document.querySelector(`script[src="${MEMED_SDK_URL}"]`);
+    if (existing) {
+      existing.addEventListener("load", () => resolve());
+      existing.addEventListener("error", () => reject(new Error("Falha ao carregar SDK Memed")));
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = MEMED_SDK_URL;
+    script.type = "text/javascript";
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("Falha ao carregar SDK Memed"));
+    document.head.appendChild(script);
   });
-  const [saved, setSaved] = useState(false);
+}
 
-  const hasToken = typeof window !== "undefined" && !!localStorage.getItem("memed_token");
+async function openMemed(patient: any, clinic: any): Promise<void> {
+  const config = await memedApi.getConfig();
 
-  const handleSave = () => {
-    if (!token.trim()) return;
-    localStorage.setItem("memed_token", token.trim());
-    setSaved(true);
-    toast.success("Token Memed salvo!");
-  };
+  await loadMemedSDK();
 
-  return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.6)" }}>
-      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="font-bold text-slate-900 dark:text-slate-50">Integração Memed</h2>
-          <button onClick={onClose} className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-        {hasToken && !saved ? (
-          <div className="text-center py-4">
-            <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
-              <CheckCircle className="w-6 h-6 text-green-600" />
-            </div>
-            <p className="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-1">Integração Memed configurada</p>
-            <p className="text-xs text-slate-500 mb-4">Em breve disponível nesta tela.</p>
-            <button
-              onClick={() => { localStorage.removeItem("memed_token"); setToken(""); setSaved(false); }}
-              className="text-xs text-red-500 hover:text-red-700"
-            >
-              Remover token
-            </button>
-          </div>
-        ) : saved ? (
-          <div className="text-center py-4">
-            <p className="text-sm text-green-700 font-semibold">Token salvo com sucesso!</p>
-            <p className="text-xs text-slate-500 mt-1">A integração estará disponível em breve.</p>
-          </div>
-        ) : (
-          <>
-            <p className="text-sm text-slate-600 dark:text-slate-300 mb-4">
-              A integração com o Memed permite prescrição digital. Para ativar, forneça seu token de acesso Memed.
-            </p>
-            <div className="space-y-3">
-              <div>
-                <label className={lbl}>Token Memed</label>
-                <input
-                  className={inp}
-                  type="password"
-                  placeholder="Cole seu token de acesso aqui..."
-                  value={token}
-                  onChange={(e) => setToken(e.target.value)}
-                />
-              </div>
-              <button
-                onClick={handleSave}
-                disabled={!token.trim()}
-                className="w-full py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 font-semibold text-sm"
-              >
-                Salvar Token
-              </button>
-            </div>
-          </>
-        )}
-      </div>
-    </div>
-  );
+  const sdk = window.MdSinapsePrescricao;
+  if (!sdk) throw new Error("SDK Memed não inicializado");
+
+  sdk.setApiKey(config.api_key);
+
+  let crm = "6326";
+  let uf = "PB";
+  if (clinic?.state === "PE") {
+    crm = "16551";
+    uf = "PE";
+  }
+
+  sdk.event.add("prescricao:encerramento", (_prescricao: any) => {
+    toast.success("Prescrição salva no Memed!");
+  });
+
+  sdk.prescricao.new({
+    usuario: {
+      nome: "Dr. Valth Guimarães",
+      crm,
+      uf,
+      especialidade: "Ortopedia e Traumatologia",
+    },
+    paciente: {
+      nome: patient?.full_name || patient?.name,
+      nascimento: patient?.date_of_birth
+        ? formatDateBRForMemed(patient.date_of_birth)
+        : patient?.birth_date
+        ? formatDateBRForMemed(patient.birth_date)
+        : undefined,
+      telefone: patient?.phone || undefined,
+      cpf: patient?.cpf || undefined,
+    },
+  });
 }
 
 // ── Tab: Prontuário ────────────────────────────────────────────────────────────
@@ -868,7 +871,7 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
   const [savingTemplate, setSavingTemplate] = useState(false);
 
   // Memed
-  const [showMemed, setShowMemed] = useState(false);
+  const [memedLoading, setMemedLoading] = useState(false);
 
   useEffect(() => {
     prescriptionsApi.list(patientId)
@@ -982,7 +985,6 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
   return (
     <div className="space-y-4 px-5 pb-6">
       {printRx && <PrintModal rx={printRx} patient={patient} clinic={clinic} onClose={() => setPrintRx(null)} />}
-      {showMemed && <MemedModal onClose={() => setShowMemed(false)} />}
 
       {/* ── Tipo de Receita ── */}
       <div>
@@ -1092,11 +1094,27 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
             </div>
             <button
               type="button"
-              onClick={() => setShowMemed(true)}
-              className="flex items-center gap-1.5 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 text-xs font-semibold whitespace-nowrap"
+              disabled={memedLoading}
+              onClick={async () => {
+                if (!patient) { toast.error("Dados do paciente ainda não carregados"); return; }
+                setMemedLoading(true);
+                try {
+                  await openMemed(patient, clinic);
+                } catch (err: any) {
+                  toast.error("Erro ao carregar Memed. Tente novamente.");
+                  console.error("Memed error:", err);
+                } finally {
+                  setMemedLoading(false);
+                }
+              }}
+              className="flex items-center gap-1.5 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 text-xs font-semibold whitespace-nowrap disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              <Pill className="w-3.5 h-3.5" />
-              Via Memed
+              {memedLoading ? (
+                <div className="w-3.5 h-3.5 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <Pill className="w-3.5 h-3.5" />
+              )}
+              Prescrever via Memed
             </button>
           </div>
 
