@@ -866,6 +866,18 @@ function TabReceita({ patientId, patient }: { patientId: number; patient: any })
       .finally(() => setLoadingTemplates(false));
   }, [patientId]);
 
+  // Pré-preenche endereço e telefone do cadastro do paciente
+  useEffect(() => {
+    if (!patient) return;
+    const parts = [
+      patient.address_street,
+      patient.address_city,
+      patient.address_state,
+    ].filter(Boolean);
+    setPatientAddress(parts.join(", "));
+    setPatientPhone(patient.phone || "");
+  }, [patient]);
+
   const updateMed = (i: number, k: keyof Medication, v: string) =>
     setMedications((ms) => ms.map((m, idx) => (idx === i ? { ...m, [k]: v } : m)));
 

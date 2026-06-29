@@ -1,0 +1,1 @@
+{"access_token":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI1Iiwib3JnIjozLCJyb2xlIjoiYWRtaW4iLCJleHAiOjE3ODMzMDM2NTB9.lQZ9Nqwb0PBzyFt40lOcH4KfXdriO4NGUYKyv2gFVUw","token_type":"bearer","user":{"id":5,"name":"Dr. Valth","email":"valthguime@gmail.com","role":"admin","organization_id":3,"active":true}}
