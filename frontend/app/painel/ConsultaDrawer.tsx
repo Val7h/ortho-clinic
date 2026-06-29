@@ -106,7 +106,7 @@ const ORTHO_CIDS = [
 
 const ROUTE_OPTIONS = ["oral", "IM", "IV", "tópico", "inalatório", "sublingual", "retal"];
 
-const COMMON_EXAMS = [
+const DEFAULT_FREQUENT_EXAMS = [
   "Raio-X coluna lombar (AP e perfil)",
   "Raio-X joelho direito (AP, perfil e axial)",
   "Raio-X joelho esquerdo (AP, perfil e axial)",
@@ -123,6 +123,8 @@ const COMMON_EXAMS = [
   "Ácido úrico",
   "Fator Reumatoide",
 ];
+
+const LS_FREQUENT_EXAMS_KEY = "orthoclinic_frequent_exams";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -298,10 +300,6 @@ function MedRowInline({ med, index, total, onChange, onRemove }: {
     </div>
   );
 }
-
-// Exam item
-interface ExamItem { name: string; laterality: string; notes: string; }
-const emptyExam = (): ExamItem => ({ name: "", laterality: "", notes: "" });
 
 // ── Tipos de Receita ──────────────────────────────────────────────────────────
 
@@ -1214,13 +1212,93 @@ function TabReceita({ patientId, patient }: { patientId: number; patient: any })
 
 // ── Tab: Exames ────────────────────────────────────────────────────────────────
 
-function TabExames({ patientId }: { patientId: number }) {
-  const [items, setItems] = useState<ExamItem[]>([emptyExam()]);
-  const [indication, setIndication] = useState("");
-  const [urgency, setUrgency] = useState("eletivo");
+function loadFrequentExams(): string[] {
+  if (typeof window === "undefined") return DEFAULT_FREQUENT_EXAMS;
+  try {
+    const stored = localStorage.getItem(LS_FREQUENT_EXAMS_KEY);
+    if (stored) return JSON.parse(stored) as string[];
+  } catch {}
+  return DEFAULT_FREQUENT_EXAMS;
+}
+
+function saveFrequentExams(list: string[]) {
+  try {
+    localStorage.setItem(LS_FREQUENT_EXAMS_KEY, JSON.stringify(list));
+  } catch {}
+}
+
+// Modal de impressão de pedido de exame
+function PrintExamModal({ text, patientName, onClose }: {
+  text: string;
+  patientName: string;
+  onClose: () => void;
+}) {
+  const today = new Date();
+  const dateStr = `${String(today.getDate()).padStart(2, "0")}/${String(today.getMonth() + 1).padStart(2, "0")}/${today.getFullYear()}`;
+
+  return (
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.6)" }}>
+      <style>{`
+        @media print {
+          body > *:not(#print-exam-root) { display: none !important; }
+          #print-exam-root { position: fixed !important; inset: 0 !important; z-index: 9999 !important; background: white !important; padding: 20px !important; }
+          .no-print { display: none !important; }
+        }
+      `}</style>
+      <div id="print-exam-root" className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-lg flex flex-col overflow-hidden">
+        <div className="no-print px-5 pt-4 pb-3 border-b border-gray-200 dark:border-slate-700 flex items-center justify-between flex-shrink-0">
+          <h2 className="font-bold text-slate-900 dark:text-slate-50 text-sm">Preview — Pedido de Exame</h2>
+          <div className="flex items-center gap-2">
+            <button onClick={() => window.print()} className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold text-xs">
+              <Printer className="w-3.5 h-3.5" /> Imprimir
+            </button>
+            <button onClick={onClose} className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+        <div className="p-6 bg-white" style={{ fontFamily: "monospace", fontSize: "13px", color: "#111" }}>
+          <div style={{ borderBottom: "2px solid #0F2D5E", paddingBottom: "10px", marginBottom: "12px", textAlign: "center" }}>
+            <p style={{ fontWeight: 700, fontSize: "15px", margin: "0 0 2px 0", color: "#0F2D5E" }}>Dr. Valth Guimarães</p>
+            <p style={{ fontSize: "11px", color: "#555", margin: "0" }}>Ortopedia e Traumatologia · CRM/PB 1234 | CRM/PE 5678</p>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "12px", fontSize: "12px" }}>
+            <span><strong>Paciente:</strong> {patientName}</span>
+            <span><strong>Data:</strong> {dateStr}</span>
+          </div>
+          <div style={{ borderTop: "1px solid #ccc", borderBottom: "1px solid #ccc", padding: "12px 0", margin: "0 0 16px 0", whiteSpace: "pre-wrap", lineHeight: "1.7", fontSize: "13px" }}>
+            {text}
+          </div>
+          <div style={{ textAlign: "right", marginTop: "24px" }}>
+            <div style={{ display: "inline-block", textAlign: "center", width: "220px" }}>
+              <div style={{ borderTop: "1px solid #0F2D5E", paddingTop: "4px" }}>
+                <p style={{ fontSize: "12px", fontWeight: 700, margin: "0" }}>Dr. Valth Guimarães</p>
+                <p style={{ fontSize: "11px", color: "#666", margin: "0" }}>CRM/PB 1234 | CRM/PE 5678</p>
+                <p style={{ fontSize: "10px", color: "#999", margin: "4px 0 0 0" }}>Assinatura e Carimbo</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TabExames({ patientId, patient }: { patientId: number; patient: any }) {
+  const [freeText, setFreeText] = useState("");
   const [saving, setSaving] = useState(false);
   const [exams, setExams] = useState<any[]>([]);
   const [loadingEx, setLoadingEx] = useState(true);
+
+  // Exames frequentes
+  const [frequentExams, setFrequentExams] = useState<string[]>(() => loadFrequentExams());
+  const [editingFrequent, setEditingFrequent] = useState(false);
+  const [newExamInput, setNewExamInput] = useState("");
+
+  // Impressão
+  const [printText, setPrintText] = useState<string | null>(null);
+
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     examsApi.list(patientId)
@@ -1229,29 +1307,61 @@ function TabExames({ patientId }: { patientId: number }) {
       .finally(() => setLoadingEx(false));
   }, [patientId]);
 
-  const addCommon = (name: string) => {
-    setItems((prev) => {
-      const last = prev[prev.length - 1];
-      if (last.name === "") return prev.map((it, i) => i === prev.length - 1 ? { ...it, name } : it);
-      return [...prev, { name, laterality: "", notes: "" }];
-    });
+  // Auto-resize textarea
+  const autoResize = () => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    ta.style.height = "auto";
+    ta.style.height = `${Math.max(ta.scrollHeight, 160)}px`;
   };
 
+  // Clicar num atalho: append ao textarea
+  const handleShortcut = (name: string) => {
+    const line = `SOLICITO: ${name}`;
+    setFreeText((prev) => {
+      const next = prev.trim() ? `${prev.trimEnd()}\n${line}` : line;
+      return next;
+    });
+    setTimeout(autoResize, 0);
+    textareaRef.current?.focus();
+  };
+
+  // Edição da lista de frequentes
+  const updateFrequent = (list: string[]) => {
+    setFrequentExams(list);
+    saveFrequentExams(list);
+  };
+
+  const handleAddFrequent = () => {
+    if (!newExamInput.trim()) return;
+    updateFrequent([...frequentExams, newExamInput.trim()]);
+    setNewExamInput("");
+  };
+
+  const handleRemoveFrequent = (idx: number) => {
+    updateFrequent(frequentExams.filter((_, i) => i !== idx));
+  };
+
+  const handleRestoreDefault = () => {
+    updateFrequent(DEFAULT_FREQUENT_EXAMS);
+  };
+
+  // Salvar
   const handleSave = async () => {
-    const valid = items.filter((it) => it.name.trim());
-    if (valid.length === 0) { toast.error("Adicione pelo menos um exame"); return; }
+    if (!freeText.trim()) { toast.error("Digite a solicitação antes de salvar"); return; }
     setSaving(true);
     try {
       const newEx = await examsApi.create(patientId, {
         date: new Date().toISOString().split("T")[0],
-        exams: valid,
-        clinical_indication: indication,
-        urgency,
+        exams: [],
+        free_text: freeText.trim(),
       });
       toast.success("Solicitação salva!");
       setExams((prev) => [newEx, ...prev]);
-      setItems([emptyExam()]);
-      setIndication("");
+      setFreeText("");
+      if (textareaRef.current) {
+        textareaRef.current.style.height = "auto";
+      }
     } catch {
       toast.error("Erro ao salvar solicitação");
     } finally {
@@ -1259,132 +1369,176 @@ function TabExames({ patientId }: { patientId: number }) {
     }
   };
 
-  return (
-    <div className="space-y-4 px-5 pb-6">
-      <div className="space-y-3">
-        <p className={sectionTitle}>Nova Solicitação</p>
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && e.ctrlKey) {
+      e.preventDefault();
+      handleSave();
+    }
+  };
 
-        {/* Atalhos */}
-        <div>
-          <label className={lbl}>Exames frequentes</label>
-          <div className="flex flex-wrap gap-1.5 mt-1">
-            {COMMON_EXAMS.map((ex) => (
+  // Preview de texto para histórico
+  const examPreview = (ex: any): string => {
+    if (ex.free_text) return ex.free_text.slice(0, 80) + (ex.free_text.length > 80 ? "..." : "");
+    if (ex.exams?.length) return ex.exams.map((e: any) => e.name).join(", ").slice(0, 80);
+    return "—";
+  };
+
+  const patientName = patient?.name || "Paciente";
+
+  return (
+    <div className="space-y-0 pb-6">
+      {printText !== null && (
+        <PrintExamModal text={printText} patientName={patientName} onClose={() => setPrintText(null)} />
+      )}
+
+      {/* ── Seção: Exames Frequentes ── */}
+      <div className="px-5 pt-1 pb-3 border-b border-slate-100 dark:border-slate-800">
+        <div className="flex items-center justify-between mb-2">
+          <p className={sectionTitle + " mb-0"}>Exames Frequentes</p>
+          {!editingFrequent ? (
+            <button
+              type="button"
+              onClick={() => setEditingFrequent(true)}
+              className="text-xs text-slate-500 hover:text-blue-600 flex items-center gap-1"
+            >
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+              Editar
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setEditingFrequent(false)}
+              className="text-xs text-blue-600 hover:text-blue-800 font-semibold"
+            >
+              Fechar edição
+            </button>
+          )}
+        </div>
+
+        {!editingFrequent ? (
+          <div className="flex flex-wrap gap-1.5">
+            {frequentExams.map((ex) => (
               <button
                 key={ex}
                 type="button"
-                onClick={() => addCommon(ex)}
-                className="text-[11px] px-2.5 py-1 rounded-full border border-blue-200 text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+                onClick={() => handleShortcut(ex)}
+                className="text-[11px] font-mono px-2 py-0.5 rounded border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors"
               >
                 {ex}
               </button>
             ))}
           </div>
-        </div>
-
-        {/* Lista de exames */}
-        {items.map((item, i) => (
-          <div key={i} className="flex gap-2 items-end">
-            <div className="flex-1 grid grid-cols-3 gap-2">
-              <div className="col-span-2">
-                <label className={lbl}>Exame *</label>
-                <input
-                  className={inp}
-                  placeholder="Nome do exame"
-                  value={item.name}
-                  onChange={(e) => setItems((prev) => prev.map((it, idx) => idx === i ? { ...it, name: e.target.value } : it))}
-                />
-              </div>
-              <div>
-                <label className={lbl}>Lateralidade</label>
-                <select
-                  className={inp}
-                  value={item.laterality}
-                  onChange={(e) => setItems((prev) => prev.map((it, idx) => idx === i ? { ...it, laterality: e.target.value } : it))}
-                >
-                  <option value="">—</option>
-                  <option>Direito</option>
-                  <option>Esquerdo</option>
-                  <option>Bilateral</option>
-                </select>
-              </div>
+        ) : (
+          <div className="space-y-2">
+            <div className="space-y-1 max-h-48 overflow-y-auto">
+              {frequentExams.map((ex, idx) => (
+                <div key={idx} className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 rounded px-2 py-1">
+                  <span className="flex-1 text-xs font-mono text-slate-700 dark:text-slate-300 truncate">{ex}</span>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveFrequent(idx)}
+                    className="text-red-400 hover:text-red-600 flex-shrink-0"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))}
             </div>
-            {items.length > 1 && (
-              <button type="button" onClick={() => setItems((prev) => prev.filter((_, idx) => idx !== i))} className="p-2 text-red-400 hover:text-red-600 mb-0.5">
-                <Trash2 className="w-4 h-4" />
+            <div className="flex gap-2">
+              <input
+                className={inp + " text-xs flex-1"}
+                placeholder="Nome do novo exame..."
+                value={newExamInput}
+                onChange={(e) => setNewExamInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleAddFrequent(); } }}
+              />
+              <button
+                type="button"
+                onClick={handleAddFrequent}
+                className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-semibold hover:bg-blue-700"
+              >
+                Adicionar
               </button>
-            )}
+            </div>
+            <button
+              type="button"
+              onClick={handleRestoreDefault}
+              className="text-xs text-slate-400 hover:text-slate-600 underline"
+            >
+              Restaurar padrão
+            </button>
           </div>
-        ))}
-
-        <button
-          type="button"
-          onClick={() => setItems((p) => [...p, emptyExam()])}
-          className="w-full py-2 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg text-slate-600 dark:text-slate-400 hover:border-blue-400 hover:text-blue-600 flex items-center justify-center gap-2 text-xs font-semibold"
-        >
-          <Plus className="w-3.5 h-3.5" /> Adicionar exame
-        </button>
-
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className={lbl}>Urgência</label>
-            <select className={inp} value={urgency} onChange={(e) => setUrgency(e.target.value)}>
-              <option value="eletivo">Eletivo</option>
-              <option value="urgente">Urgente</option>
-              <option value="emergencia">Emergência</option>
-            </select>
-          </div>
-        </div>
-
-        <div>
-          <label className={lbl}>Indicação clínica</label>
-          <textarea className={inp + " min-h-[70px] resize-none"} placeholder="CID, diagnóstico, motivo..." value={indication} onChange={(e) => setIndication(e.target.value)} />
-        </div>
-
-        <button
-          type="button"
-          onClick={handleSave}
-          disabled={saving}
-          className="w-full py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 font-semibold flex items-center justify-center gap-2 text-sm"
-        >
-          {saving ? (
-            <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Salvando...</>
-          ) : (
-            <><FlaskConical className="w-4 h-4" /> Solicitar Exames</>
-          )}
-        </button>
+        )}
       </div>
 
-      {/* Histórico */}
-      {!loadingEx && exams.length > 0 && (
-        <div className="space-y-2">
-          <p className={sectionTitle}>Solicitações anteriores</p>
-          {exams.slice(0, 5).map((ex) => (
-            <div key={ex.id} className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-3">
-              <div className="flex items-center justify-between mb-1">
-                <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">{formatDate(ex.date)}</p>
-                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${ex.urgency === "urgente" ? "bg-red-100 text-red-700" : ex.urgency === "emergencia" ? "bg-red-200 text-red-800" : "bg-slate-100 text-slate-600"}`}>
-                  {ex.urgency}
-                </span>
-              </div>
-              <div className="space-y-0.5">
-                {ex.exams?.slice(0, 3).map((e: any, i: number) => (
-                  <p key={i} className="text-xs text-slate-600 dark:text-slate-400">
-                    {i + 1}. {e.name}{e.laterality ? ` — ${e.laterality}` : ""}
-                  </p>
-                ))}
-                {(ex.exams?.length || 0) > 3 && (
-                  <p className="text-xs text-slate-400">+{ex.exams.length - 3} mais...</p>
-                )}
-              </div>
-              {ex.clinical_indication && (
-                <p className="text-[11px] text-slate-400 mt-1 border-t border-slate-100 dark:border-slate-700 pt-1">
-                  Indicação: {ex.clinical_indication}
-                </p>
+      {/* ── Seção: Solicitação ── */}
+      <div className="px-5 pt-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+        <p className={sectionTitle}>Solicitação</p>
+        <textarea
+          ref={textareaRef}
+          className="w-full font-mono text-sm text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 resize-none placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 leading-relaxed"
+          style={{ minHeight: "160px" }}
+          placeholder={"SOLICITO: RNM DO JOELHO DIREITO SEM CONTRASTE\nHD: LESÃO MENISCAL"}
+          value={freeText}
+          onChange={(e) => { setFreeText(e.target.value); autoResize(); }}
+          onKeyDown={handleKeyDown}
+        />
+        <div className="flex items-center justify-between mt-2">
+          <span className="text-[11px] text-slate-400">Ctrl+Enter para salvar</span>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => { if (!freeText.trim()) { toast.error("Digite a solicitação antes de imprimir"); return; } setPrintText(freeText); }}
+              className="flex items-center gap-1.5 px-3 py-2 border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-400 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 text-xs font-semibold"
+            >
+              <Printer className="w-3.5 h-3.5" /> Imprimir
+            </button>
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={saving}
+              className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 font-semibold text-xs"
+            >
+              {saving ? (
+                <><div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> Salvando...</>
+              ) : (
+                <><CheckCircle className="w-3.5 h-3.5" /> Salvar</>
               )}
-            </div>
-          ))}
+            </button>
+          </div>
         </div>
-      )}
+      </div>
+
+      {/* ── Seção: Histórico ── */}
+      <div className="px-5 pt-3">
+        <p className={sectionTitle}>Histórico</p>
+        {loadingEx ? (
+          <div className="flex items-center justify-center h-12">
+            <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : exams.length === 0 ? (
+          <p className="text-xs text-slate-400 italic">Nenhuma solicitação anterior.</p>
+        ) : (
+          <div className="space-y-2">
+            {exams.slice(0, 10).map((ex) => (
+              <div key={ex.id} className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 flex items-start justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-0.5">{formatDate(ex.date)}</p>
+                  <p className="text-xs font-mono text-slate-600 dark:text-slate-400 truncate">{examPreview(ex)}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPrintText(ex.free_text || ex.exams?.map((e: any) => `SOLICITO: ${e.name}${e.laterality ? ` — ${e.laterality}` : ""}`).join("\n") || "")}
+                  className="flex-shrink-0 p-1 text-slate-400 hover:text-blue-600"
+                  title="Imprimir"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -1547,7 +1701,7 @@ export default function ConsultaDrawer({ entry, onClose, onStatusChange }: Consu
               <TabReceita patientId={entry.patient_id} patient={patient} />
             )}
             {activeTab === "exames" && (
-              <TabExames patientId={entry.patient_id} />
+              <TabExames patientId={entry.patient_id} patient={patient} />
             )}
           </div>
         )}

@@ -63,9 +63,9 @@ def list_exams(patient_id: int, db: Session = Depends(get_db)):
 
 @exam_router.post("", response_model=ExamRequestOut, status_code=201)
 def create_exam(patient_id: int, data: ExamRequestCreate, db: Session = Depends(get_db)):
-    # BUG-09: lista de exames não pode estar vazia
-    if not data.exams:
-        raise HTTPException(422, "Adicione ao menos um exame")
+    # Aceita texto livre OU lista estruturada de exames (retrocompatibilidade)
+    if not data.exams and not (data.free_text and data.free_text.strip()):
+        raise HTTPException(422, "Informe o texto da solicitação ou ao menos um exame")
     p = db.query(Patient).filter(Patient.id == patient_id).first()
     if not p:
         raise HTTPException(404, "Paciente não encontrado")

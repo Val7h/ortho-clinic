@@ -34,6 +34,7 @@ class ExamRequest(Base):
     clinical_indication = Column(Text, nullable=True)
     urgency = Column(String(20), default="eletivo")
     notes = Column(Text, nullable=True)
+    free_text = Column(Text, nullable=True)  # texto livre estilo documento médico
     signed = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 

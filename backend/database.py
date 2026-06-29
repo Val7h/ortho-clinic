@@ -599,6 +599,12 @@ def migrate_db():
         if table_name not in existing_tables:
             migrations.append(ddl)
 
+    # exam_requests: adiciona free_text se tabela já existia (texto livre médico)
+    if "exam_requests" in existing_tables:
+        er_cols = [c["name"] for c in inspector.get_columns("exam_requests")]
+        if "free_text" not in er_cols:
+            migrations.append("ALTER TABLE exam_requests ADD COLUMN free_text TEXT")
+
     # Sprint 8 — audit_logs columns added mid-sprint; add if table pre-dates them
     if "audit_logs" in existing_tables:
         al_cols = [c["name"] for c in inspector.get_columns("audit_logs")]

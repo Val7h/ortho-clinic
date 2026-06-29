@@ -46,6 +46,7 @@ class ExamRequestBase(BaseModel):
     clinical_indication: Optional[str] = None
     urgency: Optional[str] = "eletivo"
     notes: Optional[str] = None
+    free_text: Optional[str] = None  # texto livre estilo documento médico
     consultation_id: Optional[int] = None
 
 
