@@ -125,6 +125,42 @@ const DEFAULT_FREQUENT_EXAMS = [
 ];
 
 const LS_FREQUENT_EXAMS_KEY = "orthoclinic_frequent_exams";
+const LS_EXAM_TEMPLATES_KEY = "orthoclinic_exam_templates";
+const LS_EXAM_FONT_SIZE_KEY = "orthoclinic_exam_font_size";
+const LS_EXAM_LINE_HEIGHT_KEY = "orthoclinic_exam_line_height";
+
+interface ExamTemplate {
+  id: string;
+  name: string;
+  content: string;
+}
+
+function loadExamTemplates(): ExamTemplate[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(LS_EXAM_TEMPLATES_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+}
+
+function saveExamTemplates(list: ExamTemplate[]) {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(LS_EXAM_TEMPLATES_KEY, JSON.stringify(list));
+}
+
+function loadExamFontSize(): 12 | 14 | 16 {
+  if (typeof window === "undefined") return 14;
+  const v = localStorage.getItem(LS_EXAM_FONT_SIZE_KEY);
+  if (v === "12" || v === "14" || v === "16") return Number(v) as 12 | 14 | 16;
+  return 14;
+}
+
+function loadExamLineHeight(): "normal" | "relaxed" {
+  if (typeof window === "undefined") return "normal";
+  const v = localStorage.getItem(LS_EXAM_LINE_HEIGHT_KEY);
+  if (v === "relaxed") return "relaxed";
+  return "normal";
+}
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -1228,10 +1264,12 @@ function saveFrequentExams(list: string[]) {
 }
 
 // Modal de impressão de pedido de exame
-function PrintExamModal({ text, patientName, onClose }: {
+function PrintExamModal({ text, patientName, onClose, fontSize = 14, lineHeight = "normal" }: {
   text: string;
   patientName: string;
   onClose: () => void;
+  fontSize?: 12 | 14 | 16;
+  lineHeight?: "normal" | "relaxed";
 }) {
   const today = new Date();
   const dateStr = `${String(today.getDate()).padStart(2, "0")}/${String(today.getMonth() + 1).padStart(2, "0")}/${today.getFullYear()}`;
@@ -1266,7 +1304,7 @@ function PrintExamModal({ text, patientName, onClose }: {
             <span><strong>Paciente:</strong> {patientName}</span>
             <span><strong>Data:</strong> {dateStr}</span>
           </div>
-          <div style={{ borderTop: "1px solid #ccc", borderBottom: "1px solid #ccc", padding: "12px 0", margin: "0 0 16px 0", whiteSpace: "pre-wrap", lineHeight: "1.7", fontSize: "13px" }}>
+          <div style={{ borderTop: "1px solid #ccc", borderBottom: "1px solid #ccc", padding: "12px 0", margin: "0 0 16px 0", whiteSpace: "pre-wrap", lineHeight: lineHeight === "relaxed" ? "1.6" : "1.4", fontSize: `${fontSize}px` }}>
             {text}
           </div>
           <div style={{ textAlign: "right", marginTop: "24px" }}>
@@ -1294,6 +1332,13 @@ function TabExames({ patientId, patient }: { patientId: number; patient: any }) 
   const [frequentExams, setFrequentExams] = useState<string[]>(() => loadFrequentExams());
   const [editingFrequent, setEditingFrequent] = useState(false);
   const [newExamInput, setNewExamInput] = useState("");
+
+  // Modelos de solicitação
+  const [examTemplates, setExamTemplates] = useState<ExamTemplate[]>(() => loadExamTemplates());
+
+  // Controle de fonte
+  const [fontSize, setFontSize] = useState<12 | 14 | 16>(() => loadExamFontSize());
+  const [lineHeight, setLineHeight] = useState<"normal" | "relaxed">(() => loadExamLineHeight());
 
   // Impressão
   const [printText, setPrintText] = useState<string | null>(null);
@@ -1346,6 +1391,43 @@ function TabExames({ patientId, patient }: { patientId: number; patient: any }) 
     updateFrequent(DEFAULT_FREQUENT_EXAMS);
   };
 
+  // Modelos
+  const handleSaveTemplate = () => {
+    if (!freeText.trim()) return;
+    const name = window.prompt("Nome do modelo:");
+    if (!name?.trim()) return;
+    const newTemplate: ExamTemplate = { id: String(Date.now()), name: name.trim(), content: freeText };
+    const updated = [...examTemplates, newTemplate];
+    setExamTemplates(updated);
+    saveExamTemplates(updated);
+    toast.success("Modelo salvo");
+  };
+
+  const handleLoadTemplate = (id: string) => {
+    const tpl = examTemplates.find((t) => t.id === id);
+    if (!tpl) return;
+    setFreeText(tpl.content);
+    setTimeout(autoResize, 0);
+    textareaRef.current?.focus();
+  };
+
+  const handleDeleteTemplate = (id: string) => {
+    const updated = examTemplates.filter((t) => t.id !== id);
+    setExamTemplates(updated);
+    saveExamTemplates(updated);
+  };
+
+  // Fonte
+  const handleFontSize = (size: 12 | 14 | 16) => {
+    setFontSize(size);
+    if (typeof window !== "undefined") localStorage.setItem(LS_EXAM_FONT_SIZE_KEY, String(size));
+  };
+
+  const handleLineHeight = (lh: "normal" | "relaxed") => {
+    setLineHeight(lh);
+    if (typeof window !== "undefined") localStorage.setItem(LS_EXAM_LINE_HEIGHT_KEY, lh);
+  };
+
   // Salvar
   const handleSave = async () => {
     if (!freeText.trim()) { toast.error("Digite a solicitação antes de salvar"); return; }
@@ -1388,7 +1470,7 @@ function TabExames({ patientId, patient }: { patientId: number; patient: any }) 
   return (
     <div className="space-y-0 pb-6">
       {printText !== null && (
-        <PrintExamModal text={printText} patientName={patientName} onClose={() => setPrintText(null)} />
+        <PrintExamModal text={printText} patientName={patientName} onClose={() => setPrintText(null)} fontSize={fontSize} lineHeight={lineHeight} />
       )}
 
       {/* ── Seção: Exames Frequentes ── */}
@@ -1467,6 +1549,28 @@ function TabExames({ patientId, patient }: { patientId: number; patient: any }) 
             >
               Restaurar padrão
             </button>
+
+            {/* Modelos salvos (visível só no modo edição) */}
+            {examTemplates.length > 0 && (
+              <div className="mt-3 border-t border-slate-200 dark:border-slate-700 pt-3">
+                <p className="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">Modelos salvos</p>
+                <div className="space-y-1 max-h-36 overflow-y-auto">
+                  {examTemplates.map((tpl) => (
+                    <div key={tpl.id} className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 rounded px-2 py-1">
+                      <span className="flex-1 text-xs text-slate-700 dark:text-slate-300 truncate">{tpl.name}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteTemplate(tpl.id)}
+                        className="text-red-400 hover:text-red-600 flex-shrink-0"
+                        title="Excluir modelo"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -1474,10 +1578,65 @@ function TabExames({ patientId, patient }: { patientId: number; patient: any }) 
       {/* ── Seção: Solicitação ── */}
       <div className="px-5 pt-3 pb-3 border-b border-slate-100 dark:border-slate-800">
         <p className={sectionTitle}>Solicitação</p>
+
+        {/* Dropdown de modelos */}
+        {examTemplates.length > 0 && (
+          <div className="mb-2">
+            <select
+              className="w-full text-xs border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              defaultValue=""
+              onChange={(e) => { if (e.target.value) { handleLoadTemplate(e.target.value); e.target.value = ""; } }}
+            >
+              <option value="">📋 Carregar Modelo...</option>
+              {examTemplates.map((tpl) => (
+                <option key={tpl.id} value={tpl.id}>{tpl.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {/* Controles de fonte */}
+        <div className="flex items-center justify-end gap-3 mb-1.5">
+          <div className="flex items-center gap-1">
+            <span className="text-[10px] text-slate-400 mr-1">Fonte:</span>
+            {([12, 14, 16] as const).map((sz) => (
+              <button
+                key={sz}
+                type="button"
+                onClick={() => handleFontSize(sz)}
+                className={`px-2 py-0.5 text-[10px] border rounded transition-colors ${
+                  fontSize === sz
+                    ? "bg-slate-700 dark:bg-slate-200 text-white dark:text-slate-900 border-slate-700 dark:border-slate-200"
+                    : "border-slate-300 dark:border-slate-600 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700"
+                }`}
+              >
+                {sz === 12 ? "P" : sz === 14 ? "M" : "G"}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="text-[10px] text-slate-400 mr-1">Espaçamento:</span>
+            {(["normal", "relaxed"] as const).map((lh) => (
+              <button
+                key={lh}
+                type="button"
+                onClick={() => handleLineHeight(lh)}
+                className={`px-2 py-0.5 text-[10px] border rounded transition-colors ${
+                  lineHeight === lh
+                    ? "bg-slate-700 dark:bg-slate-200 text-white dark:text-slate-900 border-slate-700 dark:border-slate-200"
+                    : "border-slate-300 dark:border-slate-600 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700"
+                }`}
+              >
+                {lh === "normal" ? "1×" : "1,5×"}
+              </button>
+            ))}
+          </div>
+        </div>
+
         <textarea
           ref={textareaRef}
-          className="w-full font-mono text-sm text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 resize-none placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 leading-relaxed"
-          style={{ minHeight: "160px" }}
+          className="w-full font-mono text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 resize-none placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          style={{ minHeight: "160px", fontSize: `${fontSize}px`, lineHeight: lineHeight === "relaxed" ? "1.6" : "1.4" }}
           placeholder={"SOLICITO: RNM DO JOELHO DIREITO SEM CONTRASTE\nHD: LESÃO MENISCAL"}
           value={freeText}
           onChange={(e) => { setFreeText(e.target.value); autoResize(); }}
@@ -1486,6 +1645,15 @@ function TabExames({ patientId, patient }: { patientId: number; patient: any }) 
         <div className="flex items-center justify-between mt-2">
           <span className="text-[11px] text-slate-400">Ctrl+Enter para salvar</span>
           <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={handleSaveTemplate}
+              disabled={!freeText.trim()}
+              className="flex items-center gap-1.5 px-3 py-2 border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-400 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-xs font-semibold"
+              title="Salvar como modelo"
+            >
+              💾 Salvar Modelo
+            </button>
             <button
               type="button"
               onClick={() => { if (!freeText.trim()) { toast.error("Digite a solicitação antes de imprimir"); return; } setPrintText(freeText); }}
