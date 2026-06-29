@@ -7,7 +7,7 @@ import {
   Plus, Trash2, Printer, ChevronDown, ChevronUp, Save,
 } from "lucide-react";
 import toast from "react-hot-toast";
-import { patientsApi, consultationsApi, prescriptionsApi, prescriptionTemplatesApi, examsApi, evolutionApi, clinicApi, memedApi } from "@/lib/api";
+import { patientsApi, consultationsApi, prescriptionsApi, prescriptionTemplatesApi, examsApi, evolutionApi, clinicApi } from "@/lib/api";
 import { formatDate } from "@/lib/utils";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -622,6 +622,11 @@ function PrintModal({ rx, patient, clinic, onClose }: {
 }
 
 // ── Memed SDK Integration ───────────────────────────────────────────────────────
+// SDK Memed Sinapse Prescricao v3.25
+// JWT lido de data-token na <script> tag (autenticação automática no carregamento).
+// Após o download do script principal, o SDK carrega MdHub + md-privacy de forma
+// dinâmica — window.MdSinapsePrescricao só fica disponível depois disso (~2-5s).
+// SecurityErrors no console = bug interno do SDK (cross-origin iframe), não-fatal.
 
 declare global {
   interface Window {
@@ -636,94 +641,126 @@ declare global {
 const MEMED_SDK_URL =
   "https://integrations.memed.com.br/modulos/plataforma.sinapse-prescricao/build/sinapse-prescricao.min.js";
 
-// JWT gerado pela Memed para Dr. Valth (id=171135)
-const MEMED_JWT =
-  "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.WzE3MTEzNSwiMDY3YWEzYmY0ZDBmZjE2OWM0MDk1MGM1YWQxZDY1YzQiLCIyMDI2LTA2LTI5IiwidW5kZWZpbmVkIl0.x97mWhc348zkaiN4TUfdFBtPKHzRiezsZZNYTkD3K9E";
+// ── Singleton de módulo (fora do React) ────────────────────────────────────────
+// Garante que o SDK é inicializado uma única vez por sessão do navegador,
+// mesmo que o componente seja montado/desmontado várias vezes.
+type SdkStatus = "idle" | "loading" | "ready" | "error";
+let _sdkStatus: SdkStatus = "idle";
+let _sdkActiveJwt: string | null = null;
+let _sdkLoadPromise: Promise<void> | null = null;
 
-const formatDateBRForMemed = (isoDate: string): string | undefined => {
-  if (!isoDate) return undefined;
-  const d = new Date(isoDate + "T12:00:00");
+function _isoToBR(iso: string): string | undefined {
+  if (!iso) return undefined;
+  const d = new Date(iso + "T12:00:00");
+  if (isNaN(d.getTime())) return undefined;
   return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
-};
+}
 
-// O SDK Memed lê o JWT do atributo data-token da sua própria tag <script>.
-// Após o download, ele carrega plataforma.hub e md-privacy dinamicamente
-// antes de expor window.MdSinapsePrescricao — por isso precisamos de 15s.
-async function loadMemedSDK(): Promise<void> {
-  if (window.MdSinapsePrescricao) return;
-
-  // Script já no DOM: aguarda inicialização completa (até 15s)
-  const existingScript = document.querySelector(`script[src="${MEMED_SDK_URL}"]`);
-  if (existingScript) {
-    return new Promise((resolve, reject) => {
-      let n = 0;
-      const t = setInterval(() => {
-        if (window.MdSinapsePrescricao) { clearInterval(t); resolve(); return; }
-        if (++n > 150) { clearInterval(t); reject(new Error("Timeout aguardando SDK Memed")); }
-      }, 100);
-    });
+async function _fetchMemedToken(): Promise<string> {
+  const API = process.env.NEXT_PUBLIC_API_URL || "https://ortho-clinic-ldcd.onrender.com";
+  const bearerToken = typeof window !== "undefined" ? localStorage.getItem("orthoclinic_token") : null;
+  const res = await fetch(`${API}/memed/token`, {
+    headers: bearerToken ? { Authorization: `Bearer ${bearerToken}` } : {},
+  });
+  if (!res.ok) throw new Error(`Memed /token retornou HTTP ${res.status}`);
+  const data = await res.json();
+  if (data.valid === false) {
+    console.warn("[Memed] JWT com data", data.date, "— pode estar expirado. Atualize MEMED_JWT no Render.");
   }
+  return data.token as string;
+}
 
-  // Primeira carga: cria <script data-token="JWT"> para autenticação automática
+function _injectScript(jwt: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const script = document.createElement("script");
     script.src = MEMED_SDK_URL;
     script.type = "text/javascript";
-    script.setAttribute("data-token", MEMED_JWT); // ← autenticação via data-token
+    script.setAttribute("data-token", jwt); // autenticação automática no load
+
     script.onload = () => {
-      // SDK carrega MdHub e md-privacy dinamicamente; aguarda até 15s
-      let n = 0;
-      const t = setInterval(() => {
-        if (window.MdSinapsePrescricao) { clearInterval(t); resolve(); return; }
-        if (++n > 150) { clearInterval(t); reject(new Error("SDK Memed não inicializou (MdHub timeout)")); }
+      // MdHub é carregado dinamicamente após o script principal — poll até 20s
+      let ticks = 0;
+      const timer = setInterval(() => {
+        if (window.MdSinapsePrescricao) { clearInterval(timer); resolve(); return; }
+        if (++ticks > 200) { clearInterval(timer); reject(new Error("Memed: MdHub não inicializou em 20s")); }
       }, 100);
     };
-    script.onerror = () => reject(new Error("Falha ao carregar SDK Memed (rede)"));
+
+    script.onerror = () => reject(new Error("Memed: falha ao baixar SDK (verifique conexão)"));
     document.head.appendChild(script);
   });
 }
 
-async function openMemed(patient: any, clinic: any): Promise<void> {
-  await loadMemedSDK();
+async function _ensureSdkReady(jwt: string): Promise<void> {
+  // Já pronto
+  if (_sdkStatus === "ready" && window.MdSinapsePrescricao) return;
 
-  const sdk = window.MdSinapsePrescricao;
-  if (!sdk) throw new Error("SDK Memed não disponível");
+  // Já em carregamento — reutiliza a mesma promise
+  if (_sdkStatus === "loading" && _sdkLoadPromise) {
+    await _sdkLoadPromise;
+    return;
+  }
 
-  // Garante que os módulos estão carregados (caso SDK já existia mas iframes não)
-  if (typeof sdk.setToken === "function") sdk.setToken(MEMED_JWT);
+  _sdkStatus = "loading";
+  _sdkActiveJwt = jwt;
 
-  // Aguarda iframes dos módulos aparecerem (até 10s)
-  await new Promise<void>((resolve) => {
-    let n = 0;
-    const t = setInterval(() => {
-      if (document.querySelectorAll("#iframe-container iframe").length > 0) {
-        clearInterval(t); resolve(); return;
-      }
-      if (++n > 100) { clearInterval(t); resolve(); }
-    }, 100);
-  });
+  // Script já está no DOM (ex: segunda chamada após erro recuperado)
+  const existingScript = document.querySelector(`script[src="${MEMED_SDK_URL}"]`);
+  if (existingScript) {
+    _sdkLoadPromise = new Promise<void>((resolve, reject) => {
+      if (window.MdSinapsePrescricao) { resolve(); return; }
+      let ticks = 0;
+      const timer = setInterval(() => {
+        if (window.MdSinapsePrescricao) { clearInterval(timer); resolve(); return; }
+        if (++ticks > 200) { clearInterval(timer); reject(new Error("Memed: timeout aguardando MdHub")); }
+      }, 100);
+    });
+  } else {
+    _sdkLoadPromise = _injectScript(jwt);
+  }
 
   try {
-    sdk.event.add("prescricao:encerramento", (_data: any) => {
-      toast.success("Prescrição finalizada no Memed!");
-    });
+    await _sdkLoadPromise;
+    _sdkStatus = "ready";
+  } catch (err) {
+    _sdkStatus = "error";
+    _sdkLoadPromise = null; // permite retry na próxima chamada
+    throw err;
+  }
+}
+
+async function openMemed(patient: any, _clinic: any): Promise<void> {
+  // 1. JWT fresco do backend (env var MEMED_JWT no Render)
+  const jwt = await _fetchMemedToken();
+
+  // 2. Carrega e inicializa o SDK (idempotente)
+  await _ensureSdkReady(jwt);
+
+  const sdk = window.MdSinapsePrescricao!;
+
+  // 3. Renova token se mudou desde a última abertura
+  if (jwt !== _sdkActiveJwt) {
+    try { sdk.setToken(jwt); } catch (_) {}
+    _sdkActiveJwt = jwt;
+  }
+
+  // 4. Registra callbacks de ciclo de vida (SDK ignora duplicatas)
+  try {
+    sdk.event.add("prescricao:encerramento", () => toast.success("Prescrição finalizada no Memed!"));
+    sdk.event.add("logout:token-invalido", () => toast.error("Sessão Memed expirada — recarregue a página."));
   } catch (_) {}
 
-  // Pré-preencher paciente no módulo de gerenciamento de pacientes
+  // 5. Pré-preenche dados do paciente
   try {
     sdk.command.send("platform.patient-management", "setPatient", {
-      nome: patient?.full_name || patient?.name || "",
-      data_nascimento: patient?.date_of_birth
-        ? formatDateBRForMemed(patient.date_of_birth)
-        : patient?.birth_date
-        ? formatDateBRForMemed(patient.birth_date)
-        : undefined,
-      telefone: patient?.phone || undefined,
-      cpf: patient?.cpf || undefined,
+      nome:            patient?.full_name || patient?.name || "",
+      data_nascimento: _isoToBR(patient?.date_of_birth || patient?.birth_date || ""),
+      telefone:        patient?.phone || undefined,
+      cpf:             patient?.cpf   || undefined,
     });
   } catch (_) {}
 
-  // Abrir o módulo de prescrição (API real do SDK v3.25)
+  // 6. Abre o módulo de prescrição
   sdk.command.send("hub", "core:moduleShow", "plataforma.prescricao");
 }
 
