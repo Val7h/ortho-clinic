@@ -37,10 +37,13 @@ class MedicationIn(BaseModel):
 
 class PatientRxCreate(BaseModel):
     date: str  # ISO date string YYYY-MM-DD
-    prescription_type: str = "simples"  # simples | especial_azul | especial_amarelo
+    prescription_type: str = "simples"  # simples | controle_especial | antimicrobiano | notificacao_ab
     medications: List[MedicationIn] = []
     instructions: str = ""
     memed_id: Optional[str] = None
+    # Campos extras para ATB (RDC 20/2011)
+    patient_address: Optional[str] = None
+    patient_phone: Optional[str] = None
 
 
 class PatientRxOut(BaseModel):

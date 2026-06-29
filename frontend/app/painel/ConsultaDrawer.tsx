@@ -305,66 +305,197 @@ const emptyExam = (): ExamItem => ({ name: "", laterality: "", notes: "" });
 
 // ── Tipos de Receita ──────────────────────────────────────────────────────────
 
-type PrescriptionType = "simples" | "especial_azul" | "especial_amarelo";
+type PrescriptionType = "simples" | "controle_especial" | "antimicrobiano" | "notificacao_ab";
+
+// Alias de compatibilidade com valores antigos do banco
+function normalizePrescriptionType(t: string): PrescriptionType {
+  if (t === "especial_azul") return "controle_especial";
+  if (t === "especial_amarelo") return "controle_especial";
+  if (t === "simples" || t === "controle_especial" || t === "antimicrobiano" || t === "notificacao_ab") return t as PrescriptionType;
+  return "simples";
+}
 
 const PRESCRIPTION_TYPE_LABELS: Record<PrescriptionType, string> = {
   simples: "Simples (Branca)",
-  especial_azul: "Especial Azul (B)",
-  especial_amarelo: "Especial Amarelo (A)",
+  controle_especial: "Controle Especial (RCE)",
+  antimicrobiano: "Antimicrobiano (ATB)",
+  notificacao_ab: "Notificação A/B (SESA)",
 };
 
-// Print prescription modal — suporta os 3 tipos com layouts diferenciados
+// Print prescription modal — 3 tipos que o médico pode imprimir + aviso para A/B
 function PrintModal({ rx, patient, onClose }: {
-  rx: { date: string; medications: Medication[]; instructions: string; prescription_type: PrescriptionType };
+  rx: {
+    date: string;
+    medications: Medication[];
+    instructions: string;
+    prescription_type: PrescriptionType;
+    patientAddress?: string;
+    patientPhone?: string;
+  };
   patient: any;
   onClose: () => void;
 }) {
-  const isEspecial = rx.prescription_type !== "simples";
-  const isAmarelo = rx.prescription_type === "especial_amarelo";
-  const vias = rx.prescription_type === "especial_amarelo" ? 3 : rx.prescription_type === "especial_azul" ? 2 : 1;
-  const headerColor = isAmarelo ? "#7c6000" : isEspecial ? "#003580" : "#0F2D5E";
-  const headerBg = isAmarelo ? "#fffde7" : isEspecial ? "#e8f0fe" : "white";
-  const viaLabels = rx.prescription_type === "especial_amarelo"
-    ? ["Via Farmácia", "Via Paciente", "Via Médico/Fichário"]
-    : rx.prescription_type === "especial_azul"
-    ? ["Via Farmácia", "Via Paciente"]
-    : ["Via Única"];
+  const type = normalizePrescriptionType(rx.prescription_type);
+  const isRCE = type === "controle_especial";
+  const isATB = type === "antimicrobiano";
+  const vias = (isRCE || isATB) ? 2 : 1;
+  const headerColor = isRCE ? "#5c3a00" : isATB ? "#003580" : "#0F2D5E";
+  const viaLabels = (isRCE || isATB) ? ["1ª VIA — FARMÁCIA", "2ª VIA — PACIENTE"] : ["VIA ÚNICA"];
 
   const dateStr = (() => {
     const d = new Date(rx.date + "T12:00:00");
     return `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()}`;
   })();
 
-  // Renderiza uma via da receita
-  const RxSheet = ({ viaLabel, viaIndex }: { viaLabel: string; viaIndex: number }) => (
-    <div
-      style={{
-        background: "white",
-        border: `2px solid ${headerColor}`,
-        borderRadius: "8px",
-        padding: "20px",
-        marginBottom: viaIndex < vias - 1 ? "24px" : "0",
-        pageBreakAfter: viaIndex < vias - 1 ? "always" : "auto",
-        fontSize: "13px",
-        color: "#111",
-      }}
-    >
+  // Folha para RCE (Controle Especial — Portaria 344/98)
+  const RCESheet = ({ viaLabel, viaIndex }: { viaLabel: string; viaIndex: number }) => (
+    <div style={{
+      background: "white",
+      border: `2px solid ${headerColor}`,
+      borderRadius: "8px",
+      padding: "18px",
+      marginBottom: viaIndex < vias - 1 ? "0" : "0",
+      fontSize: "12px",
+      color: "#111",
+    }}>
       {/* Cabeçalho */}
-      <div style={{ background: headerBg, borderBottom: `2px solid ${headerColor}`, paddingBottom: "12px", marginBottom: "14px", textAlign: "center" }}>
-        {isEspecial && (
-          <p style={{ fontSize: "10px", fontWeight: 700, color: headerColor, letterSpacing: "1px", marginBottom: "4px", textTransform: "uppercase" }}>
-            {isAmarelo ? "Notificação de Receita A — Entorpecentes" : "Receita de Controle Especial"}
-          </p>
+      <div style={{ borderBottom: `2px solid ${headerColor}`, paddingBottom: "10px", marginBottom: "12px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+          <div>
+            <p style={{ fontWeight: 700, fontSize: "15px", margin: "0 0 1px 0", color: headerColor }}>Dr. Valth Guimarães</p>
+            <p style={{ fontSize: "11px", color: "#555", margin: "0" }}>Ortopedia e Traumatologia</p>
+            <p style={{ fontSize: "11px", color: "#555", margin: "0" }}>CRM/PB 1234 | CRM/PE 5678</p>
+            <p style={{ fontSize: "11px", color: "#555", margin: "0" }}>Tel: (83) 99347-6410</p>
+          </div>
+          <div style={{ textAlign: "right" }}>
+            <p style={{ fontWeight: 700, fontSize: "10px", color: headerColor, textTransform: "uppercase", letterSpacing: "0.5px", margin: "0 0 4px 0" }}>Receita de Controle Especial</p>
+            <p style={{ fontWeight: 700, fontSize: "11px", color: headerColor, margin: "0" }}>{viaLabel}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Paciente */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px", marginBottom: "12px", fontSize: "11px" }}>
+        <div><span style={{ fontWeight: 700, color: "#666", textTransform: "uppercase", fontSize: "9px" }}>Paciente: </span><span style={{ fontWeight: 600 }}>{patient?.name}</span></div>
+        <div><span style={{ fontWeight: 700, color: "#666", textTransform: "uppercase", fontSize: "9px" }}>Data: </span><span>{dateStr}</span></div>
+        {patient?.cpf && <div><span style={{ fontWeight: 700, color: "#666", textTransform: "uppercase", fontSize: "9px" }}>CPF: </span><span style={{ fontFamily: "monospace" }}>{patient.cpf}</span></div>}
+        {patient?.birth_date && <div><span style={{ fontWeight: 700, color: "#666", textTransform: "uppercase", fontSize: "9px" }}>Nasc.: </span><span>{new Date(patient.birth_date + "T12:00:00").toLocaleDateString("pt-BR")}</span></div>}
+      </div>
+
+      {/* Medicamentos */}
+      <div style={{ marginBottom: "12px", borderBottom: "1px solid #ddd", paddingBottom: "10px" }}>
+        {rx.medications.map((m, i) => (
+          <div key={i} style={{ marginBottom: "8px" }}>
+            <p style={{ fontWeight: 600, margin: "0 0 1px 0" }}>{i + 1}. {m.name}{m.dose ? ` — ${m.dose}` : ""}</p>
+            <p style={{ color: "#555", fontSize: "10px", margin: "0 0 1px 0" }}>{[m.route && `Via ${m.route}`, m.frequency, m.duration].filter(Boolean).join(" · ")}</p>
+            {m.instructions && <p style={{ color: "#777", fontSize: "10px", fontStyle: "italic", margin: "0" }}>Obs: {m.instructions}</p>}
+          </div>
+        ))}
+        {rx.instructions && (
+          <p style={{ color: "#555", fontSize: "10px", marginTop: "6px", fontStyle: "italic" }}>Orientações: {rx.instructions}</p>
         )}
+      </div>
+
+      {/* Assinatura e validade */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginTop: "10px" }}>
+        <div style={{ fontSize: "10px", color: "#888" }}>
+          <p style={{ margin: "0 0 3px 0" }}>Portaria SVS/MS 344/98</p>
+          <p style={{ margin: "0" }}>Validade: 30 dias a partir de {dateStr}</p>
+        </div>
+        <div style={{ textAlign: "center", width: "180px" }}>
+          <p style={{ fontSize: "10px", color: "#888", margin: "0 0 4px 0" }}>_____________ , ___/___/______</p>
+          <div style={{ borderTop: `1px solid ${headerColor}`, paddingTop: "4px" }}>
+            <p style={{ fontSize: "11px", fontWeight: 700, margin: "0" }}>Dr. Valth Guimarães</p>
+            <p style={{ fontSize: "10px", color: "#666", margin: "0" }}>CRM/PB 1234 | CRM/PE 5678</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  // Folha para ATB (RDC ANVISA 20/2011)
+  const ATBSheet = ({ viaLabel, viaIndex }: { viaLabel: string; viaIndex: number }) => (
+    <div style={{
+      background: "white",
+      border: `2px solid ${headerColor}`,
+      borderRadius: "8px",
+      padding: "18px",
+      fontSize: "12px",
+      color: "#111",
+    }}>
+      {/* Cabeçalho */}
+      <div style={{ borderBottom: `2px solid ${headerColor}`, paddingBottom: "10px", marginBottom: "12px" }}>
+        <p style={{ fontWeight: 700, fontSize: "11px", color: headerColor, textTransform: "uppercase", letterSpacing: "0.5px", margin: "0 0 6px 0", textAlign: "center" }}>
+          Receita para Antimicrobianos — RDC ANVISA 20/2011
+        </p>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+          <div>
+            <p style={{ fontWeight: 700, fontSize: "10px", color: "#555", textTransform: "uppercase", margin: "0 0 2px 0" }}>Prescritor</p>
+            <p style={{ fontWeight: 700, fontSize: "14px", margin: "0 0 1px 0", color: headerColor }}>Dr. Valth Guimarães</p>
+            <p style={{ fontSize: "10px", color: "#555", margin: "0" }}>Especialidade: Ortopedia e Traumatologia</p>
+            <p style={{ fontSize: "10px", color: "#555", margin: "0" }}>CRM/PB 1234 | CRM/PE 5678</p>
+            <p style={{ fontSize: "10px", color: "#555", margin: "0" }}>Tel: (83) 99347-6410</p>
+          </div>
+          <div style={{ textAlign: "right" }}>
+            <p style={{ fontWeight: 700, fontSize: "11px", color: headerColor, margin: "0" }}>{viaLabel}</p>
+            <p style={{ fontSize: "10px", color: "#888", margin: "4px 0 0 0" }}>Data: {dateStr}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Dados do paciente */}
+      <div style={{ border: "1px solid #ddd", borderRadius: "4px", padding: "8px", marginBottom: "12px", fontSize: "10px" }}>
+        <p style={{ fontWeight: 700, color: "#555", textTransform: "uppercase", fontSize: "9px", margin: "0 0 6px 0" }}>Identificação do Paciente</p>
+        <p style={{ margin: "0 0 3px 0" }}><strong>Paciente:</strong> {patient?.name}</p>
+        {patient?.cpf && <p style={{ margin: "0 0 3px 0" }}><strong>CPF:</strong> {patient.cpf}</p>}
+        {rx.patientAddress && <p style={{ margin: "0 0 3px 0" }}><strong>Endereço:</strong> {rx.patientAddress}</p>}
+        {rx.patientPhone && <p style={{ margin: "0" }}><strong>Telefone:</strong> {rx.patientPhone}</p>}
+      </div>
+
+      {/* Medicamentos */}
+      <div style={{ marginBottom: "12px", borderBottom: "1px solid #ddd", paddingBottom: "10px" }}>
+        <p style={{ fontWeight: 700, color: "#444", textTransform: "uppercase", fontSize: "9px", letterSpacing: "0.5px", margin: "0 0 8px 0" }}>Prescrição</p>
+        {rx.medications.map((m, i) => (
+          <div key={i} style={{ marginBottom: "8px" }}>
+            <p style={{ fontWeight: 600, margin: "0 0 1px 0" }}>{i + 1}. {m.name}{m.dose ? ` — ${m.dose}` : ""}</p>
+            <p style={{ color: "#555", fontSize: "10px", margin: "0 0 1px 0" }}>{[m.route && `Via ${m.route}`, m.frequency, m.duration].filter(Boolean).join(" · ")}</p>
+            {m.instructions && <p style={{ color: "#777", fontSize: "10px", fontStyle: "italic", margin: "0" }}>Obs: {m.instructions}</p>}
+          </div>
+        ))}
+        {rx.instructions && (
+          <p style={{ color: "#555", fontSize: "10px", marginTop: "6px", fontStyle: "italic" }}>Orientações: {rx.instructions}</p>
+        )}
+      </div>
+
+      {/* Assinatura */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
+        <p style={{ fontSize: "9px", color: "#aaa", margin: "0" }}>Antibiótico de uso sob prescrição médica — RDC ANVISA 20/2011</p>
+        <div style={{ textAlign: "center", width: "180px" }}>
+          <div style={{ borderTop: `1px solid ${headerColor}`, paddingTop: "4px" }}>
+            <p style={{ fontSize: "11px", fontWeight: 700, margin: "0" }}>Dr. Valth Guimarães</p>
+            <p style={{ fontSize: "10px", color: "#666", margin: "0" }}>CRM/PB 1234 | CRM/PE 5678</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  // Folha para Receita Simples
+  const SimplesSheet = () => (
+    <div style={{
+      background: "white",
+      border: `2px solid ${headerColor}`,
+      borderRadius: "8px",
+      padding: "20px",
+      fontSize: "13px",
+      color: "#111",
+    }}>
+      {/* Cabeçalho */}
+      <div style={{ borderBottom: `2px solid ${headerColor}`, paddingBottom: "12px", marginBottom: "14px", textAlign: "center" }}>
         <h1 style={{ fontSize: "16px", fontWeight: 700, color: headerColor, margin: "0 0 2px 0" }}>Dr. Valth Guimarães</h1>
         <p style={{ fontSize: "11px", color: "#555", margin: "0" }}>Ortopedia e Traumatologia</p>
         <p style={{ fontSize: "11px", color: "#555", margin: "0" }}>CRM/PB 1234 | CRM/PE 5678</p>
-        {isEspecial && (
-          <div style={{ marginTop: "8px", display: "flex", justifyContent: "space-between", fontSize: "11px" }}>
-            <span>Nº Notificação: ___________________</span>
-            <span style={{ fontWeight: 700, color: headerColor }}>{viaLabel}</span>
-          </div>
-        )}
+        <p style={{ fontSize: "11px", color: "#555", margin: "0" }}>Tel: (83) 99347-6410</p>
       </div>
 
       {/* Dados do paciente */}
@@ -372,10 +503,10 @@ function PrintModal({ rx, patient, onClose }: {
         <div><span style={{ fontWeight: 700, color: "#666", textTransform: "uppercase", fontSize: "10px" }}>Paciente: </span><span style={{ fontWeight: 600 }}>{patient?.name}</span></div>
         <div><span style={{ fontWeight: 700, color: "#666", textTransform: "uppercase", fontSize: "10px" }}>Data: </span><span>{dateStr}</span></div>
         {patient?.cpf && <div><span style={{ fontWeight: 700, color: "#666", textTransform: "uppercase", fontSize: "10px" }}>CPF: </span><span style={{ fontFamily: "monospace" }}>{patient.cpf}</span></div>}
-        {patient?.birth_date && <div><span style={{ fontWeight: 700, color: "#666", textTransform: "uppercase", fontSize: "10px" }}>Nascimento: </span><span>{new Date(patient.birth_date + "T12:00:00").toLocaleDateString("pt-BR")}</span></div>}
+        {patient?.birth_date && <div><span style={{ fontWeight: 700, color: "#666", textTransform: "uppercase", fontSize: "10px" }}>Nasc.: </span><span>{new Date(patient.birth_date + "T12:00:00").toLocaleDateString("pt-BR")}</span></div>}
       </div>
 
-      {/* Prescrição */}
+      {/* Medicamentos */}
       <div style={{ marginBottom: "14px" }}>
         <p style={{ fontWeight: 700, color: "#444", textTransform: "uppercase", fontSize: "10px", letterSpacing: "1px", borderBottom: "1px solid #ddd", paddingBottom: "4px", marginBottom: "10px" }}>Prescrição</p>
         <ol style={{ margin: 0, padding: 0, listStyle: "none" }}>
@@ -396,45 +527,42 @@ function PrintModal({ rx, patient, onClose }: {
         </div>
       )}
 
-      {/* Identificação do comprador (receitas especiais) */}
-      {isEspecial && (
-        <div style={{ border: "1px dashed #aaa", borderRadius: "4px", padding: "10px", marginBottom: "14px", fontSize: "11px" }}>
-          <p style={{ fontWeight: 700, color: "#444", textTransform: "uppercase", fontSize: "10px", marginBottom: "8px" }}>Identificação do Comprador</p>
-          <p style={{ margin: "0 0 4px 0" }}>Nome: _____________________________________</p>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px" }}>
-            <p style={{ margin: "0 0 4px 0" }}>CPF: __________________</p>
-            <p style={{ margin: "0 0 4px 0" }}>RG: __________________</p>
-          </div>
-          <p style={{ margin: "0" }}>Endereço: _________________________________________________</p>
-        </div>
-      )}
-
       {/* Assinatura */}
       <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "20px" }}>
         <div style={{ textAlign: "center", width: "200px" }}>
           <div style={{ borderTop: `2px solid ${headerColor}`, paddingTop: "6px", marginBottom: "2px" }}></div>
           <p style={{ fontSize: "12px", fontWeight: 700, margin: "0" }}>Dr. Valth Guimarães</p>
           <p style={{ fontSize: "11px", color: "#666", margin: "0" }}>CRM/PB 1234 | CRM/PE 5678</p>
-          {!isEspecial && <p style={{ fontSize: "10px", color: "#888", margin: "4px 0 0 0" }}>Válido por 30 dias</p>}
+          <p style={{ fontSize: "10px", color: "#888", margin: "4px 0 0 0" }}>Válido por 30 dias</p>
         </div>
       </div>
     </div>
   );
+
+  const labelMap: Record<PrescriptionType, string> = {
+    simples: "Receita Simples — 1 via",
+    controle_especial: "Controle Especial (RCE) — 2 vias",
+    antimicrobiano: "Antimicrobiano (ATB) — 2 vias",
+    notificacao_ab: "Notificação A/B",
+  };
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.6)" }}>
       <style>{`
         @media print {
           body > *:not(#print-rx-root) { display: none !important; }
-          #print-rx-root { position: fixed !important; inset: 0 !important; z-index: 9999 !important; background: white !important; padding: 20px !important; }
+          #print-rx-root { position: fixed !important; inset: 0 !important; z-index: 9999 !important; background: white !important; padding: 10px !important; }
           .no-print { display: none !important; }
+          .rx-via-break { page-break-after: always; margin-bottom: 0 !important; }
+          .rx-cut-line { display: block !important; }
         }
+        .rx-cut-line { display: none; }
       `}</style>
       <div id="print-rx-root" className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
         <div className="no-print px-5 pt-4 pb-3 border-b border-gray-200 dark:border-slate-700 flex items-center justify-between flex-shrink-0">
           <div>
             <h2 className="font-bold text-slate-900 dark:text-slate-50 text-sm">Preview da Receita</h2>
-            <p className="text-xs text-slate-500 mt-0.5">{PRESCRIPTION_TYPE_LABELS[rx.prescription_type]} — {vias} {vias === 1 ? "via" : "vias"}</p>
+            <p className="text-xs text-slate-500 mt-0.5">{labelMap[type]}</p>
           </div>
           <div className="flex items-center gap-2">
             <button onClick={() => window.print()} className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold text-xs">
@@ -446,8 +574,30 @@ function PrintModal({ rx, patient, onClose }: {
           </div>
         </div>
         <div className="flex-1 overflow-y-auto p-5 bg-white">
-          {viaLabels.map((label, idx) => (
-            <RxSheet key={idx} viaLabel={label} viaIndex={idx} />
+          {type === "simples" && <SimplesSheet />}
+          {type === "controle_especial" && viaLabels.map((label, idx) => (
+            <div key={idx}>
+              <div className={idx < vias - 1 ? "rx-via-break" : ""}>
+                <RCESheet viaLabel={label} viaIndex={idx} />
+              </div>
+              {idx < vias - 1 && (
+                <div className="rx-cut-line" style={{ textAlign: "center", color: "#aaa", fontSize: "10px", margin: "4px 0", letterSpacing: "2px", borderTop: "1px dashed #ccc", paddingTop: "4px" }}>
+                  ✂ recortar aqui
+                </div>
+              )}
+            </div>
+          ))}
+          {type === "antimicrobiano" && viaLabels.map((label, idx) => (
+            <div key={idx}>
+              <div className={idx < vias - 1 ? "rx-via-break" : ""}>
+                <ATBSheet viaLabel={label} viaIndex={idx} />
+              </div>
+              {idx < vias - 1 && (
+                <div className="rx-cut-line" style={{ textAlign: "center", color: "#aaa", fontSize: "10px", margin: "4px 0", letterSpacing: "2px", borderTop: "1px dashed #ccc", paddingTop: "4px" }}>
+                  ✂ recortar aqui
+                </div>
+              )}
+            </div>
           ))}
         </div>
       </div>
@@ -665,20 +815,36 @@ function TabProntuario({ patientId }: { patientId: number }) {
 
 // ── Tab: Receita ───────────────────────────────────────────────────────────────
 
-const PRESCRIPTION_TYPE_BADGE: Record<PrescriptionType, { label: string; cls: string }> = {
-  simples:         { label: "Simples",  cls: "bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300" },
-  especial_azul:   { label: "Ctrl Azul", cls: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300" },
-  especial_amarelo:{ label: "Entorpecente", cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300" },
+const PRESCRIPTION_TYPE_BADGE: Record<string, { label: string; cls: string }> = {
+  simples:           { label: "Simples",   cls: "bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300" },
+  controle_especial: { label: "RCE 2 vias", cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300" },
+  antimicrobiano:    { label: "ATB 2 vias", cls: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300" },
+  notificacao_ab:    { label: "Notif. A/B", cls: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300" },
+  // aliases legados
+  especial_azul:     { label: "RCE 2 vias", cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300" },
+  especial_amarelo:  { label: "RCE 2 vias", cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300" },
 };
+
+const RX_TYPE_OPTIONS: { value: PrescriptionType; label: string; activeClass: string }[] = [
+  { value: "simples",           label: "Simples (Branca)",          activeClass: "border-slate-600 bg-slate-600 text-white" },
+  { value: "controle_especial", label: "Controle Especial (RCE)",   activeClass: "border-amber-600 bg-amber-600 text-white" },
+  { value: "antimicrobiano",    label: "Antimicrobiano (ATB)",       activeClass: "border-blue-600 bg-blue-600 text-white" },
+  { value: "notificacao_ab",    label: "Notificação A/B (SESA)",    activeClass: "border-red-500 bg-red-500 text-white" },
+];
 
 function TabReceita({ patientId, patient }: { patientId: number; patient: any }) {
   const [rxType, setRxType] = useState<PrescriptionType>("simples");
   const [medications, setMedications] = useState<Medication[]>([emptyMed()]);
   const [instructions, setInstructions] = useState("");
+  const [patientAddress, setPatientAddress] = useState("");
+  const [patientPhone, setPatientPhone] = useState("");
   const [saving, setSaving] = useState(false);
   const [prescriptions, setPrescriptions] = useState<any[]>([]);
   const [loadingRx, setLoadingRx] = useState(true);
-  const [printRx, setPrintRx] = useState<{ date: string; medications: Medication[]; instructions: string; prescription_type: PrescriptionType } | null>(null);
+  const [printRx, setPrintRx] = useState<{
+    date: string; medications: Medication[]; instructions: string;
+    prescription_type: PrescriptionType; patientAddress?: string; patientPhone?: string;
+  } | null>(null);
 
   // Templates
   const [templates, setTemplates] = useState<any[]>([]);
@@ -703,7 +869,11 @@ function TabReceita({ patientId, patient }: { patientId: number; patient: any })
   const updateMed = (i: number, k: keyof Medication, v: string) =>
     setMedications((ms) => ms.map((m, idx) => (idx === i ? { ...m, [k]: v } : m)));
 
+  const isNotificacaoAB = rxType === "notificacao_ab";
+  const isATB = rxType === "antimicrobiano";
+
   const handleSave = async () => {
+    if (isNotificacaoAB) { toast.error("Notificação A/B não pode ser impressa pelo médico — use formulários SESA"); return; }
     const validMeds = medications.filter((m) => m.name.trim());
     if (validMeds.length === 0) { toast.error("Adicione pelo menos um medicamento"); return; }
     setSaving(true);
@@ -718,6 +888,8 @@ function TabReceita({ patientId, patient }: { patientId: number; patient: any })
       setPrescriptions((prev) => [newRx, ...prev]);
       setMedications([emptyMed()]);
       setInstructions("");
+      setPatientAddress("");
+      setPatientPhone("");
     } catch {
       toast.error("Erro ao salvar receita");
     } finally {
@@ -726,13 +898,21 @@ function TabReceita({ patientId, patient }: { patientId: number; patient: any })
   };
 
   const handlePrint = () => {
+    if (isNotificacaoAB) return;
     const validMeds = medications.filter((m) => m.name.trim());
     if (validMeds.length === 0) { toast.error("Adicione pelo menos um medicamento para imprimir"); return; }
-    setPrintRx({ date: new Date().toISOString().split("T")[0], medications: validMeds, instructions, prescription_type: rxType });
+    setPrintRx({
+      date: new Date().toISOString().split("T")[0],
+      medications: validMeds,
+      instructions,
+      prescription_type: rxType,
+      patientAddress: patientAddress || undefined,
+      patientPhone: patientPhone || undefined,
+    });
   };
 
   const handleLoadTemplate = (tmpl: any) => {
-    setRxType(tmpl.prescription_type || "simples");
+    setRxType(normalizePrescriptionType(tmpl.prescription_type || "simples"));
     setMedications(tmpl.medications?.length ? tmpl.medications : [emptyMed()]);
     setInstructions(tmpl.instructions || "");
     setShowTemplateDropdown(false);
@@ -781,169 +961,207 @@ function TabReceita({ patientId, patient }: { patientId: number; patient: any })
       <div>
         <p className={sectionTitle}>Tipo de Receita</p>
         <div className="flex gap-2 flex-wrap">
-          {(["simples", "especial_azul", "especial_amarelo"] as PrescriptionType[]).map((t) => (
+          {RX_TYPE_OPTIONS.map(({ value, label, activeClass }) => (
             <button
-              key={t}
+              key={value}
               type="button"
-              onClick={() => setRxType(t)}
+              onClick={() => setRxType(value)}
               className={`px-3 py-1.5 rounded-lg border-2 text-xs font-semibold transition-all ${
-                rxType === t
-                  ? t === "simples" ? "border-slate-600 bg-slate-600 text-white"
-                    : t === "especial_azul" ? "border-blue-600 bg-blue-600 text-white"
-                    : "border-amber-500 bg-amber-500 text-white"
+                rxType === value
+                  ? activeClass
                   : "border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-400 hover:border-slate-400"
               }`}
             >
-              {PRESCRIPTION_TYPE_LABELS[t]}
+              {label}
             </button>
           ))}
         </div>
 
-        {/* Avisos para receitas especiais */}
-        {rxType === "especial_azul" && (
-          <div className="mt-2 flex items-center gap-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-300 dark:border-blue-700 rounded-lg px-3 py-2">
-            <AlertTriangle className="w-4 h-4 text-blue-600 dark:text-blue-400 flex-shrink-0" />
-            <p className="text-xs font-semibold text-blue-800 dark:text-blue-300">Receita de Controle Especial — 2 vias obrigatórias</p>
-          </div>
-        )}
-        {rxType === "especial_amarelo" && (
+        {/* Badges informativos por tipo */}
+        {rxType === "controle_especial" && (
           <div className="mt-2 flex items-center gap-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700 rounded-lg px-3 py-2">
             <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0" />
-            <p className="text-xs font-semibold text-amber-800 dark:text-amber-300">Notificação de Receita A — Entorpecentes — 3 vias obrigatórias</p>
+            <p className="text-xs font-semibold text-amber-800 dark:text-amber-300">2 VIAS — Portaria SVS/MS 344/98 · Imprime 2 vias (farmácia + paciente)</p>
+          </div>
+        )}
+        {rxType === "antimicrobiano" && (
+          <div className="mt-2 flex items-center gap-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-300 dark:border-blue-700 rounded-lg px-3 py-2">
+            <AlertTriangle className="w-4 h-4 text-blue-600 dark:text-blue-400 flex-shrink-0" />
+            <p className="text-xs font-semibold text-blue-800 dark:text-blue-300">2 VIAS — RDC ANVISA 20/2011 · Campos obrigatórios: endereço e telefone do paciente</p>
           </div>
         )}
       </div>
 
-      {/* ── Modelos + Memed ── */}
-      <div className="flex gap-2">
-        {/* Dropdown de modelos */}
-        <div className="relative flex-1">
-          <button
-            type="button"
-            onClick={() => setShowTemplateDropdown((v) => !v)}
-            className="w-full flex items-center justify-between gap-2 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 text-xs font-semibold"
-          >
-            <span className="flex items-center gap-1.5">
-              <ClipboardList className="w-3.5 h-3.5" />
-              Carregar Modelo
-            </span>
-            <ChevronDown className="w-3.5 h-3.5" />
-          </button>
-          {showTemplateDropdown && (
-            <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg overflow-hidden">
-              {loadingTemplates ? (
-                <p className="text-xs text-slate-400 p-3 text-center">Carregando...</p>
-              ) : templates.length === 0 ? (
-                <p className="text-xs text-slate-400 p-3 text-center">Nenhum modelo salvo</p>
-              ) : (
-                <ul className="max-h-48 overflow-y-auto">
-                  {templates.map((tmpl) => (
-                    <li key={tmpl.id} className="flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-700">
-                      <button
-                        type="button"
-                        className="flex-1 text-left px-3 py-2"
-                        onClick={() => handleLoadTemplate(tmpl)}
-                      >
-                        <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">{tmpl.name}</p>
-                        <p className="text-[10px] text-slate-400">{PRESCRIPTION_TYPE_LABELS[tmpl.prescription_type as PrescriptionType] || tmpl.prescription_type} · {tmpl.medications?.length || 0} med.</p>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteTemplate(tmpl.id, tmpl.name)}
-                        className="p-2 text-red-400 hover:text-red-600 flex-shrink-0"
-                        title="Remover modelo"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </li>
-                  ))}
-                </ul>
+      {/* ── Box informativo Notificação A/B ── */}
+      {isNotificacaoAB && (
+        <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-4 space-y-2">
+          <div className="flex items-center gap-2">
+            <span className="text-lg">ℹ️</span>
+            <p className="text-sm font-bold text-slate-800 dark:text-slate-100">Notificação de Receita A e B</p>
+          </div>
+          <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+            Formulários <strong>pré-numerados emitidos pela SESA estadual</strong> (Secretaria Estadual de Saúde).
+            O médico <strong>NÃO pode imprimir</strong> esses formulários — eles têm numeração controlada pelo governo.
+          </p>
+          <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+            Solicite os talonários na <strong>Secretaria Estadual de Saúde da Paraíba (SES-PB)</strong> ou
+            da <strong>Secretaria Estadual de Saúde de Pernambuco (SES-PE)</strong>.
+          </p>
+          <p className="text-xs text-slate-500 dark:text-slate-400 italic">
+            Exemplos: morfina, codeína, tramadol em altas doses, metilfenidato, anfetaminas.
+          </p>
+        </div>
+      )}
+
+      {/* ── Conteúdo do formulário (oculto para Notificação A/B) ── */}
+      {!isNotificacaoAB && (
+        <>
+          {/* ── Modelos + Memed ── */}
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <button
+                type="button"
+                onClick={() => setShowTemplateDropdown((v) => !v)}
+                className="w-full flex items-center justify-between gap-2 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 text-xs font-semibold"
+              >
+                <span className="flex items-center gap-1.5">
+                  <ClipboardList className="w-3.5 h-3.5" />
+                  Carregar Modelo
+                </span>
+                <ChevronDown className="w-3.5 h-3.5" />
+              </button>
+              {showTemplateDropdown && (
+                <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg overflow-hidden">
+                  {loadingTemplates ? (
+                    <p className="text-xs text-slate-400 p-3 text-center">Carregando...</p>
+                  ) : templates.length === 0 ? (
+                    <p className="text-xs text-slate-400 p-3 text-center">Nenhum modelo salvo</p>
+                  ) : (
+                    <ul className="max-h-48 overflow-y-auto">
+                      {templates.map((tmpl) => (
+                        <li key={tmpl.id} className="flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-700">
+                          <button
+                            type="button"
+                            className="flex-1 text-left px-3 py-2"
+                            onClick={() => handleLoadTemplate(tmpl)}
+                          >
+                            <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">{tmpl.name}</p>
+                            <p className="text-[10px] text-slate-400">{PRESCRIPTION_TYPE_LABELS[normalizePrescriptionType(tmpl.prescription_type)] || tmpl.prescription_type} · {tmpl.medications?.length || 0} med.</p>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteTemplate(tmpl.id, tmpl.name)}
+                            className="p-2 text-red-400 hover:text-red-600 flex-shrink-0"
+                            title="Remover modelo"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
               )}
             </div>
+            <button
+              type="button"
+              onClick={() => setShowMemed(true)}
+              className="flex items-center gap-1.5 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 text-xs font-semibold whitespace-nowrap"
+            >
+              <Pill className="w-3.5 h-3.5" />
+              Via Memed
+            </button>
+          </div>
+
+          {/* ── Banner de Alergias ── */}
+          <AllergyBanner patient={patient} />
+
+          {/* ── Campos extras ATB: endereço e telefone do paciente ── */}
+          {isATB && (
+            <div className="space-y-2 border border-blue-200 dark:border-blue-800 rounded-lg p-3 bg-blue-50/40 dark:bg-blue-900/10">
+              <p className="text-xs font-bold text-blue-700 dark:text-blue-300 uppercase tracking-wide">Dados obrigatórios do paciente (RDC 20/2011)</p>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="col-span-2">
+                  <label className={lbl}>Endereço do paciente *</label>
+                  <input className={inp} placeholder="Rua, nº, bairro, cidade/UF" value={patientAddress} onChange={(e) => setPatientAddress(e.target.value)} />
+                </div>
+                <div>
+                  <label className={lbl}>Telefone do paciente *</label>
+                  <input className={inp} placeholder="(83) 9xxxx-xxxx" value={patientPhone} onChange={(e) => setPatientPhone(e.target.value)} />
+                </div>
+              </div>
+            </div>
           )}
-        </div>
 
-        {/* Botão Memed */}
-        <button
-          type="button"
-          onClick={() => setShowMemed(true)}
-          className="flex items-center gap-1.5 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 text-xs font-semibold whitespace-nowrap"
-        >
-          <Pill className="w-3.5 h-3.5" />
-          Via Memed
-        </button>
-      </div>
+          {/* ── Medicamentos ── */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <p className={sectionTitle + " mb-0"}>Medicamentos</p>
+              <button
+                type="button"
+                onClick={() => setMedications((ms) => [...ms, emptyMed()])}
+                className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-semibold"
+              >
+                <Plus className="w-3.5 h-3.5" /> Adicionar
+              </button>
+            </div>
 
-      {/* ── Banner de Alergias ── */}
-      <AllergyBanner patient={patient} />
+            {medications.map((med, i) => (
+              <MedRowInline
+                key={i}
+                med={med}
+                index={i}
+                total={medications.length}
+                onChange={(k, v) => updateMed(i, k, v)}
+                onRemove={() => setMedications((ms) => ms.filter((_, idx) => idx !== i))}
+              />
+            ))}
 
-      {/* ── Medicamentos ── */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <p className={sectionTitle + " mb-0"}>Medicamentos</p>
-          <button
-            type="button"
-            onClick={() => setMedications((ms) => [...ms, emptyMed()])}
-            className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-semibold"
-          >
-            <Plus className="w-3.5 h-3.5" /> Adicionar
-          </button>
-        </div>
+            <div>
+              <label className={lbl}>Orientações gerais</label>
+              <textarea className={inp + " min-h-[70px] resize-none"} placeholder="Evitar álcool, repouso, retorno em 7 dias..." value={instructions} onChange={(e) => setInstructions(e.target.value)} rows={3} />
+            </div>
 
-        {medications.map((med, i) => (
-          <MedRowInline
-            key={i}
-            med={med}
-            index={i}
-            total={medications.length}
-            onChange={(k, v) => updateMed(i, k, v)}
-            onRemove={() => setMedications((ms) => ms.filter((_, idx) => idx !== i))}
-          />
-        ))}
-
-        <div>
-          <label className={lbl}>Orientações gerais</label>
-          <textarea className={inp + " min-h-[70px] resize-none"} placeholder="Evitar álcool, repouso, retorno em 7 dias..." value={instructions} onChange={(e) => setInstructions(e.target.value)} rows={3} />
-        </div>
-
-        {/* ── Ações ── */}
-        <div className="flex gap-2 flex-wrap">
-          <button
-            type="button"
-            onClick={handleSaveTemplate}
-            disabled={savingTemplate}
-            className="flex items-center gap-1.5 px-3 py-2 border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-400 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 text-xs font-semibold disabled:opacity-50"
-          >
-            <Save className="w-3.5 h-3.5" /> Salvar Modelo
-          </button>
-          <button
-            type="button"
-            onClick={handlePrint}
-            className="flex items-center gap-1.5 px-3 py-2 border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-400 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 text-xs font-semibold"
-          >
-            <Printer className="w-3.5 h-3.5" /> Imprimir
-          </button>
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={saving}
-            className="flex-1 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 font-semibold flex items-center justify-center gap-2 text-sm"
-          >
-            {saving ? (
-              <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Salvando...</>
-            ) : (
-              <><CheckCircle className="w-4 h-4" /> Salvar Receita</>
-            )}
-          </button>
-        </div>
-      </div>
+            {/* ── Ações ── */}
+            <div className="flex gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={handleSaveTemplate}
+                disabled={savingTemplate}
+                className="flex items-center gap-1.5 px-3 py-2 border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-400 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 text-xs font-semibold disabled:opacity-50"
+              >
+                <Save className="w-3.5 h-3.5" /> Salvar Modelo
+              </button>
+              <button
+                type="button"
+                onClick={handlePrint}
+                className="flex items-center gap-1.5 px-3 py-2 border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-400 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 text-xs font-semibold"
+              >
+                <Printer className="w-3.5 h-3.5" /> Imprimir
+              </button>
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={saving}
+                className="flex-1 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 font-semibold flex items-center justify-center gap-2 text-sm"
+              >
+                {saving ? (
+                  <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Salvando...</>
+                ) : (
+                  <><CheckCircle className="w-4 h-4" /> Salvar Receita</>
+                )}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
 
       {/* ── Histórico ── */}
       {!loadingRx && prescriptions.length > 0 && (
         <div className="space-y-2">
           <p className={sectionTitle}>Receitas anteriores</p>
           {prescriptions.slice(0, 8).map((rx) => {
-            const badge = PRESCRIPTION_TYPE_BADGE[(rx.prescription_type as PrescriptionType) || "simples"];
+            const badge = PRESCRIPTION_TYPE_BADGE[rx.prescription_type] || PRESCRIPTION_TYPE_BADGE["simples"];
             return (
               <div key={rx.id} className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-3">
                 <div className="flex justify-between items-center mb-1">
@@ -952,7 +1170,12 @@ function TabReceita({ patientId, patient }: { patientId: number; patient: any })
                     <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${badge.cls}`}>{badge.label}</span>
                   </div>
                   <button
-                    onClick={() => setPrintRx({ date: rx.date, medications: rx.medications || [], instructions: rx.instructions || "", prescription_type: (rx.prescription_type as PrescriptionType) || "simples" })}
+                    onClick={() => setPrintRx({
+                      date: rx.date,
+                      medications: rx.medications || [],
+                      instructions: rx.instructions || "",
+                      prescription_type: normalizePrescriptionType(rx.prescription_type || "simples"),
+                    })}
                     className="p-1 text-slate-400 hover:text-blue-600"
                     title="Imprimir"
                   >

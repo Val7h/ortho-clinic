@@ -16,7 +16,8 @@ class PatientRx(Base):
     patient_id = Column(Integer, ForeignKey("patients.id"), nullable=False, index=True)
 
     date = Column(Date, nullable=False)
-    # Tipo: "simples" | "especial_azul" | "especial_amarelo"
+    # Tipo: "simples" | "controle_especial" | "antimicrobiano" | "notificacao_ab"
+    # Aliases legados mantidos: "especial_azul" → "controle_especial", "especial_amarelo" → descontinuado
     prescription_type = Column(String(30), nullable=False, default="simples")
     medications = Column(JSON, nullable=True)   # lista de {name, dose, route, frequency, duration, instructions}
     instructions = Column(Text, nullable=True)  # orientações gerais
