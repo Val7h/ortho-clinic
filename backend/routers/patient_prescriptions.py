@@ -37,6 +37,7 @@ class MedicationIn(BaseModel):
 
 class PatientRxCreate(BaseModel):
     date: str  # ISO date string YYYY-MM-DD
+    prescription_type: str = "simples"  # simples | especial_azul | especial_amarelo
     medications: List[MedicationIn] = []
     instructions: str = ""
     memed_id: Optional[str] = None
@@ -46,6 +47,7 @@ class PatientRxOut(BaseModel):
     id: int
     patient_id: int
     date: Any
+    prescription_type: str = "simples"
     medications: Optional[List[Any]] = None
     instructions: Optional[str] = None
     memed_id: Optional[str] = None
@@ -97,6 +99,7 @@ def create_prescription(
     rx = PatientRx(
         patient_id=patient_id,
         date=rx_date,
+        prescription_type=data.prescription_type or "simples",
         medications=[m.model_dump() for m in data.medications],
         instructions=data.instructions or "",
         memed_id=data.memed_id,

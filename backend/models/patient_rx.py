@@ -16,6 +16,8 @@ class PatientRx(Base):
     patient_id = Column(Integer, ForeignKey("patients.id"), nullable=False, index=True)
 
     date = Column(Date, nullable=False)
+    # Tipo: "simples" | "especial_azul" | "especial_amarelo"
+    prescription_type = Column(String(30), nullable=False, default="simples")
     medications = Column(JSON, nullable=True)   # lista de {name, dose, route, frequency, duration, instructions}
     instructions = Column(Text, nullable=True)  # orientações gerais
     memed_id = Column(String(100), nullable=True)  # id da receita Memed (se houver)

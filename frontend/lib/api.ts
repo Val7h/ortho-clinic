@@ -144,6 +144,16 @@ export const prescriptionsApi = {
     api.delete(`/patients/${patientId}/prescriptions/${id}`),
 };
 
+// ── Templates de Prescrição ───────────────────────────────────────────────
+export const prescriptionTemplatesApi = {
+  list: () =>
+    api.get("/prescription-templates").then((r) => r.data),
+  create: (data: { name: string; prescription_type: string; medications: any[]; instructions: string }) =>
+    api.post("/prescription-templates", data).then((r) => r.data),
+  delete: (id: number) =>
+    api.delete(`/prescription-templates/${id}`),
+};
+
 // ── Exames ────────────────────────────────────────────────────────────────
 export const examsApi = {
   list: (patientId: number) =>

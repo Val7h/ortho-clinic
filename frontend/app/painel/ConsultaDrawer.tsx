@@ -7,7 +7,7 @@ import {
   Plus, Trash2, Printer, ChevronDown, ChevronUp, Save,
 } from "lucide-react";
 import toast from "react-hot-toast";
-import { patientsApi, consultationsApi, prescriptionsApi, examsApi, evolutionApi } from "@/lib/api";
+import { patientsApi, consultationsApi, prescriptionsApi, prescriptionTemplatesApi, examsApi, evolutionApi } from "@/lib/api";
 import { formatDate } from "@/lib/utils";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -303,24 +303,139 @@ function MedRowInline({ med, index, total, onChange, onRemove }: {
 interface ExamItem { name: string; laterality: string; notes: string; }
 const emptyExam = (): ExamItem => ({ name: "", laterality: "", notes: "" });
 
-// Print prescription modal
+// ── Tipos de Receita ──────────────────────────────────────────────────────────
+
+type PrescriptionType = "simples" | "especial_azul" | "especial_amarelo";
+
+const PRESCRIPTION_TYPE_LABELS: Record<PrescriptionType, string> = {
+  simples: "Simples (Branca)",
+  especial_azul: "Especial Azul (B)",
+  especial_amarelo: "Especial Amarelo (A)",
+};
+
+// Print prescription modal — suporta os 3 tipos com layouts diferenciados
 function PrintModal({ rx, patient, onClose }: {
-  rx: { date: string; medications: Medication[]; instructions: string };
+  rx: { date: string; medications: Medication[]; instructions: string; prescription_type: PrescriptionType };
   patient: any;
   onClose: () => void;
 }) {
+  const isEspecial = rx.prescription_type !== "simples";
+  const isAmarelo = rx.prescription_type === "especial_amarelo";
+  const vias = rx.prescription_type === "especial_amarelo" ? 3 : rx.prescription_type === "especial_azul" ? 2 : 1;
+  const headerColor = isAmarelo ? "#7c6000" : isEspecial ? "#003580" : "#0F2D5E";
+  const headerBg = isAmarelo ? "#fffde7" : isEspecial ? "#e8f0fe" : "white";
+  const viaLabels = rx.prescription_type === "especial_amarelo"
+    ? ["Via Farmácia", "Via Paciente", "Via Médico/Fichário"]
+    : rx.prescription_type === "especial_azul"
+    ? ["Via Farmácia", "Via Paciente"]
+    : ["Via Única"];
+
+  const dateStr = (() => {
+    const d = new Date(rx.date + "T12:00:00");
+    return `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()}`;
+  })();
+
+  // Renderiza uma via da receita
+  const RxSheet = ({ viaLabel, viaIndex }: { viaLabel: string; viaIndex: number }) => (
+    <div
+      style={{
+        background: "white",
+        border: `2px solid ${headerColor}`,
+        borderRadius: "8px",
+        padding: "20px",
+        marginBottom: viaIndex < vias - 1 ? "24px" : "0",
+        pageBreakAfter: viaIndex < vias - 1 ? "always" : "auto",
+        fontSize: "13px",
+        color: "#111",
+      }}
+    >
+      {/* Cabeçalho */}
+      <div style={{ background: headerBg, borderBottom: `2px solid ${headerColor}`, paddingBottom: "12px", marginBottom: "14px", textAlign: "center" }}>
+        {isEspecial && (
+          <p style={{ fontSize: "10px", fontWeight: 700, color: headerColor, letterSpacing: "1px", marginBottom: "4px", textTransform: "uppercase" }}>
+            {isAmarelo ? "Notificação de Receita A — Entorpecentes" : "Receita de Controle Especial"}
+          </p>
+        )}
+        <h1 style={{ fontSize: "16px", fontWeight: 700, color: headerColor, margin: "0 0 2px 0" }}>Dr. Valth Guimarães</h1>
+        <p style={{ fontSize: "11px", color: "#555", margin: "0" }}>Ortopedia e Traumatologia</p>
+        <p style={{ fontSize: "11px", color: "#555", margin: "0" }}>CRM/PB 1234 | CRM/PE 5678</p>
+        {isEspecial && (
+          <div style={{ marginTop: "8px", display: "flex", justifyContent: "space-between", fontSize: "11px" }}>
+            <span>Nº Notificação: ___________________</span>
+            <span style={{ fontWeight: 700, color: headerColor }}>{viaLabel}</span>
+          </div>
+        )}
+      </div>
+
+      {/* Dados do paciente */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "14px", fontSize: "12px" }}>
+        <div><span style={{ fontWeight: 700, color: "#666", textTransform: "uppercase", fontSize: "10px" }}>Paciente: </span><span style={{ fontWeight: 600 }}>{patient?.name}</span></div>
+        <div><span style={{ fontWeight: 700, color: "#666", textTransform: "uppercase", fontSize: "10px" }}>Data: </span><span>{dateStr}</span></div>
+        {patient?.cpf && <div><span style={{ fontWeight: 700, color: "#666", textTransform: "uppercase", fontSize: "10px" }}>CPF: </span><span style={{ fontFamily: "monospace" }}>{patient.cpf}</span></div>}
+        {patient?.birth_date && <div><span style={{ fontWeight: 700, color: "#666", textTransform: "uppercase", fontSize: "10px" }}>Nascimento: </span><span>{new Date(patient.birth_date + "T12:00:00").toLocaleDateString("pt-BR")}</span></div>}
+      </div>
+
+      {/* Prescrição */}
+      <div style={{ marginBottom: "14px" }}>
+        <p style={{ fontWeight: 700, color: "#444", textTransform: "uppercase", fontSize: "10px", letterSpacing: "1px", borderBottom: "1px solid #ddd", paddingBottom: "4px", marginBottom: "10px" }}>Prescrição</p>
+        <ol style={{ margin: 0, padding: 0, listStyle: "none" }}>
+          {rx.medications.map((m, i) => (
+            <li key={i} style={{ marginBottom: "10px", paddingLeft: "4px" }}>
+              <p style={{ fontWeight: 600, margin: "0 0 2px 0" }}>{i + 1}. {m.name}{m.dose ? ` — ${m.dose}` : ""}</p>
+              <p style={{ color: "#555", fontSize: "11px", margin: "0 0 2px 0" }}>{[m.route && `Via ${m.route}`, m.frequency, m.duration].filter(Boolean).join(" · ")}</p>
+              {m.instructions && <p style={{ color: "#777", fontSize: "11px", fontStyle: "italic", margin: "0" }}>Obs: {m.instructions}</p>}
+            </li>
+          ))}
+        </ol>
+      </div>
+
+      {rx.instructions && (
+        <div style={{ background: "#f8f8f8", borderRadius: "4px", padding: "10px", marginBottom: "14px" }}>
+          <p style={{ fontWeight: 700, color: "#444", textTransform: "uppercase", fontSize: "10px", marginBottom: "4px" }}>Orientações</p>
+          <p style={{ fontSize: "11px", color: "#555", margin: 0 }}>{rx.instructions}</p>
+        </div>
+      )}
+
+      {/* Identificação do comprador (receitas especiais) */}
+      {isEspecial && (
+        <div style={{ border: "1px dashed #aaa", borderRadius: "4px", padding: "10px", marginBottom: "14px", fontSize: "11px" }}>
+          <p style={{ fontWeight: 700, color: "#444", textTransform: "uppercase", fontSize: "10px", marginBottom: "8px" }}>Identificação do Comprador</p>
+          <p style={{ margin: "0 0 4px 0" }}>Nome: _____________________________________</p>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px" }}>
+            <p style={{ margin: "0 0 4px 0" }}>CPF: __________________</p>
+            <p style={{ margin: "0 0 4px 0" }}>RG: __________________</p>
+          </div>
+          <p style={{ margin: "0" }}>Endereço: _________________________________________________</p>
+        </div>
+      )}
+
+      {/* Assinatura */}
+      <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "20px" }}>
+        <div style={{ textAlign: "center", width: "200px" }}>
+          <div style={{ borderTop: `2px solid ${headerColor}`, paddingTop: "6px", marginBottom: "2px" }}></div>
+          <p style={{ fontSize: "12px", fontWeight: 700, margin: "0" }}>Dr. Valth Guimarães</p>
+          <p style={{ fontSize: "11px", color: "#666", margin: "0" }}>CRM/PB 1234 | CRM/PE 5678</p>
+          {!isEspecial && <p style={{ fontSize: "10px", color: "#888", margin: "4px 0 0 0" }}>Válido por 30 dias</p>}
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.6)" }}>
       <style>{`
         @media print {
           body > *:not(#print-rx-root) { display: none !important; }
-          #print-rx-root { position: fixed !important; inset: 0 !important; z-index: 9999 !important; background: white !important; }
+          #print-rx-root { position: fixed !important; inset: 0 !important; z-index: 9999 !important; background: white !important; padding: 20px !important; }
           .no-print { display: none !important; }
         }
       `}</style>
-      <div id="print-rx-root" className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-xl max-h-[90vh] flex flex-col overflow-hidden">
+      <div id="print-rx-root" className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
         <div className="no-print px-5 pt-4 pb-3 border-b border-gray-200 dark:border-slate-700 flex items-center justify-between flex-shrink-0">
-          <h2 className="font-bold text-slate-900 dark:text-slate-50 text-sm">Preview da Receita</h2>
+          <div>
+            <h2 className="font-bold text-slate-900 dark:text-slate-50 text-sm">Preview da Receita</h2>
+            <p className="text-xs text-slate-500 mt-0.5">{PRESCRIPTION_TYPE_LABELS[rx.prescription_type]} — {vias} {vias === 1 ? "via" : "vias"}</p>
+          </div>
           <div className="flex items-center gap-2">
             <button onClick={() => window.print()} className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold text-xs">
               <Printer className="w-3.5 h-3.5" /> Imprimir
@@ -331,44 +446,87 @@ function PrintModal({ rx, patient, onClose }: {
           </div>
         </div>
         <div className="flex-1 overflow-y-auto p-5 bg-white">
-          <div className="bg-white p-5 border border-gray-200 rounded-lg text-sm text-gray-900">
-            <div className="text-center border-b-2 border-blue-800 pb-3 mb-5">
-              <h1 className="text-lg font-bold text-blue-900">Dr. Valth Guimarães</h1>
-              <p className="text-xs text-gray-600">Ortopedia e Traumatologia</p>
-              <p className="text-xs text-gray-600">CRM/PB 1234</p>
-            </div>
-            <div className="grid grid-cols-2 gap-3 mb-5 text-xs">
-              <div><span className="font-bold text-gray-500 uppercase">Paciente:</span><p className="font-semibold">{patient?.name}</p></div>
-              <div><span className="font-bold text-gray-500 uppercase">Data:</span><p>{new Date(rx.date).toLocaleDateString("pt-BR")}</p></div>
-              {patient?.cpf && <div><span className="font-bold text-gray-500 uppercase">CPF:</span><p className="font-mono">{patient.cpf}</p></div>}
-            </div>
-            <div className="mb-5">
-              <p className="font-bold text-gray-700 uppercase text-xs tracking-wider mb-3 border-b border-gray-200 pb-1">Prescrição</p>
-              <ol className="space-y-3">
-                {rx.medications.map((m, i) => (
-                  <li key={i} className="pl-2">
-                    <p className="font-semibold">{i + 1}. {m.name}{m.dose && <span className="font-normal text-gray-600"> — {m.dose}</span>}</p>
-                    <p className="text-gray-600 text-xs mt-0.5">{[m.route && `Via ${m.route}`, m.frequency, m.duration].filter(Boolean).join(" · ")}</p>
-                    {m.instructions && <p className="text-gray-500 text-xs italic mt-0.5">Obs: {m.instructions}</p>}
-                  </li>
-                ))}
-              </ol>
-            </div>
-            {rx.instructions && (
-              <div className="mb-5 bg-gray-50 rounded p-3">
-                <p className="font-bold text-gray-700 text-xs uppercase tracking-wider mb-1">Orientações</p>
-                <p className="text-xs text-gray-700">{rx.instructions}</p>
-              </div>
-            )}
-            <div className="mt-8 flex justify-end">
-              <div className="text-center w-48">
-                <div className="border-t-2 border-gray-800 mb-2 pt-2"></div>
-                <p className="text-xs font-bold">Dr. Valth Guimarães</p>
-                <p className="text-xs text-gray-500">CRM/PB 1234</p>
-              </div>
-            </div>
-          </div>
+          {viaLabels.map((label, idx) => (
+            <RxSheet key={idx} viaLabel={label} viaIndex={idx} />
+          ))}
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Modal Memed ────────────────────────────────────────────────────────────────
+
+function MemedModal({ onClose }: { onClose: () => void }) {
+  const [token, setToken] = useState(() => {
+    if (typeof window !== "undefined") return localStorage.getItem("memed_token") || "";
+    return "";
+  });
+  const [saved, setSaved] = useState(false);
+
+  const hasToken = typeof window !== "undefined" && !!localStorage.getItem("memed_token");
+
+  const handleSave = () => {
+    if (!token.trim()) return;
+    localStorage.setItem("memed_token", token.trim());
+    setSaved(true);
+    toast.success("Token Memed salvo!");
+  };
+
+  return (
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.6)" }}>
+      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="font-bold text-slate-900 dark:text-slate-50">Integração Memed</h2>
+          <button onClick={onClose} className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        {hasToken && !saved ? (
+          <div className="text-center py-4">
+            <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
+              <CheckCircle className="w-6 h-6 text-green-600" />
+            </div>
+            <p className="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-1">Integração Memed configurada</p>
+            <p className="text-xs text-slate-500 mb-4">Em breve disponível nesta tela.</p>
+            <button
+              onClick={() => { localStorage.removeItem("memed_token"); setToken(""); setSaved(false); }}
+              className="text-xs text-red-500 hover:text-red-700"
+            >
+              Remover token
+            </button>
+          </div>
+        ) : saved ? (
+          <div className="text-center py-4">
+            <p className="text-sm text-green-700 font-semibold">Token salvo com sucesso!</p>
+            <p className="text-xs text-slate-500 mt-1">A integração estará disponível em breve.</p>
+          </div>
+        ) : (
+          <>
+            <p className="text-sm text-slate-600 dark:text-slate-300 mb-4">
+              A integração com o Memed permite prescrição digital. Para ativar, forneça seu token de acesso Memed.
+            </p>
+            <div className="space-y-3">
+              <div>
+                <label className={lbl}>Token Memed</label>
+                <input
+                  className={inp}
+                  type="password"
+                  placeholder="Cole seu token de acesso aqui..."
+                  value={token}
+                  onChange={(e) => setToken(e.target.value)}
+                />
+              </div>
+              <button
+                onClick={handleSave}
+                disabled={!token.trim()}
+                className="w-full py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 font-semibold text-sm"
+              >
+                Salvar Token
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
@@ -507,19 +665,39 @@ function TabProntuario({ patientId }: { patientId: number }) {
 
 // ── Tab: Receita ───────────────────────────────────────────────────────────────
 
+const PRESCRIPTION_TYPE_BADGE: Record<PrescriptionType, { label: string; cls: string }> = {
+  simples:         { label: "Simples",  cls: "bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300" },
+  especial_azul:   { label: "Ctrl Azul", cls: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300" },
+  especial_amarelo:{ label: "Entorpecente", cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300" },
+};
+
 function TabReceita({ patientId, patient }: { patientId: number; patient: any }) {
+  const [rxType, setRxType] = useState<PrescriptionType>("simples");
   const [medications, setMedications] = useState<Medication[]>([emptyMed()]);
   const [instructions, setInstructions] = useState("");
   const [saving, setSaving] = useState(false);
   const [prescriptions, setPrescriptions] = useState<any[]>([]);
   const [loadingRx, setLoadingRx] = useState(true);
-  const [printRx, setPrintRx] = useState<{ date: string; medications: Medication[]; instructions: string } | null>(null);
+  const [printRx, setPrintRx] = useState<{ date: string; medications: Medication[]; instructions: string; prescription_type: PrescriptionType } | null>(null);
+
+  // Templates
+  const [templates, setTemplates] = useState<any[]>([]);
+  const [loadingTemplates, setLoadingTemplates] = useState(true);
+  const [showTemplateDropdown, setShowTemplateDropdown] = useState(false);
+  const [savingTemplate, setSavingTemplate] = useState(false);
+
+  // Memed
+  const [showMemed, setShowMemed] = useState(false);
 
   useEffect(() => {
     prescriptionsApi.list(patientId)
       .then(setPrescriptions)
       .catch(() => {})
       .finally(() => setLoadingRx(false));
+    prescriptionTemplatesApi.list()
+      .then(setTemplates)
+      .catch(() => {})
+      .finally(() => setLoadingTemplates(false));
   }, [patientId]);
 
   const updateMed = (i: number, k: keyof Medication, v: string) =>
@@ -532,6 +710,7 @@ function TabReceita({ patientId, patient }: { patientId: number; patient: any })
     try {
       const newRx = await prescriptionsApi.create(patientId, {
         date: new Date().toISOString().split("T")[0],
+        prescription_type: rxType,
         medications: validMeds,
         instructions,
       });
@@ -549,17 +728,168 @@ function TabReceita({ patientId, patient }: { patientId: number; patient: any })
   const handlePrint = () => {
     const validMeds = medications.filter((m) => m.name.trim());
     if (validMeds.length === 0) { toast.error("Adicione pelo menos um medicamento para imprimir"); return; }
-    setPrintRx({ date: new Date().toISOString().split("T")[0], medications: validMeds, instructions });
+    setPrintRx({ date: new Date().toISOString().split("T")[0], medications: validMeds, instructions, prescription_type: rxType });
+  };
+
+  const handleLoadTemplate = (tmpl: any) => {
+    setRxType(tmpl.prescription_type || "simples");
+    setMedications(tmpl.medications?.length ? tmpl.medications : [emptyMed()]);
+    setInstructions(tmpl.instructions || "");
+    setShowTemplateDropdown(false);
+    toast.success(`Modelo "${tmpl.name}" carregado`);
+  };
+
+  const handleSaveTemplate = async () => {
+    const validMeds = medications.filter((m) => m.name.trim());
+    if (validMeds.length === 0) { toast.error("Adicione medicamentos antes de salvar modelo"); return; }
+    const name = window.prompt("Nome do modelo:");
+    if (!name?.trim()) return;
+    setSavingTemplate(true);
+    try {
+      const tmpl = await prescriptionTemplatesApi.create({
+        name: name.trim(),
+        prescription_type: rxType,
+        medications: validMeds,
+        instructions,
+      });
+      setTemplates((prev) => [...prev, tmpl].sort((a, b) => a.name.localeCompare(b.name)));
+      toast.success(`Modelo "${name}" salvo!`);
+    } catch {
+      toast.error("Erro ao salvar modelo");
+    } finally {
+      setSavingTemplate(false);
+    }
+  };
+
+  const handleDeleteTemplate = async (id: number, name: string) => {
+    if (!window.confirm(`Remover modelo "${name}"?`)) return;
+    try {
+      await prescriptionTemplatesApi.delete(id);
+      setTemplates((prev) => prev.filter((t) => t.id !== id));
+      toast.success("Modelo removido");
+    } catch {
+      toast.error("Erro ao remover modelo");
+    }
   };
 
   return (
     <div className="space-y-4 px-5 pb-6">
       {printRx && <PrintModal rx={printRx} patient={patient} onClose={() => setPrintRx(null)} />}
+      {showMemed && <MemedModal onClose={() => setShowMemed(false)} />}
 
+      {/* ── Tipo de Receita ── */}
+      <div>
+        <p className={sectionTitle}>Tipo de Receita</p>
+        <div className="flex gap-2 flex-wrap">
+          {(["simples", "especial_azul", "especial_amarelo"] as PrescriptionType[]).map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setRxType(t)}
+              className={`px-3 py-1.5 rounded-lg border-2 text-xs font-semibold transition-all ${
+                rxType === t
+                  ? t === "simples" ? "border-slate-600 bg-slate-600 text-white"
+                    : t === "especial_azul" ? "border-blue-600 bg-blue-600 text-white"
+                    : "border-amber-500 bg-amber-500 text-white"
+                  : "border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-400 hover:border-slate-400"
+              }`}
+            >
+              {PRESCRIPTION_TYPE_LABELS[t]}
+            </button>
+          ))}
+        </div>
+
+        {/* Avisos para receitas especiais */}
+        {rxType === "especial_azul" && (
+          <div className="mt-2 flex items-center gap-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-300 dark:border-blue-700 rounded-lg px-3 py-2">
+            <AlertTriangle className="w-4 h-4 text-blue-600 dark:text-blue-400 flex-shrink-0" />
+            <p className="text-xs font-semibold text-blue-800 dark:text-blue-300">Receita de Controle Especial — 2 vias obrigatórias</p>
+          </div>
+        )}
+        {rxType === "especial_amarelo" && (
+          <div className="mt-2 flex items-center gap-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700 rounded-lg px-3 py-2">
+            <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0" />
+            <p className="text-xs font-semibold text-amber-800 dark:text-amber-300">Notificação de Receita A — Entorpecentes — 3 vias obrigatórias</p>
+          </div>
+        )}
+      </div>
+
+      {/* ── Modelos + Memed ── */}
+      <div className="flex gap-2">
+        {/* Dropdown de modelos */}
+        <div className="relative flex-1">
+          <button
+            type="button"
+            onClick={() => setShowTemplateDropdown((v) => !v)}
+            className="w-full flex items-center justify-between gap-2 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 text-xs font-semibold"
+          >
+            <span className="flex items-center gap-1.5">
+              <ClipboardList className="w-3.5 h-3.5" />
+              Carregar Modelo
+            </span>
+            <ChevronDown className="w-3.5 h-3.5" />
+          </button>
+          {showTemplateDropdown && (
+            <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg overflow-hidden">
+              {loadingTemplates ? (
+                <p className="text-xs text-slate-400 p-3 text-center">Carregando...</p>
+              ) : templates.length === 0 ? (
+                <p className="text-xs text-slate-400 p-3 text-center">Nenhum modelo salvo</p>
+              ) : (
+                <ul className="max-h-48 overflow-y-auto">
+                  {templates.map((tmpl) => (
+                    <li key={tmpl.id} className="flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-700">
+                      <button
+                        type="button"
+                        className="flex-1 text-left px-3 py-2"
+                        onClick={() => handleLoadTemplate(tmpl)}
+                      >
+                        <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">{tmpl.name}</p>
+                        <p className="text-[10px] text-slate-400">{PRESCRIPTION_TYPE_LABELS[tmpl.prescription_type as PrescriptionType] || tmpl.prescription_type} · {tmpl.medications?.length || 0} med.</p>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteTemplate(tmpl.id, tmpl.name)}
+                        className="p-2 text-red-400 hover:text-red-600 flex-shrink-0"
+                        title="Remover modelo"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Botão Memed */}
+        <button
+          type="button"
+          onClick={() => setShowMemed(true)}
+          className="flex items-center gap-1.5 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 text-xs font-semibold whitespace-nowrap"
+        >
+          <Pill className="w-3.5 h-3.5" />
+          Via Memed
+        </button>
+      </div>
+
+      {/* ── Banner de Alergias ── */}
       <AllergyBanner patient={patient} />
 
+      {/* ── Medicamentos ── */}
       <div className="space-y-3">
-        <p className={sectionTitle}>Nova Receita</p>
+        <div className="flex items-center justify-between">
+          <p className={sectionTitle + " mb-0"}>Medicamentos</p>
+          <button
+            type="button"
+            onClick={() => setMedications((ms) => [...ms, emptyMed()])}
+            className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-semibold"
+          >
+            <Plus className="w-3.5 h-3.5" /> Adicionar
+          </button>
+        </div>
+
         {medications.map((med, i) => (
           <MedRowInline
             key={i}
@@ -571,70 +901,77 @@ function TabReceita({ patientId, patient }: { patientId: number; patient: any })
           />
         ))}
 
-        <button
-          type="button"
-          onClick={() => setMedications((ms) => [...ms, emptyMed()])}
-          className="w-full py-2 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg text-slate-600 dark:text-slate-400 hover:border-blue-400 hover:text-blue-600 flex items-center justify-center gap-2 text-xs font-semibold"
-        >
-          <Plus className="w-3.5 h-3.5" /> Adicionar medicamento
-        </button>
-
         <div>
           <label className={lbl}>Orientações gerais</label>
           <textarea className={inp + " min-h-[70px] resize-none"} placeholder="Evitar álcool, repouso, retorno em 7 dias..." value={instructions} onChange={(e) => setInstructions(e.target.value)} rows={3} />
         </div>
 
-        <div className="flex gap-2">
+        {/* ── Ações ── */}
+        <div className="flex gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={handleSaveTemplate}
+            disabled={savingTemplate}
+            className="flex items-center gap-1.5 px-3 py-2 border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-400 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 text-xs font-semibold disabled:opacity-50"
+          >
+            <Save className="w-3.5 h-3.5" /> Salvar Modelo
+          </button>
           <button
             type="button"
             onClick={handlePrint}
-            className="flex-1 py-2.5 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700 font-semibold flex items-center justify-center gap-2 text-sm"
+            className="flex items-center gap-1.5 px-3 py-2 border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-400 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 text-xs font-semibold"
           >
-            <Printer className="w-4 h-4" /> Imprimir
+            <Printer className="w-3.5 h-3.5" /> Imprimir
           </button>
           <button
             type="button"
             onClick={handleSave}
             disabled={saving}
-            className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 font-semibold flex items-center justify-center gap-2 text-sm"
+            className="flex-1 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 font-semibold flex items-center justify-center gap-2 text-sm"
           >
             {saving ? (
               <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Salvando...</>
             ) : (
-              <><Save className="w-4 h-4" /> Salvar Receita</>
+              <><CheckCircle className="w-4 h-4" /> Salvar Receita</>
             )}
           </button>
         </div>
       </div>
 
-      {/* Histórico */}
+      {/* ── Histórico ── */}
       {!loadingRx && prescriptions.length > 0 && (
         <div className="space-y-2">
           <p className={sectionTitle}>Receitas anteriores</p>
-          {prescriptions.slice(0, 5).map((rx) => (
-            <div key={rx.id} className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-3">
-              <div className="flex justify-between items-center mb-1">
-                <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">{formatDate(rx.date)}</p>
-                <button
-                  onClick={() => setPrintRx({ date: rx.date, medications: rx.medications || [], instructions: rx.instructions || "" })}
-                  className="p-1 text-slate-400 hover:text-blue-600"
-                  title="Imprimir"
-                >
-                  <Printer className="w-3.5 h-3.5" />
-                </button>
+          {prescriptions.slice(0, 8).map((rx) => {
+            const badge = PRESCRIPTION_TYPE_BADGE[(rx.prescription_type as PrescriptionType) || "simples"];
+            return (
+              <div key={rx.id} className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-3">
+                <div className="flex justify-between items-center mb-1">
+                  <div className="flex items-center gap-2">
+                    <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">{formatDate(rx.date)}</p>
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${badge.cls}`}>{badge.label}</span>
+                  </div>
+                  <button
+                    onClick={() => setPrintRx({ date: rx.date, medications: rx.medications || [], instructions: rx.instructions || "", prescription_type: (rx.prescription_type as PrescriptionType) || "simples" })}
+                    className="p-1 text-slate-400 hover:text-blue-600"
+                    title="Imprimir"
+                  >
+                    <Printer className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                <div className="space-y-0.5">
+                  {rx.medications?.slice(0, 3).map((m: any, i: number) => (
+                    <p key={i} className="text-xs text-slate-600 dark:text-slate-400">
+                      {i + 1}. {m.name}{m.dose ? ` — ${m.dose}` : ""}
+                    </p>
+                  ))}
+                  {(rx.medications?.length || 0) > 3 && (
+                    <p className="text-xs text-slate-400">+{rx.medications.length - 3} mais...</p>
+                  )}
+                </div>
               </div>
-              <div className="space-y-0.5">
-                {rx.medications?.slice(0, 3).map((m: any, i: number) => (
-                  <p key={i} className="text-xs text-slate-600 dark:text-slate-400">
-                    {i + 1}. {m.name}{m.dose ? ` — ${m.dose}` : ""}
-                  </p>
-                ))}
-                {(rx.medications?.length || 0) > 3 && (
-                  <p className="text-xs text-slate-400">+{rx.medications.length - 3} mais...</p>
-                )}
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

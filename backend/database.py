@@ -26,7 +26,7 @@ def get_db():
 
 
 def init_db():
-    from models import patient, consultation, documents, whatsapp, financial, media, anamnesis, clinic, organization, queue, push_notification, patient_documents, oauth2, patient_rx  # noqa
+    from models import patient, consultation, documents, whatsapp, financial, media, anamnesis, clinic, organization, queue, push_notification, patient_documents, oauth2, patient_rx, prescription_template  # noqa
     from models import webhook  # noqa — WebhookEndpoint, WebhookDeliveryLog, WebhookDeadLetter
     from models import billing  # noqa — Sprint 8 Enterprise Billing
     from models import audit_log  # noqa — Sprint 8 Immutable Audit Log
@@ -156,11 +156,35 @@ def migrate_db():
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 patient_id INTEGER NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
                 date DATE NOT NULL,
+                prescription_type VARCHAR(30) NOT NULL DEFAULT 'simples',
                 medications JSON DEFAULT '[]',
                 instructions TEXT,
                 memed_id VARCHAR(100),
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 updated_at DATETIME
+            )
+        """),
+    ]:
+        if table_name not in existing_tables:
+            migrations.append(ddl)
+
+    # Adiciona prescription_type se tabela já existia (migration incremental)
+    if "patient_prescriptions" in existing_tables:
+        pp_cols = [c["name"] for c in inspector.get_columns("patient_prescriptions")]
+        if "prescription_type" not in pp_cols:
+            migrations.append("ALTER TABLE patient_prescriptions ADD COLUMN prescription_type VARCHAR(30) NOT NULL DEFAULT 'simples'")
+
+    # Prescription templates (modelos reutilizáveis de receitas)
+    for table_name, ddl in [
+        ("prescription_templates", """
+            CREATE TABLE IF NOT EXISTS prescription_templates (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name VARCHAR(200) NOT NULL,
+                prescription_type VARCHAR(30) DEFAULT 'simples',
+                medications JSON DEFAULT '[]',
+                instructions TEXT,
+                created_by INTEGER REFERENCES users(id),
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         """),
     ]:
