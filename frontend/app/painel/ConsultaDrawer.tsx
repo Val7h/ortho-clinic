@@ -419,7 +419,7 @@ function PrintModal({ rx, patient, clinic, onClose }: {
           <p style={{ margin: "0" }}>Validade: 30 dias a partir de {dateStr}</p>
         </div>
         <div style={{ textAlign: "center", width: "180px" }}>
-          <p style={{ fontSize: "10px", color: "#888", margin: "0 0 4px 0" }}>_____________ , ___/___/______</p>
+          <p style={{ fontSize: "10px", color: "#555", margin: "0 0 4px 0" }}>{clinic ? `${clinic.city}/${clinic.state}` : "_____________"} , {dateStr}</p>
           <div style={{ borderTop: `1px solid ${headerColor}`, paddingTop: "4px" }}>
             <p style={{ fontSize: "11px", fontWeight: 700, margin: "0" }}>Dr. Valth Guimarães</p>
             <p style={{ fontSize: "10px", color: "#666", margin: "0" }}>CRM/PB 6326 | CRM/PE 16551</p>
