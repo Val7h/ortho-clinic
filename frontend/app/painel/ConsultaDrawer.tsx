@@ -626,9 +626,9 @@ function PrintModal({ rx, patient, clinic, onClose }: {
 declare global {
   interface Window {
     MdSinapsePrescricao?: {
-      prescricao: { new: (opts: any) => void };
+      setToken: (jwt: string) => void;
+      command: { send: (module: string, action: string, data?: any) => Promise<any> };
       event: { add: (event: string, cb: (data: any) => void) => void };
-      setToken?: (jwt: string) => void;
     };
   }
 }
@@ -689,34 +689,42 @@ async function openMemed(patient: any, clinic: any): Promise<void> {
   const sdk = window.MdSinapsePrescricao;
   if (!sdk) throw new Error("SDK Memed não disponível");
 
-  let crm = "6326";
-  let uf = "PB";
-  if (clinic?.state === "PE") { crm = "16551"; uf = "PE"; }
+  // Garante que os módulos estão carregados (caso SDK já existia mas iframes não)
+  if (typeof sdk.setToken === "function") sdk.setToken(MEMED_JWT);
+
+  // Aguarda iframes dos módulos aparecerem (até 10s)
+  await new Promise<void>((resolve) => {
+    let n = 0;
+    const t = setInterval(() => {
+      if (document.querySelectorAll("#iframe-container iframe").length > 0) {
+        clearInterval(t); resolve(); return;
+      }
+      if (++n > 100) { clearInterval(t); resolve(); }
+    }, 100);
+  });
 
   try {
     sdk.event.add("prescricao:encerramento", (_data: any) => {
       toast.success("Prescrição finalizada no Memed!");
     });
-  } catch (_) { /* evento pode já estar registrado */ }
+  } catch (_) {}
 
-  sdk.prescricao.new({
-    usuario: {
-      nome: "Dr. Valth Guimarães",
-      crm,
-      uf,
-      especialidade: "Ortopedia e Traumatologia",
-    },
-    paciente: {
+  // Pré-preencher paciente no módulo de gerenciamento de pacientes
+  try {
+    sdk.command.send("platform.patient-management", "setPatient", {
       nome: patient?.full_name || patient?.name || "",
-      nascimento: patient?.date_of_birth
+      data_nascimento: patient?.date_of_birth
         ? formatDateBRForMemed(patient.date_of_birth)
         : patient?.birth_date
         ? formatDateBRForMemed(patient.birth_date)
         : undefined,
       telefone: patient?.phone || undefined,
       cpf: patient?.cpf || undefined,
-    },
-  });
+    });
+  } catch (_) {}
+
+  // Abrir o módulo de prescrição (API real do SDK v3.25)
+  sdk.command.send("hub", "core:moduleShow", "plataforma.prescricao");
 }
 
 // ── Tab: Prontuário ────────────────────────────────────────────────────────────
