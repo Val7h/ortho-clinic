@@ -665,7 +665,8 @@ async function _fetchMemedToken(): Promise<string> {
   if (!res.ok) throw new Error(`Memed /token retornou HTTP ${res.status}`);
   const data = await res.json();
   if (data.valid === false) {
-    console.warn("[Memed] JWT com data", data.date, "— pode estar expirado. Atualize MEMED_JWT no Render.");
+    // Token com data desatualizada — falha imediata com mensagem clara ao usuário
+    throw new Error(`Token Memed expirado (${data.date}). Atualize MEMED_JWT no Render.`);
   }
   return data.token as string;
 }
@@ -725,6 +726,10 @@ async function _ensureSdkReady(jwt: string): Promise<void> {
   } catch (err) {
     _sdkStatus = "error";
     _sdkLoadPromise = null; // permite retry na próxima chamada
+    // Garante que iframes residuais do Memed não bloqueiem cliques na UI
+    document.querySelectorAll<HTMLIFrameElement>('iframe[src*="memed.com.br"]').forEach((f) => {
+      f.style.pointerEvents = "none";
+    });
     throw err;
   }
 }
@@ -1164,8 +1169,9 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
                 try {
                   await openMemed(patient, clinic);
                 } catch (err: any) {
-                  toast.error("Erro ao carregar Memed. Tente novamente.");
-                  console.error("Memed error:", err);
+                  const msg = err?.message || "Erro ao carregar Memed";
+                  toast.error(msg.includes("expirado") ? msg : "Erro ao abrir Memed. Tente novamente.");
+                  console.error("[Memed]", err);
                 } finally {
                   setMemedLoading(false);
                 }
