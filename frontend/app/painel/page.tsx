@@ -94,156 +94,106 @@ function PatientCard({ entry, onStatusChange, onRemove, onSelect, busy, selected
         selected
           ? 'border-blue-500 dark:border-blue-400 shadow-md shadow-blue-100 dark:shadow-blue-950 ring-2 ring-blue-500/30'
           : entry.status === 'attending'
-          ? 'border-green-400 dark:border-green-600 shadow-md shadow-green-100 dark:shadow-green-950'
+          ? 'border-green-400 dark:border-green-600 shadow-sm shadow-green-100 dark:shadow-green-950'
           : entry.status === 'waiting'
           ? 'border-amber-300 dark:border-amber-700'
           : 'border-slate-200 dark:border-slate-700'
-      } bg-white dark:bg-slate-900 ${isDimmed ? 'opacity-60' : ''}`}
+      } bg-white dark:bg-slate-900 ${isDimmed ? 'opacity-55' : ''}`}
       onClick={() => onSelect(entry)}
     >
       {entry.status === 'attending' && !selected && (
-        <span className="absolute -top-1 -right-1 flex h-3 w-3">
+        <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
-          <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500" />
-        </span>
-      )}
-      {selected && (
-        <span className="absolute -top-1 -right-1 flex h-3 w-3">
-          <span className="relative inline-flex rounded-full h-3 w-3 bg-blue-500" />
+          <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500" />
         </span>
       )}
 
-      <div className="p-4">
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex items-center gap-3 min-w-0">
-            <span
-              className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
-                selected
-                  ? 'bg-blue-500 text-white'
-                  : entry.status === 'attending'
-                  ? 'bg-green-500 text-white'
-                  : entry.status === 'waiting'
-                  ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300'
-                  : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
-              }`}
-            >
-              {entry.position}
+      <div className="px-3 py-2.5">
+        {/* Row 1: position + name + time + wait */}
+        <div className="flex items-center gap-2 min-w-0">
+          <span
+            className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+              selected
+                ? 'bg-blue-500 text-white'
+                : entry.status === 'attending'
+                ? 'bg-green-500 text-white'
+                : entry.status === 'waiting'
+                ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300'
+                : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
+            }`}
+          >
+            {entry.position}
+          </span>
+          <p
+            className={`flex-1 min-w-0 font-semibold text-sm text-slate-900 dark:text-slate-50 truncate ${
+              isAttended ? 'line-through text-slate-400 dark:text-slate-500' : ''
+            }`}
+          >
+            {entry.patient_name}
+          </p>
+          <div className="flex-shrink-0 flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
+            <Clock className="w-3 h-3" />
+            <span>{formatTime(entry.arrived_at)}</span>
+            <span className={`ml-1 font-medium ${(entry.waited_minutes ?? 0) > 30 ? 'text-red-500 dark:text-red-400' : ''}`}>
+              · {formatWait(entry.waited_minutes)}
             </span>
-            <div className="min-w-0">
-              <p
-                className={`font-semibold text-slate-900 dark:text-slate-50 truncate block ${
-                  isAttended ? 'line-through text-slate-400 dark:text-slate-500' : ''
-                }`}
-              >
-                {entry.patient_name}
-              </p>
-              {entry.reason && (
-                <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5">{entry.reason}</p>
-              )}
-            </div>
-          </div>
-
-          <div className="flex-shrink-0 text-right">
-            <div className="flex items-center gap-1 text-slate-600 dark:text-slate-300 text-sm">
-              <Clock className="w-3.5 h-3.5" />
-              <span>{formatTime(entry.arrived_at)}</span>
-            </div>
-            <div className="flex items-center gap-1 justify-end mt-0.5">
-              <Timer className="w-3 h-3 text-slate-400" />
-              <span
-                className={`text-xs font-medium ${
-                  (entry.waited_minutes ?? 0) > 30
-                    ? 'text-red-600 dark:text-red-400'
-                    : 'text-slate-500 dark:text-slate-400'
-                }`}
-              >
-                {formatWait(entry.waited_minutes)}
-              </span>
-            </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 mt-3">
-          <span
-            className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${insuranceColor(
-              entry.patient_insurance
-            )}`}
-          >
+        {/* Row 2: insurance + status badge + actions */}
+        <div className="flex items-center gap-1.5 mt-1.5" onClick={(e) => e.stopPropagation()}>
+          <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium flex-shrink-0 ${insuranceColor(entry.patient_insurance)}`}>
             {entry.patient_insurance ?? 'Particular'}
           </span>
-          <Badge variant={statusBadgeVariant(entry.status)} size="sm">
-            {statusLabel(entry.status)}
-          </Badge>
-          {selected && (
-            <span className="ml-auto text-xs text-blue-600 dark:text-blue-400 font-semibold flex items-center gap-1">
-              <Stethoscope className="w-3 h-3" /> Atendendo
-            </span>
+          {entry.reason && (
+            <span className="text-[10px] text-slate-400 truncate min-w-0 flex-1">{entry.reason}</span>
           )}
-        </div>
-
-        {/* Action buttons — stop propagation so they don't trigger onSelect */}
-        <div className="flex items-center gap-2 mt-3 flex-wrap" onClick={(e) => e.stopPropagation()}>
-          {entry.status === 'waiting' && (
-            <>
-              <Button
-                size="sm"
-                variant="success"
-                icon={<Play className="w-3.5 h-3.5" />}
-                onClick={() => onStatusChange(entry.id, 'attending')}
+          <div className="ml-auto flex items-center gap-1 flex-shrink-0">
+            {entry.status === 'waiting' && (
+              <>
+                <button
+                  onClick={() => onStatusChange(entry.id, 'attending')}
+                  disabled={busy}
+                  className="flex items-center gap-1 px-2 py-1 rounded-lg bg-green-600 text-white text-[10px] font-semibold hover:bg-green-700 disabled:opacity-50"
+                >
+                  <Play className="w-3 h-3" /> Chamar
+                </button>
+                <button
+                  onClick={() => onStatusChange(entry.id, 'absent')}
+                  disabled={busy}
+                  className="flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-[10px] font-semibold hover:bg-slate-300 dark:hover:bg-slate-600 disabled:opacity-50"
+                >
+                  <UserX className="w-3 h-3" />
+                </button>
+              </>
+            )}
+            {entry.status === 'attending' && (
+              <button
+                onClick={() => onStatusChange(entry.id, 'attended')}
                 disabled={busy}
+                className="flex items-center gap-1 px-2 py-1 rounded-lg bg-blue-600 text-white text-[10px] font-semibold hover:bg-blue-700 disabled:opacity-50"
               >
-                Chamar
-              </Button>
-              <Button
-                size="sm"
-                variant="secondary"
-                icon={<UserX className="w-3.5 h-3.5" />}
-                onClick={() => onStatusChange(entry.id, 'absent')}
+                <CheckCircle className="w-3 h-3" /> Concluir
+              </button>
+            )}
+            {(entry.status === 'attended' || entry.status === 'absent') && (
+              <button
+                onClick={() => onStatusChange(entry.id, 'waiting')}
                 disabled={busy}
+                className="flex items-center gap-1 px-2 py-1 rounded-lg bg-amber-500 text-white text-[10px] font-semibold hover:bg-amber-600 disabled:opacity-50"
               >
-                Ausente
-              </Button>
-            </>
-          )}
-
-          {entry.status === 'attending' && (
-            <Button
-              size="sm"
-              variant="primary"
-              icon={<CheckCircle className="w-3.5 h-3.5" />}
-              onClick={() => onStatusChange(entry.id, 'attended')}
+                <Play className="w-3 h-3" /> Recolocar
+              </button>
+            )}
+            <button
+              onClick={() => onRemove(entry.id)}
               disabled={busy}
+              className="p-1 rounded text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950 transition-colors disabled:opacity-40"
+              title="Remover da fila"
             >
-              Concluir
-            </Button>
-          )}
-
-          {(entry.status === 'attended' || entry.status === 'absent') && (
-            <Button
-              size="sm"
-              variant="tertiary"
-              icon={<Play className="w-3.5 h-3.5" />}
-              onClick={() => onStatusChange(entry.id, 'waiting')}
-              disabled={busy}
-            >
-              Recolocar
-            </Button>
-          )}
-
-          <Link href={`/pacientes/${entry.patient_id}`} className="ml-auto" onClick={(e) => e.stopPropagation()}>
-            <Button size="sm" variant="tertiary" icon={<ChevronRight className="w-3.5 h-3.5" />}>
-              Prontuário
-            </Button>
-          </Link>
-
-          <button
-            onClick={() => onRemove(entry.id)}
-            disabled={busy}
-            className="p-1.5 rounded text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950 transition-colors disabled:opacity-40"
-            title="Remover da fila"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
+              <Trash2 className="w-3 h-3" />
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -489,28 +439,43 @@ export default function SalaDeEsperaPage() {
           >
             <div className="px-4 py-6 space-y-6">
               {/* Stats */}
-              <div className={`grid gap-3 ${drawerOpen ? 'grid-cols-2' : 'grid-cols-2 sm:grid-cols-4'}`}>
-                {([
-                  { label: 'Aguardando', count: waitingCount, colorClass: 'amber', icon: <Timer className="w-5 h-5" /> },
-                  { label: 'Em Atendimento', count: attendingCount, colorClass: 'green', icon: <UserCheck className="w-5 h-5" /> },
-                  { label: 'Atendidos', count: attendedCount, colorClass: 'blue', icon: <CheckCircle className="w-5 h-5" /> },
-                  { label: 'Ausentes', count: absentCount, colorClass: 'red', icon: <UserX className="w-5 h-5" /> },
-                ] as const).map(({ label, count, colorClass, icon }) => (
-                  <Card key={label} shadow="sm">
-                    <CardContent className="flex items-center gap-3 pt-4 pb-4">
-                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 bg-${colorClass}-100 dark:bg-${colorClass}-900/30 text-${colorClass}-600 dark:text-${colorClass}-400`}>
-                        {icon}
-                      </div>
-                      <div>
-                        <p className={`text-2xl font-bold text-${colorClass}-600 dark:text-${colorClass}-400`}>
-                          {count}
-                        </p>
-                        <p className="text-xs text-slate-500 dark:text-slate-400">{label}</p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
+              {drawerOpen ? (
+                <div className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2">
+                  {[
+                    { label: 'Aguard.', count: waitingCount, color: 'text-amber-600 dark:text-amber-400', icon: <Timer className="w-3.5 h-3.5" /> },
+                    { label: 'Atend.', count: attendingCount, color: 'text-green-600 dark:text-green-400', icon: <UserCheck className="w-3.5 h-3.5" /> },
+                    { label: 'Concl.', count: attendedCount, color: 'text-blue-600 dark:text-blue-400', icon: <CheckCircle className="w-3.5 h-3.5" /> },
+                    { label: 'Aus.', count: absentCount, color: 'text-red-500 dark:text-red-400', icon: <UserX className="w-3.5 h-3.5" /> },
+                  ].map(({ label, count, color, icon }) => (
+                    <div key={label} className={`flex items-center gap-1 ${color} flex-1 justify-center`}>
+                      {icon}
+                      <span className="font-bold text-sm">{count}</span>
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400">{label}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {([
+                    { label: 'Aguardando', count: waitingCount, colorClass: 'amber', icon: <Timer className="w-5 h-5" /> },
+                    { label: 'Em Atendimento', count: attendingCount, colorClass: 'green', icon: <UserCheck className="w-5 h-5" /> },
+                    { label: 'Atendidos', count: attendedCount, colorClass: 'blue', icon: <CheckCircle className="w-5 h-5" /> },
+                    { label: 'Ausentes', count: absentCount, colorClass: 'red', icon: <UserX className="w-5 h-5" /> },
+                  ] as const).map(({ label, count, colorClass, icon }) => (
+                    <Card key={label} shadow="sm">
+                      <CardContent className="flex items-center gap-3 pt-4 pb-4">
+                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 bg-${colorClass}-100 dark:bg-${colorClass}-900/30 text-${colorClass}-600 dark:text-${colorClass}-400`}>
+                          {icon}
+                        </div>
+                        <div>
+                          <p className={`text-2xl font-bold text-${colorClass}-600 dark:text-${colorClass}-400`}>{count}</p>
+                          <p className="text-xs text-slate-500 dark:text-slate-400">{label}</p>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
 
               {/* Filter tabs */}
               <div className="flex gap-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl p-1">

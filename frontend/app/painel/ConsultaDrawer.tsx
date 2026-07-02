@@ -5,6 +5,7 @@ import {
   X, Play, CheckCircle, UserX, AlertTriangle, Activity, Pill,
   ClipboardList, Stethoscope, FileText, FlaskConical,
   Plus, Trash2, Printer, ChevronDown, ChevronUp, Save,
+  Send, ClipboardCheck, Award, Camera, FileSearch2, Upload, ImageIcon, ZoomIn, ZoomOut,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { patientsApi, consultationsApi, prescriptionsApi, prescriptionTemplatesApi, examsApi, evolutionApi, clinicApi } from "@/lib/api";
@@ -33,7 +34,7 @@ interface ConsultaDrawerProps {
   onStatusChange: (entryId: number, status: QueueStatus) => void;
 }
 
-type DrawerTab = "prontuario" | "receita" | "exames";
+type DrawerTab = "anamnese" | "exames" | "receitas" | "encaminhamentos" | "procedimentos" | "atestados" | "laudos" | "fotos";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -1654,10 +1655,614 @@ function TabExames({ patientId, patient, clinic }: { patientId: number; patient:
   );
 }
 
+// ── Constants: new tabs ────────────────────────────────────────────────────────
+
+const REFERRAL_TYPES = [
+  { value: "fisioterapia", label: "Fisioterapia" },
+  { value: "especialidade", label: "Outra Especialidade" },
+  { value: "colega", label: "Colega Ortopedista" },
+  { value: "outro", label: "Outro" },
+];
+
+const PROCEDURE_TEMPLATES = [
+  { name: "Infiltração de joelho (corticosteróide)", text: "Realizada infiltração articular do joelho com corticosteróide (Triancinolona 40mg + Lidocaína 2% 2ml).\nOrientações: repouso de 24h, gelo local por 20 min 3x/dia por 3 dias. Retorno em 4 semanas." },
+  { name: "Infiltração de ombro (corticosteróide)", text: "Realizada infiltração subacromial do ombro com corticosteróide (Triancinolona 40mg + Lidocaína 2% 2ml).\nOrientações: repouso relativo de 24h, gelo local por 20 min 3x/dia por 3 dias. Retorno em 4 semanas." },
+  { name: "Infiltração de coluna (bloqueio)", text: "Realizado bloqueio periradicular com corticosteróide (Betametasona + Lidocaína 2%).\nOrientações: repouso de 24h, evitar esforços por 48h. Retorno em 2 semanas." },
+  { name: "Retirada de pontos", text: "Realizada retirada de pontos cirúrgicos. Ferida operatória com boa cicatrização, sem sinais de infecção.\nOrientações: manter curativo simples por mais 24h. Liberado para banho." },
+  { name: "Imobilização com gesso/tala", text: "Realizada imobilização com tala gessada. Paciente orientado sobre cuidados com a imobilização.\nOrientações: não molhar o gesso, elevar o membro, retornar se houver edema excessivo, dor intensa ou alteração da cor dos dedos. Retorno em 4 semanas." },
+  { name: "Curativo e limpeza de ferida", text: "Realizado curativo e limpeza de ferida com soro fisiológico 0,9% e cobertura estéril.\nOrientações: manter curativo limpo e seco, trocar a cada 48h ou se molhar. Retornar se sinais de infecção." },
+  { name: "Punção aspirativa de cisto", text: "Realizada punção aspirativa de cisto com agulha 18G. Aspirado material mucoide característico.\nOrientações: manter curatvo local por 24h, retornar se houver recidiva da coleção." },
+  { name: "Redução de luxação", text: "Realizada redução de luxação sob analgesia local. Controle radiológico evidenciou redução adequada.\nOrientações: imobilização por período determinado, retorno em 1 semana para reavaliação." },
+];
+
+const CERTIFICATE_TYPES = [
+  { value: "trabalho", label: "Atividades de trabalho" },
+  { value: "esportes", label: "Atividades físicas / esportes" },
+  { value: "escola", label: "Atividades escolares" },
+  { value: "geral", label: "Atividades em geral" },
+];
+
+const LAUDO_TEMPLATES = [
+  { name: "Laudo de joelho (RX/RM)", text: "LAUDO MÉDICO — JOELHO\n\nExame: {EXAME}\nLado: {LADO}\n\nACHADOS:\n\nCONCLUSÃO:\n\nAssinatura do médico responsável." },
+  { name: "Laudo de ombro (RX/RM)", text: "LAUDO MÉDICO — OMBRO\n\nExame: {EXAME}\nLado: {LADO}\n\nACHADOS:\n\nCONCLUSÃO:\n\nAssinatura do médico responsável." },
+  { name: "Laudo de coluna (RX/RM)", text: "LAUDO MÉDICO — COLUNA VERTEBRAL\n\nExame: {EXAME}\nSegmento: {SEGMENTO}\n\nACHADOS:\n\nCONCLUSÃO:\n\nAssinatura do médico responsável." },
+  { name: "Laudo de quadril (RX/RM)", text: "LAUDO MÉDICO — QUADRIL\n\nExame: {EXAME}\nLado: {LADO}\n\nACHADOS:\n\nCONCLUSÃO:\n\nAssinatura do médico responsável." },
+  { name: "Laudo de pé e tornozelo (RX)", text: "LAUDO MÉDICO — PÉ E TORNOZELO\n\nExame: {EXAME}\nLado: {LADO}\n\nACHADOS:\n\nCONCLUSÃO:\n\nAssinatura do médico responsável." },
+  { name: "Relatório médico livre", text: "RELATÓRIO MÉDICO\n\nIlmo(a). Sr(a).,\n\nEncaminho o(a) paciente abaixo, cujos dados e informações clínicas seguem:\n\n" },
+];
+
+// ── Generic Print Modal ────────────────────────────────────────────────────────
+
+function PrintDocModal({ title, content, onClose }: { title: string; content: React.ReactNode; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.6)" }}>
+      <style>{`
+        @media print {
+          body > *:not(#print-doc-root) { display: none !important; }
+          #print-doc-root { position: fixed !important; inset: 0 !important; z-index: 9999 !important; background: white !important; padding: 16px !important; }
+          .no-print { display: none !important; }
+        }
+      `}</style>
+      <div id="print-doc-root" className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
+        <div className="no-print px-5 pt-4 pb-3 border-b border-gray-200 dark:border-slate-700 flex items-center justify-between flex-shrink-0">
+          <h2 className="font-bold text-slate-900 dark:text-slate-50 text-sm">{title}</h2>
+          <div className="flex items-center gap-2">
+            <button onClick={() => window.print()} className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold text-xs">
+              <Printer className="w-3.5 h-3.5" /> Imprimir
+            </button>
+            <button onClick={onClose} className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+        <div className="flex-1 overflow-y-auto p-6 bg-white">
+          {content}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DrHeader({ clinic }: { clinic?: any }) {
+  return (
+    <div style={{ borderBottom: "2px solid #0F2D5E", paddingBottom: "12px", marginBottom: "16px", textAlign: "center" }}>
+      <p style={{ fontWeight: 700, fontSize: "16px", color: "#0F2D5E", margin: "0 0 2px 0" }}>Dr. Valth Guimarães</p>
+      <p style={{ fontSize: "11px", color: "#555", margin: "0" }}>Ortopedia e Traumatologia</p>
+      <p style={{ fontSize: "11px", color: "#555", margin: "0" }}>CRM/PB 6326 | CRM/PE 16551</p>
+      {clinic?.phone && <p style={{ fontSize: "11px", color: "#555", margin: "0" }}>Tel: {clinic.phone}</p>}
+    </div>
+  );
+}
+
+// ── Tab: Encaminhamentos ───────────────────────────────────────────────────────
+
+function TabEncaminhamentos({ patient, clinic }: { patient: any; clinic?: any }) {
+  const [refType, setRefType] = useState("fisioterapia");
+  const [specialty, setSpecialty] = useState("");
+  const [text, setText] = useState("");
+  const [printData, setPrintData] = useState<{ refType: string; specialty: string; text: string } | null>(null);
+
+  const today = new Date();
+  const dateStr = `${String(today.getDate()).padStart(2,"0")}/${String(today.getMonth()+1).padStart(2,"0")}/${today.getFullYear()}`;
+  const cityState = clinic ? `${clinic.city}/${clinic.state}` : "_________";
+
+  const handlePrint = () => {
+    if (!text.trim()) { toast.error("Descreva o encaminhamento antes de imprimir"); return; }
+    setPrintData({ refType, specialty, text });
+  };
+
+  const typeLabel = refType === "especialidade" && specialty
+    ? specialty
+    : REFERRAL_TYPES.find(r => r.value === refType)?.label ?? refType;
+
+  const printContent = printData && (
+    <div style={{ fontFamily: "Arial, sans-serif", color: "#111", fontSize: "13px" }}>
+      <DrHeader clinic={clinic} />
+      <div style={{ textAlign: "center", marginBottom: "16px" }}>
+        <p style={{ fontWeight: 700, fontSize: "14px", textTransform: "uppercase", letterSpacing: "1px", color: "#0F2D5E", margin: 0 }}>Encaminhamento Médico</p>
+      </div>
+      <p style={{ marginBottom: "12px" }}><strong>Paciente:</strong> {patient?.name}</p>
+      {patient?.birth_date && <p style={{ marginBottom: "12px" }}><strong>Data de Nasc.:</strong> {new Date(patient.birth_date + "T12:00:00").toLocaleDateString("pt-BR")}</p>}
+      <p style={{ marginBottom: "16px" }}><strong>Encaminhar para:</strong> {typeLabel}</p>
+      <div style={{ background: "#f8f8f8", borderLeft: "3px solid #0F2D5E", padding: "12px", marginBottom: "24px", whiteSpace: "pre-wrap", fontSize: "12px" }}>
+        {printData.text}
+      </div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginTop: "32px" }}>
+        <p style={{ fontSize: "11px", color: "#888", margin: 0 }}>{cityState}, {dateStr}</p>
+        <div style={{ textAlign: "center", width: "200px" }}>
+          <div style={{ borderTop: "2px solid #0F2D5E", paddingTop: "6px" }}>
+            <p style={{ fontSize: "12px", fontWeight: 700, margin: "0" }}>Dr. Valth Guimarães</p>
+            <p style={{ fontSize: "11px", color: "#666", margin: "0" }}>CRM/PB 6326 | CRM/PE 16551</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="px-5 pb-5 space-y-4">
+      {printData && printContent && (
+        <PrintDocModal title="Encaminhamento" content={printContent} onClose={() => setPrintData(null)} />
+      )}
+
+      <div>
+        <label className={lbl}>Tipo de Encaminhamento</label>
+        <div className="flex flex-wrap gap-2">
+          {REFERRAL_TYPES.map(rt => (
+            <button
+              key={rt.value}
+              type="button"
+              onClick={() => setRefType(rt.value)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+                refType === rt.value
+                  ? "border-blue-600 bg-blue-600 text-white"
+                  : "border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-400 hover:border-blue-400"
+              }`}
+            >
+              {rt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {refType === "especialidade" && (
+        <div>
+          <label className={lbl}>Especialidade</label>
+          <input className={inp} placeholder="Ex: Neurologia, Reumatologia..." value={specialty} onChange={e => setSpecialty(e.target.value)} />
+        </div>
+      )}
+
+      <div>
+        <label className={lbl}>Detalhes do Encaminhamento</label>
+        <textarea
+          className={`${inp} resize-none`}
+          rows={7}
+          placeholder="Paciente com diagnóstico de... Solicito avaliação e conduta para..."
+          value={text}
+          onChange={e => setText(e.target.value)}
+        />
+      </div>
+
+      <div className="flex justify-end gap-2 pt-1">
+        <button type="button" onClick={handlePrint} className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold text-xs">
+          <Printer className="w-3.5 h-3.5" /> Imprimir Encaminhamento
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Tab: Procedimentos ────────────────────────────────────────────────────────
+
+function TabProcedimentos({ patient, clinic }: { patient: any; clinic?: any }) {
+  const [text, setText] = useState("");
+  const [selectedTemplate, setSelectedTemplate] = useState("");
+  const [printData, setPrintData] = useState<string | null>(null);
+
+  const today = new Date();
+  const dateStr = `${String(today.getDate()).padStart(2,"0")}/${String(today.getMonth()+1).padStart(2,"0")}/${today.getFullYear()}`;
+  const cityState = clinic ? `${clinic.city}/${clinic.state}` : "_________";
+
+  const handleTemplate = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const t = PROCEDURE_TEMPLATES.find(p => p.name === e.target.value);
+    if (t) { setText(t.text); setSelectedTemplate(e.target.value); }
+  };
+
+  const printContent = printData && (
+    <div style={{ fontFamily: "Arial, sans-serif", color: "#111", fontSize: "13px" }}>
+      <DrHeader clinic={clinic} />
+      <div style={{ textAlign: "center", marginBottom: "16px" }}>
+        <p style={{ fontWeight: 700, fontSize: "14px", textTransform: "uppercase", letterSpacing: "1px", color: "#0F2D5E", margin: 0 }}>Relatório de Procedimento</p>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "16px", fontSize: "12px" }}>
+        <p style={{ margin: 0 }}><strong>Paciente:</strong> {patient?.name}</p>
+        <p style={{ margin: 0 }}><strong>Data:</strong> {dateStr}</p>
+      </div>
+      <div style={{ background: "#f8f8f8", padding: "14px", border: "1px solid #ddd", borderRadius: "4px", marginBottom: "24px", whiteSpace: "pre-wrap", lineHeight: "1.6", fontSize: "12px" }}>
+        {printData}
+      </div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginTop: "32px" }}>
+        <p style={{ fontSize: "11px", color: "#888", margin: 0 }}>{cityState}, {dateStr}</p>
+        <div style={{ textAlign: "center", width: "200px" }}>
+          <div style={{ borderTop: "2px solid #0F2D5E", paddingTop: "6px" }}>
+            <p style={{ fontSize: "12px", fontWeight: 700, margin: "0" }}>Dr. Valth Guimarães</p>
+            <p style={{ fontSize: "11px", color: "#666", margin: "0" }}>CRM/PB 6326 | CRM/PE 16551</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="px-5 pb-5 space-y-4">
+      {printData && printContent && (
+        <PrintDocModal title="Relatório de Procedimento" content={printContent} onClose={() => setPrintData(null)} />
+      )}
+
+      <div>
+        <label className={lbl}>Modelo de Procedimento</label>
+        <select className={inp} value={selectedTemplate} onChange={handleTemplate}>
+          <option value="">— selecionar modelo —</option>
+          {PROCEDURE_TEMPLATES.map(t => (
+            <option key={t.name} value={t.name}>{t.name}</option>
+          ))}
+        </select>
+      </div>
+
+      <div>
+        <label className={lbl}>Descrição do Procedimento</label>
+        <textarea
+          className={`${inp} resize-none font-mono`}
+          rows={9}
+          placeholder="Descreva o procedimento realizado..."
+          value={text}
+          onChange={e => setText(e.target.value)}
+        />
+      </div>
+
+      <div className="flex justify-end gap-2 pt-1">
+        <button
+          type="button"
+          onClick={() => { if (!text.trim()) { toast.error("Descreva o procedimento antes de imprimir"); return; } setPrintData(text); }}
+          className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold text-xs"
+        >
+          <Printer className="w-3.5 h-3.5" /> Imprimir Procedimento
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Tab: Atestados ────────────────────────────────────────────────────────────
+
+function TabAtestados({ patient, clinic }: { patient: any; clinic?: any }) {
+  const [cid, setCid] = useState("");
+  const [days, setDays] = useState("1");
+  const [certType, setCertType] = useState("trabalho");
+  const [obs, setObs] = useState("");
+  const [printData, setPrintData] = useState<{ cid: string; days: string; certType: string; obs: string } | null>(null);
+
+  const today = new Date();
+  const dateStr = `${String(today.getDate()).padStart(2,"0")}/${String(today.getMonth()+1).padStart(2,"0")}/${today.getFullYear()}`;
+  const cityState = clinic ? `${clinic.city}/${clinic.state}` : "_________";
+  const typeLabel = CERTIFICATE_TYPES.find(c => c.value === certType)?.label ?? certType;
+
+  const printContent = printData && (
+    <div style={{ fontFamily: "Arial, sans-serif", color: "#111", fontSize: "13px" }}>
+      <DrHeader clinic={clinic} />
+      <div style={{ textAlign: "center", marginBottom: "20px" }}>
+        <p style={{ fontWeight: 700, fontSize: "15px", textTransform: "uppercase", letterSpacing: "2px", color: "#0F2D5E", margin: 0 }}>Atestado Médico</p>
+      </div>
+      <div style={{ lineHeight: "1.8", marginBottom: "24px" }}>
+        <p>
+          Atesto que o(a) paciente <strong>{patient?.name}</strong>
+          {patient?.cpf ? `, CPF ${patient.cpf},` : ""}
+          {patient?.birth_date ? ` nascido(a) em ${new Date(patient.birth_date + "T12:00:00").toLocaleDateString("pt-BR")},` : ""}
+          {" "}encontra-se sob meus cuidados médicos e necessita afastar-se de <strong>{typeLabel}</strong> pelo
+          período de <strong>{printData.days} dia{Number(printData.days) !== 1 ? "s" : ""}</strong>, a partir da data de hoje.
+        </p>
+        {printData.cid && (
+          <p style={{ marginTop: "12px" }}>
+            <strong>CID-10:</strong> {printData.cid}
+          </p>
+        )}
+        {printData.obs && (
+          <p style={{ marginTop: "12px", color: "#555", fontSize: "12px" }}>
+            <strong>Observações:</strong> {printData.obs}
+          </p>
+        )}
+      </div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginTop: "40px" }}>
+        <p style={{ fontSize: "11px", color: "#888", margin: 0 }}>{cityState}, {dateStr}</p>
+        <div style={{ textAlign: "center", width: "200px" }}>
+          <div style={{ borderTop: "2px solid #0F2D5E", paddingTop: "6px" }}>
+            <p style={{ fontSize: "12px", fontWeight: 700, margin: "0" }}>Dr. Valth Guimarães</p>
+            <p style={{ fontSize: "11px", color: "#666", margin: "0" }}>CRM/PB 6326 | CRM/PE 16551</p>
+          </div>
+        </div>
+      </div>
+      <p style={{ fontSize: "10px", color: "#aaa", textAlign: "center", marginTop: "24px" }}>Válido somente com assinatura e carimbo do médico</p>
+    </div>
+  );
+
+  return (
+    <div className="px-5 pb-5 space-y-4">
+      {printData && printContent && (
+        <PrintDocModal title="Atestado Médico" content={printContent} onClose={() => setPrintData(null)} />
+      )}
+
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className={lbl}>Dias de afastamento *</label>
+          <input
+            type="number"
+            min="1"
+            max="365"
+            className={inp}
+            value={days}
+            onChange={e => setDays(e.target.value)}
+          />
+        </div>
+        <div>
+          <label className={lbl}>Tipo de afastamento</label>
+          <select className={inp} value={certType} onChange={e => setCertType(e.target.value)}>
+            {CERTIFICATE_TYPES.map(c => (
+              <option key={c.value} value={c.value}>{c.label}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div>
+        <label className={lbl}>CID-10 (opcional)</label>
+        <CidSearch value={cid} onChange={setCid} />
+      </div>
+
+      <div>
+        <label className={lbl}>Observações (opcional)</label>
+        <input
+          className={inp}
+          placeholder="Ex: paciente pode praticar atividades sedentárias..."
+          value={obs}
+          onChange={e => setObs(e.target.value)}
+        />
+      </div>
+
+      <div className="flex justify-end gap-2 pt-1">
+        <button
+          type="button"
+          onClick={() => {
+            if (!days || Number(days) < 1) { toast.error("Informe os dias de afastamento"); return; }
+            setPrintData({ cid, days, certType, obs });
+          }}
+          className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold text-xs"
+        >
+          <Printer className="w-3.5 h-3.5" /> Imprimir Atestado
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Tab: Laudos ───────────────────────────────────────────────────────────────
+
+function TabLaudos({ patient, clinic }: { patient: any; clinic?: any }) {
+  const [text, setText] = useState("");
+  const [selectedTemplate, setSelectedTemplate] = useState("");
+  const [printData, setPrintData] = useState<string | null>(null);
+
+  const today = new Date();
+  const dateStr = `${String(today.getDate()).padStart(2,"0")}/${String(today.getMonth()+1).padStart(2,"0")}/${today.getFullYear()}`;
+  const cityState = clinic ? `${clinic.city}/${clinic.state}` : "_________";
+
+  const handleTemplate = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const t = LAUDO_TEMPLATES.find(lt => lt.name === e.target.value);
+    if (t) { setText(t.text); setSelectedTemplate(e.target.value); }
+  };
+
+  const printContent = printData && (
+    <div style={{ fontFamily: "Arial, sans-serif", color: "#111", fontSize: "13px" }}>
+      <DrHeader clinic={clinic} />
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "16px", fontSize: "12px" }}>
+        <p style={{ margin: 0 }}><strong>Paciente:</strong> {patient?.name}</p>
+        <p style={{ margin: 0 }}><strong>Data:</strong> {dateStr}</p>
+        {patient?.birth_date && <p style={{ margin: 0 }}><strong>Nasc.:</strong> {new Date(patient.birth_date + "T12:00:00").toLocaleDateString("pt-BR")}</p>}
+        {patient?.cpf && <p style={{ margin: 0 }}><strong>CPF:</strong> {patient.cpf}</p>}
+      </div>
+      <div style={{ borderTop: "1px solid #ddd", paddingTop: "14px", whiteSpace: "pre-wrap", lineHeight: "1.7", fontSize: "12px", marginBottom: "24px" }}>
+        {printData}
+      </div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginTop: "32px" }}>
+        <p style={{ fontSize: "11px", color: "#888", margin: 0 }}>{cityState}, {dateStr}</p>
+        <div style={{ textAlign: "center", width: "200px" }}>
+          <div style={{ borderTop: "2px solid #0F2D5E", paddingTop: "6px" }}>
+            <p style={{ fontSize: "12px", fontWeight: 700, margin: "0" }}>Dr. Valth Guimarães</p>
+            <p style={{ fontSize: "11px", color: "#666", margin: "0" }}>CRM/PB 6326 | CRM/PE 16551</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="px-5 pb-5 space-y-4">
+      {printData && printContent && (
+        <PrintDocModal title="Laudo Médico" content={printContent} onClose={() => setPrintData(null)} />
+      )}
+
+      <div>
+        <label className={lbl}>Modelo de Laudo</label>
+        <select className={inp} value={selectedTemplate} onChange={handleTemplate}>
+          <option value="">— selecionar modelo —</option>
+          {LAUDO_TEMPLATES.map(t => (
+            <option key={t.name} value={t.name}>{t.name}</option>
+          ))}
+        </select>
+      </div>
+
+      <div>
+        <label className={lbl}>Texto do Laudo</label>
+        <textarea
+          className={`${inp} resize-none font-mono`}
+          rows={11}
+          placeholder="Escreva o laudo aqui..."
+          value={text}
+          onChange={e => setText(e.target.value)}
+        />
+      </div>
+
+      <div className="flex justify-end gap-2 pt-1">
+        <button
+          type="button"
+          onClick={() => { if (!text.trim()) { toast.error("Escreva o laudo antes de imprimir"); return; } setPrintData(text); }}
+          className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold text-xs"
+        >
+          <Printer className="w-3.5 h-3.5" /> Imprimir Laudo
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Tab: Fotos ────────────────────────────────────────────────────────────────
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://ortho-clinic-ldcd.onrender.com";
+
+function TabFotos({ patientId }: { patientId: number }) {
+  const [photos, setPhotos] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [zoomedUrl, setZoomedUrl] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const token = typeof window !== "undefined" ? localStorage.getItem("orthoclinic_token") : null;
+  const authHeaders: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+
+  const fetchPhotos = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/patients/${patientId}/documents?category=photo`, {
+        headers: authHeaders,
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setPhotos(Array.isArray(data) ? data : (data.items ?? []));
+      }
+    } catch { /* silent */ } finally {
+      setLoading(false);
+    }
+  }, [patientId]);
+
+  useEffect(() => { fetchPhotos(); }, [fetchPhotos]);
+
+  const handleUpload = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    setUploading(true);
+    let uploaded = 0;
+    for (const file of Array.from(files)) {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("title", file.name || "Foto de exame");
+      fd.append("category", "photo");
+      fd.append("date", new Date().toISOString().split("T")[0]);
+      try {
+        const res = await fetch(`${API_URL}/patients/${patientId}/documents/upload`, {
+          method: "POST",
+          headers: authHeaders,
+          body: fd,
+        });
+        if (res.ok) uploaded++;
+      } catch { /* skip */ }
+    }
+    setUploading(false);
+    if (uploaded > 0) { toast.success(`${uploaded} foto${uploaded > 1 ? "s" : ""} enviada${uploaded > 1 ? "s" : ""}!`); fetchPhotos(); }
+    else toast.error("Erro ao enviar foto");
+  };
+
+  const handleDelete = async (docId: number) => {
+    if (!confirm("Remover esta foto?")) return;
+    try {
+      await fetch(`${API_URL}/patients/${patientId}/documents/${docId}`, {
+        method: "DELETE",
+        headers: authHeaders,
+      });
+      setPhotos(prev => prev.filter(p => p.id !== docId));
+      toast.success("Foto removida");
+    } catch { toast.error("Erro ao remover"); }
+  };
+
+  return (
+    <div className="px-5 pb-5">
+      {zoomedUrl && (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80"
+          onClick={() => setZoomedUrl(null)}
+        >
+          <img src={zoomedUrl} alt="Zoom" className="max-w-[95vw] max-h-[95vh] rounded-xl shadow-2xl" />
+          <button className="absolute top-4 right-4 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white" onClick={() => setZoomedUrl(null)}>
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+      )}
+
+      {/* Upload area */}
+      <div
+        className="border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-xl p-6 text-center cursor-pointer hover:border-blue-400 hover:bg-blue-50/30 dark:hover:bg-blue-900/10 transition-all mb-4"
+        onClick={() => fileRef.current?.click()}
+        onDragOver={e => e.preventDefault()}
+        onDrop={e => { e.preventDefault(); handleUpload(e.dataTransfer.files); }}
+      >
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*"
+          multiple
+          className="hidden"
+          onChange={e => handleUpload(e.target.files)}
+        />
+        {uploading ? (
+          <div className="flex flex-col items-center gap-2">
+            <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+            <p className="text-sm text-slate-500">Enviando...</p>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center gap-2">
+            <Camera className="w-8 h-8 text-slate-400" />
+            <p className="text-sm font-semibold text-slate-600 dark:text-slate-400">Toque para adicionar fotos</p>
+            <p className="text-xs text-slate-400">Ou arraste as imagens aqui — aceita múltiplas</p>
+          </div>
+        )}
+      </div>
+
+      {/* Grid */}
+      {loading ? (
+        <div className="flex justify-center py-8">
+          <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+        </div>
+      ) : photos.length === 0 ? (
+        <p className="text-center text-xs text-slate-400 italic py-4">Nenhuma foto adicionada ainda.</p>
+      ) : (
+        <div className="grid grid-cols-2 gap-3">
+          {photos.map(photo => (
+            <div key={photo.id} className="relative group rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 aspect-square">
+              <img
+                src={photo.file_url}
+                alt={photo.title || "Foto"}
+                className="w-full h-full object-cover"
+              />
+              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100">
+                <button
+                  onClick={() => setZoomedUrl(photo.file_url)}
+                  className="p-2 bg-white/90 rounded-full text-slate-700 hover:bg-white"
+                  title="Ampliar"
+                >
+                  <ZoomIn className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => handleDelete(photo.id)}
+                  className="p-2 bg-red-500/90 rounded-full text-white hover:bg-red-600"
+                  title="Remover"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+              {photo.title && (
+                <p className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-[10px] px-2 py-1 truncate">
+                  {photo.title}
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main Drawer ────────────────────────────────────────────────────────────────
 
 export default function ConsultaDrawer({ entry, onClose, onStatusChange }: ConsultaDrawerProps) {
-  const [activeTab, setActiveTab] = useState<DrawerTab>("prontuario");
+  const [activeTab, setActiveTab] = useState<DrawerTab>("anamnese");
   const [patient, setPatient] = useState<any>(null);
   const [loadingPatient, setLoadingPatient] = useState(true);
   const [busyStatus, setBusyStatus] = useState(false);
@@ -1691,9 +2296,14 @@ export default function ConsultaDrawer({ entry, onClose, onStatusChange }: Consu
   const allergies = parseList(patient?.allergies);
 
   const tabs: { key: DrawerTab; label: string; icon: React.ReactNode }[] = [
-    { key: "prontuario", label: "Prontuário", icon: <ClipboardList className="w-4 h-4" /> },
-    { key: "receita", label: "Receita", icon: <FileText className="w-4 h-4" /> },
-    { key: "exames", label: "Exames", icon: <FlaskConical className="w-4 h-4" /> },
+    { key: "anamnese",        label: "Anamnese",         icon: <ClipboardList className="w-3.5 h-3.5" /> },
+    { key: "exames",          label: "Exames",            icon: <FlaskConical className="w-3.5 h-3.5" /> },
+    { key: "receitas",        label: "Receitas",          icon: <FileText className="w-3.5 h-3.5" /> },
+    { key: "encaminhamentos", label: "Encaminh.",         icon: <Send className="w-3.5 h-3.5" /> },
+    { key: "procedimentos",   label: "Procedimentos",     icon: <ClipboardCheck className="w-3.5 h-3.5" /> },
+    { key: "atestados",       label: "Atestados",         icon: <Award className="w-3.5 h-3.5" /> },
+    { key: "laudos",          label: "Laudos",            icon: <FileSearch2 className="w-3.5 h-3.5" /> },
+    { key: "fotos",           label: "Fotos",             icon: <Camera className="w-3.5 h-3.5" /> },
   ];
 
   return (
@@ -1787,22 +2397,24 @@ export default function ConsultaDrawer({ entry, onClose, onStatusChange }: Consu
         </div>
       </div>
 
-      {/* ── Tabs ── */}
-      <div className="flex-shrink-0 flex border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
-        {tabs.map(({ key, label, icon }) => (
-          <button
-            key={key}
-            onClick={() => setActiveTab(key)}
-            className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-3 text-xs font-semibold transition-all border-b-2 ${
-              activeTab === key
-                ? "border-blue-600 text-blue-600 dark:text-blue-400"
-                : "border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
-            }`}
-          >
-            {icon}
-            {label}
-          </button>
-        ))}
+      {/* ── Tabs (scrollable) ── */}
+      <div className="flex-shrink-0 overflow-x-auto border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 scrollbar-none" style={{ scrollbarWidth: "none" }}>
+        <div className="flex min-w-max">
+          {tabs.map(({ key, label, icon }) => (
+            <button
+              key={key}
+              onClick={() => setActiveTab(key)}
+              className={`flex items-center gap-1 px-3 py-2.5 text-[11px] font-semibold transition-all border-b-2 whitespace-nowrap ${
+                activeTab === key
+                  ? "border-blue-600 text-blue-600 dark:text-blue-400"
+                  : "border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+              }`}
+            >
+              {icon}
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* ── Tab content (scrollable) ── */}
@@ -1813,15 +2425,14 @@ export default function ConsultaDrawer({ entry, onClose, onStatusChange }: Consu
           </div>
         ) : (
           <div className="pt-4">
-            {activeTab === "prontuario" && (
-              <TabProntuario patientId={entry.patient_id} />
-            )}
-            {activeTab === "receita" && (
-              <TabReceita patientId={entry.patient_id} patient={patient} clinic={clinic} />
-            )}
-            {activeTab === "exames" && (
-              <TabExames patientId={entry.patient_id} patient={patient} clinic={clinic} />
-            )}
+            {activeTab === "anamnese"        && <TabProntuario patientId={entry.patient_id} />}
+            {activeTab === "exames"          && <TabExames patientId={entry.patient_id} patient={patient} clinic={clinic} />}
+            {activeTab === "receitas"        && <TabReceita patientId={entry.patient_id} patient={patient} clinic={clinic} />}
+            {activeTab === "encaminhamentos" && <TabEncaminhamentos patient={patient} clinic={clinic} />}
+            {activeTab === "procedimentos"   && <TabProcedimentos patient={patient} clinic={clinic} />}
+            {activeTab === "atestados"       && <TabAtestados patient={patient} clinic={clinic} />}
+            {activeTab === "laudos"          && <TabLaudos patient={patient} clinic={clinic} />}
+            {activeTab === "fotos"           && <TabFotos patientId={entry.patient_id} />}
           </div>
         )}
       </div>
