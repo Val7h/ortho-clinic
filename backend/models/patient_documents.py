@@ -22,6 +22,7 @@ DOCUMENT_CATEGORIES = {
     "referral":     "Encaminhamento",
     "report":       "Laudo / Relatório",
     "consent":      "Termo de Consentimento",
+    "photo":        "Foto Clínica",
     "other":        "Outro",
 }
 
