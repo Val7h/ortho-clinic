@@ -131,7 +131,7 @@ const EXAM_QUICK_TEMPLATES = [
   { name: "RX Coluna LS", content: "SOLICITO: RADIOGRAFIA DA COLUNA LOMBOSSACRA\nINCIDÊNCIAS: AP e Perfil\nHD: LOMBALGIA / ESPONDILODISCOARTROSE" },
   { name: "TC Coluna", content: "SOLICITO: TOMOGRAFIA COMPUTADORIZADA DA COLUNA LOMBAR\nHD: HÉRNIA DISCAL / ESTENOSE DO CANAL" },
   { name: "DXA", content: "SOLICITO: DENSITOMETRIA ÓSSEA (DXA)\nREGIÕES: Coluna lombar L1-L4, Fêmur proximal bilateral e Rádio distal 1/3\nINDICAÇÃO: [Pós-menopausa / Uso crônico de corticoide / Fratura por fragilidade]\nHD: OSTEOPOROSE / OSTEOPENIA\n\nObs: Controle terapêutico — último DXA em: ___" },
-  { name: "DXA (controle)", content: "SOLICITO: DENSITOMETRIA ÓSSEA — CONTROLE TERAPÊUTICO\nREGIÕES: Coluna lombar L1-L4 e Fêmur proximal bilateral\nÚLTIMO EXAME: [data]  T-score prévio: ___\nTRATAMENTO EM USO: [bifosfonato/denosumabe/outro]\nHD: OSTEOPOROSE EM TRATAMENTO" },
+  { name: "DXA (controle)", content: "SOLICITO: DENSITOMETRIA ÓSSEA — CONTROLE TERAPÊUTICO\nREGIÕES: Coluna lombar L1-L4 e Fêmur proximal bilateral\nÚLTIMO EXAME: [data]  T-score prévio: ___\nTRATAMENTO EM USO: [bifosfonato/denosumabe/outro]\nHD: OSTEOPOROSE EM TRATAMENTO\nObs: intervalo mínimo recomendado entre exames: 12 meses (em tratamento) / 24 meses (sem tratamento) — SBDENS 2022" },
   { name: "ENMG", content: "SOLICITO: ELETRONEUROMIOGRAFIA (ENMG) COM VELOCIDADE DE CONDUÇÃO NERVOSA DOS MEMBROS [SUPERIORES/INFERIORES]\nHD: SÍNDROME DO TÚNEL DO CARPO / RADICULOPATIA" },
   { name: "RNM Ombro", content: "SOLICITO: RESSONÂNCIA MAGNÉTICA DO OMBRO [D/E] SEM CONTRASTE\nINCIDÊNCIAS: Coronal, Sagital, Axial\nHD: LESÃO DO MANGUITO ROTADOR / IMPACTO SUBACROMIAL" },
   { name: "artro-RM Ombro", content: "SOLICITO: ARTRO-RESSONÂNCIA MAGNÉTICA DO OMBRO [D/E]\n(RM após artrocentese com injeção intra-articular de gadolíneo diluído)\nINCIDÊNCIAS: Coronal, Sagital, Axial\nHD: INSTABILIDADE GLENOUMERAL / LESÃO LABRAL (BANKART / SLAP)\nObs: Paciente em investigação de instabilidade anterior crônica" },
@@ -141,6 +141,10 @@ const EXAM_QUICK_TEMPLATES = [
   { name: "RX Bacia AP", content: "SOLICITO: RADIOGRAFIA DA BACIA\nINCIDÊNCIAS: AP em ortostatismo\nHD: COXARTROSE / DISPLASIA" },
   { name: "RX Tornozelo", content: "SOLICITO: RADIOGRAFIA DO TORNOZELO [D/E]\nINCIDÊNCIAS: AP, Perfil e Mortise\nHD: ENTORSE / FRATURA" },
   { name: "US Ombro", content: "SOLICITO: ULTRASSONOGRAFIA DO OMBRO [D/E]\nHD: TENDINOPATIA / BURSITE SUBACROMIAL" },
+  { name: "RX Mão/Punho", content: "SOLICITO: RADIOGRAFIA DO PUNHO E MÃO [D/E]\nINCIDÊNCIAS: AP, Perfil e Oblíqua\nHD: FRATURA DO ESCAFOIDE / METACARPO" },
+  { name: "RNM Quadril", content: "SOLICITO: RESSONÂNCIA MAGNÉTICA DO QUADRIL [D/E] SEM CONTRASTE\nINCIDÊNCIAS: Coronal, Sagital, Axial\nHD: BURSITE TROCANTÉRICA / LESÃO LABRAL / FAI" },
+  { name: "Cintilografia Óssea", content: "SOLICITO: CINTILOGRAFIA ÓSSEA COM TECNÉCIO-99m (CORPO INTEIRO + FOCO)\nHD: FRATURA POR ESTRESSE / INVESTIGAÇÃO DE LESÃO ÓSSEA METASTÁTICA" },
+  { name: "RX Pé", content: "SOLICITO: RADIOGRAFIA DO PÉ [D/E]\nINCIDÊNCIAS: AP, Perfil e Oblíqua\nHD: HÁLUX VALGO / ESPORÃO CALCÂNEO / FRATURA" },
 ];
 
 interface ExamTemplate {
@@ -177,14 +181,16 @@ function loadExamLineHeight(): "normal" | "relaxed" {
 }
 
 // ── Drug-allergy alert groups ───────────────────────────────────────────────────
-const DRUG_ALLERGY_GROUPS: { groupKeywords: string[]; drugKeywords: string[] }[] = [
-  { groupKeywords: ["aine", "anti-inflamatório", "antiinflamatório", "nsaid", "aspirina", "asa", "aas"], drugKeywords: ["nimesulida", "diclofenaco", "meloxicam", "ibuprofeno", "celecoxib", "etoricoxib", "naproxeno", "piroxicam", "cetoprofeno", "tenoxicam"] },
-  { groupKeywords: ["penicilina", "amoxicilina", "ampicilina"], drugKeywords: ["amoxicilina", "ampicilina", "amoxil"] },
-  { groupKeywords: ["sulfa", "sulfonamida"], drugKeywords: ["sulfametoxazol", "bactrim"] },
-  { groupKeywords: ["dipirona", "metamizol"], drugKeywords: ["dipirona", "novalgina"] },
+const DRUG_ALLERGY_GROUPS: { groupName: string; groupKeywords: string[]; drugKeywords: string[] }[] = [
+  { groupName: "AINEs", groupKeywords: ["aine", "anti-inflamatório", "antiinflamatório", "nsaid", "aspirina", "asa", "aas"], drugKeywords: ["nimesulida", "diclofenaco", "meloxicam", "ibuprofeno", "celecoxib", "etoricoxib", "naproxeno", "piroxicam", "cetoprofeno", "tenoxicam"] },
+  { groupName: "Penicilinas", groupKeywords: ["penicilina", "amoxicilina", "ampicilina"], drugKeywords: ["amoxicilina", "ampicilina", "amoxil"] },
+  { groupName: "Sulfonamidas", groupKeywords: ["sulfa", "sulfonamida"], drugKeywords: ["sulfametoxazol", "bactrim"] },
+  { groupName: "Dipirona/Metamizol", groupKeywords: ["dipirona", "metamizol"], drugKeywords: ["dipirona", "novalgina"] },
+  { groupName: "Opioides", groupKeywords: ["opioide", "morfina", "codeína", "tramadol"], drugKeywords: ["morfina", "codeína", "tramadol", "oxicodona", "fentanil"] },
+  { groupName: "Corticosteroides", groupKeywords: ["corticoide", "corticosteroide"], drugKeywords: ["prednisona", "prednisolona", "dexametasona", "triancinolona", "betametasona"] },
 ];
 
-function checkDrugAllergyAlert(medName: string, allergiesStr: string): string | null {
+function checkDrugAllergyAlert(medName: string, allergiesStr: string): { allergen: string; drug: string; group: string } | null {
   if (!medName || !allergiesStr) return null;
   const name = medName.toLowerCase();
   const alrg = allergiesStr.toLowerCase();
@@ -192,7 +198,7 @@ function checkDrugAllergyAlert(medName: string, allergiesStr: string): string | 
     const allergyMatches = grp.groupKeywords.some(k => alrg.includes(k)) || grp.drugKeywords.some(k => alrg.includes(k));
     const drugMatches = grp.drugKeywords.some(k => name.includes(k));
     if (allergyMatches && drugMatches) {
-      return allergiesStr;
+      return { allergen: allergiesStr, drug: medName, group: grp.groupName };
     }
   }
   return null;
@@ -200,7 +206,7 @@ function checkDrugAllergyAlert(medName: string, allergiesStr: string): string | 
 
 // ── Ortho autocomplete medications ─────────────────────────────────────────────
 interface OrthoMedPreset {
-  name: string; dose: string; route: string; frequency: string; duration: string; instructions: string; prescriptionType: "simples" | "controle_especial" | "antimicrobiano";
+  name: string; dose: string; route: string; frequency: string; duration: string; instructions: string; prescriptionType: "simples" | "controle_especial" | "antimicrobiano" | "notificacao_ab";
 }
 const ORTHO_MEDICATIONS: OrthoMedPreset[] = [
   { name: "Nimesulida 100mg", dose: "1 comprimido", route: "oral", frequency: "12/12h", duration: "5 dias", instructions: "Tomar após refeições", prescriptionType: "simples" },
@@ -225,7 +231,11 @@ const ORTHO_MEDICATIONS: OrthoMedPreset[] = [
   { name: "Celecoxib 200mg", dose: "1 cápsula", route: "oral", frequency: "1x/dia", duration: "10 dias", instructions: "Tomar com alimento — evitar em doença renal", prescriptionType: "simples" },
   { name: "Duloxetina 30mg", dose: "1 cápsula", route: "oral", frequency: "1x/dia", duration: "30 dias", instructions: "Tomar pela manhã — titulação gradual", prescriptionType: "simples" },
   { name: "Vitamina D3 7000UI", dose: "1 comprimido", route: "oral", frequency: "1x/semana", duration: "60 dias", instructions: "Tomar junto com refeição", prescriptionType: "simples" },
-  { name: "Prednisona 40mg (desmame 7d)", dose: "2 comprimidos", route: "oral", frequency: "1x/dia por 3 dias, depois 1 comprimido por 3 dias, depois 1/2 comprimido por 1 dia", duration: "7 dias", instructions: "Tomar pela manhã após refeição — não suspender abruptamente", prescriptionType: "simples" },
+  { name: "Prednisona 40mg (desmame 7d)", dose: "1 comprimido (40mg)", route: "oral", frequency: "1x/dia (esquema de desmame — ver orientações)", duration: "7 dias", instructions: "Esquema: Dias 1-3: 2 comprimidos pela manhã / Dias 4-6: 1 comprimido pela manhã / Dia 7: 1/2 comprimido pela manhã. NÃO suspender abruptamente.", prescriptionType: "simples" },
+  { name: "Etoricoxib 90mg", dose: "1 comprimido", route: "oral", frequency: "1x/dia", duration: "5 dias", instructions: "Tomar após refeição principal — evitar em insuficiência renal", prescriptionType: "simples" },
+  { name: "Tizanidina 4mg", dose: "1 comprimido", route: "oral", frequency: "8/8h", duration: "7 dias", instructions: "Pode causar hipotensão — não associar com ciprofloxacino", prescriptionType: "simples" },
+  { name: "Clonazepam 0,5mg", dose: "1/2 comprimido", route: "oral", frequency: "1x/dia (à noite)", duration: "30 dias", instructions: "Usar à noite para dor neuropática — Notificação B2 (receita amarela)", prescriptionType: "controle_especial" },
+  { name: "Sulfato de Glicosamina 1500mg", dose: "1 sachê em 200ml de água", route: "oral", frequency: "1x/dia", duration: "90 dias", instructions: "Tomar preferencialmente pela manhã", prescriptionType: "simples" },
 ];
 
 // ── Referral text templates ─────────────────────────────────────────────────────
@@ -240,7 +250,7 @@ const REFERRAL_TEXT_TEMPLATES = [
   { type: "fisioterapia", name: "Reabilitação pós-fratura", text: "Paciente em recuperação de fratura de [osso/segmento] com imobilização resolvida. Solicito fisioterapia para recuperação de ADM, força muscular e funcionalidade." },
   { type: "especialidade", name: "Lombalgia → Neurologia", text: "Paciente com lombalgia crônica e sinais de radiculopatia. Solicito avaliação neurológica para investigação diagnóstica e conduta especializada." },
   { type: "especialidade", name: "Suspeita reumatológica", text: "Paciente com artralgia poliarticular de padrão inflamatório. Solicito avaliação reumatológica para investigação de doença reumatológica sistêmica." },
-  { type: "colega", name: "Segunda opinião cirúrgica", text: "Encaminho o(a) paciente para avaliação e segunda opinião cirúrgica. Segue resumo clínico e exames anexos para sua apreciação." },
+  { type: "colega", name: "Segunda opinião cirúrgica", text: "Encaminho o(a) paciente para avaliação ortopédica e segunda opinião quanto à indicação cirúrgica. O paciente apresenta [diagnóstico], com falha de tratamento conservador de [prazo]. Seguem resumo clínico, imagens e exames complementares em anexo. Solicito sua avaliação e parecer.\n\nAtenciosamente,\nDr. Valth Guimarães — CRM/PB 6326 | CRM/PE 16551" },
   { type: "outro", name: "Clínica da dor", text: "Paciente com dor crônica de difícil controle. Solicito avaliação multidisciplinar em clínica especializada em dor para otimização do tratamento analgésico." },
 ];
 
@@ -372,12 +382,20 @@ interface Medication {
 }
 const emptyMed = (): Medication => ({ id: typeof crypto !== "undefined" ? crypto.randomUUID() : String(Date.now() + Math.random()), name: "", dose: "", route: "oral", frequency: "", duration: "", instructions: "", quantity: "" });
 
-function MedRowInline({ med, index, total, onChange, onRemove, allergyWarning }: {
+const FREQ_OPTIONS = ["1x/dia", "2x/dia (12/12h)", "3x/dia (8/8h)", "4x/dia (6/6h)", "1x/semana", "2x/semana", "1x/mês", "Dose única", "Se necessário (SN)", "Outro"];
+
+function MedRowInline({ med, index, total, onChange, onRemove, allergyWarning, suggestions, onApplyPreset }: {
   med: Medication; index: number; total: number;
   onChange: (k: keyof Medication, v: string) => void;
   onRemove: () => void;
-  allergyWarning?: string | null;
+  allergyWarning?: { allergen: string; drug: string; group: string } | null;
+  suggestions?: OrthoMedPreset[];
+  onApplyPreset?: (p: OrthoMedPreset) => void;
 }) {
+  const [freqOther, setFreqOther] = useState(false);
+  const knownFreq = FREQ_OPTIONS.includes(med.frequency);
+  const showSuggestions = (suggestions?.length ?? 0) > 0;
+
   return (
     <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3 space-y-2">
       <div className="flex justify-between items-center">
@@ -391,13 +409,29 @@ function MedRowInline({ med, index, total, onChange, onRemove, allergyWarning }:
       {allergyWarning && (
         <div className="flex items-start gap-1.5 bg-red-50 dark:bg-red-900/20 border border-red-300 dark:border-red-700 rounded px-2 py-1.5">
           <AlertTriangle className="w-3.5 h-3.5 text-red-600 flex-shrink-0 mt-0.5" />
-          <p className="text-[11px] text-red-700 dark:text-red-300 font-semibold">ATENÇÃO: paciente refere alergia a {allergyWarning}. Confirme antes de prescrever.</p>
+          <p className="text-[11px] text-red-700 dark:text-red-300 font-semibold">ATENÇÃO: paciente alérgico a {allergyWarning.allergen} — {allergyWarning.drug} pertence ao grupo {allergyWarning.group}. Confirme antes de prescrever.</p>
         </div>
       )}
       <div className="grid grid-cols-2 gap-2">
-        <div className="col-span-2">
+        <div className="col-span-2 relative">
           <label className={lbl}>Nome *</label>
           <input className={inp} placeholder="Ex: Nimesulida 100mg" value={med.name} onChange={(e) => onChange("name", e.target.value)} />
+          {showSuggestions && (
+            <ul className="absolute z-50 w-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+              {suggestions!.map((p) => (
+                <li key={p.name}>
+                  <button
+                    type="button"
+                    className="w-full text-left px-3 py-2 hover:bg-blue-50 dark:hover:bg-blue-900/20 flex flex-col gap-0.5"
+                    onClick={() => onApplyPreset?.(p)}
+                  >
+                    <span className="text-xs font-semibold text-slate-800 dark:text-slate-100">{p.name}</span>
+                    <span className="text-[10px] text-slate-500">{p.dose} · {p.frequency} · {p.duration}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
         <div>
           <label className={lbl}>Dose</label>
@@ -411,7 +445,24 @@ function MedRowInline({ med, index, total, onChange, onRemove, allergyWarning }:
         </div>
         <div>
           <label className={lbl}>Frequência</label>
-          <input className={inp} placeholder="8/8h, 12/12h..." value={med.frequency} onChange={(e) => onChange("frequency", e.target.value)} />
+          {(!freqOther && knownFreq) || !freqOther ? (
+            <select
+              className={inp}
+              value={knownFreq ? med.frequency : "Outro"}
+              onChange={(e) => {
+                if (e.target.value === "Outro") { setFreqOther(true); onChange("frequency", ""); }
+                else onChange("frequency", e.target.value);
+              }}
+            >
+              <option value="">— selecionar —</option>
+              {FREQ_OPTIONS.map(f => <option key={f} value={f}>{f}</option>)}
+            </select>
+          ) : (
+            <div className="flex gap-1">
+              <input className={inp} placeholder="Ex: de 8 em 8h" value={med.frequency} onChange={(e) => onChange("frequency", e.target.value)} />
+              <button type="button" className="text-[10px] text-slate-400 hover:text-slate-600 whitespace-nowrap" onClick={() => setFreqOther(false)}>↩</button>
+            </div>
+          )}
         </div>
         <div>
           <label className={lbl}>Duração</label>
@@ -930,6 +981,7 @@ function TabProntuario({ patientId }: { patientId: number }) {
   const [consultType, setConsultType] = useState("retorno");
   const [saving, setSaving] = useState(false);
   const [recentlySavedId, setRecentlySavedId] = useState<number | null>(null);
+  const [sortAsc, setSortAsc] = useState(false);
   // Adendo modal state (immutable append instead of edit)
   const [adendoId, setAdendoId] = useState<number | null>(null);
   const [adendoText, setAdendoText] = useState("");
@@ -937,6 +989,7 @@ function TabProntuario({ patientId }: { patientId: number }) {
   const [searchQuery, setSearchQuery] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const adendoTextareaRef = useRef<HTMLTextAreaElement>(null);
 
   const { todayBRFull, todayISO } = useMemo(() => {
     const d = new Date();
@@ -966,10 +1019,11 @@ function TabProntuario({ patientId }: { patientId: number }) {
 
   // Auto-resize adendo textarea
   useEffect(() => {
-    if (!adendoId) return;
-    const ta = document.querySelector("[data-edit-ta]") as HTMLTextAreaElement | null;
-    if (ta) { ta.style.height = "auto"; ta.style.height = Math.min(ta.scrollHeight, 500) + "px"; }
-  }, [adendoText, adendoId]);
+    const ta = adendoTextareaRef.current;
+    if (!ta) return;
+    ta.style.height = "auto";
+    ta.style.height = Math.min(ta.scrollHeight, 500) + "px";
+  }, [adendoText]);
 
   const handleSave = async () => {
     if (!newText.trim()) {
@@ -978,10 +1032,12 @@ function TabProntuario({ patientId }: { patientId: number }) {
     }
     setSaving(true);
     try {
+      // Use fresh date at save time — avoids stale date if drawer was open past midnight
+      const saveDateISO = new Date().toISOString().split("T")[0];
       const typePrefix = CONSULT_TYPES.find(c => c.value === consultType)?.label ?? "";
       const contentWithType = typePrefix ? `[${typePrefix.toUpperCase()}]\n${newText.trim()}` : newText.trim();
       const created = await evolutionApi.create(patientId, {
-        entry_date: todayISO,
+        entry_date: saveDateISO,
         content: contentWithType,
       });
       setEvolutions((prev) => [created as Evolution, ...prev]);
@@ -1020,6 +1076,18 @@ function TabProntuario({ patientId }: { patientId: number }) {
     if (e.key === "Enter" && e.ctrlKey) {
       e.preventDefault();
       handleSave();
+      return;
+    }
+    // Tab-stop: jump to next __ placeholder in the textarea
+    if (e.key === "Tab") {
+      const ta = textareaRef.current;
+      if (!ta) return;
+      const nextPos = ta.value.indexOf("__", ta.selectionEnd);
+      if (nextPos >= 0) {
+        e.preventDefault();
+        ta.setSelectionRange(nextPos, nextPos + 2);
+      }
+      // else: default Tab behavior (move focus out)
     }
   };
 
@@ -1045,13 +1113,16 @@ function TabProntuario({ patientId }: { patientId: number }) {
   };
 
   const filteredEvolutions = useMemo(() => {
-    const sorted = [...evolutions].sort((a, b) => b.entry_date.localeCompare(a.entry_date) || (b.id - a.id));
+    const sorted = [...evolutions].sort((a, b) => {
+      const cmp = b.entry_date.localeCompare(a.entry_date) || (b.id - a.id);
+      return sortAsc ? -cmp : cmp;
+    });
     if (!searchQuery.trim()) return sorted;
     const q = searchQuery.toLowerCase();
     return sorted.filter(ev =>
       ev.content.toLowerCase().includes(q) || ev.entry_date.includes(q)
     );
-  }, [evolutions, searchQuery]);
+  }, [evolutions, searchQuery, sortAsc]);
 
   const highlightText = (text: string, query: string): React.ReactNode => {
     if (!query.trim()) return text;
@@ -1074,8 +1145,8 @@ function TabProntuario({ patientId }: { patientId: number }) {
             <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-lg flex flex-col overflow-hidden max-h-[85vh]">
               <div className="px-5 pt-4 pb-3 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between flex-shrink-0">
                 <div>
-                  <p className="font-bold text-slate-900 dark:text-slate-50 text-sm">Adicionar Adendo</p>
-                  <p className="text-xs text-slate-400 mt-0.5">O registro original e preservado — o adendo e acrescentado abaixo</p>
+                  <p className="font-bold text-slate-900 dark:text-slate-50 text-sm">Acrescentar Adendo</p>
+                  <p className="text-xs text-slate-400 mt-0.5">O registro original é preservado — o adendo é acrescentado abaixo</p>
                 </div>
                 <button onClick={() => { setAdendoId(null); setAdendoText(""); }} className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg">
                   <X className="w-4 h-4" />
@@ -1089,13 +1160,13 @@ function TabProntuario({ patientId }: { patientId: number }) {
                   </div>
                 </div>
                 <div>
-                  <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Texto do adendo / correcao *</p>
+                  <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Texto do adendo / correção *</p>
                   <textarea
-                    data-edit-ta
+                    ref={adendoTextareaRef}
                     autoFocus
                     className="w-full font-mono text-sm text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-700 border border-blue-300 dark:border-blue-600 rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
                     style={{ minHeight: "120px", maxHeight: "500px" }}
-                    placeholder="Descreva a correcao ou complemento..."
+                    placeholder="Descreva a correção ou complemento..."
                     value={adendoText}
                     onChange={e => setAdendoText(e.target.value)}
                   />
@@ -1118,24 +1189,53 @@ function TabProntuario({ patientId }: { patientId: number }) {
       })()}
 
       {/* ── Histórico header ── */}
-      {!loading && evolutions.length > 0 && (
-        <div className="px-5 pt-2 pb-1 border-b border-slate-100 dark:border-slate-800 flex-shrink-0 space-y-1.5">
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-slate-500">
-              {evolutions.length} evolucao{evolutions.length !== 1 ? "oes" : ""} · mais recente primeiro
-            </span>
+      {!loading && evolutions.length > 0 && (() => {
+        const todayISO = new Date().toISOString().split("T")[0];
+        const todayEv = evolutions.find(e => e.entry_date === todayISO);
+        const todayTime = todayEv?.created_at
+          ? new Date(todayEv.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
+          : null;
+        return (
+          <div className="px-5 pt-2 pb-1 border-b border-slate-100 dark:border-slate-800 flex-shrink-0 space-y-1.5">
+            {/* Banner: evolução registrada hoje */}
+            {todayEv && (
+              <div className="flex items-center gap-2 bg-green-50 dark:bg-green-900/20 border border-green-300 dark:border-green-700 rounded-lg px-3 py-1.5">
+                <CheckCircle className="w-3.5 h-3.5 text-green-600 dark:text-green-400 flex-shrink-0" />
+                <p className="text-[11px] text-green-700 dark:text-green-300 font-semibold">
+                  Evolução registrada hoje{todayTime ? ` às ${todayTime}` : ""}
+                </p>
+              </div>
+            )}
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-slate-500">
+                {evolutions.length} evolução{evolutions.length !== 1 ? "ões" : ""} · {sortAsc ? "mais antigo primeiro" : "mais recente primeiro"}
+              </span>
+              <button
+                type="button"
+                onClick={() => setSortAsc(v => !v)}
+                title={sortAsc ? "Mostrar mais recente primeiro" : "Mostrar mais antigo primeiro"}
+                className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+              >
+                {sortAsc ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+              </button>
+            </div>
+            <div className="relative">
+              <input
+                type="text"
+                className="w-full px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-50 text-xs placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                placeholder="Buscar no histórico de evoluções..."
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+              />
+              {searchQuery.trim() && (
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-400">
+                  {filteredEvolutions.length} de {evolutions.length}
+                </span>
+              )}
+            </div>
           </div>
-          {evolutions.length > 5 && (
-            <input
-              type="text"
-              className="w-full px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-50 text-xs placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              placeholder="Buscar no historico de evolucoes..."
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-            />
-          )}
-        </div>
-      )}
+        );
+      })()}
 
       {/* ── Documento evolutivo (scrollável) ── */}
       <div
@@ -1150,31 +1250,34 @@ function TabProntuario({ patientId }: { patientId: number }) {
         ) : evolutions.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-8 gap-2">
             <FileText className="w-8 h-8 text-slate-300" />
-            <p className="text-sm font-semibold text-slate-500">Sem evolucoes registradas neste sistema</p>
-            <p className="text-xs text-slate-400 text-center max-w-52">Se houver historico anterior, registre um resumo como primeira entrada.</p>
+            <p className="text-sm font-semibold text-slate-500">Sem evoluções registradas neste sistema</p>
+            <p className="text-xs text-slate-400 text-center max-w-52">Se houver histórico anterior, registre um resumo como primeira entrada.</p>
             <button
               type="button"
               onClick={() => {
-                setNewText("[RESUMO DE PRONTUARIO ANTERIOR]\nHistorico relevante: __\nCirurgias previas: __\nExames anteriores: __\n");
+                setNewText("[RESUMO DE PRONTUÁRIO ANTERIOR]\nHistórico relevante: __\nCirurgias prévias: __\nExames anteriores: __\n");
                 textareaRef.current?.focus();
               }}
               className="text-xs text-blue-600 hover:underline mt-1"
             >
-              Importar resumo de prontuario anterior
+              Importar resumo de prontuário anterior
             </button>
           </div>
         ) : filteredEvolutions.length === 0 ? (
-          <p className="text-xs text-slate-400 italic py-4 text-center">Nenhuma evolucao encontrada para "{searchQuery}"</p>
+          <p className="text-xs text-slate-400 italic py-4 text-center">Nenhuma evolução encontrada para "{searchQuery}"</p>
         ) : (
           <div className="space-y-3 py-1">
-            {filteredEvolutions.map((ev) => (
+            {filteredEvolutions.map((ev) => {
+              const isToday = ev.entry_date === new Date().toISOString().split("T")[0];
+              return (
               <div
                 key={ev.id}
-                className={`border-l-4 border-blue-500 bg-slate-50 dark:bg-slate-800 rounded-r-lg p-3 transition-all duration-1000 ${recentlySavedId === ev.id ? "ring-2 ring-green-400 ring-offset-1" : ""}`}
+                className={`border-l-4 ${isToday ? "border-green-500" : "border-blue-500"} bg-slate-50 dark:bg-slate-800 rounded-r-lg p-3 transition-all duration-1000 ${recentlySavedId === ev.id ? "ring-2 ring-green-400 ring-offset-1" : ""}`}
               >
                 <div className="flex justify-between items-center mb-1">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-blue-600 dark:text-blue-400">{formatDateBRFull(ev.entry_date)}</span>
+                    <span className={`text-xs font-bold ${isToday ? "text-green-600 dark:text-green-400" : "text-blue-600 dark:text-blue-400"}`}>{formatDateBRFull(ev.entry_date)}</span>
+                    {isToday && <span className="text-[9px] bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 px-1.5 py-0.5 rounded-full font-bold">HOJE</span>}
                     {ev.created_at && (
                       <span className="text-[10px] text-slate-400">
                         {new Date(ev.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
@@ -1183,7 +1286,7 @@ function TabProntuario({ patientId }: { patientId: number }) {
                   </div>
                   <button
                     type="button"
-                    title="Adicionar adendo a esta evolucao"
+                    title="Acrescentar adendo a esta evolução"
                     onClick={() => { setAdendoId(ev.id); setAdendoText(""); }}
                     className="p-1 text-slate-300 hover:text-blue-600 dark:text-slate-600 dark:hover:text-blue-400 transition-colors"
                   >
@@ -1194,7 +1297,8 @@ function TabProntuario({ patientId }: { patientId: number }) {
                   {highlightText(ev.content, searchQuery)}
                 </p>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
@@ -1234,7 +1338,7 @@ function TabProntuario({ patientId }: { patientId: number }) {
           ref={textareaRef}
           className="w-full font-mono text-sm text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 resize-none placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
           style={{ minHeight: "120px", maxHeight: "400px" }}
-          placeholder="Queixa principal, historia da doenca, exame fisico, hipotese diagnostica e conduta..."
+          placeholder="Queixa principal, história da doença, exame físico, hipótese diagnóstica e conduta..."
           value={newText}
           onChange={(e) => setNewText(e.target.value)}
           onKeyDown={handleKeyDown}
@@ -1276,6 +1380,7 @@ const RX_TYPE_OPTIONS: { value: PrescriptionType; label: string; activeClass: st
   { value: "simples",           label: "Simples (Branca)",          activeClass: "border-slate-600 bg-slate-600 text-white" },
   { value: "controle_especial", label: "Controle Especial (RCE)",   activeClass: "border-amber-600 bg-amber-600 text-white" },
   { value: "antimicrobiano",    label: "Antimicrobiano (ATB)",       activeClass: "border-blue-600 bg-blue-600 text-white" },
+  { value: "notificacao_ab",    label: "Notificação A/B (SESA)",    activeClass: "border-red-600 bg-red-600 text-white" },
 ];
 
 function TabReceita({ patientId, patient, clinic }: { patientId: number; patient: any; clinic?: any }) {
@@ -1302,11 +1407,14 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
   const [confirmDeleteTemplateId, setConfirmDeleteTemplateId] = useState<number | null>(null);
   const [showAllRx, setShowAllRx] = useState(false);
 
-  // Autocomplete
-  const [medSuggestions, setMedSuggestions] = useState<{ idx: string; list: OrthoMedPreset[] }[]>([]);
+  // Autocomplete suggestions keyed by med.id
+  const [medSuggestions, setMedSuggestions] = useState<Record<string, OrthoMedPreset[]>>({});
 
   // Memed
   const [memedLoading, setMemedLoading] = useState(false);
+
+  // Track patient id to avoid overwriting manually edited address on re-render
+  const patientIdRef = useRef<number | null>(null);
 
   useEffect(() => {
     prescriptionsApi.list(patientId)
@@ -1319,20 +1427,46 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
       .finally(() => setLoadingTemplates(false));
   }, [patientId]);
 
-  // Pré-preenche endereço e telefone do cadastro do paciente
+  // Pré-preenche endereço e telefone do cadastro do paciente (somente ao trocar de paciente)
   useEffect(() => {
     if (!patient) return;
-    const parts = [
-      patient.address_street,
-      patient.address_city,
-      patient.address_state,
-    ].filter(Boolean);
-    setPatientAddress(parts.join(", "));
-    setPatientPhone(patient.phone || "");
+    if (patient.id !== patientIdRef.current) {
+      const parts = [
+        patient.address_street,
+        patient.address_city,
+        patient.address_state,
+      ].filter(Boolean);
+      setPatientAddress(parts.join(", "));
+      setPatientPhone(patient.phone || "");
+      patientIdRef.current = patient.id;
+    }
   }, [patient]);
 
-  const updateMed = (id: string, k: keyof Medication, v: string) =>
+  const updateMed = (id: string, k: keyof Medication, v: string) => {
     setMedications((ms) => ms.map((m) => (m.id === id ? { ...m, [k]: v } : m)));
+    // Trigger autocomplete suggestions when editing name
+    if (k === "name") {
+      if (v.trim().length >= 2) {
+        const q = v.toLowerCase();
+        const matches = ORTHO_MEDICATIONS.filter(p => p.name.toLowerCase().includes(q)).slice(0, 6);
+        setMedSuggestions(prev => ({ ...prev, [id]: matches }));
+      } else {
+        setMedSuggestions(prev => { const n = { ...prev }; delete n[id]; return n; });
+      }
+    }
+  };
+
+  const applyPreset = (medId: string, preset: OrthoMedPreset) => {
+    setMedications(ms => ms.map(m => m.id === medId ? {
+      ...m, name: preset.name, dose: preset.dose, route: preset.route,
+      frequency: preset.frequency, duration: preset.duration, instructions: preset.instructions,
+    } : m));
+    // Auto-select prescription type from preset
+    if (preset.prescriptionType === "notificacao_ab" || preset.prescriptionType === "controle_especial" || preset.prescriptionType === "antimicrobiano") {
+      setRxType(preset.prescriptionType);
+    }
+    setMedSuggestions(prev => { const n = { ...prev }; delete n[medId]; return n; });
+  };
 
   const isNotificacaoAB = rxType === "notificacao_ab";
   const isATB = rxType === "antimicrobiano";
@@ -1353,8 +1487,12 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
       setPrescriptions((prev) => [newRx, ...prev]);
       setMedications([emptyMed()]);
       setInstructions("");
-      setPatientAddress("");
-      setPatientPhone("");
+      // Restore patient defaults (not wipe them)
+      if (patient) {
+        const parts = [patient.address_street, patient.address_city, patient.address_state].filter(Boolean);
+        setPatientAddress(parts.join(", "));
+        setPatientPhone(patient.phone || "");
+      }
     } catch {
       toast.error("Erro ao salvar receita");
     } finally {
@@ -1479,6 +1617,9 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
         </div>
       )}
 
+      {/* ── Banner de Alergias — sempre visível independente do tipo de receita ── */}
+      <AllergyBanner patient={patient} />
+
       {/* ── Conteúdo do formulário (oculto para Notificação A/B) ── */}
       {!isNotificacaoAB && (
         <>
@@ -1566,9 +1707,6 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
             </button>
           </div>
 
-          {/* ── Banner de Alergias ── */}
-          <AllergyBanner patient={patient} />
-
           {/* ── Campos extras ATB: endereço e telefone do paciente ── */}
           {isATB && (
             <div className="space-y-2 border border-blue-200 dark:border-blue-800 rounded-lg p-3 bg-blue-50/40 dark:bg-blue-900/10">
@@ -1608,6 +1746,8 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
                 onChange={(k, v) => updateMed(med.id, k, v)}
                 onRemove={() => setMedications((ms) => ms.filter((m) => m.id !== med.id))}
                 allergyWarning={checkDrugAllergyAlert(med.name, (patient?.allergies || ""))}
+                suggestions={medSuggestions[med.id] || []}
+                onApplyPreset={(p) => applyPreset(med.id, p)}
               />
             ))}
 
@@ -1778,7 +1918,7 @@ function PrintExamModal({ text, patientName, clinic, onClose, fontSize = 14, lin
             </button>
           </div>
         </div>
-        <div className="p-6 bg-white" style={{ fontFamily: "monospace", fontSize: "13px", color: "#111" }}>
+        <div className="p-6 bg-white" style={{ fontFamily: "Arial, sans-serif", fontSize: "13px", color: "#111" }}>
           <div style={{ borderBottom: "2px solid #0F2D5E", paddingBottom: "10px", marginBottom: "12px", textAlign: "center" }}>
             <p style={{ fontWeight: 700, fontSize: "15px", margin: "0 0 2px 0", color: "#0F2D5E" }}>Dr. Valth Guimarães</p>
             <p style={{ fontSize: "11px", color: "#555", margin: "0" }}>Ortopedia e Traumatologia · CRM/PB 6326 | CRM/PE 16551</p>
@@ -2086,7 +2226,9 @@ function TabExames({ patientId, patient, clinic }: { patientId: number; patient:
         )}
 
         <div className="flex items-center justify-between mt-2">
-          <span className="text-[11px] text-slate-400">Ctrl+Enter para salvar</span>
+          <span className={`text-[11px] ${freeText.length > 500 ? "text-amber-500" : "text-slate-400"}`}>
+            {freeText.length} chars{freeText.length > 500 ? " · pedidos longos podem ser truncados em portais de convênio" : " · Ctrl+Enter para salvar"}
+          </span>
           <div className="flex gap-2">
             <button
               type="button"
@@ -2141,7 +2283,11 @@ function TabExames({ patientId, patient, clinic }: { patientId: number; patient:
             <button type="button" onClick={fetchExams} className="text-xs text-blue-600 hover:underline flex-shrink-0">Tentar novamente</button>
           </div>
         ) : exams.length === 0 ? (
-          <p className="text-xs text-slate-400 italic">Nenhuma solicitação anterior.</p>
+          <div className="flex flex-col items-center py-6 gap-2">
+            <FileSearch2 className="w-8 h-8 text-slate-300" />
+            <p className="text-xs font-semibold text-slate-500">Nenhuma solicitação registrada para este paciente</p>
+            <p className="text-xs text-slate-400">Use os modelos acima para começar</p>
+          </div>
         ) : (
           <div className="space-y-2">
             {(showAllExams ? exams : exams.slice(0, 5)).map((ex) => (
@@ -2249,30 +2395,46 @@ const CERTIFICATE_TYPES = [
   { value: "esportes", label: "Atividades físicas / esportes" },
   { value: "escola", label: "Atividades escolares" },
   { value: "geral", label: "Atividades em geral" },
+  { value: "ef_escolar", label: "Educação Física escolar" },
+  { value: "academia", label: "Academia / Atividade física supervisionada" },
+  { value: "acompanhamento", label: "Acompanhamento de paciente" },
 ];
 
 // Dias rápidos por tipo de atestado
 const CERT_QUICK_DAYS: Record<string, number[]> = {
-  trabalho: [1, 3, 7, 15, 30],
-  esportes:  [7, 14, 30, 60, 90],
-  escola:    [1, 2, 3, 5, 7],
-  geral:     [1, 3, 7, 15, 30],
+  trabalho:       [1, 3, 7, 15, 30],
+  esportes:       [7, 14, 30, 60, 90],
+  escola:         [1, 2, 3, 5, 7],
+  geral:          [1, 3, 7, 15, 30],
+  ef_escolar:     [30, 60, 90, 180],
+  academia:       [14, 30, 45, 60, 90],
+  acompanhamento: [1, 2, 3],
 };
 
 const OBS_CHIPS = [
-  "Uso de muletas",
+  "Uso de muletas — descarga parcial",
+  "Uso de muletas — sem descarga",
   "Membro em repouso elevado",
   "Restrição para esforço físico",
   "Restrição para levantamento de peso",
   "Proibido dirigir",
   "Pode exercer função administrativa",
+  "Imobilização gessada/órtese em uso",
+  "Proibido subir escadas",
+  "Deambulação com apoio parcial",
+  "Restrição para posição sentada prolongada",
+  "Uso de colar cervical",
 ];
 
 const LAUDO_TEMPLATES = [
   { name: "Perícia INSS — Joelho", text: "LAUDO MÉDICO\n\n1. QUEIXA PRINCIPAL\n\n2. HISTÓRIA DA DOENÇA ATUAL\n\n3. ANTECEDENTES PESSOAIS E CIRÚRGICOS\n\n4. EXAME FÍSICO\n   - Inspeção:\n   - Palpação:\n   - Amplitude de Movimento (ADM):\n     Flexão: ___° (normal 135°)\n     Extensão: ___° (normal 0°)\n   - Testes Especiais: Lachman ___ | McMurray ___ | Varo/Valgo ___\n\n5. EXAMES COMPLEMENTARES\n   Exame: | Data: | Achados:\n\n6. DIAGNÓSTICO\n   CID-10:\n\n7. CAPACIDADE FUNCIONAL\n   [ ] Apto para trabalho habitual\n   [ ] Parcialmente incapaz — restrições:\n   [ ] Incapaz temporariamente — prazo estimado:\n   [ ] Incapaz permanentemente\n\n8. CONCLUSÃO\n" },
+  { name: "Perícia INSS — Coluna Lombar", text: "LAUDO MÉDICO — PERÍCIA PREVIDENCIÁRIA\nColuna Lombar / Lombossacra\n\n1. QUEIXA PRINCIPAL\n   {QUEIXA}\n\n2. HISTÓRIA DA DOENÇA ATUAL\n\n3. ANTECEDENTES E CIRURGIAS PRÉVIAS\n\n4. EXAME FÍSICO\n   - Marcha:\n   - ADM lombar:\n     Flexão: ___°  Extensão: ___°  Inclinação D: ___°  Inclinação E: ___°\n   - Lasegue: D___°  E___°\n   - Força muscular MMII: D___  E___  (0–5)\n   - Reflexos: patelar D___ E___ | aquileu D___ E___\n   - Sensibilidade: {SENSIBILIDADE}\n\n5. EXAMES COMPLEMENTARES\n   Exame: | Data: | Achados:\n\n6. DIAGNÓSTICO\n   CID-10:\n\n7. CONCLUSÃO PERICIAL FORMAL\n   ( ) Não há incapacidade laborativa\n   ( ) Incapacidade parcial — restrições:\n   ( ) Incapacidade total temporária — prazo:\n   ( ) Incapacidade total definitiva\n\n8. OBSERVAÇÕES\n" },
+  { name: "Seguradora — Ombro", text: "LAUDO MÉDICO — AVALIAÇÃO ORTOPÉDICA\nRegião: Ombro  |  Lado: {LADO}\n\n1. IDENTIFICAÇÃO\n   Sinistro/Apólice nº: {APOLICE}\n\n2. HISTÓRIA CLÍNICA\n   Data do evento: {DATA_EVENTO}\n   Mecanismo: {MECANISMO}\n\n3. EXAME FÍSICO\n   - Inspeção e palpação:\n   - ADM ativa:\n     Flexão: ___°  Abdução: ___°  RI: ___°  RE: ___°\n   - Força (escala MRC):\n   - Testes: Neer ___  Hawkins ___  Jobe ___  Yergason ___  Apprehension ___\n\n4. EXAMES COMPLEMENTARES\n   Exame: | Data: | Achados relevantes:\n\n5. DIAGNÓSTICO\n   CID-10:\n\n6. NEXO CAUSAL\n   As lesões descritas {SIM/NÃO} são compatíveis com o mecanismo informado.\n\n7. SEQUELA (SUSEP 2023 / Decreto 3.048/99)\n   Grau de incapacidade parcial e permanente: ____%\n\n8. CONCLUSÃO\n" },
+  { name: "Autorização cirúrgica — Quadril (PTQ)", text: "LAUDO PARA AUTORIZAÇÃO DE ARTROPLASTIA TOTAL DE QUADRIL\n\n1. IDENTIFICAÇÃO DO PROCEDIMENTO\n   Procedimento: Artroplastia Total do Quadril (ATQ)\n   Código TUSS: 30724059 / CBHPM: 3.10.06.07-1\n   Lado: {LADO}\n\n2. DIAGNÓSTICO\n   CID-10: M16 — Coxartrose\n\n3. JUSTIFICATIVA CLÍNICA\n   Paciente portador(a) de coxartrose avançada ({LADO}), com dor em repouso e ao esforço, limitação severa da marcha e falha de tratamento conservador.\n\n4. TRATAMENTO CONSERVADOR REALIZADO\n   Fisioterapia: ___ sessões\n   Medicação: ___\n   Infiltrações: ___\n\n5. EXAMES COMPLEMENTARES\n   Exame: | Data: | Achados:\n\n6. URGÊNCIA\n   ( ) Eletiva\n\n7. CONCLUSÃO\n   Indicação formal de ATQ {LADO}. Solicito autorização para realização do procedimento acima justificado.\n" },
+  { name: "Perícia — Síndrome do Túnel do Carpo", text: "LAUDO MÉDICO — PERÍCIA\nSíndrome do Túnel do Carpo (STC)\n\n1. QUEIXA PRINCIPAL\n   Parestesia e dor em {LADO}, com irradiação para dedos 1-3.\n\n2. HISTÓRIA DA DOENÇA ATUAL\n   Início: {INICIO}  |  Fator ocupacional: {SIM/NÃO}\n\n3. EXAME FÍSICO\n   - Sinal de Tinel: {POS/NEG}\n   - Teste de Phalen (60s): {POS/NEG}\n   - Força de pinça D:___  E:___\n   - Sensibilidade (monofilamento): {ACHADOS}\n\n4. ELETRONEUROMIOGRAFIA\n   Data: | Laudo: VCS mediano {VALOR} m/s (ref >50 m/s)\n\n5. DIAGNÓSTICO\n   CID-10: G56.0\n\n6. NEXO COM TRABALHO\n   ( ) Doença Ocupacional — CID: G56.0 / Z57\n   ( ) Sem nexo ocupacional\n\n7. CONCLUSÃO PERICIAL FORMAL\n   ( ) Sem incapacidade\n   ( ) Incapacidade parcial — restrições: movimentos repetitivos, vibração\n   ( ) Indicação cirúrgica (liberação endoscópica do túnel do carpo)\n" },
   { name: "Autorização cirúrgica (Plano)", text: "LAUDO PARA AUTORIZAÇÃO DE PROCEDIMENTO CIRÚRGICO\n\n1. IDENTIFICAÇÃO DO PROCEDIMENTO\n   Procedimento solicitado:\n   Código TUSS/CBHPM:\n\n2. DIAGNÓSTICO\n   CID-10:\n\n3. JUSTIFICATIVA CLÍNICA\n   Paciente portador(a) de...\n\n4. EXAMES QUE EMBASAM A INDICAÇÃO\n\n5. TRATAMENTO CONSERVADOR REALIZADO\n   Sim ( ) — duração:\n   Não ( ) — justificativa:\n\n6. URGÊNCIA\n   ( ) Eletiva  ( ) Urgente  ( ) Emergência\n\n7. CONCLUSÃO\n   Solicito autorização para realização do procedimento acima justificado.\n" },
   { name: "Acidente de trabalho (CAT)", text: "LAUDO DE ACIDENTE DE TRABALHO\n\n1. DESCRIÇÃO DO ACIDENTE\n   Data/hora:\n   Local:\n   Mecanismo do trauma:\n\n2. LESÕES ENCONTRADAS\n\n3. NEXO CAUSAL\n   As lesões descritas são compatíveis com o mecanismo de acidente informado.\n\n4. DIAGNÓSTICO\n   CID-10:\n\n5. TRATAMENTO NECESSÁRIO\n\n6. CONCLUSÃO\n" },
-  { name: "Sequela pós-traumática", text: "LAUDO DE AVALIAÇÃO DE SEQUELA PÓS-TRAUMÁTICA\n\n1. IDENTIFICAÇÃO DO EVENTO\n   Data do trauma:\n   Mecanismo:\n\n2. HISTÓRICO DE TRATAMENTO\n\n3. ESTADO ATUAL\n   Queixa atual:\n   Exame físico:\n   Exames complementares:\n\n4. DIAGNÓSTICO\n   CID-10:\n\n5. SEQUELA\n   Descrição da sequela:\n   Limitação funcional:\n   Grau estimado de incapacidade (tabela SUSEP): ____%\n\n6. CONCLUSÃO\n" },
+  { name: "Sequela pós-traumática", text: "LAUDO DE AVALIAÇÃO DE SEQUELA PÓS-TRAUMÁTICA\n\n1. IDENTIFICAÇÃO DO EVENTO\n   Data do trauma:\n   Mecanismo:\n\n2. HISTÓRICO DE TRATAMENTO\n\n3. ESTADO ATUAL\n   Queixa atual:\n   Exame físico:\n   Exames complementares:\n\n4. DIAGNÓSTICO\n   CID-10:\n\n5. SEQUELA\n   Descrição da sequela:\n   Limitação funcional:\n   Grau estimado de incapacidade (SUSEP 2023 / Decreto 3.048/99): ____%\n\n6. CONCLUSÃO\n" },
   { name: "Laudo de joelho (RX/RM)", text: "LAUDO MÉDICO — JOELHO\n\nExame: {EXAME}\nLado: {LADO}\n\n1. ACHADOS CLÍNICOS\n\n2. ACHADOS DE IMAGEM\n\n3. DIAGNÓSTICO\n   CID-10:\n\n4. CONCLUSÃO\n" },
   { name: "Laudo de coluna (RX/RM)", text: "LAUDO MÉDICO — COLUNA VERTEBRAL\n\nExame: {EXAME}\nSegmento: {SEGMENTO}\n\n1. ACHADOS CLÍNICOS\n\n2. ACHADOS DE IMAGEM\n\n3. DIAGNÓSTICO\n   CID-10:\n\n4. CONCLUSÃO\n" },
   { name: "Relatório médico livre", text: "RELATÓRIO MÉDICO\n\nIlmo(a). Sr(a).,\n\nEncaminho o(a) paciente abaixo, cujos dados e informações clínicas seguem:\n\n" },
@@ -2342,6 +2504,7 @@ function TabEncaminhamentos({ patient, clinic, patientId }: { patient: any; clin
   const [text, setText] = useState("");
   const [outroDestino, setOutroDestino] = useState("");
   const [saving, setSaving] = useState(false);
+  const [pendingRefTemplate, setPendingRefTemplate] = useState<typeof REFERRAL_TEXT_TEMPLATES[0] | null>(null);
   const [printData, setPrintData] = useState<{ typeLabel: string; text: string; cid: string; colleagueName: string } | null>(null);
   const textRef = useRef<HTMLTextAreaElement>(null);
 
@@ -2359,6 +2522,7 @@ function TabEncaminhamentos({ patient, clinic, patientId }: { patient: any; clin
         const p = JSON.parse(saved);
         if (p.refType) setRefType(p.refType);
         if (p.specialty) setSpecialty(p.specialty);
+        if (p.specialtyOther) setSpecialtyOther(p.specialtyOther);
         if (p.physioModality) setPhysioModality(p.physioModality);
         if (p.colleagueName) setColleagueName(p.colleagueName);
         if (p.cid) setCid(p.cid);
@@ -2368,16 +2532,15 @@ function TabEncaminhamentos({ patient, clinic, patientId }: { patient: any; clin
     } catch {}
   }, [draftKey]);
 
-  // Autosave draft with debounce
+  // Autosave draft with debounce — no guard so clearing text also persists the cleared state
   useEffect(() => {
-    if (!text.trim()) return;
     const timer = setTimeout(() => {
       if (typeof window !== "undefined") {
-        localStorage.setItem(draftKey, JSON.stringify({ refType, specialty, physioModality, colleagueName, cid, text, outroDestino }));
+        localStorage.setItem(draftKey, JSON.stringify({ refType, specialty, specialtyOther, physioModality, colleagueName, cid, text, outroDestino }));
       }
     }, 1000);
     return () => clearTimeout(timer);
-  }, [refType, specialty, physioModality, colleagueName, cid, text, outroDestino, draftKey]);
+  }, [refType, specialty, specialtyOther, physioModality, colleagueName, cid, text, outroDestino, draftKey]);
 
   const autoResizeRef = useCallback(() => {
     const ta = textRef.current;
@@ -2452,6 +2615,16 @@ function TabEncaminhamentos({ patient, clinic, patientId }: { patient: any; clin
         <PrintDocModal title="Encaminhamento" content={printContent} onClose={() => setPrintData(null)} />
       )}
 
+      {pendingRefTemplate && (
+        <div className="flex items-center justify-between gap-3 px-3 py-2.5 bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700 rounded-lg text-xs">
+          <span className="text-amber-800 dark:text-amber-200 font-medium">Substituir texto atual pelo modelo <strong>{pendingRefTemplate.name}</strong>?</span>
+          <div className="flex gap-2 shrink-0">
+            <button type="button" onClick={() => setPendingRefTemplate(null)} className="px-2 py-1 rounded border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700">Cancelar</button>
+            <button type="button" onClick={() => { setText(pendingRefTemplate.text); setPendingRefTemplate(null); setTimeout(autoResizeRef, 0); textRef.current?.focus(); }} className="px-2 py-1 rounded bg-amber-600 text-white hover:bg-amber-700 font-semibold">Substituir</button>
+          </div>
+        </div>
+      )}
+
       <div>
         <label className={lbl}>Tipo de Encaminhamento</label>
         <div className="flex flex-wrap gap-2">
@@ -2499,11 +2672,9 @@ function TabEncaminhamentos({ patient, clinic, patientId }: { patient: any; clin
       )}
 
       {refType === "colega" && (
-        <div className="grid grid-cols-2 gap-2">
-          <div className="col-span-2">
-            <label className={lbl}>Nome do colega (Dr./Dra.)</label>
-            <input className={inp} placeholder="Ex: Dr. João Silva" value={colleagueName} onChange={e => setColleagueName(e.target.value)} />
-          </div>
+        <div>
+          <label className={lbl}>Nome do colega (Dr./Dra.)</label>
+          <input className={inp} placeholder="Ex: Dr. João Silva" value={colleagueName} onChange={e => setColleagueName(e.target.value)} />
         </div>
       )}
 
@@ -2529,7 +2700,10 @@ function TabEncaminhamentos({ patient, clinic, patientId }: { patient: any; clin
               <button
                 key={tpl.name}
                 type="button"
-                onClick={() => { setText(tpl.text); setTimeout(autoResizeRef, 0); textRef.current?.focus(); }}
+                onClick={() => {
+                  if (text.trim() && text !== tpl.text) { setPendingRefTemplate(tpl); return; }
+                  setText(tpl.text); setTimeout(autoResizeRef, 0); textRef.current?.focus();
+                }}
                 className="text-[11px] px-2 py-0.5 rounded border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors"
               >
                 {tpl.name}
@@ -2573,33 +2747,64 @@ function TabEncaminhamentos({ patient, clinic, patientId }: { patient: any; clin
 function TabProcedimentos({ patientId, patient, clinic }: { patientId: number; patient: any; clinic?: any }) {
   const [text, setText] = useState("");
   const [cid, setCid] = useState("");
+  const [duration, setDuration] = useState("");
+  const [saving, setSaving] = useState(false);
   const [procedureTime, setProcedureTime] = useState(() => {
     const now = new Date();
     return `${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`;
   });
   const [activeTemplateName, setActiveTemplateName] = useState<string | null>(null);
-  const [printData, setPrintData] = useState<{ text: string; cid: string; time: string } | null>(null);
+  const [pendingTemplate, setPendingTemplate] = useState<typeof PROCEDURE_TEMPLATES[0] | null>(null);
+  const [printData, setPrintData] = useState<{ text: string; cid: string; time: string; duration: string } | null>(null);
   const textRef = useRef<HTMLTextAreaElement>(null);
 
   const today = new Date();
   const dateStr = `${String(today.getDate()).padStart(2,"0")}/${String(today.getMonth()+1).padStart(2,"0")}/${today.getFullYear()}`;
   const cityState = clinic ? `${clinic.city}/${clinic.state}` : "_________";
 
-  const autoResizeProc = () => {
+  const autoResizeProc = useCallback(() => {
     const ta = textRef.current;
     if (!ta) return;
     ta.style.height = "auto";
     ta.style.height = `${Math.max(ta.scrollHeight, 200)}px`;
-  };
+  }, []);
 
   const handleSelectTemplate = (tmpl: typeof PROCEDURE_TEMPLATES[0]) => {
     if (text.trim() && text !== tmpl.text) {
-      if (!window.confirm("Substituir o texto atual pelo modelo?")) return;
+      setPendingTemplate(tmpl);
+      return;
     }
+    applyTemplate(tmpl);
+  };
+
+  const applyTemplate = (tmpl: typeof PROCEDURE_TEMPLATES[0]) => {
     setText(tmpl.text);
     setActiveTemplateName(tmpl.name);
+    setPendingTemplate(null);
     setTimeout(autoResizeProc, 0);
     textRef.current?.focus();
+  };
+
+  const handleSaveProc = async () => {
+    if (!text.trim()) { toast.error("Descreva o procedimento antes de salvar"); return; }
+    setSaving(true);
+    try {
+      // Persist via evolutionApi with procedure tag until dedicated endpoint exists
+      await evolutionApi.create(patientId, {
+        entry_date: new Date().toISOString().split("T")[0],
+        content: `[PROCEDIMENTO]${cid ? ` — CID: ${cid}` : ""}${duration ? ` — Duração: ${duration}` : ""}\n${text.trim()}`,
+      });
+      toast.success("Procedimento registrado!");
+      setText("");
+      setCid("");
+      setDuration("");
+      setActiveTemplateName(null);
+      if (textRef.current) textRef.current.style.height = "auto";
+    } catch {
+      toast.error("Erro ao salvar procedimento");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const printContent = printData && (
@@ -2614,6 +2819,7 @@ function TabProcedimentos({ patientId, patient, clinic }: { patientId: number; p
         {patient?.birth_date && <p style={{ margin: 0 }}><strong>Nasc.:</strong> {new Date(patient.birth_date + "T12:00:00").toLocaleDateString("pt-BR")}</p>}
         {patient?.cpf && <p style={{ margin: 0 }}><strong>CPF:</strong> {patient.cpf}</p>}
         {(patient?.patient_insurance || patient?.insurance) && <p style={{ margin: 0 }}><strong>Convênio:</strong> {patient?.patient_insurance || patient?.insurance}</p>}
+        {printData.duration && <p style={{ margin: 0 }}><strong>Duração:</strong> {printData.duration}</p>}
       </div>
       {printData.cid && (
         <p style={{ marginBottom: "12px", fontSize: "12px" }}><strong>CID-10:</strong> {printData.cid}</p>
@@ -2640,6 +2846,19 @@ function TabProcedimentos({ patientId, patient, clinic }: { patientId: number; p
     <div className="px-5 pb-5 space-y-4">
       {printData && printContent && (
         <PrintDocModal title="Relatório de Procedimento" content={printContent} onClose={() => setPrintData(null)} />
+      )}
+
+      <AllergyBanner patient={patient} />
+
+      {/* Inline confirmation for template replacement */}
+      {pendingTemplate && (
+        <div className="flex items-center justify-between gap-3 px-3 py-2.5 bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700 rounded-lg text-xs">
+          <span className="text-amber-800 dark:text-amber-200 font-medium">Substituir texto atual pelo modelo <strong>{pendingTemplate.name}</strong>?</span>
+          <div className="flex gap-2 shrink-0">
+            <button type="button" onClick={() => setPendingTemplate(null)} className="px-2 py-1 rounded border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700">Cancelar</button>
+            <button type="button" onClick={() => applyTemplate(pendingTemplate)} className="px-2 py-1 rounded bg-amber-600 text-white hover:bg-amber-700 font-semibold">Substituir</button>
+          </div>
+        </div>
       )}
 
       {/* Template chips */}
@@ -2673,16 +2892,29 @@ function TabProcedimentos({ patientId, patient, clinic }: { patientId: number; p
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className={lbl}>Hora do procedimento</label>
-          <input type="time" className={inp} value={procedureTime} onChange={e => setProcedureTime(e.target.value)} />
+          <div className="flex gap-1">
+            <input type="time" className={inp} value={procedureTime} onChange={e => setProcedureTime(e.target.value)} />
+            <button
+              type="button"
+              onClick={() => {
+                const now = new Date();
+                setProcedureTime(`${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`);
+              }}
+              className="px-2 py-1.5 border border-slate-300 dark:border-slate-600 rounded-lg text-xs text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 whitespace-nowrap"
+              title="Usar hora atual"
+            >
+              Agora
+            </button>
+          </div>
         </div>
         <div>
           <label className={lbl}>Duração aproximada</label>
-          <select className={inp}>
+          <select className={inp} value={duration} onChange={e => setDuration(e.target.value)}>
             <option value="">— selecionar —</option>
-            <option>Menos de 10 min</option>
-            <option>10–30 min</option>
-            <option>30–60 min</option>
-            <option>Mais de 60 min</option>
+            <option value="Menos de 10 min">Menos de 10 min</option>
+            <option value="10–30 min">10–30 min</option>
+            <option value="30–60 min">30–60 min</option>
+            <option value="Mais de 60 min">Mais de 60 min</option>
           </select>
         </div>
       </div>
@@ -2696,7 +2928,7 @@ function TabProcedimentos({ patientId, patient, clinic }: { patientId: number; p
           placeholder={"Ex: Realizada infiltração articular do joelho direito com...\n\nOrientações: repouso de 24h..."}
           value={text}
           onChange={e => { setText(e.target.value); setActiveTemplateName(null); autoResizeProc(); }}
-          onKeyDown={e => { if (e.key === "Enter" && e.ctrlKey) { e.preventDefault(); if (!text.trim()) { toast.error("Descreva o procedimento antes de salvar"); return; } setPrintData({ text, cid, time: procedureTime }); toast.success("Procedimento registrado"); } }}
+          onKeyDown={e => { if (e.key === "Enter" && e.ctrlKey) { e.preventDefault(); handleSaveProc(); } }}
         />
         <p className="text-[11px] text-slate-400 mt-1">Ctrl+Enter para salvar · {text.length} caracteres</p>
       </div>
@@ -2704,21 +2936,18 @@ function TabProcedimentos({ patientId, patient, clinic }: { patientId: number; p
       <div className="flex gap-2 pt-1">
         <button
           type="button"
-          onClick={() => { if (!text.trim()) { toast.error("Descreva o procedimento antes de imprimir"); return; } setPrintData({ text, cid, time: procedureTime }); }}
+          onClick={() => { if (!text.trim()) { toast.error("Descreva o procedimento antes de imprimir"); return; } setPrintData({ text, cid, time: procedureTime, duration }); }}
           className="flex items-center gap-1.5 px-3 py-2 border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-400 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 text-xs font-semibold"
         >
           <Printer className="w-3.5 h-3.5" /> Imprimir
         </button>
         <button
           type="button"
-          onClick={() => {
-            if (!text.trim()) { toast.error("Descreva o procedimento antes de salvar"); return; }
-            setPrintData({ text, cid, time: procedureTime });
-            toast.success("Procedimento registrado");
-          }}
-          className="flex-1 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold flex items-center justify-center gap-2 text-sm"
+          onClick={handleSaveProc}
+          disabled={saving}
+          className="flex-1 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold flex items-center justify-center gap-2 text-sm disabled:opacity-60"
         >
-          <CheckCircle className="w-4 h-4" /> Salvar Procedimento
+          <CheckCircle className="w-4 h-4" /> {saving ? "Salvando..." : "Salvar Procedimento"}
         </button>
       </div>
     </div>
@@ -2775,8 +3004,8 @@ function TabAtestados({ patient, clinic }: { patient: any; clinic?: any }) {
             Atesto que o(a) paciente <strong>{patient?.name}</strong>
             {patient?.cpf ? `, CPF ${patient.cpf},` : ""}
             {patient?.birth_date ? ` nascido(a) em ${new Date(patient.birth_date + "T12:00:00").toLocaleDateString("pt-BR")},` : ""}
-            {" "}encontra-se em avaliação médica nesta data e necessita afastar-se de <strong>{pTypeLabel}</strong> pelo
-            período de <strong>{printData.days} dia{Number(printData.days) !== 1 ? "s" : ""}</strong>, a partir de {startFormatted}, com retorno previsto para <strong>{retDate}</strong>.
+            {" "}foi avaliado(a) em {dateStr} e necessita afastar-se de <strong>{pTypeLabel}</strong> pelo
+            período de <strong>{printData.days} dia{Number(printData.days) !== 1 ? "s" : ""}</strong>, a contar de {startFormatted}, com retorno previsto para <strong>{retDate}</strong>.
           </p>
           {printData.cid && (
             <p style={{ marginTop: "12px" }}>
@@ -2842,19 +3071,43 @@ function TabAtestados({ patient, clinic }: { patient: any; clinic?: any }) {
           type="number"
           min="1"
           max="365"
-          className={inp}
+          className={`${inp} ${(!days || Number(days) < 1) ? "border-red-400 ring-1 ring-red-400" : ""}`}
           value={days}
           onChange={e => setDays(e.target.value)}
         />
+        {(!days || Number(days) < 1) && (
+          <p className="text-xs text-red-500 mt-0.5">Mínimo 1 dia</p>
+        )}
         {returnDate && (
           <p className="text-xs text-slate-500 mt-1">Retorno previsto: <strong>{returnDate}</strong></p>
         )}
       </div>
 
       <div>
-        <label className={lbl}>CID-10 <span className="text-red-500 font-normal">(exigido para empresas com PCMSO e INSS)</span></label>
+        <label className={lbl}>
+          CID-10{" "}
+          {(certType === "trabalho" || certType === "geral") ? (
+            <span className="text-red-500 font-normal">(exigido para empresas com PCMSO e INSS)</span>
+          ) : (certType === "escola" || certType === "esportes" || certType === "ef_escolar" || certType === "academia") ? (
+            <span className="text-slate-400 font-normal">(opcional para atividades escolares e esportivas)</span>
+          ) : null}
+        </label>
         <CidSearch value={cid} onChange={setCid} />
       </div>
+
+      {/* Acompanhamento extra fields */}
+      {certType === "acompanhamento" && (
+        <div className="grid grid-cols-2 gap-3">
+          <div className="col-span-2">
+            <label className={lbl}>Nome do paciente acompanhado *</label>
+            <input className={inp} placeholder="Nome completo do paciente" id="accomp-name" />
+          </div>
+          <div>
+            <label className={lbl}>Grau de parentesco / relação</label>
+            <input className={inp} placeholder="Ex: filho(a), cônjuge, pai/mãe..." id="accomp-rel" />
+          </div>
+        </div>
+      )}
 
       <div>
         <label className={lbl}>Restrições / Observações</label>
@@ -2888,11 +3141,12 @@ function TabAtestados({ patient, clinic }: { patient: any; clinic?: any }) {
         </button>
         <button
           type="button"
+          disabled={!startDate || !days || Number(days) < 1}
           onClick={() => {
             if (!startDate || !days || Number(days) < 1) { toast.error("Informe os dias de afastamento"); return; }
             setPrintData({ cid, days, certType, obs, startDate });
           }}
-          className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold text-xs"
+          className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold text-xs disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Printer className="w-3.5 h-3.5" /> Visualizar e Imprimir
         </button>
@@ -2909,6 +3163,7 @@ function TabLaudos({ patient, clinic }: { patient: any; clinic?: any }) {
   const [cid, setCid] = useState("");
   const [funcCapacity, setFuncCapacity] = useState("");
   const [funcDetail, setFuncDetail] = useState("");
+  const [pendingLaudoTemplate, setPendingLaudoTemplate] = useState<typeof LAUDO_TEMPLATES[0] | null>(null);
   const [printData, setPrintData] = useState<{ text: string; finalidade: string; cid: string; funcCapacity: string; funcDetail: string } | null>(null);
   const textRef = useRef<HTMLTextAreaElement>(null);
 
@@ -2949,25 +3204,49 @@ function TabLaudos({ patient, clinic }: { patient: any; clinic?: any }) {
     return () => clearTimeout(timer);
   }, [text, finalidade, cid, funcCapacity, funcDetail, draftKey]);
 
-  const autoResizeLaudo = () => {
+  const autoResizeLaudo = useCallback(() => {
     const ta = textRef.current;
     if (!ta) return;
     ta.style.height = "auto";
-    ta.style.height = `${Math.max(ta.scrollHeight, 300)}px`;
-  };
+    ta.style.height = `${Math.min(Math.max(ta.scrollHeight, 300), 600)}px`;
+  }, []);
 
   const hasPlaceholders = /\{[A-Z_]+\}/g.test(text);
   const pendingPlaceholders = useMemo(() => [...text.matchAll(/\{[A-Z_]+\}/g)].map(m => m[0]), [text]);
+
+  // Fill {PACIENTE} and {DATA} placeholders with real patient data on template apply
+  const fillPatientVars = (tmplText: string): string => {
+    const patientName = patient?.name ?? "{PACIENTE}";
+    const today = new Date().toLocaleDateString("pt-BR");
+    return tmplText
+      .replace(/\{PACIENTE\}/g, patientName)
+      .replace(/\{DATA\}/g, today);
+  };
+
+  const applyLaudoTemplate = (t: typeof LAUDO_TEMPLATES[0]) => {
+    setText(fillPatientVars(t.text));
+    setPendingLaudoTemplate(null);
+    setTimeout(autoResizeLaudo, 0);
+    textRef.current?.focus();
+  };
 
   const handleTemplate = (name: string) => {
     const t = LAUDO_TEMPLATES.find(lt => lt.name === name);
     if (!t) return;
     if (text.trim() && text !== t.text) {
-      if (!window.confirm("Substituir o texto atual pelo modelo?")) return;
+      setPendingLaudoTemplate(t);
+      return;
     }
-    setText(t.text);
-    setTimeout(autoResizeLaudo, 0);
-    textRef.current?.focus();
+    applyLaudoTemplate(t);
+  };
+
+  const saveDraftNow = () => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem(draftKey, JSON.stringify({ text, finalidade, cid, funcCapacity, funcDetail }));
+      setDraftSaved(true);
+      setTimeout(() => setDraftSaved(false), 2000);
+      toast.success("Rascunho salvo");
+    }
   };
 
   const printContent = useMemo(() => {
@@ -2995,7 +3274,7 @@ function TabLaudos({ patient, clinic }: { patient: any; clinic?: any }) {
         </div>
         {printData.funcCapacity && (
           <div style={{ borderTop: "2px solid #0F2D5E", paddingTop: "10px", marginBottom: "24px" }}>
-            <p style={{ fontWeight: 700, fontSize: "12px", marginBottom: "4px" }}>Conclusão Funcional:</p>
+            <p style={{ fontWeight: 700, fontSize: "12px", marginBottom: "4px" }}>Conclusão Pericial Formal:</p>
             <p style={{ fontSize: "12px" }}>{printData.funcCapacity}{printData.funcDetail ? ` — ${printData.funcDetail}` : ""}</p>
           </div>
         )}
@@ -3017,6 +3296,17 @@ function TabLaudos({ patient, clinic }: { patient: any; clinic?: any }) {
     <div className="px-5 pb-5 space-y-4">
       {printData && printContent && (
         <PrintDocModal title="Laudo Médico" content={printContent} onClose={() => setPrintData(null)} />
+      )}
+
+      {/* Inline confirmation for template replacement */}
+      {pendingLaudoTemplate && (
+        <div className="flex items-center justify-between gap-3 px-3 py-2.5 bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700 rounded-lg text-xs">
+          <span className="text-amber-800 dark:text-amber-200 font-medium">Substituir texto atual pelo modelo <strong>{pendingLaudoTemplate.name}</strong>?</span>
+          <div className="flex gap-2 shrink-0">
+            <button type="button" onClick={() => setPendingLaudoTemplate(null)} className="px-2 py-1 rounded border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700">Cancelar</button>
+            <button type="button" onClick={() => applyLaudoTemplate(pendingLaudoTemplate)} className="px-2 py-1 rounded bg-amber-600 text-white hover:bg-amber-700 font-semibold">Substituir</button>
+          </div>
+        </div>
       )}
 
       {/* Finalidade */}
@@ -3070,7 +3360,7 @@ function TabLaudos({ patient, clinic }: { patient: any; clinic?: any }) {
         <textarea
           ref={textRef}
           className={`${inp} resize-none font-mono`}
-          style={{ minHeight: "300px" }}
+          style={{ minHeight: "300px", maxHeight: "600px" }}
           placeholder="Escreva o laudo aqui ou selecione um modelo acima..."
           value={text}
           onChange={e => { setText(e.target.value); autoResizeLaudo(); }}
@@ -3080,9 +3370,9 @@ function TabLaudos({ patient, clinic }: { patient: any; clinic?: any }) {
         )}
       </div>
 
-      {/* Conclusão funcional */}
+      {/* Conclusão Pericial Formal */}
       <div>
-        <label className={lbl}>Conclusão Funcional (opcional)</label>
+        <label className={lbl}>Conclusão Pericial Formal (opcional)</label>
         <select className={inp + " mb-2"} value={funcCapacity} onChange={e => setFuncCapacity(e.target.value)}>
           <option value="">— selecionar —</option>
           <option value="Sem limitação funcional">Sem limitação funcional</option>
@@ -3106,13 +3396,20 @@ function TabLaudos({ patient, clinic }: { patient: any; clinic?: any }) {
                 value={incapPercent}
                 onChange={e => setIncapPercent(e.target.value)}
               />
-              <span className="text-xs text-slate-500 dark:text-slate-400">Conforme tabela DPVAT/SUSEP ou laudo pericial</span>
+              <span className="text-xs text-slate-500 dark:text-slate-400">Conforme tabela SUSEP 2023 / Decreto 3.048/99</span>
             </div>
           </div>
         )}
       </div>
 
       <div className="flex gap-2 pt-1">
+        <button
+          type="button"
+          onClick={saveDraftNow}
+          className="flex items-center gap-1.5 px-3 py-2 border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-400 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 text-xs font-semibold"
+        >
+          <Save className="w-3.5 h-3.5" /> Salvar Rascunho
+        </button>
         <button
           type="button"
           onClick={() => {
@@ -3155,6 +3452,7 @@ function TabFotos({ patientId }: { patientId: number }) {
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
   const [uploadZoneOpen, setUploadZoneOpen] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
 
@@ -3318,12 +3616,15 @@ function TabFotos({ patientId }: { patientId: number }) {
           >
             <ChevronDown className="w-5 h-5 -rotate-90" />
           </button>
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1">
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1 max-w-[75vw]">
             {zoomedPhoto.title && (
-              <p className="bg-black/60 text-white text-xs px-3 py-1 rounded-full max-w-64 truncate">{zoomedPhoto.title}</p>
+              <p className="bg-black/60 text-white text-xs px-3 py-1 rounded-full max-w-full truncate">{zoomedPhoto.title}</p>
             )}
             {zoomedPhoto.date && (
               <p className="bg-black/50 text-white/80 text-[10px] px-2 py-0.5 rounded-full">{formatPhotoDate(zoomedPhoto.date)}</p>
+            )}
+            {zoomedPhoto.notes && (
+              <p className="bg-black/60 text-white/90 text-[11px] px-3 py-1 rounded-lg text-center max-w-full">{zoomedPhoto.notes}</p>
             )}
           </div>
           <p className="absolute top-4 left-1/2 -translate-x-1/2 text-white/60 text-xs">{(zoomedIndex ?? 0) + 1} / {photos.length}</p>
@@ -3334,10 +3635,15 @@ function TabFotos({ patientId }: { patientId: number }) {
       {showUploadZone ? (
         <div className="mb-4 space-y-2">
           <div
-            className="border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-xl p-6 text-center cursor-pointer hover:border-blue-400 hover:bg-blue-50/30 dark:hover:bg-blue-900/10 transition-all"
+            className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all ${
+              isDragging
+                ? "border-blue-500 bg-blue-50/60 dark:bg-blue-900/25 scale-[1.01]"
+                : "border-slate-300 dark:border-slate-600 hover:border-blue-400 hover:bg-blue-50/30 dark:hover:bg-blue-900/10"
+            }`}
             onClick={() => fileRef.current?.click()}
-            onDragOver={e => e.preventDefault()}
-            onDrop={e => { e.preventDefault(); handleUpload(e.dataTransfer.files); }}
+            onDragOver={e => { e.preventDefault(); setIsDragging(true); }}
+            onDragLeave={() => setIsDragging(false)}
+            onDrop={e => { e.preventDefault(); setIsDragging(false); handleUpload(e.dataTransfer.files); }}
           >
             <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={e => handleUpload(e.target.files)} />
             <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={e => handleUpload(e.target.files)} />
