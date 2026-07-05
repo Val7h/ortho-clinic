@@ -3212,7 +3212,7 @@ function TabLaudos({ patient, clinic }: { patient: any; clinic?: any }) {
   }, []);
 
   const hasPlaceholders = /\{[A-Z_]+\}/g.test(text);
-  const pendingPlaceholders = useMemo(() => [...text.matchAll(/\{[A-Z_]+\}/g)].map(m => m[0]), [text]);
+  const pendingPlaceholders = useMemo(() => { const matches: string[] = []; let m; const re = /\{[A-Z_]+\}/g; while ((m = re.exec(text)) !== null) matches.push(m[0]); return matches; }, [text]);
 
   // Fill {PACIENTE} and {DATA} placeholders with real patient data on template apply
   const fillPatientVars = (tmplText: string): string => {
