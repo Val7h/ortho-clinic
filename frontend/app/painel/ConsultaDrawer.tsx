@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import {
   X, Play, CheckCircle, UserX, AlertTriangle, Activity, Pill,
   ClipboardList, Stethoscope, FileText, FlaskConical,
   Plus, Trash2, Printer, ChevronDown, ChevronUp, Save,
   Send, ClipboardCheck, Award, Camera, FileSearch2, Upload, ImageIcon, ZoomIn, ZoomOut,
+  Pencil, Download,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { patientsApi, consultationsApi, prescriptionsApi, prescriptionTemplatesApi, examsApi, evolutionApi, clinicApi } from "@/lib/api";
@@ -103,13 +104,37 @@ const ORTHO_CIDS = [
   { code: "M48.0", label: "Estenose espinhal" },
   { code: "M47.8", label: "Espondilose com outras mielopatias" },
   { code: "M62.6", label: "Distensão muscular" },
+  { code: "S93.4", label: "Entorse e distensão do tornozelo" },
+  { code: "M54.2", label: "Cervicalgia" },
+  { code: "S42.2", label: "Fratura da diáfise do úmero" },
+  { code: "S82.0", label: "Fratura da rótula" },
+  { code: "M23.0", label: "Corpo livre em articulação do joelho" },
+  { code: "M79.3", label: "Paniculite" },
+  { code: "S72.1", label: "Fratura pertrocantérica do fêmur" },
+  { code: "S62.5", label: "Fratura dos metacarpos" },
+  { code: "M25.5", label: "Dor articular" },
+  { code: "M79.6", label: "Dor em membro" },
+  { code: "T14.0", label: "Fratura de região não especificada do corpo" },
+  { code: "S00.9", label: "Traumatismo superficial não especificado da cabeça" },
 ];
 
-const ROUTE_OPTIONS = ["oral", "IM", "IV", "tópico", "inalatório", "sublingual", "retal"];
+const ROUTE_OPTIONS = ["oral", "tópico", "IM", "SC", "IV", "transdérmico", "intraarticular", "inalatório", "sublingual", "retal"];
 
 const LS_EXAM_TEMPLATES_KEY = "orthoclinic_exam_templates";
 const LS_EXAM_FONT_SIZE_KEY = "orthoclinic_exam_font_size";
 const LS_EXAM_LINE_HEIGHT_KEY = "orthoclinic_exam_line_height";
+
+// Quick exam templates built-in (ortopedia ambulatorial)
+const EXAM_QUICK_TEMPLATES = [
+  { name: "RNM Joelho", content: "SOLICITO: RESSONÂNCIA MAGNÉTICA DO JOELHO [D/E] SEM CONTRASTE\nINCIDÊNCIAS: Coronal, Sagital, Axial\nHD: LESÃO MENISCAL / LCA" },
+  { name: "RX Coluna LS", content: "SOLICITO: RADIOGRAFIA DA COLUNA LOMBOSSACRA\nINCIDÊNCIAS: AP e Perfil\nHD: LOMBALGIA / ESPONDILODISCOARTROSE" },
+  { name: "TC Coluna", content: "SOLICITO: TOMOGRAFIA COMPUTADORIZADA DA COLUNA LOMBAR\nHD: HÉRNIA DISCAL / ESTENOSE DO CANAL" },
+  { name: "DXA", content: "SOLICITO: DENSITOMETRIA ÓSSEA\nREGIÕES: Coluna lombar L1-L4 e fêmur proximal bilateral\nHD: OSTEOPOROSE / OSTEOPENIA" },
+  { name: "EMG", content: "SOLICITO: ELETRONEUROMIOGRAFIA DOS MEMBROS [SUPERIORES/INFERIORES]\nHD: SÍNDROME DO TÚNEL DO CARPO / RADICULOPATIA" },
+  { name: "RNM Ombro", content: "SOLICITO: RESSONÂNCIA MAGNÉTICA DO OMBRO [D/E] SEM CONTRASTE\nINCIDÊNCIAS: Coronal, Sagital, Axial\nHD: LESÃO DO MANGUITO ROTADOR / IMPACTO SUBACROMIAL" },
+  { name: "RX Joelho", content: "SOLICITO: RADIOGRAFIA DO JOELHO [D/E]\nINCIDÊNCIAS: AP, Perfil e Axial de Patela\nHD: GONARTROSE" },
+  { name: "US Ombro", content: "SOLICITO: ULTRASSONOGRAFIA DO OMBRO [D/E]\nHD: TENDINOPATIA / BURSITE SUBACROMIAL" },
+];
 
 interface ExamTemplate {
   id: string;
@@ -143,6 +168,67 @@ function loadExamLineHeight(): "normal" | "relaxed" {
   if (v === "relaxed") return "relaxed";
   return "normal";
 }
+
+// ── Drug-allergy alert groups ───────────────────────────────────────────────────
+const DRUG_ALLERGY_GROUPS: { groupKeywords: string[]; drugKeywords: string[] }[] = [
+  { groupKeywords: ["aine", "anti-inflamatório", "antiinflamatório", "nsaid", "aspirina", "asa", "aas"], drugKeywords: ["nimesulida", "diclofenaco", "meloxicam", "ibuprofeno", "celecoxib", "etoricoxib", "naproxeno", "piroxicam", "cetoprofeno", "tenoxicam"] },
+  { groupKeywords: ["penicilina", "amoxicilina", "ampicilina"], drugKeywords: ["amoxicilina", "ampicilina", "amoxil"] },
+  { groupKeywords: ["sulfa", "sulfonamida"], drugKeywords: ["sulfametoxazol", "bactrim"] },
+  { groupKeywords: ["dipirona", "metamizol"], drugKeywords: ["dipirona", "novalgina"] },
+];
+
+function checkDrugAllergyAlert(medName: string, allergiesStr: string): string | null {
+  if (!medName || !allergiesStr) return null;
+  const name = medName.toLowerCase();
+  const alrg = allergiesStr.toLowerCase();
+  for (const grp of DRUG_ALLERGY_GROUPS) {
+    const allergyMatches = grp.groupKeywords.some(k => alrg.includes(k)) || grp.drugKeywords.some(k => alrg.includes(k));
+    const drugMatches = grp.drugKeywords.some(k => name.includes(k));
+    if (allergyMatches && drugMatches) {
+      return allergiesStr;
+    }
+  }
+  return null;
+}
+
+// ── Ortho autocomplete medications ─────────────────────────────────────────────
+interface OrthoMedPreset {
+  name: string; dose: string; route: string; frequency: string; duration: string; instructions: string; prescriptionType: "simples" | "controle_especial" | "antimicrobiano";
+}
+const ORTHO_MEDICATIONS: OrthoMedPreset[] = [
+  { name: "Nimesulida 100mg", dose: "1 comprimido", route: "oral", frequency: "12/12h", duration: "5 dias", instructions: "Tomar após refeições", prescriptionType: "simples" },
+  { name: "Diclofenaco Potássico 50mg", dose: "1 comprimido", route: "oral", frequency: "8/8h", duration: "5 dias", instructions: "Tomar após refeições", prescriptionType: "simples" },
+  { name: "Meloxicam 15mg", dose: "1 comprimido", route: "oral", frequency: "1x/dia", duration: "7 dias", instructions: "Tomar após refeição principal", prescriptionType: "simples" },
+  { name: "Cetoprofeno 100mg", dose: "1 comprimido", route: "oral", frequency: "12/12h", duration: "5 dias", instructions: "Tomar após refeições", prescriptionType: "simples" },
+  { name: "Tramadol 50mg", dose: "1 cápsula", route: "oral", frequency: "8/8h", duration: "5 dias", instructions: "Pode causar sonolência", prescriptionType: "controle_especial" },
+  { name: "Codeína 30mg", dose: "1 comprimido", route: "oral", frequency: "6/6h", duration: "3 dias", instructions: "Conforme necessidade de dor", prescriptionType: "controle_especial" },
+  { name: "Ciclobenzaprina 5mg", dose: "1 comprimido", route: "oral", frequency: "8/8h", duration: "7 dias", instructions: "Pode causar sonolência — evitar dirigir", prescriptionType: "simples" },
+  { name: "Omeprazol 20mg", dose: "1 cápsula", route: "oral", frequency: "1x/dia", duration: "30 dias", instructions: "Tomar 30 min antes do café", prescriptionType: "simples" },
+  { name: "Prednisolona 20mg", dose: "1 comprimido", route: "oral", frequency: "1x/dia", duration: "5 dias", instructions: "Tomar pela manhã após refeição", prescriptionType: "simples" },
+  { name: "Dexametasona 4mg", dose: "1 comprimido", route: "oral", frequency: "12/12h", duration: "3 dias", instructions: "Tomar após refeições", prescriptionType: "simples" },
+  { name: "Tenoxicam 20mg", dose: "1 comprimido", route: "oral", frequency: "1x/dia", duration: "7 dias", instructions: "Tomar após refeição principal", prescriptionType: "simples" },
+  { name: "Paracetamol 750mg", dose: "1 comprimido", route: "oral", frequency: "6/6h", duration: "5 dias", instructions: "Conforme necessidade — máx. 4 comprimidos/dia", prescriptionType: "simples" },
+  { name: "Dipirona 500mg", dose: "2 comprimidos", route: "oral", frequency: "6/6h", duration: "3 dias", instructions: "Conforme necessidade de dor ou febre", prescriptionType: "simples" },
+  { name: "Gabapentina 300mg", dose: "1 cápsula", route: "oral", frequency: "8/8h", duration: "30 dias", instructions: "Aumentar dose gradualmente conforme orientação", prescriptionType: "simples" },
+  { name: "Pregabalina 75mg", dose: "1 cápsula", route: "oral", frequency: "12/12h", duration: "30 dias", instructions: "Pode causar sonolência e tontura", prescriptionType: "simples" },
+  { name: "Alopurinol 300mg", dose: "1 comprimido", route: "oral", frequency: "1x/dia", duration: "30 dias", instructions: "Tomar após refeição principal — manter hidratação", prescriptionType: "simples" },
+  { name: "Colchicina 0,5mg", dose: "1 comprimido", route: "oral", frequency: "12/12h", duration: "5 dias", instructions: "Suspender se diarreia ou dor abdominal intensa", prescriptionType: "simples" },
+  { name: "Condroitina + Glucosamina", dose: "1 comprimido", route: "oral", frequency: "1x/dia", duration: "90 dias", instructions: "Tomar após refeição", prescriptionType: "simples" },
+  { name: "Carisoprodol + Diclofenaco", dose: "1 comprimido", route: "oral", frequency: "8/8h", duration: "5 dias", instructions: "Tomar após refeições — pode causar sonolência", prescriptionType: "simples" },
+  { name: "Enoxaparina 40mg/0,4ml", dose: "0,4ml", route: "SC", frequency: "1x/dia", duration: "Conforme protocolo", instructions: "Aplicar no abdome — alternar lado", prescriptionType: "simples" },
+];
+
+// ── Referral text templates ─────────────────────────────────────────────────────
+const REFERRAL_TEXT_TEMPLATES = [
+  { type: "fisioterapia", name: "Gonartrose (fortalecimento)", text: "Paciente portador(a) de gonartrose (CID: M17.1). Solicito avaliação e início de programa de fortalecimento muscular de quadríceps e isquiotibiais, visando melhora funcional e alívio da dor." },
+  { type: "fisioterapia", name: "Pós-op LCA", text: "Paciente em pós-operatório de reconstrução do ligamento cruzado anterior. Solicito fisioterapia pós-operatória conforme protocolo de reabilitação de LCA." },
+  { type: "fisioterapia", name: "Lombalgia crônica", text: "Paciente com lombalgia crônica (CID: M54.5). Solicito avaliação e programa de fisioterapia para fortalecimento do core e reabilitação funcional." },
+  { type: "fisioterapia", name: "Síndrome do ombro", text: "Paciente com síndrome do manguito rotador (CID: M75.1). Solicito avaliação e tratamento fisioterápico — cinesioterapia e fortalecimento do manguito." },
+  { type: "especialidade", name: "Lombalgia → Neurologia", text: "Paciente com lombalgia crônica e sinais de radiculopatia. Solicito avaliação neurológica para investigação diagnóstica e conduta especializada." },
+  { type: "especialidade", name: "Suspeita reumatológica", text: "Paciente com artralgia poliarticular de padrão inflamatório. Solicito avaliação reumatológica para investigação de doença reumatológica sistêmica." },
+  { type: "colega", name: "Segunda opinião cirúrgica", text: "Encaminho o(a) paciente para avaliação e segunda opinião cirúrgica. Segue resumo clínico e exames anexos para sua apreciação." },
+  { type: "outro", name: "Clínica da dor", text: "Paciente com dor crônica de difícil controle. Solicito avaliação multidisciplinar em clínica especializada em dor para otimização do tratamento analgésico." },
+];
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -268,14 +354,15 @@ const sectionTitle = "text-xs font-bold text-slate-500 dark:text-slate-400 upper
 
 // Medication row
 interface Medication {
-  name: string; dose: string; route: string; frequency: string; duration: string; instructions: string;
+  id: string; name: string; dose: string; route: string; frequency: string; duration: string; instructions: string; quantity?: string;
 }
-const emptyMed = (): Medication => ({ name: "", dose: "", route: "oral", frequency: "", duration: "", instructions: "" });
+const emptyMed = (): Medication => ({ id: typeof crypto !== "undefined" ? crypto.randomUUID() : String(Date.now() + Math.random()), name: "", dose: "", route: "oral", frequency: "", duration: "", instructions: "", quantity: "" });
 
-function MedRowInline({ med, index, total, onChange, onRemove }: {
+function MedRowInline({ med, index, total, onChange, onRemove, allergyWarning }: {
   med: Medication; index: number; total: number;
   onChange: (k: keyof Medication, v: string) => void;
   onRemove: () => void;
+  allergyWarning?: string | null;
 }) {
   return (
     <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-3 space-y-2">
@@ -287,6 +374,12 @@ function MedRowInline({ med, index, total, onChange, onRemove }: {
           </button>
         )}
       </div>
+      {allergyWarning && (
+        <div className="flex items-start gap-1.5 bg-red-50 dark:bg-red-900/20 border border-red-300 dark:border-red-700 rounded px-2 py-1.5">
+          <AlertTriangle className="w-3.5 h-3.5 text-red-600 flex-shrink-0 mt-0.5" />
+          <p className="text-[11px] text-red-700 dark:text-red-300 font-semibold">ATENÇÃO: paciente refere alergia a {allergyWarning}. Confirme antes de prescrever.</p>
+        </div>
+      )}
       <div className="grid grid-cols-2 gap-2">
         <div className="col-span-2">
           <label className={lbl}>Nome *</label>
@@ -309,6 +402,10 @@ function MedRowInline({ med, index, total, onChange, onRemove }: {
         <div>
           <label className={lbl}>Duração</label>
           <input className={inp} placeholder="7 dias..." value={med.duration} onChange={(e) => onChange("duration", e.target.value)} />
+        </div>
+        <div>
+          <label className={lbl}>Qtd. total (QSP)</label>
+          <input className={inp} placeholder="Ex: 10 comprimidos" value={med.quantity || ""} onChange={(e) => onChange("quantity", e.target.value)} />
         </div>
         <div className="col-span-2">
           <label className={lbl}>Instruções</label>
@@ -774,19 +871,55 @@ async function openMemed(patient: any, _clinic: any): Promise<void> {
 
 const formatDateBR = (dateStr: string) => {
   const d = new Date(dateStr + "T12:00:00");
-  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getFullYear()).slice(2)}`;
+  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
 };
 
+const formatDateBRFull = (dateStr: string) => {
+  const d = new Date(dateStr + "T12:00:00");
+  const dias = ["Domingo", "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado"];
+  return `${dias[d.getDay()]}, ${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+};
+
+// Evolution type
+interface Evolution {
+  id: number;
+  patient_id: number;
+  entry_date: string;
+  content: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+// SOAP/templates for prontuario
+const PRONTUARIO_TEMPLATES = [
+  { name: "SOAP", text: "QP: \nHDA: \nEF: \nHD: \nConduta: " },
+  { name: "Retorno", text: "Retorno - \nEvolução: \nEF atual: \nConduta: " },
+  { name: "Pós-op", text: "POD: \nFerida: \nDor (0-10): \nFisio: \nRetorno em: " },
+  { name: "Urgência", text: "Chegou ao consultório com \nMecanismo: \nEF: \nRX: \nConduta: " },
+];
+
+function insertAtCursor(el: HTMLTextAreaElement, text: string): string {
+  const start = el.selectionStart;
+  const end = el.selectionEnd;
+  const before = el.value.substring(0, start);
+  const after = el.value.substring(end);
+  return before + text + after;
+}
+
 function TabProntuario({ patientId }: { patientId: number }) {
-  const [evolutions, setEvolutions] = useState<any[]>([]);
+  const [evolutions, setEvolutions] = useState<Evolution[]>([]);
   const [loading, setLoading] = useState(true);
   const [newText, setNewText] = useState("");
   const [saving, setSaving] = useState(false);
+  const [recentlySavedId, setRecentlySavedId] = useState<number | null>(null);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editText, setEditText] = useState("");
+  const [editSaving, setEditSaving] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const today = new Date();
-  const todayBR = `${String(today.getDate()).padStart(2, "0")}/${String(today.getMonth() + 1).padStart(2, "0")}/${String(today.getFullYear()).slice(2)}`;
+  const todayBRFull = formatDateBRFull(today.toISOString().split("T")[0]);
   const todayISO = today.toISOString().split("T")[0];
 
   useEffect(() => {
@@ -794,10 +927,25 @@ function TabProntuario({ patientId }: { patientId: number }) {
     setEvolutions([]);
     evolutionApi
       .list(patientId)
-      .then((data) => setEvolutions(data))
+      .then((data) => setEvolutions(data as Evolution[]))
       .catch(() => toast.error("Erro ao carregar evoluções"))
       .finally(() => setLoading(false));
   }, [patientId]);
+
+  // Scroll to bottom whenever evolutions array grows
+  useEffect(() => {
+    if (scrollRef.current && evolutions.length > 0) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [evolutions.length]);
+
+  // Auto-resize textarea
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = Math.min(el.scrollHeight, 400) + "px";
+  }, [newText]);
 
   const handleSave = async () => {
     if (!newText.trim()) {
@@ -810,19 +958,38 @@ function TabProntuario({ patientId }: { patientId: number }) {
         entry_date: todayISO,
         content: newText.trim(),
       });
-      setEvolutions((prev) => [...prev, created]);
+      setEvolutions((prev) => [...prev, created as Evolution]);
       setNewText("");
-      // Scroll para o final do documento após salvar
-      setTimeout(() => {
-        if (scrollRef.current) {
-          scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-        }
-      }, 50);
+      setRecentlySavedId((created as Evolution).id);
+      setTimeout(() => setRecentlySavedId(null), 2500);
       toast.success("Evolução registrada!");
     } catch (err: any) {
       toast.error(err?.response?.data?.detail || "Erro ao salvar evolução");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleEditSave = async (ev: Evolution) => {
+    if (!editText.trim()) return;
+    setEditSaving(true);
+    try {
+      const now = new Date();
+      const tag = `\n[editado em ${String(now.getDate()).padStart(2,"0")}/${String(now.getMonth()+1).padStart(2,"0")}/${now.getFullYear()}]`;
+      const newContent = editText.trim() + tag;
+      await (evolutionApi as any).update(ev.id, { content: newContent });
+      setEvolutions(prev => prev.map(e => e.id === ev.id ? { ...e, content: newContent } : e));
+      setEditingId(null);
+      toast.success("Evolução atualizada");
+    } catch {
+      // fallback: update locally only if API not available
+      const now = new Date();
+      const tag = `\n[editado em ${String(now.getDate()).padStart(2,"0")}/${String(now.getMonth()+1).padStart(2,"0")}/${now.getFullYear()}]`;
+      setEvolutions(prev => prev.map(e => e.id === ev.id ? { ...e, content: editText.trim() + tag } : e));
+      setEditingId(null);
+      toast.success("Evolução atualizada (local)");
+    } finally {
+      setEditSaving(false);
     }
   };
 
@@ -833,29 +1000,108 @@ function TabProntuario({ patientId }: { patientId: number }) {
     }
   };
 
+  const insertTemplate = (templateText: string) => {
+    const ta = textareaRef.current;
+    if (!ta) {
+      setNewText(prev => prev + templateText);
+      return;
+    }
+    const updated = insertAtCursor(ta, templateText);
+    setNewText(updated);
+    setTimeout(() => {
+      const pos = ta.selectionStart + templateText.length;
+      ta.setSelectionRange(pos, pos);
+      ta.focus();
+    }, 0);
+  };
+
   return (
     <div className="flex flex-col h-full">
+      {/* ── Histórico header ── */}
+      {!loading && evolutions.length > 0 && (
+        <div className="flex items-center justify-between px-5 pt-2 pb-1 border-b border-slate-100 dark:border-slate-800 flex-shrink-0">
+          <span className="text-xs text-slate-500">
+            {evolutions.length} evolução{evolutions.length !== 1 ? "ões" : ""}
+            {evolutions.length > 0 ? ` · ${formatDateBR(evolutions[0].entry_date)} até ${formatDateBR(evolutions[evolutions.length - 1].entry_date)}` : ""}
+          </span>
+          <div className="flex gap-1">
+            <button
+              type="button"
+              onClick={() => scrollRef.current?.scrollTo(0, 0)}
+              title="Ir ao início"
+              className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+            >
+              <ChevronUp className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => scrollRef.current?.scrollTo(0, scrollRef.current.scrollHeight)}
+              title="Ir ao fim"
+              className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+            >
+              <ChevronDown className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ── Documento evolutivo (scrollável) ── */}
       <div
         ref={scrollRef}
         className="flex-1 overflow-y-auto px-5 pt-2 pb-2 min-h-0"
-        style={{ maxHeight: "calc(100vh - 420px)", minHeight: "120px" }}
+        style={{ maxHeight: "calc(100vh - 440px)", minHeight: "120px" }}
       >
         {loading ? (
           <div className="flex items-center justify-center h-20">
             <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
           </div>
         ) : evolutions.length === 0 ? (
-          <p className="text-xs text-slate-400 italic font-mono py-4">Nenhuma anotação anterior.</p>
+          <div className="flex flex-col items-center justify-center py-8 gap-2">
+            <FileText className="w-8 h-8 text-slate-300" />
+            <p className="text-sm font-semibold text-slate-500">Nenhuma evolução registrada</p>
+            <p className="text-xs text-slate-400 text-center max-w-48">Esta é a primeira consulta deste paciente. Registre a evolução inicial abaixo.</p>
+          </div>
         ) : (
-          <div className="font-mono text-sm text-slate-900 dark:text-slate-100 leading-relaxed whitespace-pre-wrap">
-            {evolutions.map((ev, idx) => (
-              <span key={ev.id}>
-                <span className="font-semibold">{formatDateBR(ev.entry_date)}</span>
-                {" "}
-                {ev.content}
-                {idx < evolutions.length - 1 ? "\n" : ""}
-              </span>
+          <div className="space-y-3 py-1">
+            {evolutions.map((ev) => (
+              <div
+                key={ev.id}
+                className={`border-l-4 border-blue-500 bg-slate-50 dark:bg-slate-800 rounded-r-lg p-3 group transition-all duration-1000 ${recentlySavedId === ev.id ? "ring-2 ring-green-400 ring-offset-1" : ""}`}
+              >
+                <div className="flex justify-between items-center mb-1">
+                  <span className="text-xs font-bold text-blue-600 dark:text-blue-400">{formatDateBRFull(ev.entry_date)}</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] text-slate-400">{ev.content.length} car.</span>
+                    <button
+                      type="button"
+                      title="Editar evolução"
+                      onClick={() => { setEditingId(ev.id); setEditText(ev.content); }}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity p-1 text-slate-400 hover:text-blue-600"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+                {editingId === ev.id ? (
+                  <div className="space-y-2">
+                    <textarea
+                      className="w-full font-mono text-sm text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-700 border border-blue-300 dark:border-blue-600 rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      rows={5}
+                      value={editText}
+                      onChange={e => setEditText(e.target.value)}
+                      autoFocus
+                    />
+                    <div className="flex gap-2 justify-end">
+                      <button type="button" onClick={() => setEditingId(null)} className="px-3 py-1 text-xs text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50">Cancelar</button>
+                      <button type="button" onClick={() => handleEditSave(ev)} disabled={editSaving} className="px-3 py-1 text-xs text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50">
+                        {editSaving ? "Salvando..." : "Salvar edição"}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-slate-800 dark:text-slate-200 whitespace-pre-wrap leading-relaxed font-mono">{ev.content}</p>
+                )}
+              </div>
             ))}
           </div>
         )}
@@ -863,26 +1109,38 @@ function TabProntuario({ patientId }: { patientId: number }) {
 
       {/* ── Área de nova entrada (fixa no bottom) ── */}
       <div className="flex-shrink-0 border-t border-slate-200 dark:border-slate-700 px-5 pt-3 pb-4 bg-white dark:bg-slate-900">
+        {/* Templates rápidos */}
+        <div className="flex flex-wrap gap-1 mb-2">
+          {PRONTUARIO_TEMPLATES.map(tpl => (
+            <button
+              key={tpl.name}
+              type="button"
+              onClick={() => insertTemplate(tpl.text)}
+              className="text-[11px] px-2 py-0.5 rounded border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors"
+            >
+              {tpl.name}
+            </button>
+          ))}
+        </div>
+
         {/* Label com data de hoje */}
         <div className="flex items-center gap-1 mb-1.5">
-          <span className="font-mono text-sm font-semibold text-slate-700 dark:text-slate-300">
-            {todayBR}
-          </span>
-          <span className="text-xs text-slate-400 ml-1">(hoje)</span>
+          <span className="text-xs font-bold text-blue-600 dark:text-blue-400">{todayBRFull}</span>
+          <span className="text-[11px] text-slate-400 ml-1">(hoje)</span>
         </div>
 
         <textarea
           ref={textareaRef}
           className="w-full font-mono text-sm text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 resize-none placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          rows={5}
-          placeholder="Digite a evolução clínica..."
+          style={{ minHeight: "120px", maxHeight: "400px" }}
+          placeholder="Queixa principal, história da doença, exame físico, hipótese diagnóstica e conduta..."
           value={newText}
           onChange={(e) => setNewText(e.target.value)}
           onKeyDown={handleKeyDown}
         />
 
         <div className="flex items-center justify-between mt-2">
-          <span className="text-[11px] text-slate-400">Ctrl+Enter para salvar</span>
+          <span className="text-[11px] text-slate-400">Ctrl+Enter para salvar · {newText.length} caracteres</span>
           <button
             type="button"
             onClick={handleSave}
@@ -938,6 +1196,13 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
   const [loadingTemplates, setLoadingTemplates] = useState(true);
   const [showTemplateDropdown, setShowTemplateDropdown] = useState(false);
   const [savingTemplate, setSavingTemplate] = useState(false);
+  const [showSaveTemplateInput, setShowSaveTemplateInput] = useState(false);
+  const [templateNameInput, setTemplateNameInput] = useState("");
+  const [confirmDeleteTemplateId, setConfirmDeleteTemplateId] = useState<number | null>(null);
+  const [showAllRx, setShowAllRx] = useState(false);
+
+  // Autocomplete
+  const [medSuggestions, setMedSuggestions] = useState<{ idx: string; list: OrthoMedPreset[] }[]>([]);
 
   // Memed
   const [memedLoading, setMemedLoading] = useState(false);
@@ -965,8 +1230,8 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
     setPatientPhone(patient.phone || "");
   }, [patient]);
 
-  const updateMed = (i: number, k: keyof Medication, v: string) =>
-    setMedications((ms) => ms.map((m, idx) => (idx === i ? { ...m, [k]: v } : m)));
+  const updateMed = (id: string, k: keyof Medication, v: string) =>
+    setMedications((ms) => ms.map((m) => (m.id === id ? { ...m, [k]: v } : m)));
 
   const isNotificacaoAB = rxType === "notificacao_ab";
   const isATB = rxType === "antimicrobiano";
@@ -1021,18 +1286,20 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
   const handleSaveTemplate = async () => {
     const validMeds = medications.filter((m) => m.name.trim());
     if (validMeds.length === 0) { toast.error("Adicione medicamentos antes de salvar modelo"); return; }
-    const name = window.prompt("Nome do modelo:");
-    if (!name?.trim()) return;
+    if (!showSaveTemplateInput) { setShowSaveTemplateInput(true); setTemplateNameInput(""); return; }
+    if (!templateNameInput.trim()) { toast.error("Informe um nome para o modelo"); return; }
     setSavingTemplate(true);
     try {
       const tmpl = await prescriptionTemplatesApi.create({
-        name: name.trim(),
+        name: templateNameInput.trim(),
         prescription_type: rxType,
         medications: validMeds,
         instructions,
       });
       setTemplates((prev) => [...prev, tmpl].sort((a, b) => a.name.localeCompare(b.name)));
-      toast.success(`Modelo "${name}" salvo!`);
+      toast.success(`Modelo "${templateNameInput.trim()}" salvo!`);
+      setShowSaveTemplateInput(false);
+      setTemplateNameInput("");
     } catch {
       toast.error("Erro ao salvar modelo");
     } finally {
@@ -1040,8 +1307,8 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
     }
   };
 
-  const handleDeleteTemplate = async (id: number, name: string) => {
-    if (!window.confirm(`Remover modelo "${name}"?`)) return;
+  const handleDeleteTemplate = async (id: number) => {
+    setConfirmDeleteTemplateId(null);
     try {
       await prescriptionTemplatesApi.delete(id);
       setTemplates((prev) => prev.filter((t) => t.id !== id));
@@ -1137,23 +1404,33 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
                   ) : (
                     <ul className="max-h-48 overflow-y-auto">
                       {templates.map((tmpl) => (
-                        <li key={tmpl.id} className="flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-700">
-                          <button
-                            type="button"
-                            className="flex-1 text-left px-3 py-2"
-                            onClick={() => handleLoadTemplate(tmpl)}
-                          >
-                            <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">{tmpl.name}</p>
-                            <p className="text-[10px] text-slate-400">{PRESCRIPTION_TYPE_LABELS[normalizePrescriptionType(tmpl.prescription_type)] || tmpl.prescription_type} · {tmpl.medications?.length || 0} med.</p>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteTemplate(tmpl.id, tmpl.name)}
-                            className="p-2 text-red-400 hover:text-red-600 flex-shrink-0"
-                            title="Remover modelo"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                        <li key={tmpl.id} className="hover:bg-slate-50 dark:hover:bg-slate-700">
+                          {confirmDeleteTemplateId === tmpl.id ? (
+                            <div className="flex items-center gap-2 px-3 py-2">
+                              <span className="text-xs text-red-600 flex-1">Remover "{tmpl.name}"?</span>
+                              <button type="button" onClick={() => handleDeleteTemplate(tmpl.id)} className="text-[11px] px-2 py-0.5 bg-red-500 text-white rounded">Sim</button>
+                              <button type="button" onClick={() => setConfirmDeleteTemplateId(null)} className="text-[11px] px-2 py-0.5 border border-slate-300 rounded text-slate-600">Não</button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-between">
+                              <button
+                                type="button"
+                                className="flex-1 text-left px-3 py-2"
+                                onClick={() => handleLoadTemplate(tmpl)}
+                              >
+                                <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">{tmpl.name}</p>
+                                <p className="text-[10px] text-slate-400">{PRESCRIPTION_TYPE_LABELS[normalizePrescriptionType(tmpl.prescription_type)] || tmpl.prescription_type} · {tmpl.medications?.length || 0} med.</p>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDeleteTemplateId(tmpl.id)}
+                                className="p-2 text-red-400 hover:text-red-600 flex-shrink-0"
+                                title="Remover modelo"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          )}
                         </li>
                       ))}
                     </ul>
@@ -1223,12 +1500,13 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
 
             {medications.map((med, i) => (
               <MedRowInline
-                key={i}
+                key={med.id}
                 med={med}
                 index={i}
                 total={medications.length}
-                onChange={(k, v) => updateMed(i, k, v)}
-                onRemove={() => setMedications((ms) => ms.filter((_, idx) => idx !== i))}
+                onChange={(k, v) => updateMed(med.id, k, v)}
+                onRemove={() => setMedications((ms) => ms.filter((m) => m.id !== med.id))}
+                allergyWarning={checkDrugAllergyAlert(med.name, (patient?.allergies || ""))}
               />
             ))}
 
@@ -1236,6 +1514,22 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
               <label className={lbl}>Orientações gerais</label>
               <textarea className={inp + " min-h-[70px] resize-none"} placeholder="Evitar álcool, repouso, retorno em 7 dias..." value={instructions} onChange={(e) => setInstructions(e.target.value)} rows={3} />
             </div>
+
+            {/* ── Inline save template input ── */}
+            {showSaveTemplateInput && (
+              <div className="flex gap-2 items-center p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg">
+                <input
+                  autoFocus
+                  className={inp + " flex-1"}
+                  placeholder="Nome do modelo..."
+                  value={templateNameInput}
+                  onChange={e => setTemplateNameInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter") handleSaveTemplate(); if (e.key === "Escape") setShowSaveTemplateInput(false); }}
+                />
+                <button type="button" onClick={handleSaveTemplate} disabled={savingTemplate} className="px-3 py-2 bg-blue-600 text-white rounded-lg text-xs font-semibold disabled:opacity-50">Confirmar</button>
+                <button type="button" onClick={() => setShowSaveTemplateInput(false)} className="px-3 py-2 border border-slate-300 rounded-lg text-xs text-slate-600">Cancelar</button>
+              </div>
+            )}
 
             {/* ── Ações ── */}
             <div className="flex gap-2 flex-wrap">
@@ -1251,6 +1545,7 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
                 type="button"
                 onClick={handlePrint}
                 className="flex items-center gap-1.5 px-3 py-2 border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-400 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 text-xs font-semibold"
+                title="Imprimir sem salvar"
               >
                 <Printer className="w-3.5 h-3.5" /> Imprimir
               </button>
@@ -1272,10 +1567,27 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
       )}
 
       {/* ── Histórico ── */}
-      {!loadingRx && prescriptions.length > 0 && (
-        <div className="space-y-2">
+      {loadingRx ? (
+        <div className="space-y-2 px-0 pt-2">
           <p className={sectionTitle}>Receitas anteriores</p>
-          {prescriptions.slice(0, 8).map((rx) => {
+          {[1,2,3].map(i => <div key={i} className="h-14 bg-slate-100 dark:bg-slate-800 rounded-lg animate-pulse" />)}
+        </div>
+      ) : prescriptions.length === 0 ? (
+        <div className="flex items-center gap-2 py-2">
+          <Pill className="w-4 h-4 text-slate-300" />
+          <p className="text-xs text-slate-400 italic">Nenhuma receita anterior registrada</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <p className={sectionTitle + " mb-0"}>Receitas anteriores</p>
+            {prescriptions.length > 5 && (
+              <button type="button" onClick={() => setShowAllRx(v => !v)} className="text-xs text-blue-600 hover:underline">
+                {showAllRx ? "Mostrar menos" : `Ver todas (${prescriptions.length})`}
+              </button>
+            )}
+          </div>
+          {(showAllRx ? prescriptions : prescriptions.slice(0, 5)).map((rx) => {
             const badge = PRESCRIPTION_TYPE_BADGE[rx.prescription_type] || PRESCRIPTION_TYPE_BADGE["simples"];
             return (
               <div key={rx.id} className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-3">
@@ -1284,23 +1596,37 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
                     <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">{formatDate(rx.date)}</p>
                     <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${badge.cls}`}>{badge.label}</span>
                   </div>
-                  <button
-                    onClick={() => setPrintRx({
-                      date: rx.date,
-                      medications: rx.medications || [],
-                      instructions: rx.instructions || "",
-                      prescription_type: normalizePrescriptionType(rx.prescription_type || "simples"),
-                    })}
-                    className="p-1 text-slate-400 hover:text-blue-600"
-                    title="Imprimir"
-                  >
-                    <Printer className="w-3.5 h-3.5" />
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => {
+                        setRxType(normalizePrescriptionType(rx.prescription_type || "simples"));
+                        setMedications(rx.medications?.length ? rx.medications.map((m: any) => ({ ...emptyMed(), ...m })) : [emptyMed()]);
+                        setInstructions(rx.instructions || "");
+                        toast.success("Receita carregada para edição");
+                      }}
+                      className="p-1 text-slate-400 hover:text-green-600"
+                      title="Repetir esta receita"
+                    >
+                      <ClipboardList className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => setPrintRx({
+                        date: rx.date,
+                        medications: rx.medications || [],
+                        instructions: rx.instructions || "",
+                        prescription_type: normalizePrescriptionType(rx.prescription_type || "simples"),
+                      })}
+                      className="p-1 text-slate-400 hover:text-blue-600"
+                      title="Imprimir"
+                    >
+                      <Printer className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
                 <div className="space-y-0.5">
                   {rx.medications?.slice(0, 3).map((m: any, i: number) => (
                     <p key={i} className="text-xs text-slate-600 dark:text-slate-400">
-                      {i + 1}. {m.name}{m.dose ? ` — ${m.dose}` : ""}
+                      {i + 1}. {m.name}{m.dose ? ` — ${m.dose}` : ""}{m.frequency ? ` · ${m.frequency}` : ""}{m.duration ? ` · ${m.duration}` : ""}
                     </p>
                   ))}
                   {(rx.medications?.length || 0) > 3 && (
@@ -1384,6 +1710,7 @@ function TabExames({ patientId, patient, clinic }: { patientId: number; patient:
   const [saving, setSaving] = useState(false);
   const [exams, setExams] = useState<any[]>([]);
   const [loadingEx, setLoadingEx] = useState(true);
+  const [loadingError, setLoadingError] = useState(false);
 
   // Modelos de solicitação
   const [examTemplates, setExamTemplates] = useState<ExamTemplate[]>(() => loadExamTemplates());
@@ -1395,14 +1722,25 @@ function TabExames({ patientId, patient, clinic }: { patientId: number; patient:
   // Impressão
   const [printText, setPrintText] = useState<string | null>(null);
 
+  // Inline save template
+  const [showSaveExamTemplateInput, setShowSaveExamTemplateInput] = useState(false);
+  const [examTemplateNameInput, setExamTemplateNameInput] = useState("");
+
+  // Expanded history card
+  const [expandedExamId, setExpandedExamId] = useState<number | null>(null);
+
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  useEffect(() => {
+  const fetchExams = () => {
+    setLoadingEx(true);
+    setLoadingError(false);
     examsApi.list(patientId)
       .then(setExams)
-      .catch(() => {})
+      .catch(() => { setLoadingError(true); toast.error("Erro ao carregar histórico de exames"); })
       .finally(() => setLoadingEx(false));
-  }, [patientId]);
+  };
+
+  useEffect(() => { fetchExams(); }, [patientId]);
 
   // Auto-resize textarea
   const autoResize = () => {
@@ -1415,18 +1753,23 @@ function TabExames({ patientId, patient, clinic }: { patientId: number; patient:
   // Modelos
   const handleSaveTemplate = () => {
     if (!freeText.trim()) return;
-    const name = window.prompt("Nome do modelo:");
-    if (!name?.trim()) return;
-    const newTemplate: ExamTemplate = { id: String(Date.now()), name: name.trim(), content: freeText };
+    if (!showSaveExamTemplateInput) { setShowSaveExamTemplateInput(true); setExamTemplateNameInput(""); return; }
+    if (!examTemplateNameInput.trim()) { toast.error("Informe um nome para o modelo"); return; }
+    const newTemplate: ExamTemplate = { id: String(Date.now()), name: examTemplateNameInput.trim(), content: freeText };
     const updated = [...examTemplates, newTemplate];
     setExamTemplates(updated);
     saveExamTemplates(updated);
     toast.success("Modelo salvo");
+    setShowSaveExamTemplateInput(false);
+    setExamTemplateNameInput("");
   };
 
   const handleLoadTemplate = (id: string) => {
     const tpl = examTemplates.find((t) => t.id === id);
     if (!tpl) return;
+    if (freeText.trim() && freeText !== tpl.content) {
+      if (!window.confirm("Substituir o texto atual pelo modelo?")) return;
+    }
     setFreeText(tpl.content);
     setTimeout(autoResize, 0);
     textareaRef.current?.focus();
@@ -1496,35 +1839,44 @@ function TabExames({ patientId, patient, clinic }: { patientId: number; patient:
 
       {/* ── Seção: Modelos ── */}
       <div className="px-5 pt-1 pb-3 border-b border-slate-100 dark:border-slate-800">
-        <p className={sectionTitle + " mb-2"}>Modelos</p>
-        {examTemplates.length === 0 ? (
-          <p className="text-[11px] text-slate-400 italic">
-            Nenhum modelo salvo. Escreva um pedido e clique em 💾 para criar.
-          </p>
-        ) : (
+        <p className={sectionTitle + " mb-2"}>Modelos Rápidos</p>
+        {/* Built-in quick templates */}
+        <div className="flex flex-wrap gap-1 mb-2">
+          {EXAM_QUICK_TEMPLATES.map((tpl) => (
+            <button
+              key={tpl.name}
+              type="button"
+              onClick={() => {
+                if (freeText.trim() && freeText !== tpl.content) {
+                  if (!window.confirm("Substituir o texto atual pelo modelo?")) return;
+                }
+                setFreeText(tpl.content);
+                setTimeout(autoResize, 0);
+                textareaRef.current?.focus();
+              }}
+              className="text-[11px] px-2 py-0.5 rounded border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors font-semibold"
+            >
+              {tpl.name}
+            </button>
+          ))}
+        </div>
+        {/* User saved templates */}
+        {examTemplates.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
             {examTemplates.map((tpl) => (
               <div key={tpl.id} className="flex items-center gap-0.5">
                 <button
                   type="button"
-                  onClick={() => {
-                    setFreeText(tpl.content);
-                    setTimeout(autoResize, 0);
-                    textareaRef.current?.focus();
-                  }}
-                  className="text-[11px] font-mono px-2 py-0.5 rounded-l border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors"
+                  onClick={() => handleLoadTemplate(tpl.id)}
+                  className="text-[11px] font-mono px-2 py-0.5 rounded-l border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
                   title={tpl.content.slice(0, 120)}
                 >
                   {tpl.name}
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    if (window.confirm(`Excluir modelo "${tpl.name}"?`)) {
-                      handleDeleteTemplate(tpl.id);
-                    }
-                  }}
-                  className="text-[10px] px-1 py-0.5 rounded-r border border-l-0 border-blue-200 dark:border-blue-800 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                  onClick={() => handleDeleteTemplate(tpl.id)}
+                  className="text-[10px] px-1 py-0.5 rounded-r border border-l-0 border-slate-300 dark:border-slate-600 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
                   title="Excluir modelo"
                 >
                   ×
@@ -1539,10 +1891,10 @@ function TabExames({ patientId, patient, clinic }: { patientId: number; patient:
       <div className="px-5 pt-3 pb-3 border-b border-slate-100 dark:border-slate-800">
         <p className={sectionTitle}>Solicitação</p>
 
-        {/* Controles de fonte */}
+        {/* Controles de impressão */}
         <div className="flex items-center justify-end gap-3 mb-1.5">
+          <span className="text-[10px] text-slate-400">Impressão:</span>
           <div className="flex items-center gap-1">
-            <span className="text-[10px] text-slate-400 mr-1">Fonte:</span>
             {([12, 14, 16] as const).map((sz) => (
               <button
                 key={sz}
@@ -1559,7 +1911,6 @@ function TabExames({ patientId, patient, clinic }: { patientId: number; patient:
             ))}
           </div>
           <div className="flex items-center gap-1">
-            <span className="text-[10px] text-slate-400 mr-1">Espaçamento:</span>
             {(["normal", "relaxed"] as const).map((lh) => (
               <button
                 key={lh}
@@ -1581,11 +1932,28 @@ function TabExames({ patientId, patient, clinic }: { patientId: number; patient:
           ref={textareaRef}
           className="w-full font-mono text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 resize-none placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
           style={{ minHeight: "160px", fontSize: `${fontSize}px`, lineHeight: lineHeight === "relaxed" ? "1.6" : "1.4" }}
-          placeholder={"SOLICITO: RNM DO JOELHO DIREITO SEM CONTRASTE\nHD: LESÃO MENISCAL"}
+          placeholder={"SOLICITO: [TIPO DE EXAME] — [REGIÃO ANATÔMICA] [D/E]\nINCIDÊNCIAS: \nHD: "}
           value={freeText}
           onChange={(e) => { setFreeText(e.target.value); autoResize(); }}
           onKeyDown={handleKeyDown}
         />
+
+        {/* Inline save template input */}
+        {showSaveExamTemplateInput && (
+          <div className="flex gap-2 items-center mt-2 p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg">
+            <input
+              autoFocus
+              className={inp + " flex-1"}
+              placeholder="Nome do modelo..."
+              value={examTemplateNameInput}
+              onChange={e => setExamTemplateNameInput(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") handleSaveTemplate(); if (e.key === "Escape") setShowSaveExamTemplateInput(false); }}
+            />
+            <button type="button" onClick={handleSaveTemplate} className="px-3 py-2 bg-blue-600 text-white rounded-lg text-xs font-semibold">Confirmar</button>
+            <button type="button" onClick={() => setShowSaveExamTemplateInput(false)} className="px-3 py-2 border border-slate-300 rounded-lg text-xs text-slate-600">Cancelar</button>
+          </div>
+        )}
+
         <div className="flex items-center justify-between mt-2">
           <span className="text-[11px] text-slate-400">Ctrl+Enter para salvar</span>
           <div className="flex gap-2">
@@ -1596,7 +1964,7 @@ function TabExames({ patientId, patient, clinic }: { patientId: number; patient:
               className="flex items-center gap-1.5 px-3 py-2 border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-400 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-xs font-semibold"
               title="Salvar como modelo"
             >
-              💾 Salvar Modelo
+              <Save className="w-3.5 h-3.5" /> Salvar Modelo
             </button>
             <button
               type="button"
@@ -1625,27 +1993,50 @@ function TabExames({ patientId, patient, clinic }: { patientId: number; patient:
       <div className="px-5 pt-3">
         <p className={sectionTitle}>Histórico</p>
         {loadingEx ? (
-          <div className="flex items-center justify-center h-12">
-            <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+          <div className="space-y-2">
+            {[1,2].map(i => <div key={i} className="h-12 bg-slate-100 dark:bg-slate-800 rounded-lg animate-pulse" />)}
+          </div>
+        ) : loadingError ? (
+          <div className="flex items-center gap-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg px-3 py-2">
+            <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0" />
+            <p className="text-xs text-red-700 dark:text-red-300 flex-1">Não foi possível carregar o histórico. Verifique a conexão.</p>
+            <button type="button" onClick={fetchExams} className="text-xs text-blue-600 hover:underline flex-shrink-0">Tentar novamente</button>
           </div>
         ) : exams.length === 0 ? (
           <p className="text-xs text-slate-400 italic">Nenhuma solicitação anterior.</p>
         ) : (
           <div className="space-y-2">
             {exams.slice(0, 10).map((ex) => (
-              <div key={ex.id} className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 flex items-start justify-between gap-2">
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-0.5">{formatDate(ex.date)}</p>
-                  <p className="text-xs font-mono text-slate-600 dark:text-slate-400 truncate">{examPreview(ex)}</p>
+              <div key={ex.id} className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-0.5">{formatDate(ex.date)}</p>
+                    <p className="text-xs font-mono text-slate-600 dark:text-slate-400 truncate">{examPreview(ex)}</p>
+                  </div>
+                  <div className="flex gap-1 flex-shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setExpandedExamId(expandedExamId === ex.id ? null : ex.id)}
+                      className="p-1 text-slate-400 hover:text-slate-600"
+                      title={expandedExamId === ex.id ? "Recolher" : "Expandir"}
+                    >
+                      {expandedExamId === ex.id ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPrintText(ex.free_text || ex.exams?.map((e: any) => `SOLICITO: ${e.name}${e.laterality ? ` — ${e.laterality}` : ""}`).join("\n") || "")}
+                      className="p-1 text-slate-400 hover:text-blue-600"
+                      title="Imprimir"
+                    >
+                      <Printer className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setPrintText(ex.free_text || ex.exams?.map((e: any) => `SOLICITO: ${e.name}${e.laterality ? ` — ${e.laterality}` : ""}`).join("\n") || "")}
-                  className="flex-shrink-0 p-1 text-slate-400 hover:text-blue-600"
-                  title="Imprimir"
-                >
-                  <Printer className="w-3.5 h-3.5" />
-                </button>
+                {expandedExamId === ex.id && (ex.free_text || ex.exams?.length > 0) && (
+                  <pre className="text-xs font-mono whitespace-pre-wrap text-slate-600 dark:text-slate-400 mt-2 max-h-40 overflow-y-auto border-t border-slate-200 dark:border-slate-700 pt-2">
+                    {ex.free_text || ex.exams?.map((e: any) => `SOLICITO: ${e.name}${e.laterality ? ` — ${e.laterality}` : ""}`).join("\n")}
+                  </pre>
+                )}
               </div>
             ))}
           </div>
@@ -1658,37 +2049,73 @@ function TabExames({ patientId, patient, clinic }: { patientId: number; patient:
 // ── Constants: new tabs ────────────────────────────────────────────────────────
 
 const REFERRAL_TYPES = [
-  { value: "fisioterapia", label: "Fisioterapia" },
-  { value: "especialidade", label: "Outra Especialidade" },
-  { value: "colega", label: "Colega Ortopedista" },
-  { value: "outro", label: "Outro" },
+  { value: "fisioterapia", label: "Fisioterapia", icon: "Activity" },
+  { value: "especialidade", label: "Especialidade", icon: "Stethoscope" },
+  { value: "colega", label: "Colega Ortopedista", icon: "Award" },
+  { value: "outro", label: "Outro", icon: "FileText" },
+];
+
+const SPECIALTY_OPTIONS = [
+  "Neurologia", "Neurocirurgia", "Reumatologia", "Medicina do Esporte", "Fisiatria",
+  "Angiologia / Cirurgia Vascular", "Oncologia Ortopédica", "Cirurgia da Mão",
+  "Cirurgia do Tornozelo e Pé", "Clínica da Dor", "Geriatria", "Medicina do Trabalho",
+  "Ortopedia Pediátrica", "Outra",
+];
+
+const PHYSIO_MODALITY_OPTIONS = [
+  "Cinesioterapia / Fortalecimento", "Fisioterapia pós-operatória", "Hidroterapia",
+  "RPG", "Eletroterapia / TENS", "Terapia manual", "Outro",
 ];
 
 const PROCEDURE_TEMPLATES = [
-  { name: "Infiltração de joelho (corticosteróide)", text: "Realizada infiltração articular do joelho com corticosteróide (Triancinolona 40mg + Lidocaína 2% 2ml).\nOrientações: repouso de 24h, gelo local por 20 min 3x/dia por 3 dias. Retorno em 4 semanas." },
-  { name: "Infiltração de ombro (corticosteróide)", text: "Realizada infiltração subacromial do ombro com corticosteróide (Triancinolona 40mg + Lidocaína 2% 2ml).\nOrientações: repouso relativo de 24h, gelo local por 20 min 3x/dia por 3 dias. Retorno em 4 semanas." },
-  { name: "Infiltração de coluna (bloqueio)", text: "Realizado bloqueio periradicular com corticosteróide (Betametasona + Lidocaína 2%).\nOrientações: repouso de 24h, evitar esforços por 48h. Retorno em 2 semanas." },
-  { name: "Retirada de pontos", text: "Realizada retirada de pontos cirúrgicos. Ferida operatória com boa cicatrização, sem sinais de infecção.\nOrientações: manter curativo simples por mais 24h. Liberado para banho." },
-  { name: "Imobilização com gesso/tala", text: "Realizada imobilização com tala gessada. Paciente orientado sobre cuidados com a imobilização.\nOrientações: não molhar o gesso, elevar o membro, retornar se houver edema excessivo, dor intensa ou alteração da cor dos dedos. Retorno em 4 semanas." },
-  { name: "Curativo e limpeza de ferida", text: "Realizado curativo e limpeza de ferida com soro fisiológico 0,9% e cobertura estéril.\nOrientações: manter curativo limpo e seco, trocar a cada 48h ou se molhar. Retornar se sinais de infecção." },
-  { name: "Punção aspirativa de cisto", text: "Realizada punção aspirativa de cisto com agulha 18G. Aspirado material mucoide característico.\nOrientações: manter curatvo local por 24h, retornar se houver recidiva da coleção." },
-  { name: "Redução de luxação", text: "Realizada redução de luxação sob analgesia local. Controle radiológico evidenciou redução adequada.\nOrientações: imobilização por período determinado, retorno em 1 semana para reavaliação." },
+  { name: "Artrocentese joelho", text: "Realizada artrocentese do joelho [D/E] com agulha 18G. Aspirado aproximadamente [volume]ml de líquido sinovial com aspecto [claro/turvo/hemático].\nOrientações: repouso de 24h, curativo local. Retornar se dor, febre ou recidiva da coleção." },
+  { name: "Infiltração joelho — corticoide", text: "Realizada infiltração articular do joelho [D/E] — compartimento [medial/lateral/femoropatelar] — com Triancinolona 40mg + Lidocaína 2% 2ml.\nAnestesia: Lidocaína infiltrativa local.\nIntercorrências: nenhuma.\nOrientações: repouso de 24h, gelo local por 20 min 3x/dia por 3 dias. Retorno em 4 semanas." },
+  { name: "Infiltração joelho — ácido hialurônico", text: "Realizada infiltração intra-articular do joelho [D/E] com ácido hialurônico (1 ampola).\nAnestesia: Lidocaína tópica.\nIntercorrências: nenhuma.\nOrientações: repouso de 24h, evitar esforços por 48h. Retorno em 1 semana." },
+  { name: "Infiltração ombro — subacromial", text: "Realizada infiltração subacromial do ombro [D/E] com Triancinolona 40mg + Lidocaína 2% 2ml.\nAnestesia: Lidocaína infiltrativa local.\nIntercorrências: nenhuma.\nOrientações: repouso relativo de 24h, gelo local por 20 min 3x/dia por 3 dias. Retorno em 4 semanas." },
+  { name: "Bloqueio coluna", text: "Realizado bloqueio periradicular em [nível vertebral] com Betametasona 12mg + Lidocaína 2% 3ml sob orientação radioscópica.\nAnestesia: Lidocaína infiltrativa.\nIntercorrências: nenhuma.\nOrientações: repouso de 24h, evitar esforços por 48h. Retorno em 2 semanas." },
+  { name: "Retirada de fio de Kirschner", text: "Realizada retirada de fio de Kirschner [localização] sob anestesia local com Lidocaína 2%.\nTécnica: remoção com alicate de corte e extração com porta-agulha.\nFerita: limpa, sem sinais de infecção.\nOrientações: curativo simples, troca em 48h. Retornar se sinais de infecção." },
+  { name: "Curativo pós-operatório", text: "Realizado curativo de ferida operatória [localização]. Ferida com boa evolução cicatricial, bordas coaptadas, sem sinais de infecção, hematoma ou deiscência.\nOrientações: manter curativo limpo e seco, trocar a cada 48h ou se molhar. Retornar se sinais de infecção." },
+  { name: "Buddy taping — dedo", text: "Realizado buddy taping (imobilização relativa) do dedo [indicador/médio/anular/mínimo] [D/E] ao dedo adjacente com espaçador de gaze.\nOrientações: manter a imobilização por 3 semanas, mobilizar os outros dedos. Retorno em 2 semanas." },
+  { name: "Drenagem hematoma subungeal", text: "Realizada drenagem de hematoma subungeal do [dedo] [D/E] com agulha aquecida (trefina).\nEvacuado conteúdo hemático sem intercorrências.\nOrientações: curativo compressivo local, manter limpo. Retornar em 1 semana." },
+  { name: "Retirada de pontos", text: "Realizada retirada de pontos cirúrgicos de [localização]. Ferida operatória com boa cicatrização, sem sinais de infecção.\nOrientações: manter curativo simples por mais 24h. Liberado para banho." },
+  { name: "Imobilização gesso/tala", text: "Realizada imobilização com tala gessada [tipo] em [posição]. Paciente orientado sobre cuidados.\nOrientações: não molhar o gesso, elevar o membro, retornar se edema excessivo, dor intensa ou alteração da cor dos dedos. Retorno em 4 semanas." },
+  { name: "Redução de luxação", text: "Realizada redução de luxação [articulação] [D/E] sob analgesia local. Controle radiológico evidenciou redução adequada.\nOrientações: imobilização por [período], retorno em 1 semana para reavaliação." },
 ];
 
 const CERTIFICATE_TYPES = [
   { value: "trabalho", label: "Atividades de trabalho" },
+  { value: "acidente_trabalho", label: "Acidente de trabalho (CAT)" },
   { value: "esportes", label: "Atividades físicas / esportes" },
   { value: "escola", label: "Atividades escolares" },
   { value: "geral", label: "Atividades em geral" },
 ];
 
+const OBS_CHIPS = [
+  "Uso de muletas",
+  "Membro em repouso elevado",
+  "Restrição para esforço físico",
+  "Restrição para levantamento de peso",
+  "Proibido dirigir",
+  "Pode exercer função administrativa",
+];
+
 const LAUDO_TEMPLATES = [
-  { name: "Laudo de joelho (RX/RM)", text: "LAUDO MÉDICO — JOELHO\n\nExame: {EXAME}\nLado: {LADO}\n\nACHADOS:\n\nCONCLUSÃO:\n\nAssinatura do médico responsável." },
-  { name: "Laudo de ombro (RX/RM)", text: "LAUDO MÉDICO — OMBRO\n\nExame: {EXAME}\nLado: {LADO}\n\nACHADOS:\n\nCONCLUSÃO:\n\nAssinatura do médico responsável." },
-  { name: "Laudo de coluna (RX/RM)", text: "LAUDO MÉDICO — COLUNA VERTEBRAL\n\nExame: {EXAME}\nSegmento: {SEGMENTO}\n\nACHADOS:\n\nCONCLUSÃO:\n\nAssinatura do médico responsável." },
-  { name: "Laudo de quadril (RX/RM)", text: "LAUDO MÉDICO — QUADRIL\n\nExame: {EXAME}\nLado: {LADO}\n\nACHADOS:\n\nCONCLUSÃO:\n\nAssinatura do médico responsável." },
-  { name: "Laudo de pé e tornozelo (RX)", text: "LAUDO MÉDICO — PÉ E TORNOZELO\n\nExame: {EXAME}\nLado: {LADO}\n\nACHADOS:\n\nCONCLUSÃO:\n\nAssinatura do médico responsável." },
+  { name: "Perícia INSS — Joelho", text: "LAUDO MÉDICO\n\n1. QUEIXA PRINCIPAL\n\n2. HISTÓRIA DA DOENÇA ATUAL\n\n3. ANTECEDENTES PESSOAIS E CIRÚRGICOS\n\n4. EXAME FÍSICO\n   - Inspeção:\n   - Palpação:\n   - Amplitude de Movimento (ADM):\n     Flexão: ___° (normal 135°)\n     Extensão: ___° (normal 0°)\n   - Testes Especiais: Lachman ___ | McMurray ___ | Varo/Valgo ___\n\n5. EXAMES COMPLEMENTARES\n   Exame: | Data: | Achados:\n\n6. DIAGNÓSTICO\n   CID-10:\n\n7. CAPACIDADE FUNCIONAL\n   [ ] Apto para trabalho habitual\n   [ ] Parcialmente incapaz — restrições:\n   [ ] Incapaz temporariamente — prazo estimado:\n   [ ] Incapaz permanentemente\n\n8. CONCLUSÃO\n" },
+  { name: "Autorização cirúrgica (Plano)", text: "LAUDO PARA AUTORIZAÇÃO DE PROCEDIMENTO CIRÚRGICO\n\n1. IDENTIFICAÇÃO DO PROCEDIMENTO\n   Procedimento solicitado:\n   Código TUSS/CBHPM:\n\n2. DIAGNÓSTICO\n   CID-10:\n\n3. JUSTIFICATIVA CLÍNICA\n   Paciente portador(a) de...\n\n4. EXAMES QUE EMBASAM A INDICAÇÃO\n\n5. TRATAMENTO CONSERVADOR REALIZADO\n   Sim ( ) — duração:\n   Não ( ) — justificativa:\n\n6. URGÊNCIA\n   ( ) Eletiva  ( ) Urgente  ( ) Emergência\n\n7. CONCLUSÃO\n   Solicito autorização para realização do procedimento acima justificado.\n" },
+  { name: "Acidente de trabalho (CAT)", text: "LAUDO DE ACIDENTE DE TRABALHO\n\n1. DESCRIÇÃO DO ACIDENTE\n   Data/hora:\n   Local:\n   Mecanismo do trauma:\n\n2. LESÕES ENCONTRADAS\n\n3. NEXO CAUSAL\n   As lesões descritas são compatíveis com o mecanismo de acidente informado.\n\n4. DIAGNÓSTICO\n   CID-10:\n\n5. TRATAMENTO NECESSÁRIO\n\n6. CONCLUSÃO\n" },
+  { name: "Sequela pós-traumática", text: "LAUDO DE AVALIAÇÃO DE SEQUELA PÓS-TRAUMÁTICA\n\n1. IDENTIFICAÇÃO DO EVENTO\n   Data do trauma:\n   Mecanismo:\n\n2. HISTÓRICO DE TRATAMENTO\n\n3. ESTADO ATUAL\n   Queixa atual:\n   Exame físico:\n   Exames complementares:\n\n4. DIAGNÓSTICO\n   CID-10:\n\n5. SEQUELA\n   Descrição da sequela:\n   Limitação funcional:\n   Grau estimado de incapacidade (tabela SUSEP): ____%\n\n6. CONCLUSÃO\n" },
+  { name: "Laudo de joelho (RX/RM)", text: "LAUDO MÉDICO — JOELHO\n\nExame: {EXAME}\nLado: {LADO}\n\n1. ACHADOS CLÍNICOS\n\n2. ACHADOS DE IMAGEM\n\n3. DIAGNÓSTICO\n   CID-10:\n\n4. CONCLUSÃO\n" },
+  { name: "Laudo de coluna (RX/RM)", text: "LAUDO MÉDICO — COLUNA VERTEBRAL\n\nExame: {EXAME}\nSegmento: {SEGMENTO}\n\n1. ACHADOS CLÍNICOS\n\n2. ACHADOS DE IMAGEM\n\n3. DIAGNÓSTICO\n   CID-10:\n\n4. CONCLUSÃO\n" },
   { name: "Relatório médico livre", text: "RELATÓRIO MÉDICO\n\nIlmo(a). Sr(a).,\n\nEncaminho o(a) paciente abaixo, cujos dados e informações clínicas seguem:\n\n" },
+];
+
+const LAUDO_FINALIDADE_OPTIONS = [
+  "INSS / Perícia Previdenciária",
+  "Seguradora / Seguro de Vida",
+  "Plano de Saúde (autorização cirúrgica)",
+  "Junta Médica / Concurso",
+  "Judicial / Processo Trabalhista",
+  "Relatório Médico Geral",
 ];
 
 // ── Generic Print Modal ────────────────────────────────────────────────────────
@@ -1739,21 +2166,40 @@ function DrHeader({ clinic }: { clinic?: any }) {
 function TabEncaminhamentos({ patient, clinic }: { patient: any; clinic?: any }) {
   const [refType, setRefType] = useState("fisioterapia");
   const [specialty, setSpecialty] = useState("");
+  const [specialtyOther, setSpecialtyOther] = useState("");
+  const [physioModality, setPhysioModality] = useState("");
+  const [colleagueName, setColleagueName] = useState("");
+  const [cid, setCid] = useState("");
   const [text, setText] = useState("");
-  const [printData, setPrintData] = useState<{ refType: string; specialty: string; text: string } | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [printData, setPrintData] = useState<{ typeLabel: string; text: string; cid: string; colleagueName: string } | null>(null);
+  const textRef = useRef<HTMLTextAreaElement>(null);
 
   const today = new Date();
   const dateStr = `${String(today.getDate()).padStart(2,"0")}/${String(today.getMonth()+1).padStart(2,"0")}/${today.getFullYear()}`;
   const cityState = clinic ? `${clinic.city}/${clinic.state}` : "_________";
 
-  const handlePrint = () => {
-    if (!text.trim()) { toast.error("Descreva o encaminhamento antes de imprimir"); return; }
-    setPrintData({ refType, specialty, text });
+  const autoResizeRef = () => {
+    const ta = textRef.current;
+    if (!ta) return;
+    ta.style.height = "auto";
+    ta.style.height = `${Math.max(ta.scrollHeight, 160)}px`;
   };
 
-  const typeLabel = refType === "especialidade" && specialty
-    ? specialty
+  const resolvedSpecialty = specialty === "Outra" ? specialtyOther : specialty;
+  const typeLabel = refType === "especialidade" && resolvedSpecialty
+    ? resolvedSpecialty
+    : refType === "fisioterapia" && physioModality
+    ? `Fisioterapia — ${physioModality}`
+    : refType === "colega" ? "Colega Ortopedista"
     : REFERRAL_TYPES.find(r => r.value === refType)?.label ?? refType;
+
+  const handlePrint = () => {
+    if (!text.trim()) { toast.error("Descreva o encaminhamento antes de imprimir"); return; }
+    setPrintData({ typeLabel, text, cid, colleagueName });
+  };
+
+  const filteredTemplates = REFERRAL_TEXT_TEMPLATES.filter(t => t.type === refType);
 
   const printContent = printData && (
     <div style={{ fontFamily: "Arial, sans-serif", color: "#111", fontSize: "13px" }}>
@@ -1761,9 +2207,15 @@ function TabEncaminhamentos({ patient, clinic }: { patient: any; clinic?: any })
       <div style={{ textAlign: "center", marginBottom: "16px" }}>
         <p style={{ fontWeight: 700, fontSize: "14px", textTransform: "uppercase", letterSpacing: "1px", color: "#0F2D5E", margin: 0 }}>Encaminhamento Médico</p>
       </div>
-      <p style={{ marginBottom: "12px" }}><strong>Paciente:</strong> {patient?.name}</p>
-      {patient?.birth_date && <p style={{ marginBottom: "12px" }}><strong>Data de Nasc.:</strong> {new Date(patient.birth_date + "T12:00:00").toLocaleDateString("pt-BR")}</p>}
-      <p style={{ marginBottom: "16px" }}><strong>Encaminhar para:</strong> {typeLabel}</p>
+      {printData.colleagueName && (
+        <p style={{ marginBottom: "12px" }}>Prezado(a) Dr(a). <strong>{printData.colleagueName}</strong>,</p>
+      )}
+      <p style={{ marginBottom: "6px" }}><strong>Paciente:</strong> {patient?.name}</p>
+      {patient?.birth_date && <p style={{ marginBottom: "6px" }}><strong>Data de Nasc.:</strong> {new Date(patient.birth_date + "T12:00:00").toLocaleDateString("pt-BR")}</p>}
+      {patient?.phone && <p style={{ marginBottom: "6px" }}><strong>Telefone:</strong> {patient.phone}</p>}
+      {patient?.patient_insurance && <p style={{ marginBottom: "6px" }}><strong>Convênio:</strong> {patient.patient_insurance}</p>}
+      {printData.cid && <p style={{ marginBottom: "12px" }}><strong>Diagnóstico/Hipótese (CID-10):</strong> {printData.cid}</p>}
+      <p style={{ marginBottom: "16px" }}><strong>Encaminhar para:</strong> {printData.typeLabel}</p>
       <div style={{ background: "#f8f8f8", borderLeft: "3px solid #0F2D5E", padding: "12px", marginBottom: "24px", whiteSpace: "pre-wrap", fontSize: "12px" }}>
         {printData.text}
       </div>
@@ -1788,44 +2240,107 @@ function TabEncaminhamentos({ patient, clinic }: { patient: any; clinic?: any })
       <div>
         <label className={lbl}>Tipo de Encaminhamento</label>
         <div className="flex flex-wrap gap-2">
-          {REFERRAL_TYPES.map(rt => (
-            <button
-              key={rt.value}
-              type="button"
-              onClick={() => setRefType(rt.value)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
-                refType === rt.value
-                  ? "border-blue-600 bg-blue-600 text-white"
-                  : "border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-400 hover:border-blue-400"
-              }`}
-            >
-              {rt.label}
-            </button>
-          ))}
+          {REFERRAL_TYPES.map(rt => {
+            const IconComp = rt.icon === "Activity" ? Activity : rt.icon === "Stethoscope" ? Stethoscope : rt.icon === "Award" ? Award : FileText;
+            return (
+              <button
+                key={rt.value}
+                type="button"
+                onClick={() => setRefType(rt.value)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+                  refType === rt.value
+                    ? "border-blue-600 bg-blue-600 text-white"
+                    : "border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-400 hover:border-blue-400"
+                }`}
+              >
+                <IconComp className="w-3.5 h-3.5" /> {rt.label}
+              </button>
+            );
+          })}
         </div>
       </div>
+
+      {refType === "fisioterapia" && (
+        <div>
+          <label className={lbl}>Modalidade de Fisioterapia</label>
+          <select className={inp} value={physioModality} onChange={e => setPhysioModality(e.target.value)}>
+            <option value="">— selecionar modalidade —</option>
+            {PHYSIO_MODALITY_OPTIONS.map(m => <option key={m} value={m}>{m}</option>)}
+          </select>
+        </div>
+      )}
 
       {refType === "especialidade" && (
         <div>
           <label className={lbl}>Especialidade</label>
-          <input className={inp} placeholder="Ex: Neurologia, Reumatologia..." value={specialty} onChange={e => setSpecialty(e.target.value)} />
+          <select className={inp} value={specialty} onChange={e => setSpecialty(e.target.value)}>
+            <option value="">— selecionar especialidade —</option>
+            {SPECIALTY_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+          {specialty === "Outra" && (
+            <input className={inp + " mt-2"} placeholder="Especifique a especialidade..." value={specialtyOther} onChange={e => setSpecialtyOther(e.target.value)} />
+          )}
+        </div>
+      )}
+
+      {refType === "colega" && (
+        <div>
+          <label className={lbl}>Nome do colega (opcional)</label>
+          <input className={inp} placeholder="Ex: Dr. João Silva — Ortopedia do Joelho" value={colleagueName} onChange={e => setColleagueName(e.target.value)} />
+        </div>
+      )}
+
+      {/* CID */}
+      <div>
+        <label className={lbl}>CID-10 / Hipótese Diagnóstica</label>
+        <CidSearch value={cid} onChange={setCid} />
+      </div>
+
+      {/* Templates de texto rápidos */}
+      {filteredTemplates.length > 0 && (
+        <div>
+          <p className="text-[11px] text-slate-400 mb-1 font-semibold uppercase tracking-wide">Modelos rápidos</p>
+          <div className="flex flex-wrap gap-1.5">
+            {filteredTemplates.map(tpl => (
+              <button
+                key={tpl.name}
+                type="button"
+                onClick={() => { setText(tpl.text); setTimeout(autoResizeRef, 0); textRef.current?.focus(); }}
+                className="text-[11px] px-2 py-0.5 rounded border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors"
+              >
+                {tpl.name}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
       <div>
-        <label className={lbl}>Detalhes do Encaminhamento</label>
+        <label className={lbl}>Motivo / Histórico / Conduta Solicitada</label>
         <textarea
+          ref={textRef}
           className={`${inp} resize-none`}
-          rows={7}
-          placeholder="Paciente com diagnóstico de... Solicito avaliação e conduta para..."
+          style={{ minHeight: "160px" }}
+          placeholder={`Paciente ${patient?.name || "{nome}"}, portador(a) de...\n\nExames realizados: ...\n\nHipótese diagnóstica: ...\n\nConduta solicitada: avaliar e tratar conforme protocolo.`}
           value={text}
-          onChange={e => setText(e.target.value)}
+          onChange={e => { setText(e.target.value); autoResizeRef(); }}
         />
       </div>
 
       <div className="flex justify-end gap-2 pt-1">
+        <button
+          type="button"
+          onClick={() => {
+            if (!text.trim()) { toast.error("Descreva o encaminhamento antes de salvar"); return; }
+            toast.success("Encaminhamento registrado (local)");
+          }}
+          disabled={saving}
+          className="flex items-center gap-1.5 px-4 py-2 border border-blue-600 text-blue-600 rounded-lg hover:bg-blue-50 font-semibold text-xs"
+        >
+          <Save className="w-3.5 h-3.5" /> Salvar
+        </button>
         <button type="button" onClick={handlePrint} className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold text-xs">
-          <Printer className="w-3.5 h-3.5" /> Imprimir Encaminhamento
+          <Printer className="w-3.5 h-3.5" /> Salvar e Imprimir
         </button>
       </div>
     </div>
@@ -1834,18 +2349,40 @@ function TabEncaminhamentos({ patient, clinic }: { patient: any; clinic?: any })
 
 // ── Tab: Procedimentos ────────────────────────────────────────────────────────
 
-function TabProcedimentos({ patient, clinic }: { patient: any; clinic?: any }) {
+function TabProcedimentos({ patientId, patient, clinic }: { patientId: number; patient: any; clinic?: any }) {
   const [text, setText] = useState("");
-  const [selectedTemplate, setSelectedTemplate] = useState("");
-  const [printData, setPrintData] = useState<string | null>(null);
+  const [cid, setCid] = useState("");
+  const [procedureTime, setProcedureTime] = useState("");
+  const [printData, setPrintData] = useState<{ text: string; cid: string; time: string } | null>(null);
+  const textRef = useRef<HTMLTextAreaElement>(null);
 
   const today = new Date();
   const dateStr = `${String(today.getDate()).padStart(2,"0")}/${String(today.getMonth()+1).padStart(2,"0")}/${today.getFullYear()}`;
+  const defaultTime = `${String(today.getHours()).padStart(2,"0")}:${String(today.getMinutes()).padStart(2,"0")}`;
   const cityState = clinic ? `${clinic.city}/${clinic.state}` : "_________";
 
-  const handleTemplate = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const t = PROCEDURE_TEMPLATES.find(p => p.name === e.target.value);
-    if (t) { setText(t.text); setSelectedTemplate(e.target.value); }
+  // init time
+  useEffect(() => { setProcedureTime(defaultTime); }, []);
+
+  const autoResizeProc = () => {
+    const ta = textRef.current;
+    if (!ta) return;
+    ta.style.height = "auto";
+    ta.style.height = `${Math.max(ta.scrollHeight, 200)}px`;
+  };
+
+  // Reset template select when text is cleared
+  useEffect(() => {
+    // nothing to reset (using chip buttons now)
+  }, [text]);
+
+  const handleSelectTemplate = (tmpl: typeof PROCEDURE_TEMPLATES[0]) => {
+    if (text.trim() && text !== tmpl.text) {
+      if (!window.confirm("Substituir o texto atual pelo modelo?")) return;
+    }
+    setText(tmpl.text);
+    setTimeout(autoResizeProc, 0);
+    textRef.current?.focus();
   };
 
   const printContent = printData && (
@@ -1856,10 +2393,14 @@ function TabProcedimentos({ patient, clinic }: { patient: any; clinic?: any }) {
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "16px", fontSize: "12px" }}>
         <p style={{ margin: 0 }}><strong>Paciente:</strong> {patient?.name}</p>
-        <p style={{ margin: 0 }}><strong>Data:</strong> {dateStr}</p>
+        <p style={{ margin: 0 }}><strong>Data:</strong> {dateStr}{printData.time ? ` às ${printData.time}` : ""}</p>
+        {patient?.birth_date && <p style={{ margin: 0 }}><strong>Nasc.:</strong> {new Date(patient.birth_date + "T12:00:00").toLocaleDateString("pt-BR")}</p>}
       </div>
+      {printData.cid && (
+        <p style={{ marginBottom: "12px", fontSize: "12px" }}><strong>CID-10:</strong> {printData.cid}</p>
+      )}
       <div style={{ background: "#f8f8f8", padding: "14px", border: "1px solid #ddd", borderRadius: "4px", marginBottom: "24px", whiteSpace: "pre-wrap", lineHeight: "1.6", fontSize: "12px" }}>
-        {printData}
+        {printData.text}
       </div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginTop: "32px" }}>
         <p style={{ fontSize: "11px", color: "#888", margin: 0 }}>{cityState}, {dateStr}</p>
@@ -1867,6 +2408,9 @@ function TabProcedimentos({ patient, clinic }: { patient: any; clinic?: any }) {
           <div style={{ borderTop: "2px solid #0F2D5E", paddingTop: "6px" }}>
             <p style={{ fontSize: "12px", fontWeight: 700, margin: "0" }}>Dr. Valth Guimarães</p>
             <p style={{ fontSize: "11px", color: "#666", margin: "0" }}>CRM/PB 6326 | CRM/PE 16551</p>
+          </div>
+          <div style={{ borderTop: "1px solid #ccc", marginTop: "24px", paddingTop: "4px" }}>
+            <p style={{ fontSize: "11px", color: "#888", margin: "0" }}>Paciente (Ciente e de acordo): _____________________</p>
           </div>
         </div>
       </div>
@@ -1879,34 +2423,72 @@ function TabProcedimentos({ patient, clinic }: { patient: any; clinic?: any }) {
         <PrintDocModal title="Relatório de Procedimento" content={printContent} onClose={() => setPrintData(null)} />
       )}
 
+      {/* Orientação */}
+      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg px-3 py-2">
+        <p className="text-xs text-blue-700 dark:text-blue-300">Selecione um modelo para preencher rapidamente, ou escreva diretamente o procedimento realizado.</p>
+      </div>
+
+      {/* Template chips */}
       <div>
-        <label className={lbl}>Modelo de Procedimento</label>
-        <select className={inp} value={selectedTemplate} onChange={handleTemplate}>
-          <option value="">— selecionar modelo —</option>
+        <label className={lbl}>Modelos de Procedimento</label>
+        <div className="flex flex-wrap gap-1.5">
           {PROCEDURE_TEMPLATES.map(t => (
-            <option key={t.name} value={t.name}>{t.name}</option>
+            <button
+              key={t.name}
+              type="button"
+              onClick={() => handleSelectTemplate(t)}
+              className="text-[11px] px-2 py-0.5 rounded border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors"
+            >
+              {t.name}
+            </button>
           ))}
-        </select>
+        </div>
+      </div>
+
+      {/* CID */}
+      <div>
+        <label className={lbl}>CID-10 / Indicação</label>
+        <CidSearch value={cid} onChange={setCid} />
+      </div>
+
+      {/* Hora */}
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className={lbl}>Hora do procedimento</label>
+          <input type="time" className={inp} value={procedureTime} onChange={e => setProcedureTime(e.target.value)} />
+        </div>
       </div>
 
       <div>
-        <label className={lbl}>Descrição do Procedimento</label>
+        <label className={lbl}>Descrição técnica do procedimento</label>
         <textarea
+          ref={textRef}
           className={`${inp} resize-none font-mono`}
-          rows={9}
-          placeholder="Descreva o procedimento realizado..."
+          style={{ minHeight: "200px" }}
+          placeholder={"Ex: Realizada infiltração articular do joelho direito com...\n\nOrientações: repouso de 24h..."}
           value={text}
-          onChange={e => setText(e.target.value)}
+          onChange={e => { setText(e.target.value); autoResizeProc(); }}
         />
       </div>
 
-      <div className="flex justify-end gap-2 pt-1">
+      <div className="flex gap-2 pt-1">
         <button
           type="button"
-          onClick={() => { if (!text.trim()) { toast.error("Descreva o procedimento antes de imprimir"); return; } setPrintData(text); }}
-          className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold text-xs"
+          onClick={() => { if (!text.trim()) { toast.error("Descreva o procedimento antes de imprimir"); return; } setPrintData({ text, cid, time: procedureTime }); }}
+          className="flex items-center gap-1.5 px-3 py-2 border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-400 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 text-xs font-semibold"
         >
-          <Printer className="w-3.5 h-3.5" /> Imprimir Procedimento
+          <Printer className="w-3.5 h-3.5" /> Imprimir
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            if (!text.trim()) { toast.error("Descreva o procedimento antes de salvar"); return; }
+            setPrintData({ text, cid, time: procedureTime });
+            toast.success("Procedimento registrado");
+          }}
+          className="flex-1 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold flex items-center justify-center gap-2 text-sm"
+        >
+          <CheckCircle className="w-4 h-4" /> Salvar Procedimento
         </button>
       </div>
     </div>
@@ -1920,50 +2502,78 @@ function TabAtestados({ patient, clinic }: { patient: any; clinic?: any }) {
   const [days, setDays] = useState("1");
   const [certType, setCertType] = useState("trabalho");
   const [obs, setObs] = useState("");
-  const [printData, setPrintData] = useState<{ cid: string; days: string; certType: string; obs: string } | null>(null);
+  const todayStr = new Date().toISOString().split("T")[0];
+  const [startDate, setStartDate] = useState(todayStr);
+  const [printData, setPrintData] = useState<{ cid: string; days: string; certType: string; obs: string; startDate: string } | null>(null);
 
   const today = new Date();
   const dateStr = `${String(today.getDate()).padStart(2,"0")}/${String(today.getMonth()+1).padStart(2,"0")}/${today.getFullYear()}`;
   const cityState = clinic ? `${clinic.city}/${clinic.state}` : "_________";
   const typeLabel = CERTIFICATE_TYPES.find(c => c.value === certType)?.label ?? certType;
 
-  const printContent = printData && (
-    <div style={{ fontFamily: "Arial, sans-serif", color: "#111", fontSize: "13px" }}>
-      <DrHeader clinic={clinic} />
-      <div style={{ textAlign: "center", marginBottom: "20px" }}>
-        <p style={{ fontWeight: 700, fontSize: "15px", textTransform: "uppercase", letterSpacing: "2px", color: "#0F2D5E", margin: 0 }}>Atestado Médico</p>
-      </div>
-      <div style={{ lineHeight: "1.8", marginBottom: "24px" }}>
-        <p>
-          Atesto que o(a) paciente <strong>{patient?.name}</strong>
-          {patient?.cpf ? `, CPF ${patient.cpf},` : ""}
-          {patient?.birth_date ? ` nascido(a) em ${new Date(patient.birth_date + "T12:00:00").toLocaleDateString("pt-BR")},` : ""}
-          {" "}encontra-se sob meus cuidados médicos e necessita afastar-se de <strong>{typeLabel}</strong> pelo
-          período de <strong>{printData.days} dia{Number(printData.days) !== 1 ? "s" : ""}</strong>, a partir da data de hoje.
-        </p>
-        {printData.cid && (
-          <p style={{ marginTop: "12px" }}>
-            <strong>CID-10:</strong> {printData.cid}
-          </p>
+  const returnDate = useMemo(() => {
+    if (!startDate || !days || Number(days) < 1) return null;
+    const d = new Date(startDate + "T12:00:00");
+    d.setDate(d.getDate() + Number(days));
+    return `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()}`;
+  }, [startDate, days]);
+
+  const addObsChip = (chip: string) => {
+    setObs(prev => prev ? prev + "; " + chip : chip);
+  };
+
+  const printContent = useMemo(() => {
+    if (!printData) return null;
+    const pTypeLabel = CERTIFICATE_TYPES.find(c => c.value === printData.certType)?.label ?? printData.certType;
+    const startFormatted = formatDateBR(printData.startDate);
+    const retDate = (() => {
+      const d = new Date(printData.startDate + "T12:00:00");
+      d.setDate(d.getDate() + Number(printData.days));
+      return `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()}`;
+    })();
+    return (
+      <div style={{ fontFamily: "Arial, sans-serif", color: "#111", fontSize: "13px" }}>
+        <DrHeader clinic={clinic} />
+        <div style={{ textAlign: "center", marginBottom: "20px" }}>
+          <p style={{ fontWeight: 700, fontSize: "15px", textTransform: "uppercase", letterSpacing: "2px", color: "#0F2D5E", margin: 0 }}>Atestado Médico</p>
+        </div>
+        {printData.certType === "acidente_trabalho" && (
+          <div style={{ background: "#FEF3C7", border: "1px solid #F59E0B", borderRadius: "4px", padding: "8px 12px", marginBottom: "12px", fontSize: "11px", color: "#92400E" }}>
+            Atenção: este afastamento requer emissão de CAT pelo empregador em até 24h (Lei 8.213/91). Oriente o paciente.
+          </div>
         )}
-        {printData.obs && (
-          <p style={{ marginTop: "12px", color: "#555", fontSize: "12px" }}>
-            <strong>Observações:</strong> {printData.obs}
+        <div style={{ lineHeight: "1.8", marginBottom: "24px" }}>
+          <p>
+            Atesto que o(a) paciente <strong>{patient?.name}</strong>
+            {patient?.cpf ? `, CPF ${patient.cpf},` : ""}
+            {patient?.birth_date ? ` nascido(a) em ${new Date(patient.birth_date + "T12:00:00").toLocaleDateString("pt-BR")},` : ""}
+            {" "}encontra-se em avaliação médica nesta data e necessita afastar-se de <strong>{pTypeLabel}</strong> pelo
+            período de <strong>{printData.days} dia{Number(printData.days) !== 1 ? "s" : ""}</strong>, a partir de {startFormatted}, com retorno previsto para <strong>{retDate}</strong>.
           </p>
-        )}
-      </div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginTop: "40px" }}>
-        <p style={{ fontSize: "11px", color: "#888", margin: 0 }}>{cityState}, {dateStr}</p>
-        <div style={{ textAlign: "center", width: "200px" }}>
-          <div style={{ borderTop: "2px solid #0F2D5E", paddingTop: "6px" }}>
-            <p style={{ fontSize: "12px", fontWeight: 700, margin: "0" }}>Dr. Valth Guimarães</p>
-            <p style={{ fontSize: "11px", color: "#666", margin: "0" }}>CRM/PB 6326 | CRM/PE 16551</p>
+          {printData.cid && (
+            <p style={{ marginTop: "12px" }}>
+              <strong>CID-10:</strong> {printData.cid}
+            </p>
+          )}
+          {printData.obs && (
+            <p style={{ marginTop: "12px", color: "#555", fontSize: "12px" }}>
+              <strong>Restrições/Observações:</strong> {printData.obs}
+            </p>
+          )}
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginTop: "40px" }}>
+          <p style={{ fontSize: "11px", color: "#888", margin: 0 }}>{cityState}, {dateStr}</p>
+          <div style={{ textAlign: "center", width: "200px" }}>
+            <div style={{ borderTop: "2px solid #0F2D5E", paddingTop: "6px" }}>
+              <p style={{ fontSize: "12px", fontWeight: 700, margin: "0" }}>Dr. Valth Guimarães</p>
+              <p style={{ fontSize: "11px", color: "#666", margin: "0" }}>CRM/PB 6326 | CRM/PE 16551</p>
+            </div>
           </div>
         </div>
+        <p style={{ fontSize: "10px", color: "#aaa", textAlign: "center", marginTop: "24px" }}>Válido somente com assinatura e carimbo do médico</p>
       </div>
-      <p style={{ fontSize: "10px", color: "#aaa", textAlign: "center", marginTop: "24px" }}>Válido somente com assinatura e carimbo do médico</p>
-    </div>
-  );
+    );
+  }, [printData, patient, clinic]);
 
   return (
     <div className="px-5 pb-5 space-y-4">
@@ -1973,15 +2583,8 @@ function TabAtestados({ patient, clinic }: { patient: any; clinic?: any }) {
 
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className={lbl}>Dias de afastamento *</label>
-          <input
-            type="number"
-            min="1"
-            max="365"
-            className={inp}
-            value={days}
-            onChange={e => setDays(e.target.value)}
-          />
+          <label className={lbl}>Data de início do afastamento *</label>
+          <input type="date" className={inp} value={startDate} onChange={e => setStartDate(e.target.value)} />
         </div>
         <div>
           <label className={lbl}>Tipo de afastamento</label>
@@ -1993,31 +2596,78 @@ function TabAtestados({ patient, clinic }: { patient: any; clinic?: any }) {
         </div>
       </div>
 
+      {certType === "acidente_trabalho" && (
+        <div className="flex items-start gap-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700 rounded-lg px-3 py-2">
+          <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+          <p className="text-xs text-amber-800 dark:text-amber-300">Este afastamento requer emissão de CAT pelo empregador em até 24h (Lei 8.213/91). Oriente o paciente.</p>
+        </div>
+      )}
+
       <div>
-        <label className={lbl}>CID-10 (opcional)</label>
+        <label className={lbl}>Dias de afastamento *</label>
+        {/* Quick day buttons */}
+        <div className="flex gap-1.5 mb-1.5">
+          {[1, 3, 7, 14, 30].map(d => (
+            <button key={d} type="button" onClick={() => setDays(String(d))} className={`px-2.5 py-1 text-xs rounded border transition-all font-semibold ${days === String(d) ? "bg-blue-600 text-white border-blue-600" : "border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-400 hover:border-blue-400"}`}>{d}d</button>
+          ))}
+        </div>
+        <input
+          type="number"
+          min="1"
+          max="365"
+          className={inp}
+          value={days}
+          onChange={e => setDays(e.target.value)}
+        />
+        {returnDate && (
+          <p className="text-xs text-slate-500 mt-1">Retorno previsto: <strong>{returnDate}</strong></p>
+        )}
+      </div>
+
+      <div>
+        <label className={lbl}>CID-10 <span className="text-red-500 font-normal">(exigido para empresas com PCMSO e INSS)</span></label>
         <CidSearch value={cid} onChange={setCid} />
       </div>
 
       <div>
-        <label className={lbl}>Observações (opcional)</label>
-        <input
-          className={inp}
-          placeholder="Ex: paciente pode praticar atividades sedentárias..."
+        <label className={lbl}>Restrições / Observações</label>
+        {/* Chips rápidos */}
+        <div className="flex flex-wrap gap-1 mb-1.5">
+          {OBS_CHIPS.map(chip => (
+            <button key={chip} type="button" onClick={() => addObsChip(chip)} className="text-[11px] px-2 py-0.5 rounded border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
+              + {chip}
+            </button>
+          ))}
+        </div>
+        <textarea
+          className={`${inp} resize-none min-h-[80px]`}
+          rows={3}
+          placeholder="Ex: restrição para levantamento de peso; pode exercer função administrativa sentado..."
           value={obs}
           onChange={e => setObs(e.target.value)}
         />
       </div>
 
-      <div className="flex justify-end gap-2 pt-1">
+      <div className="flex gap-2 pt-1">
         <button
           type="button"
           onClick={() => {
-            if (!days || Number(days) < 1) { toast.error("Informe os dias de afastamento"); return; }
-            setPrintData({ cid, days, certType, obs });
+            if (!startDate || !days || Number(days) < 1) { toast.error("Informe os dias de afastamento"); return; }
+            toast.success("Atestado registrado (local)");
           }}
-          className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold text-xs"
+          className="flex items-center gap-1.5 px-4 py-2 border border-blue-600 text-blue-600 rounded-lg hover:bg-blue-50 font-semibold text-xs"
         >
-          <Printer className="w-3.5 h-3.5" /> Imprimir Atestado
+          <Save className="w-3.5 h-3.5" /> Salvar
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            if (!startDate || !days || Number(days) < 1) { toast.error("Informe os dias de afastamento"); return; }
+            setPrintData({ cid, days, certType, obs, startDate });
+          }}
+          className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold text-xs"
+        >
+          <Printer className="w-3.5 h-3.5" /> Salvar e Imprimir
         </button>
       </div>
     </div>
@@ -2028,41 +2678,105 @@ function TabAtestados({ patient, clinic }: { patient: any; clinic?: any }) {
 
 function TabLaudos({ patient, clinic }: { patient: any; clinic?: any }) {
   const [text, setText] = useState("");
-  const [selectedTemplate, setSelectedTemplate] = useState("");
-  const [printData, setPrintData] = useState<string | null>(null);
+  const [finalidade, setFinalidade] = useState("");
+  const [cid, setCid] = useState("");
+  const [funcCapacity, setFuncCapacity] = useState("");
+  const [funcDetail, setFuncDetail] = useState("");
+  const [printData, setPrintData] = useState<{ text: string; finalidade: string; cid: string; funcCapacity: string; funcDetail: string } | null>(null);
+  const textRef = useRef<HTMLTextAreaElement>(null);
 
   const today = new Date();
   const dateStr = `${String(today.getDate()).padStart(2,"0")}/${String(today.getMonth()+1).padStart(2,"0")}/${today.getFullYear()}`;
   const cityState = clinic ? `${clinic.city}/${clinic.state}` : "_________";
 
-  const handleTemplate = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const t = LAUDO_TEMPLATES.find(lt => lt.name === e.target.value);
-    if (t) { setText(t.text); setSelectedTemplate(e.target.value); }
+  // Draft autosave
+  const draftKey = `orthoclinic_laudo_draft_${patient?.id || "0"}`;
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const saved = localStorage.getItem(draftKey);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        setText(parsed.text || "");
+        setFinalidade(parsed.finalidade || "");
+        setCid(parsed.cid || "");
+        if (parsed.text) toast.success("Rascunho de laudo restaurado", { icon: "📄" });
+      } catch {}
+    }
+  }, [draftKey]);
+
+  useEffect(() => {
+    if (!text.trim()) return;
+    const timer = setTimeout(() => {
+      if (typeof window !== "undefined") {
+        localStorage.setItem(draftKey, JSON.stringify({ text, finalidade, cid }));
+      }
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [text, finalidade, cid, draftKey]);
+
+  const autoResizeLaudo = () => {
+    const ta = textRef.current;
+    if (!ta) return;
+    ta.style.height = "auto";
+    ta.style.height = `${Math.max(ta.scrollHeight, 300)}px`;
   };
 
-  const printContent = printData && (
-    <div style={{ fontFamily: "Arial, sans-serif", color: "#111", fontSize: "13px" }}>
-      <DrHeader clinic={clinic} />
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "16px", fontSize: "12px" }}>
-        <p style={{ margin: 0 }}><strong>Paciente:</strong> {patient?.name}</p>
-        <p style={{ margin: 0 }}><strong>Data:</strong> {dateStr}</p>
-        {patient?.birth_date && <p style={{ margin: 0 }}><strong>Nasc.:</strong> {new Date(patient.birth_date + "T12:00:00").toLocaleDateString("pt-BR")}</p>}
-        {patient?.cpf && <p style={{ margin: 0 }}><strong>CPF:</strong> {patient.cpf}</p>}
-      </div>
-      <div style={{ borderTop: "1px solid #ddd", paddingTop: "14px", whiteSpace: "pre-wrap", lineHeight: "1.7", fontSize: "12px", marginBottom: "24px" }}>
-        {printData}
-      </div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginTop: "32px" }}>
-        <p style={{ fontSize: "11px", color: "#888", margin: 0 }}>{cityState}, {dateStr}</p>
-        <div style={{ textAlign: "center", width: "200px" }}>
-          <div style={{ borderTop: "2px solid #0F2D5E", paddingTop: "6px" }}>
-            <p style={{ fontSize: "12px", fontWeight: 700, margin: "0" }}>Dr. Valth Guimarães</p>
-            <p style={{ fontSize: "11px", color: "#666", margin: "0" }}>CRM/PB 6326 | CRM/PE 16551</p>
+  const hasPlaceholders = /\{[A-Z]+\}/g.test(text);
+
+  const handleTemplate = (name: string) => {
+    const t = LAUDO_TEMPLATES.find(lt => lt.name === name);
+    if (!t) return;
+    if (text.trim() && text !== t.text) {
+      if (!window.confirm("Substituir o texto atual pelo modelo?")) return;
+    }
+    setText(t.text);
+    setTimeout(autoResizeLaudo, 0);
+    textRef.current?.focus();
+  };
+
+  const printContent = useMemo(() => {
+    if (!printData) return null;
+    const age = patient?.birth_date ? calcAge(patient.birth_date) : "";
+    return (
+      <div style={{ fontFamily: "Arial, sans-serif", color: "#111", fontSize: "13px" }}>
+        <DrHeader clinic={clinic} />
+        {printData.finalidade && (
+          <div style={{ textAlign: "center", marginBottom: "12px" }}>
+            <p style={{ fontWeight: 700, fontSize: "12px", textTransform: "uppercase", color: "#0F2D5E", margin: 0, letterSpacing: "0.5px" }}>LAUDO MÉDICO — {printData.finalidade.toUpperCase()}</p>
+          </div>
+        )}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px", marginBottom: "16px", fontSize: "11px", border: "1px solid #eee", borderRadius: "4px", padding: "8px" }}>
+          <p style={{ margin: 0 }}><strong>Paciente:</strong> {patient?.name}</p>
+          <p style={{ margin: 0 }}><strong>Data da avaliação:</strong> {dateStr}</p>
+          {patient?.birth_date && <p style={{ margin: 0 }}><strong>Nasc.:</strong> {new Date(patient.birth_date + "T12:00:00").toLocaleDateString("pt-BR")}{age ? ` (${age})` : ""}</p>}
+          {patient?.cpf && <p style={{ margin: 0 }}><strong>CPF:</strong> {patient.cpf}</p>}
+        </div>
+        {printData.cid && (
+          <p style={{ fontWeight: 700, marginBottom: "12px", fontSize: "12px", borderLeft: "3px solid #0F2D5E", paddingLeft: "8px" }}>CID-10: {printData.cid}</p>
+        )}
+        <div style={{ borderTop: "1px solid #ddd", paddingTop: "14px", whiteSpace: "pre-wrap", lineHeight: "1.7", fontSize: "12px", marginBottom: "16px" }}>
+          {printData.text}
+        </div>
+        {printData.funcCapacity && (
+          <div style={{ borderTop: "2px solid #0F2D5E", paddingTop: "10px", marginBottom: "24px" }}>
+            <p style={{ fontWeight: 700, fontSize: "12px", marginBottom: "4px" }}>Conclusão Funcional:</p>
+            <p style={{ fontSize: "12px" }}>{printData.funcCapacity}{printData.funcDetail ? ` — ${printData.funcDetail}` : ""}</p>
+          </div>
+        )}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginTop: "32px" }}>
+          <p style={{ fontSize: "11px", color: "#888", margin: 0 }}>{cityState}, {dateStr}</p>
+          <div style={{ textAlign: "center", width: "220px" }}>
+            <div style={{ borderTop: "2px solid #0F2D5E", paddingTop: "6px" }}>
+              <p style={{ fontSize: "12px", fontWeight: 700, margin: "0" }}>Dr. Valth Guimarães</p>
+              <p style={{ fontSize: "11px", color: "#666", margin: "0" }}>CRM/PB 6326 | CRM/PE 16551</p>
+              <p style={{ fontSize: "10px", color: "#888", margin: "2px 0 0 0" }}>Assinatura, Carimbo e RQE</p>
+            </div>
           </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  }, [printData, patient, clinic]);
 
   return (
     <div className="px-5 pb-5 space-y-4">
@@ -2070,32 +2784,82 @@ function TabLaudos({ patient, clinic }: { patient: any; clinic?: any }) {
         <PrintDocModal title="Laudo Médico" content={printContent} onClose={() => setPrintData(null)} />
       )}
 
+      {/* Finalidade */}
       <div>
-        <label className={lbl}>Modelo de Laudo</label>
-        <select className={inp} value={selectedTemplate} onChange={handleTemplate}>
-          <option value="">— selecionar modelo —</option>
-          {LAUDO_TEMPLATES.map(t => (
-            <option key={t.name} value={t.name}>{t.name}</option>
-          ))}
+        <label className={lbl}>Finalidade do Laudo *</label>
+        <select className={inp} value={finalidade} onChange={e => setFinalidade(e.target.value)}>
+          <option value="">— selecionar finalidade —</option>
+          {LAUDO_FINALIDADE_OPTIONS.map(f => <option key={f} value={f}>{f}</option>)}
         </select>
       </div>
 
+      {/* Templates */}
+      <div>
+        <label className={lbl}>Modelos</label>
+        <div className="flex flex-wrap gap-1.5">
+          {LAUDO_TEMPLATES.map(t => (
+            <button
+              key={t.name}
+              type="button"
+              onClick={() => handleTemplate(t.name)}
+              className="text-[11px] px-2 py-0.5 rounded border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors"
+            >
+              {t.name}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* CID */}
+      <div>
+        <label className={lbl}>CID-10 Principal *</label>
+        <CidSearch value={cid} onChange={setCid} />
+      </div>
+
+      {/* Texto */}
       <div>
         <label className={lbl}>Texto do Laudo</label>
+        {hasPlaceholders && (
+          <div className="flex items-center gap-2 mb-1.5 bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700 rounded px-2 py-1.5">
+            <AlertTriangle className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />
+            <p className="text-[11px] text-amber-700 dark:text-amber-300">Preencha os campos marcados com {"{ }"} antes de imprimir.</p>
+          </div>
+        )}
         <textarea
+          ref={textRef}
           className={`${inp} resize-none font-mono`}
-          rows={11}
-          placeholder="Escreva o laudo aqui..."
+          style={{ minHeight: "300px" }}
+          placeholder="Escreva o laudo aqui ou selecione um modelo acima..."
           value={text}
-          onChange={e => setText(e.target.value)}
+          onChange={e => { setText(e.target.value); autoResizeLaudo(); }}
         />
       </div>
 
-      <div className="flex justify-end gap-2 pt-1">
+      {/* Conclusão funcional */}
+      <div>
+        <label className={lbl}>Conclusão Funcional (opcional)</label>
+        <select className={inp + " mb-2"} value={funcCapacity} onChange={e => setFuncCapacity(e.target.value)}>
+          <option value="">— selecionar —</option>
+          <option value="Sem limitação funcional">Sem limitação funcional</option>
+          <option value="Limitação parcial">Limitação parcial</option>
+          <option value="Incapacidade temporária">Incapacidade temporária</option>
+          <option value="Incapacidade permanente">Incapacidade permanente</option>
+        </select>
+        {(funcCapacity === "Limitação parcial" || funcCapacity === "Incapacidade temporária") && (
+          <input className={inp} placeholder={funcCapacity === "Limitação parcial" ? "Atividades restritas a..." : "Estimativa de prazo (dias/semanas)..."} value={funcDetail} onChange={e => setFuncDetail(e.target.value)} />
+        )}
+      </div>
+
+      <div className="flex gap-2 pt-1">
         <button
           type="button"
-          onClick={() => { if (!text.trim()) { toast.error("Escreva o laudo antes de imprimir"); return; } setPrintData(text); }}
-          className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold text-xs"
+          onClick={() => {
+            if (!text.trim()) { toast.error("Escreva o laudo antes de imprimir"); return; }
+            if (hasPlaceholders) { toast.error("Preencha todos os campos { } antes de imprimir"); return; }
+            if (typeof window !== "undefined") localStorage.removeItem(draftKey);
+            setPrintData({ text, finalidade, cid, funcCapacity, funcDetail });
+          }}
+          className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold text-xs"
         >
           <Printer className="w-3.5 h-3.5" /> Imprimir Laudo
         </button>
@@ -2108,15 +2872,31 @@ function TabLaudos({ patient, clinic }: { patient: any; clinic?: any }) {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://ortho-clinic-ldcd.onrender.com";
 
+interface PatientDocument {
+  id: number;
+  file_url: string;
+  title: string | null;
+  date: string;
+  category?: string;
+  notes?: string | null;
+}
+
 function TabFotos({ patientId }: { patientId: number }) {
-  const [photos, setPhotos] = useState<any[]>([]);
+  const [photos, setPhotos] = useState<PatientDocument[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
-  const [zoomedUrl, setZoomedUrl] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number } | null>(null);
+  const [zoomedIndex, setZoomedIndex] = useState<number | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const cameraRef = useRef<HTMLInputElement>(null);
 
-  const token = typeof window !== "undefined" ? localStorage.getItem("orthoclinic_token") : null;
-  const authHeaders: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+  const authHeaders = useMemo<Record<string, string>>(() => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("orthoclinic_token") : null;
+    const h: Record<string, string> = {};
+    if (token) h["Authorization"] = `Bearer ${token}`;
+    return h;
+  }, []);
 
   const fetchPhotos = useCallback(async () => {
     setLoading(true);
@@ -2137,9 +2917,18 @@ function TabFotos({ patientId }: { patientId: number }) {
 
   const handleUpload = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
+    // Pre-check file sizes
+    const fileArr = Array.from(files);
+    const oversized = fileArr.filter(f => f.size > 10 * 1024 * 1024);
+    if (oversized.length > 0) {
+      toast.error(`${oversized.map(f => f.name).join(", ")} excedem 10MB. Comprima antes de enviar.`);
+      return;
+    }
     setUploading(true);
+    setUploadProgress({ current: 0, total: fileArr.length });
     let uploaded = 0;
-    for (const file of Array.from(files)) {
+    const errors: string[] = [];
+    for (const file of fileArr) {
       const fd = new FormData();
       fd.append("file", file);
       fd.append("title", file.name || "Foto de exame");
@@ -2151,67 +2940,115 @@ function TabFotos({ patientId }: { patientId: number }) {
           headers: authHeaders,
           body: fd,
         });
-        if (res.ok) uploaded++;
-      } catch { /* skip */ }
+        if (res.ok) { uploaded++; }
+        else { errors.push(file.name); }
+      } catch { errors.push(file.name); }
+      setUploadProgress(p => p ? { ...p, current: p.current + 1 } : null);
     }
     setUploading(false);
+    setUploadProgress(null);
     if (uploaded > 0) { toast.success(`${uploaded} foto${uploaded > 1 ? "s" : ""} enviada${uploaded > 1 ? "s" : ""}!`); fetchPhotos(); }
-    else toast.error("Erro ao enviar foto");
+    if (errors.length > 0) toast.error(`Falha ao enviar: ${errors.join(", ")}`);
+    else if (uploaded === 0) toast.error("Erro ao enviar foto");
   };
 
   const handleDelete = async (docId: number) => {
     if (!confirm("Remover esta foto?")) return;
+    setDeletingId(docId);
     try {
       await fetch(`${API_URL}/patients/${patientId}/documents/${docId}`, {
         method: "DELETE",
         headers: authHeaders,
       });
       setPhotos(prev => prev.filter(p => p.id !== docId));
+      if (zoomedIndex !== null && photos[zoomedIndex]?.id === docId) setZoomedIndex(null);
       toast.success("Foto removida");
     } catch { toast.error("Erro ao remover"); }
+    finally { setDeletingId(null); }
   };
+
+  // Keyboard navigation for lightbox
+  useEffect(() => {
+    if (zoomedIndex === null) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "ArrowRight") setZoomedIndex(i => i !== null ? Math.min(i + 1, photos.length - 1) : null);
+      if (e.key === "ArrowLeft") setZoomedIndex(i => i !== null ? Math.max(i - 1, 0) : null);
+      if (e.key === "Escape") setZoomedIndex(null);
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [zoomedIndex, photos.length]);
+
+  const zoomedPhoto = zoomedIndex !== null ? photos[zoomedIndex] : null;
 
   return (
     <div className="px-5 pb-5">
-      {zoomedUrl && (
+      {/* Lightbox */}
+      {zoomedPhoto && (
         <div
           className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80"
-          onClick={() => setZoomedUrl(null)}
+          onClick={() => setZoomedIndex(null)}
         >
-          <img src={zoomedUrl} alt="Zoom" className="max-w-[95vw] max-h-[95vh] rounded-xl shadow-2xl" />
-          <button className="absolute top-4 right-4 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white" onClick={() => setZoomedUrl(null)}>
+          <button
+            className="absolute left-4 top-1/2 -translate-y-1/2 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white disabled:opacity-30"
+            onClick={e => { e.stopPropagation(); setZoomedIndex(i => i !== null ? Math.max(i - 1, 0) : null); }}
+            disabled={zoomedIndex === 0}
+          >
+            <ChevronUp className="w-5 h-5 -rotate-90" />
+          </button>
+          <img src={zoomedPhoto.file_url} alt={zoomedPhoto.title || "Foto"} className="max-w-[85vw] max-h-[85vh] rounded-xl shadow-2xl" />
+          <button className="absolute top-4 right-4 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white" onClick={() => setZoomedIndex(null)}>
             <X className="w-5 h-5" />
           </button>
+          <button
+            className="absolute right-4 top-1/2 -translate-y-1/2 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white disabled:opacity-30"
+            onClick={e => { e.stopPropagation(); setZoomedIndex(i => i !== null ? Math.min(i + 1, photos.length - 1) : null); }}
+            disabled={zoomedIndex === photos.length - 1}
+          >
+            <ChevronDown className="w-5 h-5 -rotate-90" />
+          </button>
+          {zoomedPhoto.title && (
+            <p className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/60 text-white text-xs px-3 py-1 rounded-full">{zoomedPhoto.title}</p>
+          )}
+          <p className="absolute top-4 left-1/2 -translate-x-1/2 text-white/60 text-xs">{(zoomedIndex ?? 0) + 1} / {photos.length}</p>
         </div>
       )}
 
       {/* Upload area */}
-      <div
-        className="border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-xl p-6 text-center cursor-pointer hover:border-blue-400 hover:bg-blue-50/30 dark:hover:bg-blue-900/10 transition-all mb-4"
-        onClick={() => fileRef.current?.click()}
-        onDragOver={e => e.preventDefault()}
-        onDrop={e => { e.preventDefault(); handleUpload(e.dataTransfer.files); }}
-      >
-        <input
-          ref={fileRef}
-          type="file"
-          accept="image/*"
-          multiple
-          className="hidden"
-          onChange={e => handleUpload(e.target.files)}
-        />
-        {uploading ? (
-          <div className="flex flex-col items-center gap-2">
-            <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-            <p className="text-sm text-slate-500">Enviando...</p>
-          </div>
-        ) : (
-          <div className="flex flex-col items-center gap-2">
-            <Camera className="w-8 h-8 text-slate-400" />
-            <p className="text-sm font-semibold text-slate-600 dark:text-slate-400">Toque para adicionar fotos</p>
-            <p className="text-xs text-slate-400">Ou arraste as imagens aqui — aceita múltiplas</p>
-          </div>
-        )}
+      <div className="mb-4 space-y-2">
+        <div
+          className="border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-xl p-6 text-center cursor-pointer hover:border-blue-400 hover:bg-blue-50/30 dark:hover:bg-blue-900/10 transition-all"
+          onClick={() => fileRef.current?.click()}
+          onDragOver={e => e.preventDefault()}
+          onDrop={e => { e.preventDefault(); handleUpload(e.dataTransfer.files); }}
+        >
+          <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={e => handleUpload(e.target.files)} />
+          <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={e => handleUpload(e.target.files)} />
+          {uploading ? (
+            <div className="flex flex-col items-center gap-2">
+              <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+              <p className="text-sm text-slate-500">{uploadProgress ? `Enviando ${uploadProgress.current} de ${uploadProgress.total}...` : "Enviando..."}</p>
+              {uploadProgress && (
+                <div className="w-40 h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                  <div className="h-full bg-blue-600 transition-all" style={{ width: `${(uploadProgress.current / uploadProgress.total) * 100}%` }} />
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="flex flex-col items-center gap-2">
+              <Camera className="w-8 h-8 text-slate-400" />
+              <p className="text-sm font-semibold text-slate-600 dark:text-slate-400">Toque para adicionar fotos</p>
+              <p className="text-xs text-slate-400">Ou arraste as imagens aqui — aceita múltiplas</p>
+            </div>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={() => cameraRef.current?.click()}
+          className="w-full flex items-center justify-center gap-2 px-4 py-2 border border-blue-300 dark:border-blue-700 text-blue-600 dark:text-blue-400 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 text-xs font-semibold"
+        >
+          <Camera className="w-3.5 h-3.5" /> Abrir câmera
+        </button>
       </div>
 
       {/* Grid */}
@@ -2220,37 +3057,49 @@ function TabFotos({ patientId }: { patientId: number }) {
           <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
         </div>
       ) : photos.length === 0 ? (
-        <p className="text-center text-xs text-slate-400 italic py-4">Nenhuma foto adicionada ainda.</p>
+        <div className="flex flex-col items-center justify-center py-8 gap-2">
+          <ImageIcon className="w-12 h-12 text-slate-300" />
+          <p className="text-sm font-semibold text-slate-500">Documentação fotográfica</p>
+          <p className="text-xs text-slate-400 text-center max-w-56">Registre RX fotografado, evolução de feridas, aspecto pós-operatório ou lesões cutâneas. Aceita múltiplas fotos de uma vez.</p>
+        </div>
       ) : (
         <div className="grid grid-cols-2 gap-3">
-          {photos.map(photo => (
+          {photos.map((photo, idx) => (
             <div key={photo.id} className="relative group rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 aspect-square">
               <img
                 src={photo.file_url}
                 alt={photo.title || "Foto"}
-                className="w-full h-full object-cover"
+                className="w-full h-full object-cover cursor-pointer"
+                onClick={() => setZoomedIndex(idx)}
               />
-              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100">
-                <button
-                  onClick={() => setZoomedUrl(photo.file_url)}
-                  className="p-2 bg-white/90 rounded-full text-slate-700 hover:bg-white"
-                  title="Ampliar"
-                >
-                  <ZoomIn className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => handleDelete(photo.id)}
-                  className="p-2 bg-red-500/90 rounded-full text-white hover:bg-red-600"
-                  title="Remover"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+              {/* Always visible controls (bottom bar) */}
+              <div className="absolute bottom-0 left-0 right-0 flex items-center justify-between bg-black/50 px-2 py-1">
+                <p className="text-white text-[10px] truncate flex-1 mr-1">{photo.title || "Foto"}</p>
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => setZoomedIndex(idx)}
+                    className="p-1 bg-white/20 hover:bg-white/40 rounded text-white"
+                    title="Ampliar"
+                  >
+                    <ZoomIn className="w-3 h-3" />
+                  </button>
+                  <button
+                    onClick={() => { const a = document.createElement("a"); a.href = photo.file_url; a.download = photo.title || "foto"; a.target = "_blank"; a.click(); }}
+                    className="p-1 bg-white/20 hover:bg-white/40 rounded text-white"
+                    title="Download"
+                  >
+                    <Download className="w-3 h-3" />
+                  </button>
+                  <button
+                    onClick={() => handleDelete(photo.id)}
+                    disabled={deletingId === photo.id}
+                    className="p-1 bg-red-500/80 hover:bg-red-600 rounded text-white disabled:opacity-50"
+                    title="Remover"
+                  >
+                    {deletingId === photo.id ? <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Trash2 className="w-3 h-3" />}
+                  </button>
+                </div>
               </div>
-              {photo.title && (
-                <p className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-[10px] px-2 py-1 truncate">
-                  {photo.title}
-                </p>
-              )}
             </div>
           ))}
         </div>
@@ -2429,7 +3278,7 @@ export default function ConsultaDrawer({ entry, onClose, onStatusChange }: Consu
             {activeTab === "exames"          && <TabExames patientId={entry.patient_id} patient={patient} clinic={clinic} />}
             {activeTab === "receitas"        && <TabReceita patientId={entry.patient_id} patient={patient} clinic={clinic} />}
             {activeTab === "encaminhamentos" && <TabEncaminhamentos patient={patient} clinic={clinic} />}
-            {activeTab === "procedimentos"   && <TabProcedimentos patient={patient} clinic={clinic} />}
+            {activeTab === "procedimentos"   && <TabProcedimentos patientId={entry.patient_id} patient={patient} clinic={clinic} />}
             {activeTab === "atestados"       && <TabAtestados patient={patient} clinic={clinic} />}
             {activeTab === "laudos"          && <TabLaudos patient={patient} clinic={clinic} />}
             {activeTab === "fotos"           && <TabFotos patientId={entry.patient_id} />}
