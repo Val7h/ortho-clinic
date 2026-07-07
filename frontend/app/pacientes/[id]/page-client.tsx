@@ -249,6 +249,23 @@ export default function PatientPage() {
     );
   }
 
+  // Guarda final: nenhuma das condições acima cobre o caso em que o
+  // carregamento terminou sem erro mas `patient` ainda não foi setado
+  // (ex.: 401 na primeira tentativa seguido de retry bem-sucedido).
+  // Sem isso, o acesso a patient.name abaixo derruba a página inteira.
+  if (!patient) {
+    return (
+      <PageWithSidebar>
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+        <NavBar title="Carregando..." back="/pacientes" />
+        <main className="max-w-3xl mx-auto px-4 py-8">
+          <CardSkeleton />
+        </main>
+      </div>
+      </PageWithSidebar>
+    );
+  }
+
   const tabs: { key: Tab; label: string }[] = [
     { key: "timeline", label: "Histórico" },
     { key: "dados", label: "Dados" },
