@@ -1,7 +1,7 @@
 import axios from "axios";
 
 // API URL with fallbacks for different environments
-const API_URL =
+export const API_URL =
   process.env.NEXT_PUBLIC_API_URL ||
   (typeof window !== 'undefined' && (
     window.location.hostname === 'localhost' ||
@@ -433,6 +433,29 @@ export interface ChatMessage {
 export const chatApi = {
   send: (messages: ChatMessage[]) =>
     api.post<{ reply: string }>("/api/chat", { messages }).then((r) => r.data),
+};
+
+// ── Mensagens diretas (médico <-> secretária) ──────────────────────────────
+export interface Contact {
+  id: number;
+  name: string;
+  role: string;
+}
+export interface DirectMessageOut {
+  id: number;
+  sender_id: number;
+  recipient_id: number;
+  content: string;
+  created_at: string;
+  read: boolean;
+}
+
+export const messagesApi = {
+  contacts: () => api.get<Contact[]>("/api/messages/contacts").then((r) => r.data),
+  conversation: (otherId: number) =>
+    api.get<DirectMessageOut[]>(`/api/messages/${otherId}`).then((r) => r.data),
+  send: (recipient_id: number, content: string) =>
+    api.post<DirectMessageOut>("/api/messages", { recipient_id, content }).then((r) => r.data),
 };
 
 // ── WhatsApp ──────────────────────────────────────────────────────────────
