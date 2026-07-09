@@ -613,7 +613,14 @@ export default function SalaDeEsperaPage() {
                     }}
                     className="w-full text-left px-4 py-2.5 hover:bg-blue-50 dark:hover:bg-blue-950 transition-colors"
                   >
-                    <p className="text-sm font-medium text-slate-900 dark:text-slate-50">{p.name}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium text-slate-900 dark:text-slate-50">{p.name}</p>
+                      {!p.consultation_count && (
+                        <span className="px-1.5 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 text-[10px] font-semibold shrink-0">
+                          🆕 novo
+                        </span>
+                      )}
+                    </div>
                     {p.cpf && (
                       <p className="text-xs text-slate-500 dark:text-slate-400">CPF: {p.cpf}</p>
                     )}
@@ -628,9 +635,16 @@ export default function SalaDeEsperaPage() {
             {selectedPatient && (
               <div className="flex items-center justify-between px-4 py-3 rounded-lg bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800">
                 <div>
-                  <p className="text-sm font-semibold text-green-800 dark:text-green-200">
-                    {selectedPatient.name}
-                  </p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-semibold text-green-800 dark:text-green-200">
+                      {selectedPatient.name}
+                    </p>
+                    {!selectedPatient.consultation_count && (
+                      <span className="px-1.5 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 text-[10px] font-semibold">
+                        🆕 Paciente novo
+                      </span>
+                    )}
+                  </div>
                   {selectedPatient.cpf && (
                     <p className="text-xs text-green-600 dark:text-green-400">CPF: {selectedPatient.cpf}</p>
                   )}
@@ -651,6 +665,22 @@ export default function SalaDeEsperaPage() {
               <label className="block text-sm font-medium text-slate-900 dark:text-slate-50 mb-1.5">
                 Motivo da visita <span className="font-normal text-slate-400">(opcional)</span>
               </label>
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                {["Retorno", "Procedimento", "Consulta Nova"].map((opt) => (
+                  <button
+                    key={opt}
+                    type="button"
+                    onClick={() => setCheckinReason(opt)}
+                    className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
+                      checkinReason === opt
+                        ? "bg-blue-600 border-blue-600 text-white"
+                        : "bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700"
+                    }`}
+                  >
+                    {opt}
+                  </button>
+                ))}
+              </div>
               <input
                 type="text"
                 placeholder="Ex: Retorno, Consulta, Curativo..."
