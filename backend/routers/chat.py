@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from deps import get_current_user
-from models.clinic import Appointment, Clinic
+from models.clinic import Appointment
 from models.organization import User
 from models.patient import Patient
 from models.queue import WaitingRoomEntry
@@ -111,21 +111,19 @@ class SendWhatsAppResponse(BaseModel):
     error: Optional[str] = None
 
 
-def _org_clinic_ids(db: Session, current_user: User) -> List[int]:
-    q = db.query(Clinic.id).filter(Clinic.active == True)
-    if current_user.role != "superadmin":
-        q = q.filter(Clinic.organization_id == current_user.organization_id)
-    return [row[0] for row in q.all()]
-
-
 def _build_context(db: Session, current_user: User) -> str:
     today = date.today()
     now = datetime.utcnow()
-    clinic_ids = _org_clinic_ids(db, current_user)
 
+    # Escopo por organização do PACIENTE, não por clinic_id da entrada — muitos
+    # check-ins da sala de espera ficam com clinic_id nulo (não é obrigatório
+    # escolher clínica no check-in), o que faria um filtro por clinic_id
+    # descartar silenciosamente a fila inteira (já aconteceu em produção).
     waiting_q = db.query(WaitingRoomEntry).filter(WaitingRoomEntry.entry_date == today)
-    if clinic_ids:
-        waiting_q = waiting_q.filter(WaitingRoomEntry.clinic_id.in_(clinic_ids))
+    if current_user.role != "superadmin":
+        waiting_q = waiting_q.join(Patient, WaitingRoomEntry.patient_id == Patient.id).filter(
+            Patient.organization_id == current_user.organization_id
+        )
     entries = waiting_q.order_by(WaitingRoomEntry.arrived_at.asc()).all()
 
     counts = {"waiting": 0, "attending": 0, "attended": 0, "absent": 0}
@@ -141,8 +139,10 @@ def _build_context(db: Session, current_user: User) -> str:
         queue_lines.append(f"- {name}: {STATUS_LABELS.get(entry.status, entry.status)}{wait_txt}")
 
     appt_q = db.query(Appointment).filter(Appointment.date == today)
-    if clinic_ids:
-        appt_q = appt_q.filter(Appointment.clinic_id.in_(clinic_ids))
+    if current_user.role != "superadmin":
+        appt_q = appt_q.join(Patient, Appointment.patient_id == Patient.id).filter(
+            Patient.organization_id == current_user.organization_id
+        )
     appointments = appt_q.order_by(Appointment.start_time.asc()).all()
     agenda_lines = [
         f"- {appt.start_time or '?'}: {appt.patient_name} ({appt.status})"
@@ -164,16 +164,19 @@ def _find_today_patient(db: Session, current_user: User, name_query: str) -> Opt
     """Procura, por nome, um paciente entre os que estão na fila ou na agenda de hoje.
     Retorna None se não achar exatamente um candidato — evita mandar mensagem pra pessoa errada."""
     today = date.today()
-    clinic_ids = _org_clinic_ids(db, current_user)
 
     waiting_q = db.query(WaitingRoomEntry.patient_id).filter(WaitingRoomEntry.entry_date == today)
-    if clinic_ids:
-        waiting_q = waiting_q.filter(WaitingRoomEntry.clinic_id.in_(clinic_ids))
+    if current_user.role != "superadmin":
+        waiting_q = waiting_q.join(Patient, WaitingRoomEntry.patient_id == Patient.id).filter(
+            Patient.organization_id == current_user.organization_id
+        )
     patient_ids = {row[0] for row in waiting_q.all()}
 
     appt_q = db.query(Appointment.patient_id).filter(Appointment.date == today)
-    if clinic_ids:
-        appt_q = appt_q.filter(Appointment.clinic_id.in_(clinic_ids))
+    if current_user.role != "superadmin":
+        appt_q = appt_q.join(Patient, Appointment.patient_id == Patient.id).filter(
+            Patient.organization_id == current_user.organization_id
+        )
     patient_ids |= {row[0] for row in appt_q.all() if row[0] is not None}
 
     if not patient_ids:
