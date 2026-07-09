@@ -30,7 +30,7 @@ def send_whatsapp(phone: str, message: str, instance: str | None = None) -> dict
     Retorna {"sent": True/False, "demo": True/False, "error": ...}
     """
     if is_demo():
-        print(f"[WA DEMO] → {phone}: {message[:60]}...")
+        print(f"[WA DEMO] -> {phone}: {message[:60]}...")
         return {"sent": False, "demo": True}
 
     instance = instance or EVOLUTION_DEFAULT_INSTANCE

@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import {
   Clock, UserCheck, UserX, Play, CheckCircle, Timer,
-  Plus, Trash2, RefreshCw, Search, ChevronRight, Stethoscope,
+  Plus, Trash2, RefreshCw, Search, ChevronRight, Stethoscope, Copy,
 } from 'lucide-react';
 import Link from 'next/link';
 import NavBar from '@/components/NavBar';
@@ -203,6 +203,17 @@ function PatientCard({ entry, onStatusChange, onRemove, onSelect, busy, selected
                 <Play className="w-3 h-3" /> Recolocar
               </button>
             )}
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(entry.patient_name)
+                  .then(() => toast.success('Nome copiado — cole no chat com a IA'))
+                  .catch(() => toast.error('Não foi possível copiar'));
+              }}
+              className="p-1 rounded text-slate-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-950 transition-colors"
+              title="Copiar nome do paciente (para colar no chat com a IA)"
+            >
+              <Copy className="w-3 h-3" />
+            </button>
             <button
               onClick={() => onRemove(entry.id)}
               disabled={busy}

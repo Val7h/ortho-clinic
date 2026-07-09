@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { MessageCircle, X, Send, Sparkles, User as UserIcon } from "lucide-react";
+import { MessageCircle, X, Send, Sparkles, User as UserIcon, MessageSquare, Copy, Check } from "lucide-react";
+import toast from "react-hot-toast";
 import { useAuth } from "@/components/AuthProvider";
 import {
   chatApi,
@@ -176,8 +177,13 @@ export function FloatingChatWidget() {
     setSending(true);
 
     try {
-      const { reply } = await chatApi.send(nextMessages);
-      const withReply = [...nextMessages, { role: "assistant" as const, content: reply }];
+      const { reply, draft } = await chatApi.send(nextMessages);
+      const withReply = [...nextMessages, {
+        role: "assistant" as const,
+        content: reply,
+        draft,
+        draftStatus: draft ? ("pending" as const) : undefined,
+      }];
       setMessages(withReply);
       saveHistory(withReply);
     } catch {
@@ -186,6 +192,38 @@ export function FloatingChatWidget() {
       setSending(false);
     }
   }, [messages, sending]);
+
+  const updateDraftStatus = useCallback((index: number, status: ChatMessage["draftStatus"]) => {
+    setMessages((prev) => {
+      const next = prev.map((m, i) => (i === index ? { ...m, draftStatus: status } : m));
+      saveHistory(next);
+      return next;
+    });
+  }, []);
+
+  const approveDraft = useCallback(async (index: number, draft: NonNullable<ChatMessage["draft"]>) => {
+    updateDraftStatus(index, "sending");
+    try {
+      const result = await chatApi.sendWhatsApp(draft.patient_id, draft.message);
+      if (result.sent) {
+        toast.success(`Mensagem enviada para ${draft.patient_name.split(" ")[0]}`);
+        updateDraftStatus(index, "sent");
+      } else if (result.demo) {
+        toast(`Modo demo: WhatsApp não configurado neste ambiente (mensagem não enviada de verdade)`, { icon: "⚠️" });
+        updateDraftStatus(index, "sent");
+      } else {
+        toast.error("Falha ao enviar via WhatsApp");
+        updateDraftStatus(index, "failed");
+      }
+    } catch {
+      toast.error("Falha ao enviar via WhatsApp");
+      updateDraftStatus(index, "failed");
+    }
+  }, [updateDraftStatus]);
+
+  const copyDraft = useCallback((message: string) => {
+    navigator.clipboard.writeText(message).then(() => toast.success("Mensagem copiada")).catch(() => toast.error("Não foi possível copiar"));
+  }, []);
 
   const sendDm = useCallback(async (contactId: number, text: string) => {
     const trimmed = text.trim();
@@ -332,7 +370,7 @@ export function FloatingChatWidget() {
                 )}
 
                 {messages.map((m, i) => (
-                  <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+                  <div key={i} className={`flex flex-col gap-1.5 ${m.role === "user" ? "items-end" : "items-start"}`}>
                     <div
                       className={`max-w-[80%] px-3 py-2 rounded-2xl text-sm whitespace-pre-wrap ${
                         m.role === "user"
@@ -342,6 +380,50 @@ export function FloatingChatWidget() {
                     >
                       {renderMarkdown(m.content)}
                     </div>
+                    {m.draft && (
+                      <div className="max-w-[85%] w-full rounded-xl border border-brand-200 dark:border-brand-800 bg-brand-50/60 dark:bg-brand-900/20 px-3 py-2.5 space-y-2">
+                        <div className="flex items-center gap-1.5 text-[11px] font-semibold text-brand-700 dark:text-brand-300 uppercase tracking-wide">
+                          <MessageSquare className="w-3.5 h-3.5" /> WhatsApp para {m.draft.patient_name.split(" ")[0]}
+                        </div>
+                        <p className="text-xs text-slate-700 dark:text-slate-200 whitespace-pre-wrap bg-white dark:bg-slate-800 rounded-lg px-2.5 py-2 border border-slate-200 dark:border-slate-700">
+                          {m.draft.message}
+                        </p>
+                        {m.draftStatus === "sent" ? (
+                          <div className="flex items-center gap-1.5 text-xs font-medium text-success-600 dark:text-success-400">
+                            <Check className="w-3.5 h-3.5" /> Enviado
+                          </div>
+                        ) : m.draftStatus === "dismissed" ? (
+                          <p className="text-xs text-slate-400">Descartado</p>
+                        ) : (
+                          <div className="flex flex-wrap gap-1.5">
+                            <button
+                              onClick={() => approveDraft(i, m.draft!)}
+                              disabled={!m.draft.phone || m.draftStatus === "sending"}
+                              title={!m.draft.phone ? "Paciente sem telefone cadastrado" : undefined}
+                              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-success-600 hover:bg-success-700 disabled:opacity-40 text-white text-xs font-semibold"
+                            >
+                              {m.draftStatus === "sending" ? "Enviando…" : "Enviar via WhatsApp"}
+                            </button>
+                            <button
+                              onClick={() => copyDraft(m.draft!.message)}
+                              className="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 text-xs font-semibold hover:bg-slate-100 dark:hover:bg-slate-700"
+                            >
+                              <Copy className="w-3 h-3" /> Copiar
+                            </button>
+                            <button
+                              onClick={() => updateDraftStatus(i, "dismissed")}
+                              disabled={m.draftStatus === "sending"}
+                              className="px-2.5 py-1 rounded-lg text-slate-500 dark:text-slate-400 text-xs hover:bg-slate-100 dark:hover:bg-slate-700"
+                            >
+                              Descartar
+                            </button>
+                          </div>
+                        )}
+                        {!m.draft.phone && m.draftStatus !== "sent" && m.draftStatus !== "dismissed" && (
+                          <p className="text-[11px] text-amber-600 dark:text-amber-400">Sem telefone cadastrado — não é possível enviar.</p>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ))}
 

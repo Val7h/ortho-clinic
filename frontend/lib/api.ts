@@ -425,14 +425,27 @@ export const memedApi = {
 
 // ── Chat IA ───────────────────────────────────────────────────────────────
 export type ChatRole = "user" | "assistant";
+export interface WhatsAppDraft {
+  patient_id: number;
+  patient_name: string;
+  phone: string | null;
+  message: string;
+}
+export type DraftStatus = "pending" | "sending" | "sent" | "dismissed" | "failed";
 export interface ChatMessage {
   role: ChatRole;
   content: string;
+  draft?: WhatsAppDraft;
+  draftStatus?: DraftStatus;
 }
 
 export const chatApi = {
   send: (messages: ChatMessage[]) =>
-    api.post<{ reply: string }>("/api/chat", { messages }).then((r) => r.data),
+    api.post<{ reply: string; draft?: WhatsAppDraft }>("/api/chat", {
+      messages: messages.map(({ role, content }) => ({ role, content })),
+    }).then((r) => r.data),
+  sendWhatsApp: (patient_id: number, message: string) =>
+    api.post<{ sent: boolean; demo: boolean; error?: string }>("/api/chat/send-whatsapp", { patient_id, message }).then((r) => r.data),
 };
 
 // ── Mensagens diretas (médico <-> secretária) ──────────────────────────────

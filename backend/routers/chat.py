@@ -7,7 +7,7 @@ Sem acesso a prontuário, anamnese, exames ou histórico clínico do paciente.
 import logging
 import os
 from datetime import date, datetime
-from typing import List
+from typing import List, Optional
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
@@ -20,6 +20,7 @@ from models.clinic import Appointment, Clinic
 from models.organization import User
 from models.patient import Patient
 from models.queue import WaitingRoomEntry
+from services.whatsapp import send_whatsapp
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +29,36 @@ router = APIRouter(prefix="/api/chat", tags=["chat"], dependencies=[Depends(get_
 ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
 ANTHROPIC_MODEL = "claude-opus-4-8"
 MAX_HISTORY_MESSAGES = 40
+
+# Ferramenta que permite ao assistente propor uma mensagem de WhatsApp para um
+# paciente da fila/agenda de hoje. O modelo NUNCA envia a mensagem diretamente —
+# a chamada da ferramenta só monta um rascunho que a interface mostra para o
+# usuário revisar e aprovar o envio manualmente (botão "Enviar via WhatsApp").
+CHAT_TOOLS = [
+    {
+        "name": "propose_whatsapp_message",
+        "description": (
+            "Prepara um rascunho de mensagem de WhatsApp para um paciente que está na fila de "
+            "espera ou na agenda de hoje. Isso NÃO envia a mensagem — apenas monta um rascunho "
+            "que será exibido ao usuário para revisão e aprovação manual antes do envio real. "
+            "Use sempre que o usuário pedir para avisar, notificar ou mandar mensagem para um paciente."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "patient_name": {
+                    "type": "string",
+                    "description": "Nome (completo ou parcial) do paciente — deve corresponder a alguém na fila de espera ou agenda de hoje.",
+                },
+                "message": {
+                    "type": "string",
+                    "description": "Texto da mensagem de WhatsApp, em português do Brasil, tom cordial e profissional.",
+                },
+            },
+            "required": ["patient_name", "message"],
+        },
+    }
+]
 
 STATUS_LABELS = {
     "waiting": "aguardando",
@@ -40,7 +71,12 @@ SYSTEM_PERSONA = """Você é o assistente virtual da OrthoClinic, um sistema de 
 Seu papel é ajudar o médico e a secretária com informações OPERACIONAIS sobre a agenda e a fila de atendimento do dia.
 Responda em português do Brasil, de forma curta e direta — isto é um chat, não um relatório.
 Você NÃO tem acesso a prontuário médico, anamnese, exames ou histórico clínico dos pacientes — apenas à fila de espera e à agenda do dia.
-Se perguntarem algo clínico (diagnóstico, receita, conduta), explique educadamente que isso não é sua função e sugira abrir o prontuário do paciente."""
+Se perguntarem algo clínico (diagnóstico, receita, conduta), explique educadamente que isso não é sua função e sugira abrir o prontuário do paciente.
+
+Se o usuário pedir para avisar, notificar ou mandar uma mensagem de WhatsApp para um paciente, use a
+ferramenta propose_whatsapp_message com o nome do paciente (deve estar na fila ou agenda de hoje) e o
+texto da mensagem. Você NUNCA envia a mensagem sozinho — o envio só acontece depois que o usuário
+revisar e aprovar o rascunho na interface."""
 
 
 class ChatMessage(BaseModel):
@@ -52,8 +88,27 @@ class ChatRequest(BaseModel):
     messages: List[ChatMessage]
 
 
+class WhatsAppDraft(BaseModel):
+    patient_id: int
+    patient_name: str
+    phone: Optional[str] = None
+    message: str
+
+
 class ChatResponse(BaseModel):
     reply: str
+    draft: Optional[WhatsAppDraft] = None
+
+
+class SendWhatsAppRequest(BaseModel):
+    patient_id: int
+    message: str
+
+
+class SendWhatsAppResponse(BaseModel):
+    sent: bool
+    demo: bool
+    error: Optional[str] = None
 
 
 def _org_clinic_ids(db: Session, current_user: User) -> List[int]:
@@ -105,6 +160,54 @@ AGENDA DE HOJE ({len(appointments)} consulta(s)):
 """
 
 
+def _find_today_patient(db: Session, current_user: User, name_query: str) -> Optional[Patient]:
+    """Procura, por nome, um paciente entre os que estão na fila ou na agenda de hoje.
+    Retorna None se não achar exatamente um candidato — evita mandar mensagem pra pessoa errada."""
+    today = date.today()
+    clinic_ids = _org_clinic_ids(db, current_user)
+
+    waiting_q = db.query(WaitingRoomEntry.patient_id).filter(WaitingRoomEntry.entry_date == today)
+    if clinic_ids:
+        waiting_q = waiting_q.filter(WaitingRoomEntry.clinic_id.in_(clinic_ids))
+    patient_ids = {row[0] for row in waiting_q.all()}
+
+    appt_q = db.query(Appointment.patient_id).filter(Appointment.date == today)
+    if clinic_ids:
+        appt_q = appt_q.filter(Appointment.clinic_id.in_(clinic_ids))
+    patient_ids |= {row[0] for row in appt_q.all() if row[0] is not None}
+
+    if not patient_ids:
+        return None
+
+    candidates = db.query(Patient).filter(Patient.id.in_(patient_ids)).all()
+    query_lower = name_query.strip().lower()
+    matches = [
+        p for p in candidates
+        if query_lower in p.name.lower() or p.name.lower() in query_lower
+    ]
+    return matches[0] if len(matches) == 1 else None
+
+
+@router.post("/send-whatsapp", response_model=SendWhatsAppResponse)
+def send_whatsapp_message(
+    request: SendWhatsAppRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    patient = db.query(Patient).filter(Patient.id == request.patient_id).first()
+    if not patient:
+        raise HTTPException(status_code=404, detail="Paciente não encontrado")
+    if current_user.role != "superadmin" and patient.organization_id != current_user.organization_id:
+        raise HTTPException(status_code=403, detail="Sem permissão para este paciente")
+    if not patient.phone:
+        raise HTTPException(status_code=422, detail="Paciente sem telefone cadastrado")
+    message = request.message.strip()
+    if not message:
+        raise HTTPException(status_code=422, detail="Mensagem vazia")
+    result = send_whatsapp(patient.phone, message)
+    return SendWhatsAppResponse(**result)
+
+
 @router.post("", response_model=ChatResponse)
 async def chat(
     request: ChatRequest,
@@ -134,6 +237,7 @@ async def chat(
         "max_tokens": 1500,
         "system": system_prompt,
         "messages": clean_messages,
+        "tools": CHAT_TOOLS,
     }
 
     try:
@@ -159,11 +263,34 @@ async def chat(
         raise HTTPException(status_code=502, detail="Serviço de IA indisponível no momento")
 
     data = resp.json()
+    content_blocks = data.get("content", [])
     reply_text = "".join(
-        block.get("text", "") for block in data.get("content", []) if block.get("type") == "text"
+        block.get("text", "") for block in content_blocks if block.get("type") == "text"
     ).strip()
+
+    draft: Optional[WhatsAppDraft] = None
+    tool_use = next((b for b in content_blocks if b.get("type") == "tool_use"
+                      and b.get("name") == "propose_whatsapp_message"), None)
+    if tool_use:
+        tool_input = tool_use.get("input", {})
+        patient_name = (tool_input.get("patient_name") or "").strip()
+        draft_message = (tool_input.get("message") or "").strip()
+        patient = _find_today_patient(db, current_user, patient_name) if patient_name else None
+        if patient and draft_message:
+            draft = WhatsAppDraft(
+                patient_id=patient.id,
+                patient_name=patient.name,
+                phone=patient.phone,
+                message=draft_message,
+            )
+            if not reply_text:
+                reply_text = f"Preparei uma mensagem para {patient.name}. Revise e confirme o envio abaixo."
+            if not patient.phone:
+                reply_text += "\n\n⚠️ Esse paciente não tem telefone cadastrado — não será possível enviar até isso ser corrigido no cadastro."
+        elif not reply_text:
+            reply_text = f"Não encontrei exatamente um paciente chamado \"{patient_name}\" na fila ou agenda de hoje. Pode confirmar o nome completo?"
 
     if not reply_text:
         raise HTTPException(status_code=502, detail="Resposta vazia do serviço de IA")
 
-    return ChatResponse(reply=reply_text)
+    return ChatResponse(reply=reply_text, draft=draft)
