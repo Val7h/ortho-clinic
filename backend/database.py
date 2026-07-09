@@ -90,6 +90,16 @@ def migrate_db():
         if "comorbidades" not in cols:
             migrations.append("ALTER TABLE patients ADD COLUMN comorbidades JSON")
 
+    # Sala de Espera — timer de atendimento + valor (called_at/attended_at/value_cents)
+    if "waiting_room_entries" in existing_tables:
+        wre_cols = [c["name"] for c in inspector.get_columns("waiting_room_entries")]
+        if "called_at" not in wre_cols:
+            migrations.append("ALTER TABLE waiting_room_entries ADD COLUMN called_at TIMESTAMP")
+        if "attended_at" not in wre_cols:
+            migrations.append("ALTER TABLE waiting_room_entries ADD COLUMN attended_at TIMESTAMP")
+        if "value_cents" not in wre_cols:
+            migrations.append("ALTER TABLE waiting_room_entries ADD COLUMN value_cents INTEGER")
+
     # Push notification tables — Sprint 6
     # These tables are created by Base.metadata.create_all via init_db.
     # The migration block below handles adding new columns to push tables

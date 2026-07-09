@@ -38,6 +38,19 @@ function formatWait(minutes: number | null): string {
   return m > 0 ? `${h}h ${m}min` : `${h}h`;
 }
 
+// Aceita "400", "400,00", "R$ 400,00" etc. Retorna centavos ou undefined se vazio/inválido.
+function parseReaisToCents(text: string): number | undefined {
+  const clean = text.trim().replace(/[^\d,.]/g, '').replace(/\.(?=\d{3},)/g, '').replace(',', '.');
+  if (!clean) return undefined;
+  const n = Number(clean);
+  return Number.isFinite(n) ? Math.round(n * 100) : undefined;
+}
+
+function formatCentsToReais(cents: number | null | undefined): string {
+  if (cents == null) return '';
+  return (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
 function statusLabel(s: QueueStatus): string {
   const map: Record<QueueStatus, string> = {
     waiting: 'Aguardando',
@@ -145,6 +158,11 @@ function PatientCard({ entry, onStatusChange, onRemove, onSelect, busy, selected
           <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium flex-shrink-0 ${insuranceColor(entry.patient_insurance)}`}>
             {entry.patient_insurance ?? 'Particular'}
           </span>
+          {entry.value_cents != null && (
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold flex-shrink-0 bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">
+              {formatCentsToReais(entry.value_cents)}
+            </span>
+          )}
           {entry.reason && (
             <span className="text-[10px] text-slate-400 truncate min-w-0 flex-1">{entry.reason}</span>
           )}
@@ -219,6 +237,7 @@ export default function SalaDeEsperaPage() {
   const [patientSearch, setPatientSearch] = useState('');
   const [selectedPatient, setSelectedPatient] = useState<any>(null);
   const [checkinReason, setCheckinReason] = useState('');
+  const [checkinValue, setCheckinValue] = useState(''); // texto livre (ex: "400" ou "400,00"), convertido no envio
   const [submitting, setSubmitting] = useState(false);
 
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -287,6 +306,8 @@ export default function SalaDeEsperaPage() {
 
   const filtered = filter === 'all' ? entries : entries.filter((e) => e.status === filter);
 
+  const totalValueCents = entries.reduce((sum, e) => sum + (e.value_cents ?? 0), 0);
+
   const handleStatusChange = async (id: number, newStatus: QueueStatus) => {
     setBusyIds((prev) => new Set(prev).add(id));
     try {
@@ -342,12 +363,14 @@ export default function SalaDeEsperaPage() {
         patient_id: selectedPatient.id,
         clinic_id: selectedClinicId,
         reason: checkinReason || undefined,
+        value_cents: parseReaisToCents(checkinValue),
       });
       setEntries((prev) => [...prev, entry]);
       checkinModal.onOpenChange(false);
       setSelectedPatient(null);
       setPatientSearch('');
       setCheckinReason('');
+      setCheckinValue('');
       toast.success(`${selectedPatient.name} registrado na fila`);
     } catch {
       toast.error('Erro ao registrar chegada');
@@ -548,6 +571,16 @@ export default function SalaDeEsperaPage() {
                       selected={selectedEntry?.id === entry.id}
                     />
                   ))}
+                  {totalValueCents > 0 && (
+                    <div className="flex items-center justify-between px-4 py-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800">
+                      <span className="text-sm font-medium text-emerald-800 dark:text-emerald-200">
+                        Total do dia
+                      </span>
+                      <span className="text-base font-bold text-emerald-700 dark:text-emerald-300">
+                        {formatCentsToReais(totalValueCents)}
+                      </span>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -686,6 +719,20 @@ export default function SalaDeEsperaPage() {
                 placeholder="Ex: Retorno, Consulta, Curativo..."
                 value={checkinReason}
                 onChange={(e) => setCheckinReason(e.target.value)}
+                className="w-full px-3 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-50 text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-900 dark:text-slate-50 mb-1.5">
+                Valor (R$) <span className="font-normal text-slate-400">(opcional — particular/procedimento)</span>
+              </label>
+              <input
+                type="text"
+                inputMode="decimal"
+                placeholder="Ex: 400,00"
+                value={checkinValue}
+                onChange={(e) => setCheckinValue(e.target.value)}
                 className="w-full px-3 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-50 text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>

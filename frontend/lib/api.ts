@@ -405,7 +405,7 @@ export const patientDocsApi = {
 
 // ── Sala de Espera ────────────────────────────────────────────────────────
 export const waitingRoomApi = {
-  checkin: (data: { patient_id: number; clinic_id?: number; reason?: string; notes?: string }) =>
+  checkin: (data: { patient_id: number; clinic_id?: number; reason?: string; notes?: string; value_cents?: number }) =>
     api.post("/api/clinic/waiting-room/checkin", data).then((r) => r.data),
 
   today: (clinic_id?: number) =>

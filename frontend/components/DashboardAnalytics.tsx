@@ -68,7 +68,10 @@ export const DashboardAnalytics = ({ stats }: DashboardAnalyticsProps) => {
     { name: 'Carlos Mendes', receita: 1100 },
   ];
 
-  const tempoMedioConsulta = 28; // minutos
+  // Tempo médio real (Chamar -> Concluir Atendimento) vindo do backend.
+  // null enquanto não houver nenhum atendimento com o timer completo ainda.
+  const avgDuration = stats?.stats?.avg_duration_minutes;
+  const tempoMedioConsulta = avgDuration != null ? avgDuration : null;
   const taxaOcupacao = 85; // %
   const pacientesNovos = 12;
   const taxaRetorno = 72; // %
@@ -158,8 +161,8 @@ export const DashboardAnalytics = ({ stats }: DashboardAnalyticsProps) => {
         <KPICard
           icon={Clock}
           label="Tempo Médio"
-          value={tempoMedioConsulta}
-          unit=" min"
+          value={tempoMedioConsulta ?? '—'}
+          unit={tempoMedioConsulta != null ? ' min' : ''}
         />
       </div>
 

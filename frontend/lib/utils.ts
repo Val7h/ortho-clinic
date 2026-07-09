@@ -15,13 +15,19 @@ export function cn(...inputs: ClassValue[]) {
  * (F5, link externo, digitar a URL), o Next re-hidrata com o placeholder de
  * build em vez de reanalisar a URL do navegador, e o valor vem errado (ex.:
  * Number("_") = NaN → "ID inválido"). Se o param do Next vier igual ao
- * placeholder, cai pro último segmento do pathname real como fallback.
+ * placeholder, cai pro segmento real do pathname como fallback.
+ *
+ * O id nem sempre é o último segmento (ex.: /pacientes/{id}/receita) — por
+ * isso `afterSegment` localiza o segmento logo após um marcador conhecido da
+ * rota (padrão "pacientes"). Sem esse marcador no path, cai pro último segmento.
  */
-export function resolveDynamicParam(paramValue: string | undefined, placeholder = "_"): string | undefined {
+export function resolveDynamicParam(paramValue: string | undefined, placeholder = "_", afterSegment = "pacientes"): string | undefined {
   if (paramValue && paramValue !== placeholder) return paramValue;
   if (typeof window === "undefined") return undefined;
   const path = window.location.pathname.split("?")[0].split("#")[0];
   const segments = path.split("/").filter(Boolean);
+  const anchorIndex = segments.indexOf(afterSegment);
+  if (anchorIndex !== -1 && segments[anchorIndex + 1]) return segments[anchorIndex + 1];
   return segments[segments.length - 1];
 }
 

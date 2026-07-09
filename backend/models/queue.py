@@ -61,8 +61,17 @@ class WaitingRoomEntry(Base):
     # Horário de chegada
     arrived_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
+    # Timer do atendimento: marcados nas transições de status (Chamar / Concluir)
+    # para alimentar o tempo médio real (antes era um número fixo no Dashboard).
+    called_at = Column(DateTime(timezone=True), nullable=True)
+    attended_at = Column(DateTime(timezone=True), nullable=True)
+
     # Status: waiting | attending | attended | absent
     status = Column(String(20), default="waiting", index=True, nullable=False)
+
+    # Valor do atendimento em centavos (evita erro de arredondamento com float).
+    # Digitado manualmente pela secretária no check-in — sem tabela de preço fixa.
+    value_cents = Column(Integer, nullable=True)
 
     notes = Column(Text, nullable=True)
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

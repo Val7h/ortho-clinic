@@ -25,8 +25,12 @@ export interface WaitingRoomEntry {
   reason: string | null;
   position: number;
   arrived_at: string;
+  called_at?: string | null;
+  attended_at?: string | null;
   status: QueueStatus;
   waited_minutes: number | null;
+  duration_minutes?: number | null;
+  value_cents?: number | null;
 }
 
 interface ConsultaDrawerProps {
@@ -2964,6 +2968,7 @@ function calcReturnDate(startDate: string, days: string): string | null {
 // ── Tab: Atestados ────────────────────────────────────────────────────────────
 
 function TabAtestados({ patient, clinic }: { patient: any; clinic?: any }) {
+  const [docKind, setDocKind] = useState<"atestado" | "comparecimento">("atestado");
   const [cid, setCid] = useState("");
   const [days, setDays] = useState("1");
   const [certType, setCertType] = useState("trabalho");
@@ -2971,6 +2976,13 @@ function TabAtestados({ patient, clinic }: { patient: any; clinic?: any }) {
   const todayStr = useMemo(() => new Date().toISOString().split("T")[0], []);
   const [startDate, setStartDate] = useState(todayStr);
   const [printData, setPrintData] = useState<{ cid: string; days: string; certType: string; obs: string; startDate: string } | null>(null);
+
+  // Declaração de Comparecimento
+  const [compDate, setCompDate] = useState(todayStr);
+  const [horaEntrada, setHoraEntrada] = useState("");
+  const [horaSaida, setHoraSaida] = useState("");
+  const [compAcompanhante, setCompAcompanhante] = useState("");
+  const [compPrintData, setCompPrintData] = useState<{ compDate: string; horaEntrada: string; horaSaida: string; compAcompanhante: string } | null>(null);
 
   const { dateStr, cityState } = useMemo(() => {
     const today = new Date();
@@ -3032,12 +3044,105 @@ function TabAtestados({ patient, clinic }: { patient: any; clinic?: any }) {
     );
   }, [printData, patient, clinic]);
 
+  const compPrintContent = useMemo(() => {
+    if (!compPrintData) return null;
+    const startFormatted = formatDateBR(compPrintData.compDate);
+    return (
+      <div style={{ fontFamily: "Arial, sans-serif", color: "#111", fontSize: "13px" }}>
+        <DrHeader clinic={clinic} />
+        <div style={{ textAlign: "center", marginBottom: "20px" }}>
+          <p style={{ fontWeight: 700, fontSize: "15px", textTransform: "uppercase", letterSpacing: "2px", color: "#0F2D5E", margin: 0 }}>Declaração de Comparecimento</p>
+        </div>
+        <div style={{ lineHeight: "1.8", marginBottom: "24px" }}>
+          <p>
+            Declaro, para os devidos fins, que o(a) {compPrintData.compAcompanhante ? "acompanhante" : "paciente"} <strong>{compPrintData.compAcompanhante || patient?.name}</strong>
+            {patient?.cpf && !compPrintData.compAcompanhante ? `, CPF ${patient.cpf},` : ""}
+            {compPrintData.compAcompanhante ? <> esteve presente acompanhando o(a) paciente <strong>{patient?.name}</strong></> : null}
+            {" "}compareceu a esta unidade de saúde no dia <strong>{startFormatted}</strong>
+            {horaEntrada && <>, das <strong>{horaEntrada}</strong></>}
+            {horaSaida && <> às <strong>{horaSaida}</strong></>}
+            {" "}para atendimento médico.
+          </p>
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginTop: "40px" }}>
+          <p style={{ fontSize: "11px", color: "#888", margin: 0 }}>{cityState}, {dateStr}</p>
+          <div style={{ textAlign: "center", width: "200px" }}>
+            <div style={{ borderTop: "2px solid #0F2D5E", paddingTop: "6px" }}>
+              <p style={{ fontSize: "12px", fontWeight: 700, margin: "0" }}>Dr. Valth Guimarães</p>
+              <p style={{ fontSize: "11px", color: "#666", margin: "0" }}>CRM/PB 6326 | CRM/PE 16551</p>
+            </div>
+          </div>
+        </div>
+        <p style={{ fontSize: "10px", color: "#aaa", textAlign: "center", marginTop: "24px" }}>Válido somente com assinatura e carimbo do médico</p>
+      </div>
+    );
+  }, [compPrintData, patient, clinic, cityState, dateStr, horaEntrada, horaSaida]);
+
   return (
     <div className="px-5 pb-5 space-y-4">
       {printData && printContent && (
         <PrintDocModal title="Atestado Médico" content={printContent} onClose={() => setPrintData(null)} />
       )}
+      {compPrintData && compPrintContent && (
+        <PrintDocModal title="Declaração de Comparecimento" content={compPrintContent} onClose={() => setCompPrintData(null)} />
+      )}
 
+      {/* Tipo de documento */}
+      <div className="flex gap-2 bg-slate-100 dark:bg-slate-800 rounded-lg p-1">
+        <button type="button" onClick={() => setDocKind("atestado")} className={`flex-1 py-2 text-xs font-semibold rounded-md transition-colors ${docKind === "atestado" ? "bg-white dark:bg-slate-700 text-blue-600 shadow-sm" : "text-slate-500 dark:text-slate-400"}`}>
+          Atestado (afastamento)
+        </button>
+        <button type="button" onClick={() => setDocKind("comparecimento")} className={`flex-1 py-2 text-xs font-semibold rounded-md transition-colors ${docKind === "comparecimento" ? "bg-white dark:bg-slate-700 text-blue-600 shadow-sm" : "text-slate-500 dark:text-slate-400"}`}>
+          Declaração de Comparecimento
+        </button>
+      </div>
+
+      {docKind === "comparecimento" ? (
+        <>
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className={lbl}>Data do comparecimento *</label>
+              <input type="date" className={inp} value={compDate} onChange={e => setCompDate(e.target.value)} />
+            </div>
+            <div>
+              <label className={lbl}>Hora de entrada</label>
+              <input type="time" className={inp} value={horaEntrada} onChange={e => setHoraEntrada(e.target.value)} />
+            </div>
+            <div>
+              <label className={lbl}>Hora de saída</label>
+              <input type="time" className={inp} value={horaSaida} onChange={e => setHoraSaida(e.target.value)} />
+            </div>
+          </div>
+          <div>
+            <label className={lbl}>Nome do acompanhante (se a declaração for para quem acompanhou o paciente)</label>
+            <input className={inp} placeholder="Deixe em branco se a declaração é para o próprio paciente" value={compAcompanhante} onChange={e => setCompAcompanhante(e.target.value)} />
+          </div>
+          <div className="flex gap-2 pt-1">
+            <button
+              type="button"
+              onClick={() => {
+                if (!compDate) { toast.error("Informe a data do comparecimento"); return; }
+                toast.success("Declaração registrada (pendente persistência no servidor)");
+              }}
+              className="flex items-center gap-1.5 px-4 py-2 border border-blue-600 text-blue-600 rounded-lg hover:bg-blue-50 font-semibold text-xs"
+            >
+              <Save className="w-3.5 h-3.5" /> Salvar
+            </button>
+            <button
+              type="button"
+              disabled={!compDate}
+              onClick={() => {
+                if (!compDate) { toast.error("Informe a data do comparecimento"); return; }
+                setCompPrintData({ compDate, horaEntrada, horaSaida, compAcompanhante });
+              }}
+              className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Printer className="w-3.5 h-3.5" /> Visualizar e Imprimir
+            </button>
+          </div>
+        </>
+      ) : (
+      <>
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className={lbl}>Data de início do afastamento *</label>
@@ -3151,6 +3256,8 @@ function TabAtestados({ patient, clinic }: { patient: any; clinic?: any }) {
           <Printer className="w-3.5 h-3.5" /> Visualizar e Imprimir
         </button>
       </div>
+      </>
+      )}
     </div>
   );
 }
@@ -3161,10 +3268,11 @@ function TabLaudos({ patient, clinic }: { patient: any; clinic?: any }) {
   const [text, setText] = useState("");
   const [finalidade, setFinalidade] = useState("");
   const [cid, setCid] = useState("");
+  const [cidsSecundarios, setCidsSecundarios] = useState<string[]>([]);
   const [funcCapacity, setFuncCapacity] = useState("");
   const [funcDetail, setFuncDetail] = useState("");
   const [pendingLaudoTemplate, setPendingLaudoTemplate] = useState<typeof LAUDO_TEMPLATES[0] | null>(null);
-  const [printData, setPrintData] = useState<{ text: string; finalidade: string; cid: string; funcCapacity: string; funcDetail: string } | null>(null);
+  const [printData, setPrintData] = useState<{ text: string; finalidade: string; cid: string; cidsSecundarios: string[]; funcCapacity: string; funcDetail: string } | null>(null);
   const textRef = useRef<HTMLTextAreaElement>(null);
 
   const today = new Date();
@@ -3185,6 +3293,7 @@ function TabLaudos({ patient, clinic }: { patient: any; clinic?: any }) {
         setText(parsed.text || "");
         setFinalidade(parsed.finalidade || "");
         setCid(parsed.cid || "");
+        if (Array.isArray(parsed.cidsSecundarios)) setCidsSecundarios(parsed.cidsSecundarios);
         if (parsed.funcCapacity) setFuncCapacity(parsed.funcCapacity);
         if (parsed.funcDetail) setFuncDetail(parsed.funcDetail);
         if (parsed.text) toast.success("Rascunho de laudo restaurado");
@@ -3196,13 +3305,13 @@ function TabLaudos({ patient, clinic }: { patient: any; clinic?: any }) {
     if (!text.trim()) return;
     const timer = setTimeout(() => {
       if (typeof window !== "undefined") {
-        localStorage.setItem(draftKey, JSON.stringify({ text, finalidade, cid, funcCapacity, funcDetail }));
+        localStorage.setItem(draftKey, JSON.stringify({ text, finalidade, cid, cidsSecundarios, funcCapacity, funcDetail }));
         setDraftSaved(true);
         setTimeout(() => setDraftSaved(false), 2000);
       }
     }, 1000);
     return () => clearTimeout(timer);
-  }, [text, finalidade, cid, funcCapacity, funcDetail, draftKey]);
+  }, [text, finalidade, cid, cidsSecundarios, funcCapacity, funcDetail, draftKey]);
 
   const autoResizeLaudo = useCallback(() => {
     const ta = textRef.current;
@@ -3242,7 +3351,7 @@ function TabLaudos({ patient, clinic }: { patient: any; clinic?: any }) {
 
   const saveDraftNow = () => {
     if (typeof window !== "undefined") {
-      localStorage.setItem(draftKey, JSON.stringify({ text, finalidade, cid, funcCapacity, funcDetail }));
+      localStorage.setItem(draftKey, JSON.stringify({ text, finalidade, cid, cidsSecundarios, funcCapacity, funcDetail }));
       setDraftSaved(true);
       setTimeout(() => setDraftSaved(false), 2000);
       toast.success("Rascunho salvo");
@@ -3267,7 +3376,10 @@ function TabLaudos({ patient, clinic }: { patient: any; clinic?: any }) {
           {patient?.cpf && <p style={{ margin: 0 }}><strong>CPF:</strong> {patient.cpf}</p>}
         </div>
         {printData.cid && (
-          <p style={{ fontWeight: 700, marginBottom: "12px", fontSize: "12px", borderLeft: "3px solid #0F2D5E", paddingLeft: "8px" }}>CID-10: {printData.cid}</p>
+          <p style={{ fontWeight: 700, marginBottom: printData.cidsSecundarios.length ? "4px" : "12px", fontSize: "12px", borderLeft: "3px solid #0F2D5E", paddingLeft: "8px" }}>CID-10: {printData.cid}</p>
+        )}
+        {printData.cidsSecundarios.length > 0 && (
+          <p style={{ fontWeight: 400, marginBottom: "12px", fontSize: "11px", borderLeft: "3px solid #0F2D5E", paddingLeft: "8px", color: "#555" }}>CID-10 secundário(s): {printData.cidsSecundarios.join(", ")}</p>
         )}
         <div style={{ borderTop: "1px solid #ddd", paddingTop: "14px", whiteSpace: "pre-wrap", lineHeight: "1.7", fontSize: "12px", marginBottom: "16px" }}>
           {printData.text}
@@ -3339,6 +3451,35 @@ function TabLaudos({ patient, clinic }: { patient: any; clinic?: any }) {
       <div>
         <label className={lbl}>CID-10 Principal *</label>
         <CidSearch value={cid} onChange={setCid} />
+      </div>
+
+      {/* CIDs secundários */}
+      <div>
+        <label className={lbl}>CID-10 Secundário(s) (opcional)</label>
+        <div className="space-y-2">
+          {cidsSecundarios.map((c, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <div className="flex-1">
+                <CidSearch value={c} onChange={(v) => setCidsSecundarios(prev => prev.map((x, idx) => idx === i ? v : x))} />
+              </div>
+              <button
+                type="button"
+                onClick={() => setCidsSecundarios(prev => prev.filter((_, idx) => idx !== i))}
+                className="p-2 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 flex-shrink-0"
+                title="Remover"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={() => setCidsSecundarios(prev => [...prev, ""])}
+          className="mt-1.5 flex items-center gap-1.5 text-[11px] text-blue-600 hover:text-blue-700 font-semibold"
+        >
+          <Plus className="w-3.5 h-3.5" /> Adicionar CID secundário
+        </button>
       </div>
 
       {/* Texto */}
@@ -3418,7 +3559,7 @@ function TabLaudos({ patient, clinic }: { patient: any; clinic?: any }) {
             if (hasPlaceholders) { toast.error("Preencha todos os campos { } antes de imprimir"); return; }
             if (typeof window !== "undefined") localStorage.removeItem(draftKey);
             toast.success("Laudo gerado — use Ctrl+P ou salve como PDF");
-            setPrintData({ text, finalidade, cid, funcCapacity, funcDetail });
+            setPrintData({ text, finalidade, cid, cidsSecundarios: cidsSecundarios.filter(c => c.trim()), funcCapacity, funcDetail });
           }}
           className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold text-xs"
         >

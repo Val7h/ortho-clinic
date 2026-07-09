@@ -200,31 +200,35 @@ function PrintPrescriptionModal({
             </div>
 
             {/* Medicamentos */}
-            <div className="mb-6">
-              <p className="font-bold text-gray-700 uppercase text-xs tracking-wider mb-3 border-b border-gray-200 pb-1">Prescricao</p>
-              <ol className="space-y-3">
-                {rx.medications.map((m, i) => (
-                  <li key={i} className="pl-2">
-                    <p className="font-semibold">
-                      {i + 1}. {m.name}
-                      {m.dose && <span className="font-normal text-gray-600"> — {m.dose}</span>}
-                    </p>
-                    <p className="text-gray-600 text-xs mt-0.5">
-                      {[m.route && `Via ${m.route}`, m.frequency, m.duration].filter(Boolean).join(" · ")}
-                    </p>
-                    {m.instructions && (
-                      <p className="text-gray-500 text-xs italic mt-0.5">Obs: {m.instructions}</p>
-                    )}
-                  </li>
-                ))}
-              </ol>
-            </div>
+            {rx.medications.length > 0 && (
+              <div className="mb-6">
+                <p className="font-bold text-gray-700 uppercase text-xs tracking-wider mb-3 border-b border-gray-200 pb-1">Prescricao</p>
+                <ol className="space-y-3">
+                  {rx.medications.map((m, i) => (
+                    <li key={i} className="pl-2">
+                      <p className="font-semibold">
+                        {i + 1}. {m.name}
+                        {m.dose && <span className="font-normal text-gray-600"> — {m.dose}</span>}
+                      </p>
+                      <p className="text-gray-600 text-xs mt-0.5">
+                        {[m.route && `Via ${m.route}`, m.frequency, m.duration].filter(Boolean).join(" · ")}
+                      </p>
+                      {m.instructions && (
+                        <p className="text-gray-500 text-xs italic mt-0.5">Obs: {m.instructions}</p>
+                      )}
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            )}
 
-            {/* Instrucoes gerais */}
+            {/* Instrucoes gerais / texto livre */}
             {rx.instructions && (
               <div className="mb-6 bg-gray-50 rounded p-3">
-                <p className="font-bold text-gray-700 text-xs uppercase tracking-wider mb-1">Orientacoes</p>
-                <p className="text-xs text-gray-700">{rx.instructions}</p>
+                <p className="font-bold text-gray-700 text-xs uppercase tracking-wider mb-1">
+                  {rx.medications.length === 0 ? "Prescricao" : "Orientacoes"}
+                </p>
+                <p className="text-xs text-gray-700 whitespace-pre-wrap">{rx.instructions}</p>
               </div>
             )}
 
@@ -471,10 +475,14 @@ export default function PrescriptionPage() {
   const [saving, setSaving] = useState(false);
   const [showManual, setShowManual] = useState(false);
   const [printRx, setPrintRx] = useState<{ date: string; medications: Medication[]; instructions: string } | null>(null);
+  const [freeTextMode, setFreeTextMode] = useState(false);
+  const [freeText, setFreeText] = useState("");
 
   const [controlledMeds, setControlledMeds] = useState<Medication[]>([emptyMed()]);
   const [controlledInstructions, setControlledInstructions] = useState("");
   const [controlType, setControlType] = useState<"tarja_vermelha" | "tarja_preta" | "controlada">("tarja_vermelha");
+  const [controlledFreeTextMode, setControlledFreeTextMode] = useState(false);
+  const [controlledFreeText, setControlledFreeText] = useState("");
   const [savingControlled, setSavingControlled] = useState(false);
   const [controlledRx, setControlledRx] = useState<ControlledPrescription | null>(null);
 
@@ -607,6 +615,25 @@ export default function PrescriptionPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (freeTextMode) {
+      if (!freeText.trim()) { toast.error("Escreva o conteudo da receita"); return; }
+      setSaving(true);
+      try {
+        const newRx = await prescriptionsApi.create(pid, {
+          date: new Date().toISOString().split("T")[0],
+          medications: [],
+          instructions: freeText,
+        });
+        toast.success("Receita salva!");
+        setPrescriptions((prev) => [newRx, ...prev]);
+        setFreeText("");
+      } catch {
+        toast.error("Erro ao salvar receita");
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
     const validMeds = medications.filter((m) => m.name.trim());
     if (validMeds.length === 0) { toast.error("Adicione pelo menos um medicamento"); return; }
     setSaving(true);
@@ -628,6 +655,15 @@ export default function PrescriptionPage() {
   };
 
   const handlePrintManual = () => {
+    if (freeTextMode) {
+      if (!freeText.trim()) { toast.error("Escreva o conteudo da receita para imprimir"); return; }
+      setPrintRx({
+        date: new Date().toISOString().split("T")[0],
+        medications: [],
+        instructions: freeText,
+      });
+      return;
+    }
     const validMeds = medications.filter((m) => m.name.trim());
     if (validMeds.length === 0) { toast.error("Adicione pelo menos um medicamento para imprimir"); return; }
     setPrintRx({
@@ -647,6 +683,19 @@ export default function PrescriptionPage() {
 
   const handleControlledSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (controlledFreeTextMode) {
+      if (!controlledFreeText.trim()) { toast.error("Escreva o conteudo da receita"); return; }
+      const rx: ControlledPrescription = {
+        id: `RX-${Date.now()}`,
+        date: new Date().toISOString().split("T")[0],
+        medications: [],
+        instructions: controlledFreeText,
+        controlType,
+      };
+      setControlledRx(rx);
+      toast.success("Receita controlada gerada!");
+      return;
+    }
     const validMeds = controlledMeds.filter((m) => m.name.trim());
     if (validMeds.length === 0) { toast.error("Adicione pelo menos um medicamento"); return; }
     const rx: ControlledPrescription = {
@@ -769,37 +818,63 @@ export default function PrescriptionPage() {
 
             {showManual && (
               <form onSubmit={handleSubmit} className="bg-white dark:bg-slate-800 rounded-lg shadow p-6 space-y-4">
-                <h3 className="font-bold text-slate-900 dark:text-slate-50">Receita Manual</h3>
-
-                {medications.map((med, i) => (
-                  <MedRow
-                    key={i}
-                    med={med}
-                    index={i}
-                    total={medications.length}
-                    onChange={(k, v) => updateMed(i, k, v)}
-                    onRemove={() => setMedications((ms) => ms.filter((_, idx) => idx !== i))}
-                  />
-                ))}
-
-                <button
-                  type="button"
-                  onClick={() => setMedications((ms) => [...ms, emptyMed()])}
-                  className="w-full py-2.5 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg text-slate-600 dark:text-slate-400 hover:border-brand-400 hover:text-brand-600 dark:hover:text-brand-400 flex items-center justify-center gap-2 text-sm font-semibold transition-colors"
-                >
-                  <Plus className="w-4 h-4" /> Adicionar medicamento
-                </button>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Orientacoes gerais</label>
-                  <textarea
-                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-50 resize-none text-sm"
-                    placeholder="Evitar alcool, repouso, retorno em 7 dias..."
-                    value={instructions}
-                    onChange={(e) => setInstructions(e.target.value)}
-                    rows={3}
-                  />
+                <div className="flex items-center justify-between">
+                  <h3 className="font-bold text-slate-900 dark:text-slate-50">Receita Manual</h3>
+                  <label className="flex items-center gap-2 text-xs font-semibold text-slate-600 dark:text-slate-300 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={freeTextMode}
+                      onChange={(e) => setFreeTextMode(e.target.checked)}
+                      className="w-4 h-4 rounded accent-brand-600"
+                    />
+                    Texto livre
+                  </label>
                 </div>
+
+                {freeTextMode ? (
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Conteudo da receita</label>
+                    <textarea
+                      className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-50 resize-none text-sm font-mono"
+                      placeholder={"Ex:\n1. Nimesulida 100mg - 1 cp de 12/12h por 5 dias\n2. Omeprazol 20mg - 1 cp em jejum por 30 dias"}
+                      value={freeText}
+                      onChange={(e) => setFreeText(e.target.value)}
+                      rows={10}
+                    />
+                  </div>
+                ) : (
+                  <>
+                    {medications.map((med, i) => (
+                      <MedRow
+                        key={i}
+                        med={med}
+                        index={i}
+                        total={medications.length}
+                        onChange={(k, v) => updateMed(i, k, v)}
+                        onRemove={() => setMedications((ms) => ms.filter((_, idx) => idx !== i))}
+                      />
+                    ))}
+
+                    <button
+                      type="button"
+                      onClick={() => setMedications((ms) => [...ms, emptyMed()])}
+                      className="w-full py-2.5 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg text-slate-600 dark:text-slate-400 hover:border-brand-400 hover:text-brand-600 dark:hover:text-brand-400 flex items-center justify-center gap-2 text-sm font-semibold transition-colors"
+                    >
+                      <Plus className="w-4 h-4" /> Adicionar medicamento
+                    </button>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Orientacoes gerais</label>
+                      <textarea
+                        className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-50 resize-none text-sm"
+                        placeholder="Evitar alcool, repouso, retorno em 7 dias..."
+                        value={instructions}
+                        onChange={(e) => setInstructions(e.target.value)}
+                        rows={3}
+                      />
+                    </div>
+                  </>
+                )}
 
                 <div className="flex gap-3">
                   <button
@@ -880,9 +955,20 @@ export default function PrescriptionPage() {
           <div className="space-y-6">
             {!controlledRx ? (
               <form onSubmit={handleControlledSubmit} className="bg-white dark:bg-slate-800 rounded-lg shadow p-6 space-y-5">
-                <div className="space-y-1">
-                  <h3 className="font-bold text-slate-900 dark:text-slate-50">Gerar Receita Controlada</h3>
-                  <p className="text-sm text-slate-600 dark:text-slate-400">Com 2 vias para impressao (Via vermelha + Via branca)</p>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="space-y-1">
+                    <h3 className="font-bold text-slate-900 dark:text-slate-50">Gerar Receita Controlada</h3>
+                    <p className="text-sm text-slate-600 dark:text-slate-400">Com 2 vias para impressao (Via vermelha + Via branca)</p>
+                  </div>
+                  <label className="flex items-center gap-2 text-xs font-semibold text-slate-600 dark:text-slate-300 cursor-pointer select-none whitespace-nowrap">
+                    <input
+                      type="checkbox"
+                      checked={controlledFreeTextMode}
+                      onChange={(e) => setControlledFreeTextMode(e.target.checked)}
+                      className="w-4 h-4 rounded accent-brand-600"
+                    />
+                    Texto livre
+                  </label>
                 </div>
 
                 <div className="space-y-2">
@@ -906,43 +992,55 @@ export default function PrescriptionPage() {
                   </div>
                 </div>
 
-                <div className="space-y-3">
-                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300">Medicamentos *</label>
-                  {controlledMeds.map((med, i) => (
-                    <div key={i} className="border border-slate-200 dark:border-slate-700 rounded-lg p-4 space-y-3">
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Med. {i + 1}</span>
-                        {controlledMeds.length > 1 && (
-                          <button type="button" onClick={() => setControlledMeds((ms) => ms.filter((_, idx) => idx !== i))}
-                            className="p-1 text-red-500 hover:text-red-700">
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        )}
-                      </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="col-span-2">
-                          <input className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-50"
-                            placeholder="Nome do medicamento" value={med.name} onChange={updateControlledMed(i, "name")} />
+                {controlledFreeTextMode ? (
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Conteudo da receita *</label>
+                    <textarea className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-50 resize-none font-mono text-sm"
+                      placeholder={"Ex:\n1. Tramadol 50mg - 1 cp de 8/8h se dor forte, por 5 dias"}
+                      value={controlledFreeText}
+                      onChange={(e) => setControlledFreeText(e.target.value)} rows={10} />
+                  </div>
+                ) : (
+                  <>
+                    <div className="space-y-3">
+                      <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300">Medicamentos *</label>
+                      {controlledMeds.map((med, i) => (
+                        <div key={i} className="border border-slate-200 dark:border-slate-700 rounded-lg p-4 space-y-3">
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Med. {i + 1}</span>
+                            {controlledMeds.length > 1 && (
+                              <button type="button" onClick={() => setControlledMeds((ms) => ms.filter((_, idx) => idx !== i))}
+                                className="p-1 text-red-500 hover:text-red-700">
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="col-span-2">
+                              <input className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-50"
+                                placeholder="Nome do medicamento" value={med.name} onChange={updateControlledMed(i, "name")} />
+                            </div>
+                            <input className="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-50" placeholder="Dose" value={med.dose} onChange={updateControlledMed(i, "dose")} />
+                            <input className="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-50" placeholder="Frequencia" value={med.frequency} onChange={updateControlledMed(i, "frequency")} />
+                            <input className="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-50" placeholder="Duracao" value={med.duration} onChange={updateControlledMed(i, "duration")} />
+                            <input className="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-50" placeholder="Via" value={med.route} onChange={updateControlledMed(i, "route")} />
+                          </div>
                         </div>
-                        <input className="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-50" placeholder="Dose" value={med.dose} onChange={updateControlledMed(i, "dose")} />
-                        <input className="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-50" placeholder="Frequencia" value={med.frequency} onChange={updateControlledMed(i, "frequency")} />
-                        <input className="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-50" placeholder="Duracao" value={med.duration} onChange={updateControlledMed(i, "duration")} />
-                        <input className="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-50" placeholder="Via" value={med.route} onChange={updateControlledMed(i, "route")} />
-                      </div>
+                      ))}
+                      <button type="button" onClick={() => setControlledMeds((ms) => [...ms, emptyMed()])}
+                        className="w-full py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-slate-50 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center justify-center gap-2">
+                        <Plus className="w-4 h-4" /> Adicionar
+                      </button>
                     </div>
-                  ))}
-                  <button type="button" onClick={() => setControlledMeds((ms) => [...ms, emptyMed()])}
-                    className="w-full py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-900 dark:text-slate-50 hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center justify-center gap-2">
-                    <Plus className="w-4 h-4" /> Adicionar
-                  </button>
-                </div>
 
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Orientacoes</label>
-                  <textarea className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-50 resize-none"
-                    placeholder="Orientacoes gerais ao paciente..." value={controlledInstructions}
-                    onChange={(e) => setControlledInstructions(e.target.value)} rows={3} />
-                </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Orientacoes</label>
+                      <textarea className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-50 resize-none"
+                        placeholder="Orientacoes gerais ao paciente..." value={controlledInstructions}
+                        onChange={(e) => setControlledInstructions(e.target.value)} rows={3} />
+                    </div>
+                  </>
+                )}
 
                 <button type="submit" disabled={savingControlled}
                   className="w-full py-3 bg-brand-600 text-white rounded-lg hover:bg-brand-700 disabled:opacity-50 font-semibold flex items-center justify-center gap-2">
@@ -994,7 +1092,9 @@ export default function PrescriptionPage() {
 ║  Tipo: ${controlledRx.controlType.replace("_", " ").toUpperCase()}
 ║                                           ║
 ║  MEDICAMENTOS:                            ║
-${controlledRx.medications.slice(0, 3).map((m, i) => `║  ${i + 1}. ${m.name.substring(0, 37)}║`).join("\n")}
+${controlledRx.medications.length > 0
+  ? controlledRx.medications.slice(0, 3).map((m, i) => `║  ${i + 1}. ${m.name.substring(0, 37)}║`).join("\n")
+  : controlledRx.instructions.split("\n").slice(0, 3).map((l) => `║  ${l.substring(0, 40)}║`).join("\n")}
 ║                                           ║
 ║  [ESPACO PARA ASSINATURA DO MEDICO]      ║
 ║  __________ / __________ / __________    ║
@@ -1054,26 +1154,30 @@ function ControlledPrescriptionPrint({ rx, patient }: { rx: ControlledPrescripti
 
           <div className="mb-6">
             <p className="font-bold text-gray-600 mb-2">MEDICAMENTOS:</p>
-            <table className="w-full text-xs border border-gray-300">
-              <thead className="bg-gray-100">
-                <tr>
-                  <th className="border px-2 py-1 text-left">Medicamento</th>
-                  <th className="border px-2 py-1 text-left">Dose</th>
-                  <th className="border px-2 py-1 text-left">Freq.</th>
-                  <th className="border px-2 py-1 text-left">Duracao</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rx.medications.map((m, i) => (
-                  <tr key={i}>
-                    <td className="border px-2 py-1">{m.name}</td>
-                    <td className="border px-2 py-1">{m.dose}</td>
-                    <td className="border px-2 py-1">{m.frequency}</td>
-                    <td className="border px-2 py-1">{m.duration}</td>
+            {rx.medications.length > 0 ? (
+              <table className="w-full text-xs border border-gray-300">
+                <thead className="bg-gray-100">
+                  <tr>
+                    <th className="border px-2 py-1 text-left">Medicamento</th>
+                    <th className="border px-2 py-1 text-left">Dose</th>
+                    <th className="border px-2 py-1 text-left">Freq.</th>
+                    <th className="border px-2 py-1 text-left">Duracao</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {rx.medications.map((m, i) => (
+                    <tr key={i}>
+                      <td className="border px-2 py-1">{m.name}</td>
+                      <td className="border px-2 py-1">{m.dose}</td>
+                      <td className="border px-2 py-1">{m.frequency}</td>
+                      <td className="border px-2 py-1">{m.duration}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <p className="text-xs whitespace-pre-wrap border border-gray-300 p-2">{rx.instructions}</p>
+            )}
           </div>
 
           <div className="mt-auto pt-6 border-t-2 border-gray-300">

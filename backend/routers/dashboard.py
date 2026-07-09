@@ -5,6 +5,7 @@ from datetime import date, timedelta
 from database import get_db
 from models.patient import Patient
 from models.consultation import Consultation
+from models.queue import WaitingRoomEntry
 from deps import get_current_user
 from models.organization import User
 
@@ -53,6 +54,25 @@ def get_dashboard(db: Session = Depends(get_db), current_user: User = Depends(ge
         .all()
     )
 
+    # Tempo médio real de atendimento (Chamar -> Concluir), últimos 30 dias.
+    # duration_minutes = (attended_at - called_at); só entradas com timer completo entram na média.
+    # Calculado em Python (não via SQL EXTRACT/EPOCH) para funcionar igual em SQLite e Postgres.
+    start_30d = today - timedelta(days=30)
+    q_duration = db.query(WaitingRoomEntry.called_at, WaitingRoomEntry.attended_at).filter(
+        WaitingRoomEntry.called_at.isnot(None),
+        WaitingRoomEntry.attended_at.isnot(None),
+        WaitingRoomEntry.entry_date >= start_30d,
+    )
+    if current_user.role != "superadmin":
+        q_duration = q_duration.join(Patient, WaitingRoomEntry.patient_id == Patient.id).filter(
+            Patient.organization_id == current_user.organization_id
+        )
+    durations_minutes = [
+        (attended_at - called_at).total_seconds() / 60.0
+        for called_at, attended_at in q_duration.all()
+    ]
+    avg_duration_minutes = round(sum(durations_minutes) / len(durations_minutes)) if durations_minutes else None
+
     q_recent_consult = db.query(Consultation)
     if current_user.role != "superadmin":
         q_recent_consult = q_recent_consult.join(Patient, Consultation.patient_id == Patient.id).filter(
@@ -71,6 +91,7 @@ def get_dashboard(db: Session = Depends(get_db), current_user: User = Depends(ge
             "total_consultations": total_consultations,
             "consultations_this_month": consultations_this_month,
             "consultations_this_week": consultations_this_week,
+            "avg_duration_minutes": avg_duration_minutes,
         },
         "recent_patients": [
             {"id": p.id, "name": p.name, "phone": p.phone, "created_at": p.created_at.isoformat()}

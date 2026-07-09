@@ -584,6 +584,7 @@ class CheckinRequest(BaseModel):
     clinic_id: Optional[int] = None
     reason: Optional[str] = None
     notes: Optional[str] = None
+    value_cents: Optional[int] = None
 
 
 class WaitingRoomEntryOut(BaseModel):
@@ -596,9 +597,13 @@ class WaitingRoomEntryOut(BaseModel):
     position: int
     entry_date: date
     arrived_at: datetime
+    called_at: Optional[datetime]
+    attended_at: Optional[datetime]
     status: str
     notes: Optional[str]
     waited_minutes: Optional[int]
+    duration_minutes: Optional[int]
+    value_cents: Optional[int]
 
     class Config:
         from_attributes = True
@@ -608,17 +613,21 @@ class WaitingStatusUpdate(BaseModel):
     status: str  # waiting | attending | attended | absent
 
 
-def _build_entry_out(entry: WaitingRoomEntry, patient: Patient, now: datetime) -> WaitingRoomEntryOut:
-    arrived = entry.arrived_at
-    # normalise timezone-aware vs naive comparison
-    if arrived and arrived.tzinfo is not None:
+def _minutes_between(start: Optional[datetime], end: Optional[datetime]) -> Optional[int]:
+    if not start or not end:
+        return None
+    if start.tzinfo is not None and end.tzinfo is None:
         from datetime import timezone
-        now_aware = now.replace(tzinfo=timezone.utc)
-        waited = int((now_aware - arrived).total_seconds() / 60)
-    elif arrived:
-        waited = int((now - arrived).total_seconds() / 60)
-    else:
-        waited = None
+        end = end.replace(tzinfo=timezone.utc)
+    elif end.tzinfo is not None and start.tzinfo is None:
+        from datetime import timezone
+        start = start.replace(tzinfo=timezone.utc)
+    return max(0, int((end - start).total_seconds() / 60))
+
+
+def _build_entry_out(entry: WaitingRoomEntry, patient: Patient, now: datetime) -> WaitingRoomEntryOut:
+    waited = _minutes_between(entry.arrived_at, now)
+    duration = _minutes_between(entry.called_at, entry.attended_at)
 
     return WaitingRoomEntryOut(
         id=entry.id,
@@ -630,9 +639,13 @@ def _build_entry_out(entry: WaitingRoomEntry, patient: Patient, now: datetime) -
         position=entry.position,
         entry_date=entry.entry_date,
         arrived_at=entry.arrived_at,
+        called_at=entry.called_at,
+        attended_at=entry.attended_at,
         status=entry.status,
         notes=entry.notes,
         waited_minutes=waited,
+        duration_minutes=duration,
+        value_cents=entry.value_cents,
     )
 
 
@@ -665,6 +678,7 @@ async def checkin_patient(
         entry_date=today,
         arrived_at=datetime.utcnow(),
         status="waiting",
+        value_cents=request.value_cents,
     )
     db.add(entry)
     db.commit()
@@ -715,12 +729,20 @@ async def update_waiting_status(
     if not entry:
         raise HTTPException(status_code=404, detail="Entrada não encontrada")
 
+    now = datetime.utcnow()
+    # Timer do atendimento: marca o início na primeira vez que entra em "attending"
+    # e o fim na primeira vez que vira "attended" — não sobrescreve se já setado
+    # (evita reabrir o cronômetro se o status for alternado por engano).
+    if request.status == "attending" and entry.called_at is None:
+        entry.called_at = now
+    if request.status == "attended" and entry.attended_at is None:
+        entry.attended_at = now
+
     entry.status = request.status
     db.commit()
     db.refresh(entry)
 
     patient = db.query(Patient).filter(Patient.id == entry.patient_id).first()
-    now = datetime.utcnow()
     return _build_entry_out(entry, patient, now)
 
 
