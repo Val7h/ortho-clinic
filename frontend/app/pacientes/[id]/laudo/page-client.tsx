@@ -6,7 +6,7 @@ import toast from "react-hot-toast";
 import NavBar from "@/components/NavBar";
 import { PageWithSidebar } from "@/components/PageWithSidebar";
 import { reportsApi, patientsApi } from "@/lib/api";
-import { formatDate } from "@/lib/utils";
+import { formatDate, resolveDynamicParam } from "@/lib/utils";
 
 const REPORT_TYPES = [
   "Atestado Médico",
@@ -27,7 +27,7 @@ const TEMPLATES: Record<string, string> = {
 
 export default function ReportPage() {
   const params = useParams();
-  const id = params?.id as string;
+  const id = resolveDynamicParam(params?.id as string);
   if (!id) return <div>Paciente não encontrado</div>;
   const pid = Number(id);
   const [patient, setPatient] = useState<any>(null);

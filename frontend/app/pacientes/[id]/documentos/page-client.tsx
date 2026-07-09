@@ -16,6 +16,7 @@ import { UploadModal } from "@/components/documents/UploadModal";
 import { SignaturePad } from "@/components/documents/SignaturePad";
 import { ShareSheet } from "@/components/documents/ShareSheet";
 import { getCachedDocument, cacheDocument } from "@/lib/document-cache";
+import { resolveDynamicParam } from "@/lib/utils";
 
 type Tab = "all" | "exam" | "lab" | "prescription" | "referral" | "report" | "consent" | "other";
 
@@ -32,7 +33,7 @@ const TABS: { value: Tab; label: string }[] = [
 
 export default function PatientDocumentsPage() {
   const params = useParams<{ id: string }>();
-  const patientId = Number(params?.id ?? 0);
+  const patientId = Number(resolveDynamicParam(params?.id) ?? 0);
 
   const [patient, setPatient] = useState<any>(null);
   const [docs, setDocs] = useState<PatientDocument[]>([]);

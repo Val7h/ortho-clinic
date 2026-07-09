@@ -7,6 +7,24 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+/**
+ * Em build estático (output: "export"), rotas dinâmicas [id]/[token]/[slug]
+ * geram um único HTML com um placeholder (generateStaticParams), e o servidor
+ * reescreve qualquer URL real pra esse mesmo arquivo. Numa navegação SPA
+ * (Link/router), useParams() lê o segmento certo da URL — mas num load direto
+ * (F5, link externo, digitar a URL), o Next re-hidrata com o placeholder de
+ * build em vez de reanalisar a URL do navegador, e o valor vem errado (ex.:
+ * Number("_") = NaN → "ID inválido"). Se o param do Next vier igual ao
+ * placeholder, cai pro último segmento do pathname real como fallback.
+ */
+export function resolveDynamicParam(paramValue: string | undefined, placeholder = "_"): string | undefined {
+  if (paramValue && paramValue !== placeholder) return paramValue;
+  if (typeof window === "undefined") return undefined;
+  const path = window.location.pathname.split("?")[0].split("#")[0];
+  const segments = path.split("/").filter(Boolean);
+  return segments[segments.length - 1];
+}
+
 export function formatDate(dateStr: string | null | undefined, pattern = "dd/MM/yyyy") {
   if (!dateStr) return "—";
   try {

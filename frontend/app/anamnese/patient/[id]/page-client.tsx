@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Link from 'next/link';
+import { resolveDynamicParam } from '@/lib/utils';
 
 interface PatientData {
   id: number;
@@ -35,7 +36,7 @@ interface AnamneseHistory {
 
 export default function PatientAnamnesePage() {
   const params = useParams();
-  const id = params?.id as string;
+  const id = resolveDynamicParam(params?.id as string);
   if (!id) return <div>Paciente não encontrado</div>;
   const [patient, setPatient] = useState<PatientData | null>(null);
   const [loading, setLoading] = useState(true);

@@ -20,7 +20,7 @@ import {
   Card, CardContent, Badge, Button, Modal, useModal, CardSkeleton,
 } from "@/components/ui";
 import { patientsApi, whatsappApi, anamnesisApi } from "@/lib/api";
-import { calcAge, formatDate } from "@/lib/utils";
+import { calcAge, formatDate, resolveDynamicParam } from "@/lib/utils";
 import { usePatientCache } from "@/hooks/usePatientCache";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8002";
@@ -85,7 +85,7 @@ function ProfileAvatar({
 
 export default function PatientPage() {
   const params = useParams();
-  const id = params?.id as string;
+  const id = resolveDynamicParam(params?.id as string);
   if (!id) return <div>Paciente não encontrado</div>;
   const pid = Number(id);
   const router = useRouter();

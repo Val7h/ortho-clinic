@@ -10,7 +10,7 @@ import toast from "react-hot-toast";
 import NavBar from "@/components/NavBar";
 import { PageWithSidebar } from "@/components/PageWithSidebar";
 import { api, prescriptionsApi, patientsApi } from "@/lib/api";
-import { formatDate } from "@/lib/utils";
+import { formatDate, resolveDynamicParam } from "@/lib/utils";
 
 interface MemedConfig {
   enabled: boolean;
@@ -458,7 +458,7 @@ function MedRow({
 
 export default function PrescriptionPage() {
   const params = useParams();
-  const id = params?.id as string;
+  const id = resolveDynamicParam(params?.id as string);
   if (!id) return <div>Paciente nao encontrado</div>;
   const pid = Number(id);
 

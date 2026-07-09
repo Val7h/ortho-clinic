@@ -9,6 +9,7 @@ import toast from "react-hot-toast";
 import NavBar from "@/components/NavBar";
 import { PageWithSidebar } from "@/components/PageWithSidebar";
 import { consultationsApi, patientsApi, mediaApi } from "@/lib/api";
+import { resolveDynamicParam } from "@/lib/utils";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants
@@ -204,7 +205,7 @@ function CidInlineSearch({ value, onChange }: { value: string; onChange: (v: str
 
 export default function ConsultationPage() {
   const params = useParams();
-  const id = params?.id as string;
+  const id = resolveDynamicParam(params?.id as string);
   if (!id) return <div>Paciente não encontrado</div>;
   const pid = Number(id);
   const router = useRouter();
