@@ -111,7 +111,10 @@ async def chat(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    api_key = os.getenv("ANTHROPIC_API_KEY")
+    # .strip() é essencial: um espaço/quebra de linha extra colado no valor da
+    # env var no Render vira um header HTTP inválido (httpx recusa a requisição
+    # inteira com "Illegal header value" antes mesmo de sair para a rede).
+    api_key = (os.getenv("ANTHROPIC_API_KEY") or "").strip()
     if not api_key:
         raise HTTPException(status_code=503, detail="Chat IA não configurado (ANTHROPIC_API_KEY ausente)")
 
@@ -145,7 +148,10 @@ async def chat(
                 json=payload,
             )
     except httpx.RequestError as exc:
-        logger.error(f"Erro de rede ao chamar Anthropic API: {exc}")
+        # NUNCA logar str(exc) aqui: para erros de header inválido (ex.: chave
+        # com espaço/quebra de linha), httpx/httpcore embutem o valor do
+        # header — incluindo a própria API key — na mensagem da exceção.
+        logger.error(f"Erro de rede ao chamar Anthropic API: {type(exc).__name__}")
         raise HTTPException(status_code=502, detail="Falha ao conectar com o serviço de IA")
 
     if resp.status_code != 200:
