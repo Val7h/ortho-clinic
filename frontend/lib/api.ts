@@ -423,6 +423,18 @@ export const memedApi = {
   getConfig: () => api.get<{ api_key: string; doctor_id: number }>("/memed/config").then((r) => r.data),
 };
 
+// ── Chat IA ───────────────────────────────────────────────────────────────
+export type ChatRole = "user" | "assistant";
+export interface ChatMessage {
+  role: ChatRole;
+  content: string;
+}
+
+export const chatApi = {
+  send: (messages: ChatMessage[]) =>
+    api.post<{ reply: string }>("/api/chat", { messages }).then((r) => r.data),
+};
+
 // ── WhatsApp ──────────────────────────────────────────────────────────────
 export const whatsappApi = {
   config: () => api.get("/whatsapp/config").then((r) => r.data),

@@ -28,6 +28,7 @@ from routers.pre_consulta import router as pre_consulta_router
 from routers.patient_prescriptions import router as patient_prescriptions_router
 from routers.clinical_evolutions import router as clinical_evolutions_router
 from routers.prescription_templates import router as prescription_templates_router
+from routers.chat import router as chat_router
 
 # SSO / SAML / OIDC / MFA / SCIM (Sprint 8)
 # python3-saml requer libxmlsec1 (não disponível em todos os ambientes)
@@ -152,6 +153,7 @@ app.include_router(patient_docs_public_router)
 app.include_router(patient_prescriptions_router)
 app.include_router(clinical_evolutions_router)
 app.include_router(prescription_templates_router)
+app.include_router(chat_router)
 include_all(app)
 
 # Formulário pré-consulta público (token HMAC — sem JWT)

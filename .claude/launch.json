@@ -8,6 +8,14 @@
       "cwd": "C:/Users/Admin/ortho-clinic/frontend",
       "port": 3000,
       "autoPort": false
+    },
+    {
+      "name": "orthoclinic-backend",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8003"],
+      "cwd": "C:/Users/Admin/ortho-clinic/backend",
+      "port": 8003,
+      "autoPort": false
     }
   ]
 }

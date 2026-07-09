@@ -13,6 +13,8 @@ services:
         sync: false
       - key: FORM_SECRET
         sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
       - key: SEED_ADMIN_EMAIL
         value: valthguime@gmail.com
       - key: BACKEND_CORS_ORIGINS
