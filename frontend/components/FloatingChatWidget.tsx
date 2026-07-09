@@ -14,6 +14,15 @@ const SUGGESTIONS = [
   "Quantos pacientes estão aguardando?",
 ];
 
+// Suporta só **negrito** — é o único markdown que o assistente usa nas respostas.
+function renderMarkdown(text: string): React.ReactNode[] {
+  return text.split(/(\*\*[^*]+\*\*)/g).map((part, i) =>
+    part.startsWith("**") && part.endsWith("**")
+      ? <strong key={i}>{part.slice(2, -2)}</strong>
+      : part
+  );
+}
+
 function loadHistory(): ChatMessage[] {
   if (typeof window === "undefined") return [];
   try {
@@ -155,7 +164,7 @@ export function FloatingChatWidget() {
                       : "bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 rounded-bl-sm"
                   }`}
                 >
-                  {m.content}
+                  {renderMarkdown(m.content)}
                 </div>
               </div>
             ))}
