@@ -12,8 +12,25 @@ logger = logging.getLogger("orthoclinic.memed")
 
 router = APIRouter(prefix="/memed", tags=["Memed"])
 
-MEMED_API_KEY  = "067aa3bf4d0ff169c40950c5ad1d65c4"
-MEMED_DOCTOR_ID = 171135
+# api-key e doctor_id são configuráveis por env var no Render (com os valores
+# atuais como padrão). Quando o Valth tiver o par de PRODUÇÃO da Memed, basta
+# setar MEMED_API_KEY, MEMED_DOCTOR_ID e MEMED_SECRET_KEY no Render — sem mexer
+# em código. A secret-key NUNCA fica no código (só em env var; usada só no
+# backend, nunca no front). Ver [[project_orthoclinic]] sobre o bloqueio.
+MEMED_API_KEY = os.getenv("MEMED_API_KEY", "").strip() or "067aa3bf4d0ff169c40950c5ad1d65c4"
+
+
+def _memed_doctor_id() -> int:
+    raw = os.getenv("MEMED_DOCTOR_ID", "").strip()
+    if raw:
+        try:
+            return int(raw)
+        except ValueError:
+            logger.warning("MEMED_DOCTOR_ID inválido (%r), usando padrão", raw)
+    return 171135
+
+
+MEMED_DOCTOR_ID = _memed_doctor_id()
 
 # JWT hardcoded de emergência (expirado — só usado se API + MEMED_JWT falharem)
 _FALLBACK_JWT = (
@@ -114,5 +131,13 @@ async def get_memed_token(current_user=Depends(get_current_user)):
 
     # 4. Fallback hardcoded (expirado)
     jwt_date = _jwt_date(_FALLBACK_JWT)
+    secret_set = bool(os.getenv("MEMED_SECRET_KEY", "").strip())
     logger.error("Usando JWT Memed hardcoded expirado — configure MEMED_SECRET_KEY no Render")
-    return {"token": _FALLBACK_JWT, "date": jwt_date, "today": today, "valid": False, "source": "fallback"}
+    return {
+        "token": _FALLBACK_JWT, "date": jwt_date, "today": today, "valid": False,
+        "source": "fallback",
+        # Diagnóstico p/ o Valth conferir se a env var chegou. Se secret_key_set=true
+        # mas ainda cai aqui, a secret-key não bate com a api-key/doctor_id (par errado).
+        "secret_key_set": secret_set,
+        "doctor_id": MEMED_DOCTOR_ID,
+    }
