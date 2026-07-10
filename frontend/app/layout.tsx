@@ -7,6 +7,7 @@ import { Providers } from "./providers";
 import { NavigationProvider } from "@/components/navigation/NavigationProvider";
 import { DeepLinkHandler } from "@/components/navigation/DeepLinkHandler";
 import { FloatingChatWidget } from "@/components/FloatingChatWidget";
+import { TeamChatWidget } from "@/components/TeamChatWidget";
 
 /**
  * Self-hosted Inter via next/font/google
@@ -113,6 +114,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               />
 
               <FloatingChatWidget />
+              <TeamChatWidget />
             </NavigationProvider>
           </AuthProvider>
         </Providers>
