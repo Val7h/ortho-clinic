@@ -370,7 +370,39 @@ def _ensure_clinics():
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "app": "OrthoClinic", "version": "2.0.0"}
+    # Diagnóstico de banco: confirma em qual engine a produção está rodando e se
+    # está acessível AGORA — sem vazar credencial (só dialeto + classificação do
+    # host, nunca a connection string). Persistência dos dados depende disso:
+    #  - "sqlite" em produção = disco efêmero do Render = dados somem no deploy (RUIM)
+    #  - "postgresql" + host neon/render = banco gerenciado persistente (BOM)
+    from sqlalchemy import text as _text
+    db_engine = engine.dialect.name  # "sqlite" | "postgresql"
+    host = (engine.url.host or "").lower()
+    if "neon" in host:
+        db_host_kind = "neon"
+    elif "render" in host:
+        db_host_kind = "render"
+    elif db_engine == "sqlite":
+        db_host_kind = "local-file (EFÊMERO)"
+    elif host in ("", "localhost", "127.0.0.1"):
+        db_host_kind = "local"
+    else:
+        db_host_kind = "outro"
+    try:
+        with engine.connect() as conn:
+            conn.execute(_text("SELECT 1"))
+        db_ok = True
+    except Exception:
+        db_ok = False
+    return {
+        "status": "ok",
+        "app": "OrthoClinic",
+        "version": "2.0.0",
+        "db_engine": db_engine,
+        "db_host_kind": db_host_kind,
+        "db_ok": db_ok,
+        "db_persistent": db_engine == "postgresql" and db_ok,
+    }
 
 
 # ===== SERVE NEXT.JS FRONTEND (static export) =====
