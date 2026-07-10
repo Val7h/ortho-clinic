@@ -7,10 +7,12 @@ Não exige JWT — é chamado antes da consulta, pelo próprio paciente.
 import hmac
 import hashlib
 import os
+import re
+import secrets
 import shutil
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -21,6 +23,7 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from models.anamnesis import Anamnesis
+from models.clinic import Appointment, Clinic
 from models.patient import Patient
 
 router = APIRouter(prefix="/pre-consulta", tags=["Pré-Consulta"])
@@ -57,6 +60,7 @@ class PreConsultaPayload(BaseModel):
     nome: str
     telefone: str
     data_consulta: Optional[str] = None
+    unidade: Optional[str] = None
     nascimento: Optional[str] = None
     cpf: Optional[str] = None
     cidade: Optional[str] = None
@@ -98,6 +102,8 @@ class PreConsultaOut(BaseModel):
     patient_id: int
     anamnesis_id: int
     criado: bool  # True = paciente novo, False = paciente existente atualizado
+    appointment_id: Optional[int] = None
+    appointment_criado: bool = False
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -200,6 +206,58 @@ def _atualizar_paciente(patient: Patient, data: PreConsultaPayload) -> None:
         pass  # insurance já tratado acima
 
 
+# Mapeia a unidade (texto livre vindo do bot do WhatsApp, ex: "CTO", "Instituto Pernambuco",
+# "Unimagem", "Mário Bento", "Clínica Artro") pro nome exato da Clinic cadastrada + o
+# horário de início/fim do turno daquela unidade (usado só como sugestão no agendamento
+# automático — a secretária revisa e ajusta se precisar).
+_UNIDADE_PARA_CLINICA = [
+    (("artro",), "Clínica Artro", "15:00", "19:00"),
+    (("cto",), "Clínica CTO", "08:00", "12:00"),
+    (("pernambuco", " ip", "instituto pe"), "Clínica IP", "09:00", "13:00"),
+    (("unimagem",), "Clínica Unimagem", "13:00", "16:00"),
+    (("mário bento", "mario bento", "palmares"), "Clínica Mário Bento", "10:00", "15:00"),
+]
+
+
+def _resolver_clinic(db: Session, unidade: Optional[str]) -> tuple[Optional[Clinic], Optional[str], Optional[str]]:
+    """Retorna (clinic, start_time_sugerido, end_time_sugerido) ou (None, None, None)
+    se a unidade não veio ou não bate com nenhuma unidade conhecida."""
+    if not unidade:
+        return None, None, None
+    texto = f" {unidade.lower()} "
+    for chaves, nome_clinica, inicio, fim in _UNIDADE_PARA_CLINICA:
+        if any(chave in texto for chave in chaves):
+            clinic = db.query(Clinic).filter(Clinic.name == nome_clinica, Clinic.active == True).first()  # noqa: E712
+            if clinic:
+                return clinic, inicio, fim
+    return None, None, None
+
+
+_RE_DATA = re.compile(r"^(\d{1,2})/(\d{1,2})(?:/(\d{4}))?$")
+
+
+def _parse_data_consulta(data_consulta: Optional[str]) -> Optional[date]:
+    """Converte "dd/mm" ou "dd/mm/aaaa" (formato que o bot do WhatsApp manda) numa
+    date de verdade. Se faltar o ano, assume o ano atual (ou o próximo, se a data
+    com o ano atual já ficou no passado — evita marcar sem querer num dia que já passou)."""
+    if not data_consulta:
+        return None
+    m = _RE_DATA.match(data_consulta.strip())
+    if not m:
+        return None
+    dia, mes, ano = int(m.group(1)), int(m.group(2)), m.group(3)
+    hoje = datetime.now(timezone.utc).date()
+    try:
+        if ano:
+            return date(int(ano), mes, dia)
+        candidata = date(hoje.year, mes, dia)
+        if candidata < hoje:
+            candidata = date(hoje.year + 1, mes, dia)
+        return candidata
+    except ValueError:
+        return None
+
+
 # ── Endpoint ───────────────────────────────────────────────────────────────────
 
 _UPLOADS_DIR = Path(os.getenv("UPLOADS_DIR", "/app/uploads/exames"))
@@ -272,9 +330,50 @@ def submit_pre_consulta(data: PreConsultaPayload, db: Session = Depends(get_db))
     db.commit()
     db.refresh(anamnesis)
 
+    # ── Agendamento automático (pedido do Dr. Valth, 09/07/2026): a pré-consulta já
+    # deixa o paciente na agenda do dia certo, como "pending" — a secretária só revisa
+    # e confirma/completa, não precisa criar o agendamento do zero. ──────────────────
+    appointment_id: Optional[int] = None
+    appointment_criado = False
+    clinic, inicio_sugerido, fim_sugerido = _resolver_clinic(db, data.unidade)
+    data_consulta = _parse_data_consulta(data.data_consulta)
+    if clinic and data_consulta:
+        existente = (
+            db.query(Appointment)
+            .filter(
+                Appointment.patient_id == patient.id,
+                Appointment.clinic_id == clinic.id,
+                Appointment.date == data_consulta,
+            )
+            .first()
+        )
+        if existente:
+            appointment_id = existente.id
+        else:
+            agendamento = Appointment(
+                clinic_id=clinic.id,
+                date=data_consulta,
+                start_time=inicio_sugerido,
+                end_time=fim_sugerido,
+                patient_name=data.nome,
+                patient_phone=data.telefone,
+                patient_id=patient.id,
+                reason=data.descricao,
+                status="pending",
+                confirmation_token=secrets.token_urlsafe(32),
+                notes="Criado automaticamente pelo formulário de pré-consulta (WhatsApp).",
+            )
+            db.add(agendamento)
+            db.commit()
+            db.refresh(agendamento)
+            appointment_id = agendamento.id
+            appointment_criado = True
+
     return PreConsultaOut(
         ok=True,
         patient_id=patient.id,
         anamnesis_id=anamnesis.id,
         criado=criado,
+        appointment_id=appointment_id,
+        appointment_criado=appointment_criado,
     )
