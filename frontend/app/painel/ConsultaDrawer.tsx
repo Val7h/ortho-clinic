@@ -1434,9 +1434,6 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
   // Autocomplete suggestions keyed by med.id
   const [medSuggestions, setMedSuggestions] = useState<Record<string, OrthoMedPreset[]>>({});
 
-  // Memed
-  const [memedLoading, setMemedLoading] = useState(false);
-
   // Track patient id to avoid overwriting manually edited address on re-render
   const patientIdRef = useRef<number | null>(null);
 
@@ -1728,30 +1725,22 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
                 </div>
               )}
             </div>
+            {/*
+              Botão "Abrir Memed" — paliativo: abre o site do Memed numa aba nova
+              (login de médico do Valth), síncrono no clique (sem popup blocker).
+              QUANDO as credenciais de integração (api-key/secret-key de parceiro)
+              estiverem no Render, trocar o onClick de volta por
+              `openMemed(patient, clinic)` pra abrir EMBUTIDO com o paciente já
+              preenchido. A função openMemed e o SDK continuam prontos abaixo.
+            */}
             <button
               type="button"
-              disabled={memedLoading}
-              onClick={async () => {
-                if (!patient) { toast.error("Dados do paciente ainda não carregados"); return; }
-                setMemedLoading(true);
-                try {
-                  await openMemed(patient, clinic);
-                } catch (err: any) {
-                  const msg = err?.message || "Erro ao carregar Memed";
-                  toast.error(msg.includes("expirado") ? msg : "Erro ao abrir Memed. Tente novamente.");
-                  console.error("[Memed]", err);
-                } finally {
-                  setMemedLoading(false);
-                }
-              }}
-              className="flex items-center gap-1.5 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 text-xs font-semibold whitespace-nowrap disabled:opacity-60 disabled:cursor-not-allowed"
+              onClick={() => window.open("https://memed.com.br/", "_blank", "noopener,noreferrer")}
+              title="Abre o site do Memed numa nova aba para você prescrever com seu login de médico"
+              className="flex items-center gap-1.5 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 text-xs font-semibold whitespace-nowrap"
             >
-              {memedLoading ? (
-                <div className="w-3.5 h-3.5 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" />
-              ) : (
-                <Pill className="w-3.5 h-3.5" />
-              )}
-              Prescrever via Memed
+              <Pill className="w-3.5 h-3.5" />
+              Abrir Memed
             </button>
           </div>
 
