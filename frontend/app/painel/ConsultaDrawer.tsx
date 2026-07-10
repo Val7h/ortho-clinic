@@ -567,15 +567,21 @@ function PrintModal({ rx, patient, clinic, onClose }: {
 
       {/* Medicamentos */}
       <div style={{ marginBottom: "12px", borderBottom: "1px solid #ddd", paddingBottom: "10px" }}>
-        {rx.medications.map((m, i) => (
-          <div key={i} style={{ marginBottom: "8px" }}>
-            <p style={{ fontWeight: 600, margin: "0 0 1px 0" }}>{i + 1}. {m.name}{m.dose ? ` — ${m.dose}` : ""}</p>
-            <p style={{ color: "#555", fontSize: "10px", margin: "0 0 1px 0" }}>{[m.route && `Via ${m.route}`, m.frequency, m.duration].filter(Boolean).join(" · ")}</p>
-            {m.instructions && <p style={{ color: "#777", fontSize: "10px", fontStyle: "italic", margin: "0" }}>Obs: {m.instructions}</p>}
-          </div>
-        ))}
-        {rx.instructions && (
-          <p style={{ color: "#555", fontSize: "10px", marginTop: "6px", fontStyle: "italic" }}>Orientações: {rx.instructions}</p>
+        {rx.medications.length > 0 ? (
+          <>
+            {rx.medications.map((m, i) => (
+              <div key={i} style={{ marginBottom: "8px" }}>
+                <p style={{ fontWeight: 600, margin: "0 0 1px 0" }}>{i + 1}. {m.name}{m.dose ? ` — ${m.dose}` : ""}</p>
+                <p style={{ color: "#555", fontSize: "10px", margin: "0 0 1px 0" }}>{[m.route && `Via ${m.route}`, m.frequency, m.duration].filter(Boolean).join(" · ")}</p>
+                {m.instructions && <p style={{ color: "#777", fontSize: "10px", fontStyle: "italic", margin: "0" }}>Obs: {m.instructions}</p>}
+              </div>
+            ))}
+            {rx.instructions && (
+              <p style={{ color: "#555", fontSize: "10px", marginTop: "6px", fontStyle: "italic" }}>Orientações: {rx.instructions}</p>
+            )}
+          </>
+        ) : (
+          <p style={{ whiteSpace: "pre-wrap", fontSize: "12px", margin: "0", lineHeight: 1.6 }}>{rx.instructions}</p>
         )}
       </div>
 
@@ -638,15 +644,21 @@ function PrintModal({ rx, patient, clinic, onClose }: {
       {/* Medicamentos */}
       <div style={{ marginBottom: "12px", borderBottom: "1px solid #ddd", paddingBottom: "10px" }}>
         <p style={{ fontWeight: 700, color: "#444", textTransform: "uppercase", fontSize: "9px", letterSpacing: "0.5px", margin: "0 0 8px 0" }}>Prescrição</p>
-        {rx.medications.map((m, i) => (
-          <div key={i} style={{ marginBottom: "8px" }}>
-            <p style={{ fontWeight: 600, margin: "0 0 1px 0" }}>{i + 1}. {m.name}{m.dose ? ` — ${m.dose}` : ""}</p>
-            <p style={{ color: "#555", fontSize: "10px", margin: "0 0 1px 0" }}>{[m.route && `Via ${m.route}`, m.frequency, m.duration].filter(Boolean).join(" · ")}</p>
-            {m.instructions && <p style={{ color: "#777", fontSize: "10px", fontStyle: "italic", margin: "0" }}>Obs: {m.instructions}</p>}
-          </div>
-        ))}
-        {rx.instructions && (
-          <p style={{ color: "#555", fontSize: "10px", marginTop: "6px", fontStyle: "italic" }}>Orientações: {rx.instructions}</p>
+        {rx.medications.length > 0 ? (
+          <>
+            {rx.medications.map((m, i) => (
+              <div key={i} style={{ marginBottom: "8px" }}>
+                <p style={{ fontWeight: 600, margin: "0 0 1px 0" }}>{i + 1}. {m.name}{m.dose ? ` — ${m.dose}` : ""}</p>
+                <p style={{ color: "#555", fontSize: "10px", margin: "0 0 1px 0" }}>{[m.route && `Via ${m.route}`, m.frequency, m.duration].filter(Boolean).join(" · ")}</p>
+                {m.instructions && <p style={{ color: "#777", fontSize: "10px", fontStyle: "italic", margin: "0" }}>Obs: {m.instructions}</p>}
+              </div>
+            ))}
+            {rx.instructions && (
+              <p style={{ color: "#555", fontSize: "10px", marginTop: "6px", fontStyle: "italic" }}>Orientações: {rx.instructions}</p>
+            )}
+          </>
+        ) : (
+          <p style={{ whiteSpace: "pre-wrap", fontSize: "12px", margin: "0", lineHeight: 1.6 }}>{rx.instructions}</p>
         )}
       </div>
 
@@ -692,18 +704,22 @@ function PrintModal({ rx, patient, clinic, onClose }: {
       {/* Medicamentos */}
       <div style={{ marginBottom: "14px" }}>
         <p style={{ fontWeight: 700, color: "#444", textTransform: "uppercase", fontSize: "10px", letterSpacing: "1px", borderBottom: "1px solid #ddd", paddingBottom: "4px", marginBottom: "10px" }}>Prescrição</p>
-        <ol style={{ margin: 0, padding: 0, listStyle: "none" }}>
-          {rx.medications.map((m, i) => (
-            <li key={i} style={{ marginBottom: "10px", paddingLeft: "4px" }}>
-              <p style={{ fontWeight: 600, margin: "0 0 2px 0" }}>{i + 1}. {m.name}{m.dose ? ` — ${m.dose}` : ""}</p>
-              <p style={{ color: "#555", fontSize: "11px", margin: "0 0 2px 0" }}>{[m.route && `Via ${m.route}`, m.frequency, m.duration].filter(Boolean).join(" · ")}</p>
-              {m.instructions && <p style={{ color: "#777", fontSize: "11px", fontStyle: "italic", margin: "0" }}>Obs: {m.instructions}</p>}
-            </li>
-          ))}
-        </ol>
+        {rx.medications.length > 0 ? (
+          <ol style={{ margin: 0, padding: 0, listStyle: "none" }}>
+            {rx.medications.map((m, i) => (
+              <li key={i} style={{ marginBottom: "10px", paddingLeft: "4px" }}>
+                <p style={{ fontWeight: 600, margin: "0 0 2px 0" }}>{i + 1}. {m.name}{m.dose ? ` — ${m.dose}` : ""}</p>
+                <p style={{ color: "#555", fontSize: "11px", margin: "0 0 2px 0" }}>{[m.route && `Via ${m.route}`, m.frequency, m.duration].filter(Boolean).join(" · ")}</p>
+                {m.instructions && <p style={{ color: "#777", fontSize: "11px", fontStyle: "italic", margin: "0" }}>Obs: {m.instructions}</p>}
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p style={{ whiteSpace: "pre-wrap", fontSize: "13px", margin: 0, lineHeight: 1.6 }}>{rx.instructions}</p>
+        )}
       </div>
 
-      {rx.instructions && (
+      {rx.medications.length > 0 && rx.instructions && (
         <div style={{ background: "#f8f8f8", borderRadius: "4px", padding: "10px", marginBottom: "14px" }}>
           <p style={{ fontWeight: 700, color: "#444", textTransform: "uppercase", fontSize: "10px", marginBottom: "4px" }}>Orientações</p>
           <p style={{ fontSize: "11px", color: "#555", margin: 0 }}>{rx.instructions}</p>
@@ -1389,6 +1405,8 @@ const RX_TYPE_OPTIONS: { value: PrescriptionType; label: string; activeClass: st
 
 function TabReceita({ patientId, patient, clinic }: { patientId: number; patient: any; clinic?: any }) {
   const [rxType, setRxType] = useState<PrescriptionType>("simples");
+  const [freeTextMode, setFreeTextMode] = useState(false);
+  const [freeText, setFreeText] = useState("");
   const [medications, setMedications] = useState<Medication[]>([emptyMed()]);
   const [instructions, setInstructions] = useState("");
   const [patientAddress, setPatientAddress] = useState("");
@@ -1477,20 +1495,26 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
 
   const handleSave = async () => {
     if (isNotificacaoAB) { toast.error("Notificação A/B não pode ser impressa pelo médico — use formulários SESA"); return; }
-    const validMeds = medications.filter((m) => m.name.trim());
-    if (validMeds.length === 0) { toast.error("Adicione pelo menos um medicamento"); return; }
+    let validMeds: Medication[] = [];
+    if (freeTextMode) {
+      if (!freeText.trim()) { toast.error("Escreva o conteúdo da receita"); return; }
+    } else {
+      validMeds = medications.filter((m) => m.name.trim());
+      if (validMeds.length === 0) { toast.error("Adicione pelo menos um medicamento"); return; }
+    }
     setSaving(true);
     try {
       const newRx = await prescriptionsApi.create(patientId, {
         date: new Date().toISOString().split("T")[0],
         prescription_type: rxType,
         medications: validMeds,
-        instructions,
+        instructions: freeTextMode ? freeText : instructions,
       });
       toast.success("Receita salva!");
       setPrescriptions((prev) => [newRx, ...prev]);
       setMedications([emptyMed()]);
       setInstructions("");
+      setFreeText("");
       // Restore patient defaults (not wipe them)
       if (patient) {
         const parts = [patient.address_street, patient.address_city, patient.address_state].filter(Boolean);
@@ -1506,12 +1530,17 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
 
   const handlePrint = () => {
     if (isNotificacaoAB) return;
-    const validMeds = medications.filter((m) => m.name.trim());
-    if (validMeds.length === 0) { toast.error("Adicione pelo menos um medicamento para imprimir"); return; }
+    let validMeds: Medication[] = [];
+    if (freeTextMode) {
+      if (!freeText.trim()) { toast.error("Escreva o conteúdo da receita para imprimir"); return; }
+    } else {
+      validMeds = medications.filter((m) => m.name.trim());
+      if (validMeds.length === 0) { toast.error("Adicione pelo menos um medicamento para imprimir"); return; }
+    }
     setPrintRx({
       date: new Date().toISOString().split("T")[0],
       medications: validMeds,
-      instructions,
+      instructions: freeTextMode ? freeText : instructions,
       prescription_type: rxType,
       patientAddress: patientAddress || undefined,
       patientPhone: patientPhone || undefined,
@@ -1584,6 +1613,19 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
             </button>
           ))}
         </div>
+
+        {/* Toggle texto livre — vale pra Branca, Especial e ATB */}
+        {!isNotificacaoAB && (
+          <label className="mt-2 flex items-center gap-2 text-xs font-semibold text-slate-600 dark:text-slate-300 cursor-pointer select-none w-fit">
+            <input
+              type="checkbox"
+              checked={freeTextMode}
+              onChange={(e) => setFreeTextMode(e.target.checked)}
+              className="w-4 h-4 rounded accent-blue-600"
+            />
+            Escrever em texto livre (caixa em branco)
+          </label>
+        )}
 
         {/* Badges informativos por tipo */}
         {rxType === "controle_especial" && (
@@ -1730,35 +1772,50 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
 
           {/* ── Medicamentos ── */}
           <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <p className={sectionTitle + " mb-0"}>Medicamentos</p>
-              <button
-                type="button"
-                onClick={() => setMedications((ms) => [...ms, emptyMed()])}
-                className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-semibold"
-              >
-                <Plus className="w-3.5 h-3.5" /> Adicionar
-              </button>
-            </div>
+            {freeTextMode ? (
+              <div>
+                <label className={lbl}>Conteúdo da receita (texto livre)</label>
+                <textarea
+                  className={inp + " min-h-[220px] resize-none font-mono"}
+                  placeholder={"Escreva a receita à mão livre. Ex:\n\n1. Nimesulida 100mg — 1 cp de 12/12h por 5 dias\n2. Omeprazol 20mg — 1 cp em jejum por 30 dias\n\nOrientações: repouso relativo, retorno em 7 dias."}
+                  value={freeText}
+                  onChange={(e) => setFreeText(e.target.value)}
+                  rows={12}
+                />
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center justify-between">
+                  <p className={sectionTitle + " mb-0"}>Medicamentos</p>
+                  <button
+                    type="button"
+                    onClick={() => setMedications((ms) => [...ms, emptyMed()])}
+                    className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-semibold"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Adicionar
+                  </button>
+                </div>
 
-            {medications.map((med, i) => (
-              <MedRowInline
-                key={med.id}
-                med={med}
-                index={i}
-                total={medications.length}
-                onChange={(k, v) => updateMed(med.id, k, v)}
-                onRemove={() => setMedications((ms) => ms.filter((m) => m.id !== med.id))}
-                allergyWarning={checkDrugAllergyAlert(med.name, (patient?.allergies || ""))}
-                suggestions={medSuggestions[med.id] || []}
-                onApplyPreset={(p) => applyPreset(med.id, p)}
-              />
-            ))}
+                {medications.map((med, i) => (
+                  <MedRowInline
+                    key={med.id}
+                    med={med}
+                    index={i}
+                    total={medications.length}
+                    onChange={(k, v) => updateMed(med.id, k, v)}
+                    onRemove={() => setMedications((ms) => ms.filter((m) => m.id !== med.id))}
+                    allergyWarning={checkDrugAllergyAlert(med.name, (patient?.allergies || ""))}
+                    suggestions={medSuggestions[med.id] || []}
+                    onApplyPreset={(p) => applyPreset(med.id, p)}
+                  />
+                ))}
 
-            <div>
-              <label className={lbl}>Orientações gerais</label>
-              <textarea className={inp + " min-h-[70px] resize-none"} placeholder="Evitar álcool, repouso, retorno em 7 dias..." value={instructions} onChange={(e) => setInstructions(e.target.value)} rows={3} />
-            </div>
+                <div>
+                  <label className={lbl}>Orientações gerais</label>
+                  <textarea className={inp + " min-h-[70px] resize-none"} placeholder="Evitar álcool, repouso, retorno em 7 dias..." value={instructions} onChange={(e) => setInstructions(e.target.value)} rows={3} />
+                </div>
+              </>
+            )}
 
             {/* ── Inline save template input ── */}
             {showSaveTemplateInput && (
@@ -1778,14 +1835,16 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
 
             {/* ── Ações ── */}
             <div className="flex gap-2 flex-wrap">
-              <button
-                type="button"
-                onClick={handleSaveTemplate}
-                disabled={savingTemplate}
-                className="flex items-center gap-1.5 px-3 py-2 border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-400 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 text-xs font-semibold disabled:opacity-50"
-              >
-                <Save className="w-3.5 h-3.5" /> Salvar Modelo
-              </button>
+              {!freeTextMode && (
+                <button
+                  type="button"
+                  onClick={handleSaveTemplate}
+                  disabled={savingTemplate}
+                  className="flex items-center gap-1.5 px-3 py-2 border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-400 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 text-xs font-semibold disabled:opacity-50"
+                >
+                  <Save className="w-3.5 h-3.5" /> Salvar Modelo
+                </button>
+              )}
               <button
                 type="button"
                 onClick={handlePrint}
