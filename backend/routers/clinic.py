@@ -137,8 +137,16 @@ def _walk_in_count(db: Session, clinic_id: int, appt_date: date, start_time: str
 # ── Doctor endpoints ──────────────────────────────────────────────────────────
 
 @router.get("/clinics", response_model=List[ClinicOut])
-def list_clinics(db: Session = Depends(get_db)):
-    return db.query(Clinic).filter(Clinic.active == True).order_by(Clinic.name).all()
+def list_clinics(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    q = db.query(Clinic).filter(Clinic.active == True)
+    # Isolamento multi-cliente: cada conta só vê as próprias clínicas.
+    # O superadmin da plataforma (dono do SaaS) enxerga todas.
+    if current_user.role != "superadmin":
+        q = q.filter(Clinic.organization_id == current_user.organization_id)
+    return q.order_by(Clinic.name).all()
 
 
 @router.post("/clinics", response_model=ClinicOut, status_code=201)
@@ -152,6 +160,7 @@ def create_clinic(
     if existing:
         raise HTTPException(409, f"Já existe uma clínica com slug '{data.slug}'")
     clinic = Clinic(
+        organization_id=current_user.organization_id,  # amarra a clínica à conta de quem cria
         name=data.name,
         slug=data.slug,
         city=data.city or "",
@@ -166,12 +175,24 @@ def create_clinic(
     return clinic
 
 
-@router.get("/clinics/{clinic_id}", response_model=ClinicOut)
-def get_clinic(clinic_id: int, db: Session = Depends(get_db)):
+def _clinic_da_conta(clinic_id: int, db: Session, current_user: User) -> Clinic:
+    """Busca a clínica garantindo que pertence à conta do usuário (superadmin vê qualquer uma).
+    Retorna 404 (não 403) quando é de outra conta, pra não revelar que ela existe."""
     clinic = db.query(Clinic).filter(Clinic.id == clinic_id).first()
     if not clinic:
         raise HTTPException(404, "Clínica não encontrada")
+    if current_user.role != "superadmin" and clinic.organization_id != current_user.organization_id:
+        raise HTTPException(404, "Clínica não encontrada")
     return clinic
+
+
+@router.get("/clinics/{clinic_id}", response_model=ClinicOut)
+def get_clinic(
+    clinic_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return _clinic_da_conta(clinic_id, db, current_user)
 
 
 @router.put("/clinics/{clinic_id}", response_model=ClinicOut)
@@ -179,10 +200,9 @@ def update_clinic(
     clinic_id: int,
     data: ClinicUpdate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    clinic = db.query(Clinic).filter(Clinic.id == clinic_id).first()
-    if not clinic:
-        raise HTTPException(404, "Clínica não encontrada")
+    clinic = _clinic_da_conta(clinic_id, db, current_user)
     clinic.name = data.name
     clinic.slug = data.slug
     if data.city is not None:
@@ -233,10 +253,10 @@ def list_appointments(
     date_to: Optional[date] = None,
     status: Optional[str] = None,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    clinic = db.query(Clinic).filter(Clinic.id == clinic_id).first()
-    if not clinic:
-        raise HTTPException(404, "Clínica não encontrada")
+    # Garante que a clínica é da conta do usuário antes de expor os agendamentos (dado de paciente).
+    _clinic_da_conta(clinic_id, db, current_user)
     q = db.query(Appointment).filter(Appointment.clinic_id == clinic_id)
     if date_from:
         q = q.filter(Appointment.date >= date_from)
@@ -252,6 +272,7 @@ def appointments_week(
     start: Optional[date] = None,
     end: Optional[date] = None,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     today = date.today()
     if start is None:
@@ -260,14 +281,20 @@ def appointments_week(
     if end is None:
         end = start + timedelta(days=6)
 
-    clinics = db.query(Clinic).filter(Clinic.active == True).all()
+    # Isolamento multi-cliente: a agenda mostra só as clínicas da conta (superadmin vê todas).
+    clinics_q = db.query(Clinic).filter(Clinic.active == True)
+    if current_user.role != "superadmin":
+        clinics_q = clinics_q.filter(Clinic.organization_id == current_user.organization_id)
+    clinics = clinics_q.all()
+    clinic_ids = [c.id for c in clinics]
     appointments = (
         db.query(Appointment)
+        .filter(Appointment.clinic_id.in_(clinic_ids))
         .filter(Appointment.date >= start, Appointment.date <= end)
         .filter(Appointment.status.notin_(["cancelled", "blocked"]))
         .order_by(Appointment.date, Appointment.queue_number, Appointment.start_time)
         .all()
-    )
+    ) if clinic_ids else []
 
     result = []
 

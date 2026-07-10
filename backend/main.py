@@ -193,6 +193,7 @@ def startup():
     _ensure_superadmin()
     _ensure_default_clinic()
     _ensure_clinics()
+    _backfill_clinic_org()
     # BUG-05: forçar inicialização do pool antes do primeiro request (warm-up)
     try:
         db = SessionLocal()
@@ -200,6 +201,35 @@ def startup():
         db.close()
     except Exception:
         pass
+
+
+def _backfill_clinic_org():
+    """Garante que nenhuma clínica fique com organization_id NULL antes de o isolamento
+    multi-cliente por conta entrar em vigor (senão usuário não-superadmin da única conta
+    existente não enxergaria as clínicas). Idempotente: só toca em linhas NULL, e amarra
+    à ÚNICA organização quando só existe uma (caso atual, single-tenant)."""
+    from database import SessionLocal
+    from models.organization import Organization
+    from models.clinic import Clinic
+    db = SessionLocal()
+    try:
+        orgs = db.query(Organization.id).order_by(Organization.id).all()
+        # Só faz o backfill automático quando há exatamente UMA conta (não há ambiguidade
+        # de "a qual conta pertence"). Com múltiplas contas, isso passa a ser tratado na
+        # criação/migração explícita — nunca adivinhar dono de clínica.
+        if len(orgs) != 1:
+            return
+        only_org_id = orgs[0][0]
+        n = db.query(Clinic).filter(Clinic.organization_id.is_(None)).update(
+            {Clinic.organization_id: only_org_id}, synchronize_session=False
+        )
+        if n:
+            db.commit()
+            print(f"✓ Backfill: {n} clínica(s) sem conta amarradas à org {only_org_id}")
+    except Exception as e:
+        print(f"[backfill_clinic_org] ignorado: {e}")
+    finally:
+        db.close()
 
 
 def _ensure_superadmin():
