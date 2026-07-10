@@ -77,8 +77,11 @@ async def _fetch_fresh_token() -> str | None:
     if not secret_key:
         return None
 
+    # Host da API configurável: produção por padrão, homologação via env
+    # (MEMED_API_BASE=https://integrations.api.memed.com.br).
+    api_base = os.getenv("MEMED_API_BASE", "").strip().rstrip("/") or "https://api.memed.com.br"
     url = (
-        f"https://api.memed.com.br/v1/sinapse-prescricao/usuarios/{MEMED_DOCTOR_ID}"
+        f"{api_base}/v1/sinapse-prescricao/usuarios/{MEMED_DOCTOR_ID}"
         f"?api-key={MEMED_API_KEY}&secret-key={secret_key}"
     )
     try:
