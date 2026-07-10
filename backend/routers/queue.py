@@ -6,6 +6,7 @@ Includes WebSocket support for real-time updates.
 from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
 from datetime import datetime, timedelta, date
 from typing import List, Dict, Set, Optional
 from pydantic import BaseModel
@@ -13,10 +14,12 @@ import json
 import logging
 
 from database import get_db
+from deps import get_current_user
 from tzutil import today_br
 from models.queue import ClinicQueue, PrescriptionSignature, AnamnesisTemplate, WaitingRoomEntry
 from models.clinic import Appointment, Clinic
 from models.patient import Patient
+from models.organization import User
 from schemas.queue import (
     QueueCallRequest, QueueCallResponse, QueueStatus, QueueHistoryItem,
     QueueUpdateRequest, QueueItemResponse, QueueBroadcastMessage,
@@ -67,20 +70,41 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 
+# ==================== ESCOPO POR ORGANIZAÇÃO ====================
+
+def _same_org(current_user: User, organization_id) -> bool:
+    """True se o recurso pertence à organização do usuário (superadmin vê tudo)."""
+    if current_user.role == "superadmin":
+        return True
+    return organization_id == current_user.organization_id
+
+
+def _template_in_org(db: Session, template: AnamnesisTemplate, current_user: User) -> bool:
+    """True se o template pertence à org do usuário. Template global (clinic_id
+    nulo) é acessível a qualquer usuário autenticado. Superadmin vê tudo."""
+    if current_user.role == "superadmin":
+        return True
+    if template.clinic_id is None:
+        return True
+    clinic = db.query(Clinic).filter(Clinic.id == template.clinic_id).first()
+    return clinic is not None and clinic.organization_id == current_user.organization_id
+
+
 # ==================== QUEUE ENDPOINTS ====================
 
 @router.post("/queue/call", response_model=QueueCallResponse)
 async def call_patient(
     request: QueueCallRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Call next patient to room.
     Transitions patient from 'pending' to 'called' status.
     """
-    # Validate clinic and appointment exist
+    # Validate clinic and appointment exist (escopo por organização)
     clinic = db.query(Clinic).filter(Clinic.id == request.clinic_id).first()
-    if not clinic:
+    if not clinic or not _same_org(current_user, clinic.organization_id):
         raise HTTPException(status_code=404, detail="Clinic not found")
 
     appointment = db.query(Appointment).filter(
@@ -91,7 +115,7 @@ async def call_patient(
         raise HTTPException(status_code=404, detail="Appointment not found")
 
     patient = db.query(Patient).filter(Patient.id == request.patient_id).first()
-    if not patient:
+    if not patient or not _same_org(current_user, patient.organization_id):
         raise HTTPException(status_code=404, detail="Patient not found")
 
     # Check if patient already in queue
@@ -139,11 +163,14 @@ async def call_patient(
 @router.get("/queue/status", response_model=QueueStatus)
 async def get_queue_status(
     clinic_id: int = Query(...),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user),
 ):
     """Get current queue status for a clinic."""
     clinic = db.query(Clinic).filter(Clinic.id == clinic_id).first()
-    if not clinic:
+    # current_user pode ser None quando chamado internamente pelo WebSocket
+    # (que já valida o clinic_id no seu próprio handshake).
+    if not clinic or (current_user is not None and not _same_org(current_user, clinic.organization_id)):
         raise HTTPException(status_code=404, detail="Clinic not found")
 
     # Get current patient (in consultation or just called)
@@ -211,11 +238,12 @@ async def get_queue_history(
     clinic_id: int = Query(...),
     limit: int = Query(50, le=100),
     hours: int = Query(24),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Get queue call history for a clinic (last N hours)."""
     clinic = db.query(Clinic).filter(Clinic.id == clinic_id).first()
-    if not clinic:
+    if not clinic or not _same_org(current_user, clinic.organization_id):
         raise HTTPException(status_code=404, detail="Clinic not found")
 
     cutoff_time = datetime.utcnow() - timedelta(hours=hours)
@@ -251,9 +279,15 @@ async def update_queue_status(
     queue_id: int,
     request: QueueUpdateRequest,
     clinic_id: int = Query(...),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Update queue entry status."""
+    # Valida que a clínica pertence à organização do usuário
+    clinic = db.query(Clinic).filter(Clinic.id == clinic_id).first()
+    if not clinic or not _same_org(current_user, clinic.organization_id):
+        raise HTTPException(status_code=404, detail="Queue entry not found")
+
     queue_entry = db.query(ClinicQueue).filter(
         ClinicQueue.id == queue_id,
         ClinicQueue.clinic_id == clinic_id
@@ -300,7 +334,10 @@ async def websocket_queue(websocket: WebSocket, clinic_id: int):
         # Send initial status
         db = next(get_db())
         try:
-            status = await get_queue_status(clinic_id=clinic_id, db=db)
+            # Chamada interna: passa current_user=None para pular o escopo por
+            # organização (o WS valida o clinic_id no próprio handshake) sem
+            # exigir token na rota WebSocket.
+            status = await get_queue_status(clinic_id=clinic_id, db=db, current_user=None)
             await websocket.send_json({
                 "type": "initial_status",
                 "data": status.model_dump()
@@ -328,7 +365,8 @@ async def websocket_queue(websocket: WebSocket, clinic_id: int):
 @router.post("/prescription/validate", response_model=PrescriptionValidateResponse)
 async def validate_prescription(
     request: PrescriptionValidateRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Validate medications for drug-drug interactions and contraindications.
@@ -356,6 +394,8 @@ async def validate_prescription(
     # Check patient contraindications
     if request.patient_id:
         patient = db.query(Patient).filter(Patient.id == request.patient_id).first()
+        if patient and not _same_org(current_user, patient.organization_id):
+            raise HTTPException(status_code=404, detail="Patient not found")
         if patient:
             patient_contraindications = check_patient_contraindications(patient, drug_names)
             contraindications.extend(patient_contraindications)
@@ -442,13 +482,18 @@ def validate_dosage(medication: Dict) -> str | None:
 @router.post("/prescription/sign", response_model=PrescriptionSignatureResponse)
 async def create_signature(
     request: PrescriptionSignatureCreate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Create digital signature request for prescription."""
-    # Verify prescription exists
+    # Verify prescription exists (escopo via paciente da prescrição)
     from models.documents import Prescription
     prescription = db.query(Prescription).filter(Prescription.id == request.prescription_id).first()
     if not prescription:
+        raise HTTPException(status_code=404, detail="Prescription not found")
+
+    patient = db.query(Patient).filter(Patient.id == prescription.patient_id).first()
+    if not patient or not _same_org(current_user, patient.organization_id):
         raise HTTPException(status_code=404, detail="Prescription not found")
 
     # Create signature entry
@@ -471,9 +516,19 @@ async def create_signature(
 @router.get("/prescription/{prescription_id}/signatures", response_model=List[PrescriptionSignatureResponse])
 async def get_prescription_signatures(
     prescription_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Get all signatures for a prescription."""
+    # Escopo via paciente da prescrição
+    from models.documents import Prescription
+    prescription = db.query(Prescription).filter(Prescription.id == prescription_id).first()
+    if not prescription:
+        raise HTTPException(status_code=404, detail="Prescription not found")
+    patient = db.query(Patient).filter(Patient.id == prescription.patient_id).first()
+    if not patient or not _same_org(current_user, patient.organization_id):
+        raise HTTPException(status_code=404, detail="Prescription not found")
+
     signatures = db.query(PrescriptionSignature).filter(
         PrescriptionSignature.prescription_id == prescription_id
     ).all()
@@ -488,9 +543,15 @@ async def create_anamnesis_template(
     request: AnamnesisTemplateCreate,
     clinic_id: int = Query(...),
     created_by: int = Query(...),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Create new anamnesis template for clinic/specialty."""
+    # Valida que a clínica pertence à organização do usuário
+    clinic = db.query(Clinic).filter(Clinic.id == clinic_id).first()
+    if not clinic or not _same_org(current_user, clinic.organization_id):
+        raise HTTPException(status_code=404, detail="Clinic not found")
+
     template = AnamnesisTemplate(
         clinic_id=clinic_id,
         name=request.name,
@@ -510,10 +571,26 @@ async def create_anamnesis_template(
 async def list_anamnesis_templates(
     clinic_id: int = Query(None),
     specialty: str = Query(None),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """List anamnesis templates."""
     query = db.query(AnamnesisTemplate)
+
+    # Escopo por organização: templates de clínicas da org do usuário +
+    # templates globais (clinic_id nulo). Superadmin vê tudo.
+    if current_user.role != "superadmin":
+        org_clinic_ids = [
+            c.id for c in db.query(Clinic.id).filter(
+                Clinic.organization_id == current_user.organization_id
+            ).all()
+        ]
+        query = query.filter(
+            or_(
+                AnamnesisTemplate.clinic_id.is_(None),
+                AnamnesisTemplate.clinic_id.in_(org_clinic_ids),
+            )
+        )
 
     if clinic_id:
         query = query.filter(AnamnesisTemplate.clinic_id == clinic_id)
@@ -528,11 +605,12 @@ async def list_anamnesis_templates(
 @router.get("/anamnesis-template/{template_id}", response_model=AnamnesisTemplateResponse)
 async def get_anamnesis_template(
     template_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Get specific anamnesis template."""
     template = db.query(AnamnesisTemplate).filter(AnamnesisTemplate.id == template_id).first()
-    if not template:
+    if not template or not _template_in_org(db, template, current_user):
         raise HTTPException(status_code=404, detail="Template not found")
 
     return AnamnesisTemplateResponse.model_validate(template)
@@ -542,11 +620,12 @@ async def get_anamnesis_template(
 async def update_anamnesis_template(
     template_id: int,
     request: AnamnesisTemplateUpdate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Update anamnesis template."""
     template = db.query(AnamnesisTemplate).filter(AnamnesisTemplate.id == template_id).first()
-    if not template:
+    if not template or not _template_in_org(db, template, current_user):
         raise HTTPException(status_code=404, detail="Template not found")
 
     if request.name:
@@ -565,11 +644,12 @@ async def update_anamnesis_template(
 @router.delete("/anamnesis-template/{template_id}")
 async def delete_anamnesis_template(
     template_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Delete anamnesis template."""
     template = db.query(AnamnesisTemplate).filter(AnamnesisTemplate.id == template_id).first()
-    if not template:
+    if not template or not _template_in_org(db, template, current_user):
         raise HTTPException(status_code=404, detail="Template not found")
 
     db.delete(template)
@@ -654,11 +734,18 @@ def _build_entry_out(entry: WaitingRoomEntry, patient: Patient, now: datetime) -
 async def checkin_patient(
     request: CheckinRequest,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Registra chegada de um paciente na sala de espera."""
     patient = db.query(Patient).filter(Patient.id == request.patient_id).first()
-    if not patient:
+    if not patient or not _same_org(current_user, patient.organization_id):
         raise HTTPException(status_code=404, detail="Paciente não encontrado")
+
+    # Se veio clinic_id, valida que a clínica pertence à organização do usuário
+    if request.clinic_id is not None:
+        clinic = db.query(Clinic).filter(Clinic.id == request.clinic_id).first()
+        if not clinic or not _same_org(current_user, clinic.organization_id):
+            raise HTTPException(status_code=404, detail="Clínica não encontrada")
 
     today = today_br()
 
@@ -693,10 +780,17 @@ async def checkin_patient(
 async def get_today_queue(
     clinic_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Lista todos os pacientes da fila do dia, ordenados por hora de chegada."""
     today = today_br()
     query = db.query(WaitingRoomEntry).filter(WaitingRoomEntry.entry_date == today)
+
+    # Escopo por organização via paciente (clinic_id da entry é nullable).
+    if current_user.role != "superadmin":
+        query = query.join(Patient, Patient.id == WaitingRoomEntry.patient_id).filter(
+            Patient.organization_id == current_user.organization_id
+        )
 
     if clinic_id is not None:
         query = query.filter(WaitingRoomEntry.clinic_id == clinic_id)
@@ -717,6 +811,7 @@ async def update_waiting_status(
     entry_id: int,
     request: WaitingStatusUpdate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Atualiza o status de uma entrada na sala de espera."""
     valid_statuses = {"waiting", "attending", "attended", "absent"}
@@ -728,6 +823,11 @@ async def update_waiting_status(
 
     entry = db.query(WaitingRoomEntry).filter(WaitingRoomEntry.id == entry_id).first()
     if not entry:
+        raise HTTPException(status_code=404, detail="Entrada não encontrada")
+
+    # Escopo por organização via paciente
+    entry_patient = db.query(Patient).filter(Patient.id == entry.patient_id).first()
+    if not entry_patient or not _same_org(current_user, entry_patient.organization_id):
         raise HTTPException(status_code=404, detail="Entrada não encontrada")
 
     now = datetime.utcnow()
@@ -751,10 +851,16 @@ async def update_waiting_status(
 async def delete_waiting_entry(
     entry_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Remove uma entrada da sala de espera."""
     entry = db.query(WaitingRoomEntry).filter(WaitingRoomEntry.id == entry_id).first()
     if not entry:
+        raise HTTPException(status_code=404, detail="Entrada não encontrada")
+
+    # Escopo por organização via paciente
+    entry_patient = db.query(Patient).filter(Patient.id == entry.patient_id).first()
+    if not entry_patient or not _same_org(current_user, entry_patient.organization_id):
         raise HTTPException(status_code=404, detail="Entrada não encontrada")
 
     db.delete(entry)

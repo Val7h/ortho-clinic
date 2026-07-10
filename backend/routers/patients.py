@@ -24,6 +24,20 @@ def _org_filter(q, current_user: User):
     return q
 
 
+def _redact_clinical_for_secretary(result: PatientOut, current_user: User) -> PatientOut:
+    """LGPD/confidencialidade: a secretaria vê o cadastro operacional, mas NÃO o
+    histórico clínico (medicação em uso, condições crônicas, cirurgias, história
+    familiar, observações). Alergias e tipo sanguíneo permanecem por serem
+    segurança operacional."""
+    if current_user.role == "secretary":
+        result.chronic_conditions = None
+        result.current_medications = None
+        result.surgeries_history = None
+        result.family_history = None
+        result.notes = None
+    return result
+
+
 @router.get("", response_model=List[PatientSummary])
 def list_patients(
     search: Optional[str] = Query(None),
@@ -79,7 +93,8 @@ def get_patient(
     patient = q.first()
     if not patient:
         raise HTTPException(404, "Paciente não encontrado")
-    return patient
+
+    return _redact_clinical_for_secretary(PatientOut.model_validate(patient), current_user)
 
 
 @router.put("/{patient_id}", response_model=PatientOut)
@@ -98,7 +113,8 @@ def update_patient(
         setattr(patient, key, value)
     db.commit()
     db.refresh(patient)
-    return patient
+    # Mesma redação clínica do GET: secretária não recebe o histórico de volta.
+    return _redact_clinical_for_secretary(PatientOut.model_validate(patient), current_user)
 
 
 @router.delete("/{patient_id}", status_code=204)
@@ -150,56 +166,75 @@ def get_timeline(
     if not patient:
         raise HTTPException(404, "Paciente não encontrado")
 
+    # LGPD/confidencialidade: a secretaria PRECISA da timeline p/ tarefas
+    # operacionais (ver que houve consultas/receitas/exames e as datas), mas NÃO
+    # pode ver conteúdo clínico (diagnóstico, medicações, exames solicitados,
+    # finalidade/conteúdo de laudos). Para ela, mantemos só tipo/data/título
+    # genérico; médico/admin/superadmin recebem tudo.
+    is_secretary = current_user.role == "secretary"
+
     timeline = []
 
     for c in patient.consultations:
-        timeline.append({
+        event = {
             "id": c.id,
             "type": "consulta",
             "subtype": c.type,
             "date": c.date.isoformat(),
             "title": f"{'1ª Consulta' if c.type == 'primeira_consulta' else 'Retorno'}",
-            "summary": c.chief_complaint or c.diagnosis or "",
-            "diagnosis": c.diagnosis,
-        })
+        }
+        if not is_secretary:
+            event["summary"] = c.chief_complaint or c.diagnosis or ""
+            event["diagnosis"] = c.diagnosis
+        timeline.append(event)
 
     for p in patient.prescriptions:
-        meds = [m.get("name", "") for m in (p.medications or [])]
-        timeline.append({
+        event = {
             "id": p.id,
             "type": "receita",
             "date": p.date.isoformat(),
             "title": "Receita Médica",
-            "summary": ", ".join(meds[:3]),
-        })
+        }
+        if not is_secretary:
+            meds = [m.get("name", "") for m in (p.medications or [])]
+            event["summary"] = ", ".join(meds[:3])
+        timeline.append(event)
 
     for e in patient.exam_requests:
-        exams = [ex.get("name", "") for ex in (e.exams or [])]
-        timeline.append({
+        event = {
             "id": e.id,
             "type": "exame",
             "date": e.date.isoformat(),
             "title": "Solicitação de Exames",
-            "summary": ", ".join(exams[:3]),
-        })
+        }
+        if not is_secretary:
+            exams = [ex.get("name", "") for ex in (e.exams or [])]
+            event["summary"] = ", ".join(exams[:3])
+        timeline.append(event)
 
     for f in patient.physio_requests:
-        timeline.append({
+        event = {
             "id": f.id,
             "type": "fisio",
             "date": f.date.isoformat(),
             "title": f"Fisioterapia — {f.sessions} sessões",
-            "summary": f.diagnosis or "",
-        })
+        }
+        if not is_secretary:
+            event["summary"] = f.diagnosis or ""
+        timeline.append(event)
 
     for r in patient.medical_reports:
-        timeline.append({
+        event = {
             "id": r.id,
             "type": "laudo",
             "date": r.date.isoformat(),
-            "title": r.title or r.report_type,
-            "summary": r.purpose or "",
-        })
+            # o próprio título/tipo do laudo pode revelar conteúdo clínico:
+            # genérico p/ secretaria.
+            "title": "Laudo emitido" if is_secretary else (r.title or r.report_type),
+        }
+        if not is_secretary:
+            event["summary"] = r.purpose or ""
+        timeline.append(event)
 
     timeline.sort(key=lambda x: x["date"], reverse=True)
     return timeline

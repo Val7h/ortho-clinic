@@ -7,6 +7,7 @@ Sem acesso a prontuário, anamnese, exames ou histórico clínico do paciente.
 import logging
 import os
 import re
+import unicodedata
 from datetime import date, datetime, timedelta, timezone
 from itertools import groupby
 from typing import List, Optional
@@ -208,6 +209,14 @@ AGENDA DOS PRÓXIMOS {AGENDA_HORIZON_DAYS} DIAS ({len(future_appts)} consulta(s)
 """
 
 
+def _normalize_name(text: str) -> str:
+    """Normaliza um nome para casamento seguro: minúsculas, sem acentos, sem
+    pontuação e com espaços colapsados. Ex.: 'João  Alves!' -> 'joao alves'."""
+    nfkd = unicodedata.normalize("NFKD", text or "")
+    sem_acento = "".join(c for c in nfkd if not unicodedata.combining(c))
+    return re.sub(r"[^a-z0-9]+", " ", sem_acento.lower()).strip()
+
+
 def _find_today_patient(db: Session, current_user: User, name_query: str) -> Optional[Patient]:
     """Procura, por nome, um paciente entre os que estão na fila ou na agenda de hoje.
     Retorna None se não achar exatamente um candidato — evita mandar mensagem pra pessoa errada."""
@@ -231,11 +240,29 @@ def _find_today_patient(db: Session, current_user: User, name_query: str) -> Opt
         return None
 
     candidates = db.query(Patient).filter(Patient.id.in_(patient_ids)).all()
-    query_lower = name_query.strip().lower()
-    matches = [
-        p for p in candidates
-        if query_lower in p.name.lower() or p.name.lower() in query_lower
-    ]
+
+    query_norm = _normalize_name(name_query)
+    query_tokens = query_norm.split()
+    # Query curta/ambígua (1-2 caracteres) ou vazia: preferimos NÃO casar a
+    # arriscar mandar mensagem/receita pro paciente errado. O chamador pede o
+    # nome completo quando isto retorna None.
+    if len(query_norm) < 3 or not query_tokens:
+        return None
+
+    def _match_forte(nome: str) -> bool:
+        # Casamento por PALAVRAS com fronteira (nunca substring dentro de
+        # palavra, nunca substring reverso). Evita que "ana" case "Mariana".
+        nome_norm = _normalize_name(nome)
+        # 1) Prefixo do nome completo (ex.: "mari" -> "Mariana Costa").
+        if nome_norm.startswith(query_norm):
+            return True
+        # 2) Todos os tokens da query são PALAVRAS inteiras do nome
+        #    (ex.: "ana costa" casa "Ana Paula Costa"; "ana" casa quem tem
+        #    "Ana" como um dos nomes, mas NÃO casa "Mariana").
+        nome_tokens = set(nome_norm.split())
+        return all(tok in nome_tokens for tok in query_tokens)
+
+    matches = [p for p in candidates if _match_forte(p.name)]
     return matches[0] if len(matches) == 1 else None
 
 

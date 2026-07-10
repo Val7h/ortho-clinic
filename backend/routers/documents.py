@@ -5,6 +5,7 @@ from typing import List
 from datetime import date
 from database import get_db
 from models.patient import Patient
+from models.organization import User
 from models.documents import Prescription, ExamRequest, PhysioRequest, MedicalReport, TreatmentLeaflet
 from schemas.documents import (
     PrescriptionCreate, PrescriptionOut,
@@ -18,19 +19,35 @@ from deps import require_doctor, get_current_user
 router = APIRouter(tags=["documents"])
 
 
+def _get_patient_or_404(db: Session, patient_id: int, current_user: User) -> Patient:
+    """Carrega o paciente garantindo isolamento por organização (fix IDOR A2).
+
+    Retorna 404 se o paciente não existir OU pertencer a outra organização —
+    evitando que um médico de uma clínica leia/crie/altere/apague documentos
+    de paciente de outra clínica apenas mudando o id na URL. O 404 (em vez de
+    403) evita vazar a existência de registros de terceiros. Superadmin vê tudo.
+    """
+    q = db.query(Patient).filter(Patient.id == patient_id)
+    if current_user.role != "superadmin":
+        q = q.filter(Patient.organization_id == current_user.organization_id)
+    patient = q.first()
+    if not patient:
+        raise HTTPException(404, "Paciente não encontrado")
+    return patient
+
+
 # ── RECEITAS ──────────────────────────────────────────────────────────────────
 
 presc_router = APIRouter(prefix="/patients/{patient_id}/prescriptions", dependencies=[Depends(require_doctor)])
 
 @presc_router.get("", response_model=List[PrescriptionOut])
-def list_prescriptions(patient_id: int, db: Session = Depends(get_db)):
+def list_prescriptions(patient_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    _get_patient_or_404(db, patient_id, current_user)
     return db.query(Prescription).filter(Prescription.patient_id == patient_id).order_by(Prescription.date.desc()).all()
 
 @presc_router.post("", response_model=PrescriptionOut, status_code=201)
-def create_prescription(patient_id: int, data: PrescriptionCreate, db: Session = Depends(get_db)):
-    p = db.query(Patient).filter(Patient.id == patient_id).first()
-    if not p:
-        raise HTTPException(404, "Paciente não encontrado")
+def create_prescription(patient_id: int, data: PrescriptionCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    _get_patient_or_404(db, patient_id, current_user)
     obj = Prescription(patient_id=patient_id, **data.model_dump())
     db.add(obj)
     db.commit()
@@ -38,14 +55,16 @@ def create_prescription(patient_id: int, data: PrescriptionCreate, db: Session =
     return obj
 
 @presc_router.get("/{doc_id}", response_model=PrescriptionOut)
-def get_prescription(patient_id: int, doc_id: int, db: Session = Depends(get_db)):
+def get_prescription(patient_id: int, doc_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    _get_patient_or_404(db, patient_id, current_user)
     obj = db.query(Prescription).filter(Prescription.id == doc_id, Prescription.patient_id == patient_id).first()
     if not obj:
         raise HTTPException(404, "Receita não encontrada")
     return obj
 
 @presc_router.delete("/{doc_id}", status_code=204)
-def delete_prescription(patient_id: int, doc_id: int, db: Session = Depends(get_db)):
+def delete_prescription(patient_id: int, doc_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    _get_patient_or_404(db, patient_id, current_user)
     obj = db.query(Prescription).filter(Prescription.id == doc_id, Prescription.patient_id == patient_id).first()
     if not obj:
         raise HTTPException(404, "Receita não encontrada")
@@ -58,17 +77,16 @@ def delete_prescription(patient_id: int, doc_id: int, db: Session = Depends(get_
 exam_router = APIRouter(prefix="/patients/{patient_id}/exams", dependencies=[Depends(require_doctor)])
 
 @exam_router.get("", response_model=List[ExamRequestOut])
-def list_exams(patient_id: int, db: Session = Depends(get_db)):
+def list_exams(patient_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    _get_patient_or_404(db, patient_id, current_user)
     return db.query(ExamRequest).filter(ExamRequest.patient_id == patient_id).order_by(ExamRequest.date.desc()).all()
 
 @exam_router.post("", response_model=ExamRequestOut, status_code=201)
-def create_exam(patient_id: int, data: ExamRequestCreate, db: Session = Depends(get_db)):
+def create_exam(patient_id: int, data: ExamRequestCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     # Aceita texto livre OU lista estruturada de exames (retrocompatibilidade)
     if not data.exams and not (data.free_text and data.free_text.strip()):
         raise HTTPException(422, "Informe o texto da solicitação ou ao menos um exame")
-    p = db.query(Patient).filter(Patient.id == patient_id).first()
-    if not p:
-        raise HTTPException(404, "Paciente não encontrado")
+    _get_patient_or_404(db, patient_id, current_user)
     obj = ExamRequest(patient_id=patient_id, **data.model_dump())
     db.add(obj)
     db.commit()
@@ -76,14 +94,16 @@ def create_exam(patient_id: int, data: ExamRequestCreate, db: Session = Depends(
     return obj
 
 @exam_router.get("/{doc_id}", response_model=ExamRequestOut)
-def get_exam(patient_id: int, doc_id: int, db: Session = Depends(get_db)):
+def get_exam(patient_id: int, doc_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    _get_patient_or_404(db, patient_id, current_user)
     obj = db.query(ExamRequest).filter(ExamRequest.id == doc_id, ExamRequest.patient_id == patient_id).first()
     if not obj:
         raise HTTPException(404, "Solicitação não encontrada")
     return obj
 
 @exam_router.delete("/{doc_id}", status_code=204)
-def delete_exam(patient_id: int, doc_id: int, db: Session = Depends(get_db)):
+def delete_exam(patient_id: int, doc_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    _get_patient_or_404(db, patient_id, current_user)
     obj = db.query(ExamRequest).filter(ExamRequest.id == doc_id, ExamRequest.patient_id == patient_id).first()
     if not obj:
         raise HTTPException(404, "Solicitação não encontrada")
@@ -96,14 +116,13 @@ def delete_exam(patient_id: int, doc_id: int, db: Session = Depends(get_db)):
 physio_router = APIRouter(prefix="/patients/{patient_id}/physio", dependencies=[Depends(require_doctor)])
 
 @physio_router.get("", response_model=List[PhysioRequestOut])
-def list_physio(patient_id: int, db: Session = Depends(get_db)):
+def list_physio(patient_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    _get_patient_or_404(db, patient_id, current_user)
     return db.query(PhysioRequest).filter(PhysioRequest.patient_id == patient_id).order_by(PhysioRequest.date.desc()).all()
 
 @physio_router.post("", response_model=PhysioRequestOut, status_code=201)
-def create_physio(patient_id: int, data: PhysioRequestCreate, db: Session = Depends(get_db)):
-    p = db.query(Patient).filter(Patient.id == patient_id).first()
-    if not p:
-        raise HTTPException(404, "Paciente não encontrado")
+def create_physio(patient_id: int, data: PhysioRequestCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    _get_patient_or_404(db, patient_id, current_user)
     obj = PhysioRequest(patient_id=patient_id, **data.model_dump())
     db.add(obj)
     db.commit()
@@ -111,14 +130,16 @@ def create_physio(patient_id: int, data: PhysioRequestCreate, db: Session = Depe
     return obj
 
 @physio_router.get("/{doc_id}", response_model=PhysioRequestOut)
-def get_physio(patient_id: int, doc_id: int, db: Session = Depends(get_db)):
+def get_physio(patient_id: int, doc_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    _get_patient_or_404(db, patient_id, current_user)
     obj = db.query(PhysioRequest).filter(PhysioRequest.id == doc_id, PhysioRequest.patient_id == patient_id).first()
     if not obj:
         raise HTTPException(404, "Solicitação não encontrada")
     return obj
 
 @physio_router.delete("/{doc_id}", status_code=204)
-def delete_physio(patient_id: int, doc_id: int, db: Session = Depends(get_db)):
+def delete_physio(patient_id: int, doc_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    _get_patient_or_404(db, patient_id, current_user)
     obj = db.query(PhysioRequest).filter(PhysioRequest.id == doc_id, PhysioRequest.patient_id == patient_id).first()
     if not obj:
         raise HTTPException(404, "Solicitação não encontrada")
@@ -131,14 +152,13 @@ def delete_physio(patient_id: int, doc_id: int, db: Session = Depends(get_db)):
 report_router = APIRouter(prefix="/patients/{patient_id}/reports", dependencies=[Depends(require_doctor)])
 
 @report_router.get("", response_model=List[MedicalReportOut])
-def list_reports(patient_id: int, db: Session = Depends(get_db)):
+def list_reports(patient_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    _get_patient_or_404(db, patient_id, current_user)
     return db.query(MedicalReport).filter(MedicalReport.patient_id == patient_id).order_by(MedicalReport.date.desc()).all()
 
 @report_router.post("", response_model=MedicalReportOut, status_code=201)
-def create_report(patient_id: int, data: MedicalReportCreate, db: Session = Depends(get_db)):
-    p = db.query(Patient).filter(Patient.id == patient_id).first()
-    if not p:
-        raise HTTPException(404, "Paciente não encontrado")
+def create_report(patient_id: int, data: MedicalReportCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    _get_patient_or_404(db, patient_id, current_user)
     obj = MedicalReport(patient_id=patient_id, **data.model_dump())
     db.add(obj)
     db.commit()
@@ -146,14 +166,16 @@ def create_report(patient_id: int, data: MedicalReportCreate, db: Session = Depe
     return obj
 
 @report_router.get("/{doc_id}", response_model=MedicalReportOut)
-def get_report(patient_id: int, doc_id: int, db: Session = Depends(get_db)):
+def get_report(patient_id: int, doc_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    _get_patient_or_404(db, patient_id, current_user)
     obj = db.query(MedicalReport).filter(MedicalReport.id == doc_id, MedicalReport.patient_id == patient_id).first()
     if not obj:
         raise HTTPException(404, "Laudo não encontrado")
     return obj
 
 @report_router.delete("/{doc_id}", status_code=204)
-def delete_report(patient_id: int, doc_id: int, db: Session = Depends(get_db)):
+def delete_report(patient_id: int, doc_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    _get_patient_or_404(db, patient_id, current_user)
     obj = db.query(MedicalReport).filter(MedicalReport.id == doc_id, MedicalReport.patient_id == patient_id).first()
     if not obj:
         raise HTTPException(404, "Laudo não encontrado")
@@ -162,6 +184,8 @@ def delete_report(patient_id: int, doc_id: int, db: Session = Depends(get_db)):
 
 
 # ── FOLHETOS INFORMATIVOS ─────────────────────────────────────────────────────
+# Folhetos são modelos genéricos (não vinculados a paciente), protegidos apenas
+# por autenticação (get_current_user). Não expõem dados clínicos de pacientes.
 
 leaflet_router = APIRouter(prefix="/leaflets", dependencies=[Depends(get_current_user)])
 
