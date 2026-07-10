@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback, useMemo } from "react";
+import { useEffect, useState, useRef, useCallback, useMemo, createContext, useContext } from "react";
 import {
   X, Play, CheckCircle, UserX, AlertTriangle, Activity, Pill,
   ClipboardList, Stethoscope, FileText, FlaskConical,
@@ -40,6 +40,33 @@ interface ConsultaDrawerProps {
 }
 
 type DrawerTab = "anamnese" | "exames" | "receitas" | "encaminhamentos" | "procedimentos" | "atestados" | "laudos" | "fotos";
+
+// ── Coletor de documentos da consulta ────────────────────────────────────────
+// Cada modal de impressão (PrintDocModal / PrintModal) registra seu documento
+// aqui ao abrir. No fim do atendimento, o botão "Imprimir documentos" abre um
+// centro que lista tudo que foi gerado, com checkbox pra escolher o que sai, e
+// imprime os selecionados de uma vez (cada um em sua página). Reseta por paciente.
+type CollectedDoc = { id: string; label: string; content: React.ReactNode };
+
+interface PrintCollectorValue {
+  docs: CollectedDoc[];
+  addDoc: (doc: CollectedDoc) => void;
+  removeDoc: (id: string) => void;
+}
+
+const PrintCollectorContext = createContext<PrintCollectorValue | null>(null);
+
+/** Registra um documento no coletor assim que o modal de impressão abre (mount). */
+function useRegisterPrintDoc(doc: CollectedDoc | null) {
+  const collector = useContext(PrintCollectorContext);
+  useEffect(() => {
+    if (!collector || !doc) return;
+    collector.addDoc(doc);
+    // Não remove no unmount de propósito: o doc fica disponível pra impressão
+    // final mesmo depois de fechar o preview individual.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+}
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -745,6 +772,40 @@ function PrintModal({ rx, patient, clinic, onClose }: {
     notificacao_ab: "Notificação A/B",
   };
 
+  // Corpo das folhas (reutilizado no modal E no coletor de impressão final).
+  const sheetsBody = (
+    <>
+      {type === "simples" && <SimplesSheet />}
+      {type === "controle_especial" && viaLabels.map((label, idx) => (
+        <div key={idx}>
+          <div className={idx < vias - 1 ? "rx-via-break" : ""}>
+            <RCESheet viaLabel={label} viaIndex={idx} />
+          </div>
+          {idx < vias - 1 && (
+            <div className="rx-cut-line" style={{ textAlign: "center", color: "#aaa", fontSize: "10px", margin: "4px 0", letterSpacing: "2px", borderTop: "1px dashed #ccc", paddingTop: "4px" }}>
+              ✂ recortar aqui
+            </div>
+          )}
+        </div>
+      ))}
+      {type === "antimicrobiano" && viaLabels.map((label, idx) => (
+        <div key={idx}>
+          <div className={idx < vias - 1 ? "rx-via-break" : ""}>
+            <ATBSheet viaLabel={label} viaIndex={idx} />
+          </div>
+          {idx < vias - 1 && (
+            <div className="rx-cut-line" style={{ textAlign: "center", color: "#aaa", fontSize: "10px", margin: "4px 0", letterSpacing: "2px", borderTop: "1px dashed #ccc", paddingTop: "4px" }}>
+              ✂ recortar aqui
+            </div>
+          )}
+        </div>
+      ))}
+    </>
+  );
+
+  // Registra a receita no coletor da consulta (impressão final em lote).
+  useRegisterPrintDoc({ id: `receita-${type}`, label: `Receita — ${labelMap[type]}`, content: sheetsBody });
+
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.6)" }}>
       <style>{`
@@ -773,31 +834,7 @@ function PrintModal({ rx, patient, clinic, onClose }: {
           </div>
         </div>
         <div className="flex-1 overflow-y-auto p-5 bg-white">
-          {type === "simples" && <SimplesSheet />}
-          {type === "controle_especial" && viaLabels.map((label, idx) => (
-            <div key={idx}>
-              <div className={idx < vias - 1 ? "rx-via-break" : ""}>
-                <RCESheet viaLabel={label} viaIndex={idx} />
-              </div>
-              {idx < vias - 1 && (
-                <div className="rx-cut-line" style={{ textAlign: "center", color: "#aaa", fontSize: "10px", margin: "4px 0", letterSpacing: "2px", borderTop: "1px dashed #ccc", paddingTop: "4px" }}>
-                  ✂ recortar aqui
-                </div>
-              )}
-            </div>
-          ))}
-          {type === "antimicrobiano" && viaLabels.map((label, idx) => (
-            <div key={idx}>
-              <div className={idx < vias - 1 ? "rx-via-break" : ""}>
-                <ATBSheet viaLabel={label} viaIndex={idx} />
-              </div>
-              {idx < vias - 1 && (
-                <div className="rx-cut-line" style={{ textAlign: "center", color: "#aaa", fontSize: "10px", margin: "4px 0", letterSpacing: "2px", borderTop: "1px dashed #ccc", paddingTop: "4px" }}>
-                  ✂ recortar aqui
-                </div>
-              )}
-            </div>
-          ))}
+          {sheetsBody}
         </div>
       </div>
     </div>
@@ -2579,6 +2616,8 @@ const LAUDO_FINALIDADE_OPTIONS = [
 // ── Generic Print Modal ────────────────────────────────────────────────────────
 
 function PrintDocModal({ title, content, onClose }: { title: string; content: React.ReactNode; onClose: () => void }) {
+  // Registra este documento no coletor da consulta (impressão final em lote).
+  useRegisterPrintDoc({ id: title, label: title, content });
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.6)" }}>
       <style>{`
@@ -2615,6 +2654,100 @@ function DrHeader({ clinic }: { clinic?: any }) {
       <p style={{ fontSize: "11px", color: "#555", margin: "0" }}>Ortopedia e Traumatologia</p>
       <p style={{ fontSize: "11px", color: "#555", margin: "0" }}>CRM/PB 6326 | CRM/PE 16551</p>
       {clinic?.phone && <p style={{ fontSize: "11px", color: "#555", margin: "0" }}>Tel: {clinic.phone}</p>}
+    </div>
+  );
+}
+
+// ── Centro de impressão final da consulta ─────────────────────────────────────
+// Lista todos os documentos gerados no atendimento, com checkbox pra escolher
+// quais imprimir, e imprime os selecionados de uma vez (cada um em sua página).
+function ConsultaPrintCenter({ docs, onRemove, onClose }: {
+  docs: CollectedDoc[];
+  onRemove: (id: string) => void;
+  onClose: () => void;
+}) {
+  const [selected, setSelected] = useState<Set<string>>(() => new Set(docs.map((d) => d.id)));
+  const toggle = (id: string) => setSelected((prev) => {
+    const n = new Set(prev);
+    n.has(id) ? n.delete(id) : n.add(id);
+    return n;
+  });
+  const chosen = docs.filter((d) => selected.has(d.id));
+
+  return (
+    <div className="fixed inset-0 z-[210] flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.6)" }}>
+      <style>{`
+        @media print {
+          body > *:not(#print-center-root) { display: none !important; }
+          #print-center-root { position: fixed !important; inset: 0 !important; z-index: 9999 !important; background: white !important; padding: 12px !important; overflow: visible !important; max-height: none !important; }
+          #print-center-root .no-print { display: none !important; }
+          .pc-doc { page-break-after: always; }
+          .pc-doc:last-child { page-break-after: auto; }
+        }
+      `}</style>
+      <div id="print-center-root" className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden">
+        {/* Header */}
+        <div className="no-print px-5 pt-4 pb-3 border-b border-gray-200 dark:border-slate-700 flex items-center justify-between flex-shrink-0">
+          <div>
+            <h2 className="font-bold text-slate-900 dark:text-slate-50 text-sm">Imprimir documentos</h2>
+            <p className="text-xs text-slate-500 mt-0.5">Selecione o que imprimir — sai tudo de uma vez</p>
+          </div>
+          <button onClick={onClose} className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Checklist */}
+        <div className="no-print flex-1 overflow-y-auto p-4 space-y-2">
+          {docs.length === 0 ? (
+            <p className="text-sm text-slate-400 italic text-center py-6">
+              Nenhum documento gerado ainda. Gere receitas, atestados, laudos etc. nas abas e eles aparecem aqui.
+            </p>
+          ) : (
+            docs.map((d) => (
+              <div key={d.id} className="flex items-center gap-2 px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg">
+                <label className="flex items-center gap-2 flex-1 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={selected.has(d.id)}
+                    onChange={() => toggle(d.id)}
+                    className="w-4 h-4 rounded accent-blue-600"
+                  />
+                  <span className="text-sm text-slate-700 dark:text-slate-200">{d.label}</span>
+                </label>
+                <button
+                  onClick={() => onRemove(d.id)}
+                  className="p-1 text-slate-400 hover:text-red-500 rounded"
+                  title="Remover da lista"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* Ações */}
+        {docs.length > 0 && (
+          <div className="no-print px-4 py-3 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between flex-shrink-0">
+            <span className="text-xs text-slate-500">{chosen.length} de {docs.length} selecionado(s)</span>
+            <button
+              onClick={() => window.print()}
+              disabled={chosen.length === 0}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold text-sm disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <Printer className="w-4 h-4" /> Imprimir selecionados
+            </button>
+          </div>
+        )}
+
+        {/* Área imprimível (oculta na tela; aparece só na impressão) */}
+        <div className="hidden print:block">
+          {chosen.map((d) => (
+            <div key={d.id} className="pc-doc">{d.content}</div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
@@ -4044,9 +4177,20 @@ export default function ConsultaDrawer({ entry, onClose, onStatusChange }: Consu
   const [busyStatus, setBusyStatus] = useState(false);
   const [clinic, setClinic] = useState<any>(null);
 
+  // Coletor de documentos da consulta (impressão final em lote).
+  const [collectedDocs, setCollectedDocs] = useState<CollectedDoc[]>([]);
+  const [printCenterOpen, setPrintCenterOpen] = useState(false);
+  const addDoc = useCallback((doc: CollectedDoc) => {
+    setCollectedDocs((prev) => [...prev.filter((d) => d.id !== doc.id), doc]);
+  }, []);
+  const removeDoc = useCallback((id: string) => {
+    setCollectedDocs((prev) => prev.filter((d) => d.id !== id));
+  }, []);
+
   useEffect(() => {
     setLoadingPatient(true);
     setPatient(null);
+    setCollectedDocs([]); // nova consulta = coletor zerado
     patientsApi.get(entry.patient_id)
       .then(setPatient)
       .catch(() => toast.error("Erro ao carregar dados do paciente"))
@@ -4083,7 +4227,11 @@ export default function ConsultaDrawer({ entry, onClose, onStatusChange }: Consu
   ];
 
   return (
+    <PrintCollectorContext.Provider value={{ docs: collectedDocs, addDoc, removeDoc }}>
     <div className="flex flex-col h-full bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-700 overflow-hidden">
+      {printCenterOpen && (
+        <ConsultaPrintCenter docs={collectedDocs} onRemove={removeDoc} onClose={() => setPrintCenterOpen(false)} />
+      )}
       {/* ── Header ── */}
       <div className="flex-shrink-0 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 px-5 pt-4 pb-3 space-y-3">
         {/* Top row: name + close */}
@@ -4170,6 +4318,17 @@ export default function ConsultaDrawer({ entry, onClose, onStatusChange }: Consu
           }`}>
             {entry.status === "attending" ? "Em Atendimento" : entry.status === "waiting" ? "Aguardando" : entry.status === "attended" ? "Atendido" : "Ausente"}
           </span>
+
+          {/* Impressão final em lote — só aparece quando há documentos gerados */}
+          {collectedDocs.length > 0 && (
+            <button
+              onClick={() => setPrintCenterOpen(true)}
+              className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 dark:bg-slate-200 text-white dark:text-slate-900 text-xs font-semibold hover:bg-slate-900 dark:hover:bg-white"
+              title="Imprimir todos os documentos gerados no atendimento de uma vez"
+            >
+              <Printer className="w-3.5 h-3.5" /> Imprimir documentos ({collectedDocs.length})
+            </button>
+          )}
         </div>
       </div>
 
@@ -4213,5 +4372,6 @@ export default function ConsultaDrawer({ entry, onClose, onStatusChange }: Consu
         )}
       </div>
     </div>
+    </PrintCollectorContext.Provider>
   );
 }
