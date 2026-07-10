@@ -442,6 +442,19 @@ const HTML_CONTENT = `<!DOCTYPE html>
         <div class="erro-campo">Informe sua cidade.</div>
       </div>
 
+      <div class="campo" id="c-unidade">
+        <label>Unidade / clínica do atendimento</label>
+        <select id="unidade">
+          <option value="">Selecione…</option>
+          <option value="CTO">CTO</option>
+          <option value="Artro">Artro</option>
+          <option value="Instituto Pernambuco">Instituto Pernambuco</option>
+          <option value="Unimagem">Unimagem</option>
+          <option value="Mário Bento">Mário Bento (Palmares)</option>
+        </select>
+        <div class="erro-campo">Selecione a unidade do atendimento.</div>
+      </div>
+
       <div class="campo">
         <label>Bairro <span class="opt">(opcional)</span></label>
         <input type="text" id="bairro" placeholder="Ex: Catolé" />
@@ -581,6 +594,7 @@ const MOTIVO      = params.get('motivo') || '';
 const AID         = params.get('aid')    || '';
 const EXP         = params.get('exp')    || '';
 const TOKEN       = params.get('token')  || '';
+const UNIDADE     = params.get('unidade')|| '';
 
 const TOTAL_SECOES = 5;
 const TEMPO_EST = ['~5 min restantes','~4 min restantes','~3 min restantes','~2 min restantes','Última etapa'];
@@ -600,6 +614,13 @@ function init() {
   document.getElementById('app').style.display = 'block';
   document.getElementById('nome').value      = NOME;
   document.getElementById('telefone').value  = TEL;
+
+  if (UNIDADE) {
+    const selU = document.getElementById('unidade');
+    for (const opt of selU.options) {
+      if (opt.value.toLowerCase() === UNIDADE.toLowerCase()) { opt.selected = true; break; }
+    }
+  }
 
   const sel = document.getElementById('regiao_corpo');
   for (const opt of sel.options) {
@@ -732,6 +753,7 @@ function validarSecao(n) {
   if (n === 2) {
     ok = validarCampo('c-nasc', 'nascimento') &
          validarCampo('c-cidade', 'cidade') &
+         validarCampo('c-unidade', 'unidade') &
          validarCampo('c-profissao', 'profissao') && ok;
   }
   return ok;
@@ -788,6 +810,7 @@ async function enviar() {
     nascimento:     document.getElementById('nascimento').value,
     cpf:            document.getElementById('cpf').value,
     cidade:         document.getElementById('cidade').value,
+    unidade:        (document.getElementById('unidade').value || UNIDADE),
     bairro:         document.getElementById('bairro').value,
     profissao:      document.getElementById('profissao').value,
     estado_civil:   document.getElementById('estado_civil').value,
