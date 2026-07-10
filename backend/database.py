@@ -627,6 +627,29 @@ def migrate_db():
             # Existing rows get an empty placeholder; new rows always have the real HMAC
             migrations.append("ALTER TABLE audit_logs ADD COLUMN signature VARCHAR(64) NOT NULL DEFAULT ''")
 
+    # ── ISOLAMENTO MULTI-CLIENTE (Fase 1b): organization_id direto nas tabelas clínicas ──
+    # Hoje há UMA só conta (org 1), então toda linha existente pertence a ela — por isso
+    # DEFAULT 1 popula corretamente o histórico. Puramente aditivo: NENHUM endpoint filtra
+    # por essa coluna ainda (isso é a Fase 1c/enforcement, feita à parte com testes). Não
+    # muda comportamento de leitura, então não pode quebrar o uso atual.
+    # ATENÇÃO (landmine p/ multi-conta): o DEFAULT 1 é correto SÓ enquanto houver 1 conta.
+    # Quando entrar o 2º cliente, as rotas de criação precisam SETAR o org certo (derivado
+    # do paciente/clínica) e/ou o DEFAULT precisa sair — senão linhas novas caem em org 1.
+    # Tabelas GLOBAIS/template deixadas de fora de propósito (decisão de produto: compartilhado
+    # entre contas ou por-conta?): treatment_leaflets, prescription_templates, anamnesis_templates.
+    _tabelas_clinicas_isolar = [
+        "consultations", "financial_records", "appointments", "clinic_schedules",
+        "anamneses", "prescriptions", "exam_requests", "physio_requests",
+        "medical_reports", "documents", "consultation_media", "whatsapp_messages",
+        "clinic_queue", "clinical_evolutions", "patient_prescriptions",
+        "patient_documents", "prescription_signatures", "direct_messages",
+    ]
+    for _t in _tabelas_clinicas_isolar:
+        if _t in existing_tables:
+            _cols = [c["name"] for c in inspector.get_columns(_t)]
+            if "organization_id" not in _cols:
+                migrations.append(f"ALTER TABLE {_t} ADD COLUMN organization_id INTEGER DEFAULT 1")
+
     if not migrations:
         return
 

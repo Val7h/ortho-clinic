@@ -303,6 +303,33 @@ def deactivate_user(
 
 # ── Organization management (superadmin only) ─────────────────────────────────
 
+@router.get("/isolation-status")
+def isolation_status(_: User = Depends(require_superadmin)):
+    """Diagnóstico do isolamento multi-cliente (Fase 1b): mostra quais tabelas clínicas
+    já têm a coluna organization_id. Só super-admin. Read-only."""
+    from sqlalchemy import inspect as _inspect
+    from database import engine
+    insp = _inspect(engine)
+    tabelas = [
+        "patients", "clinics", "consultations", "financial_records", "appointments",
+        "clinic_schedules", "anamneses", "prescriptions", "exam_requests",
+        "physio_requests", "medical_reports", "documents", "consultation_media",
+        "whatsapp_messages", "clinic_queue", "clinical_evolutions",
+        "patient_prescriptions", "patient_documents", "prescription_signatures",
+        "direct_messages",
+    ]
+    existentes = set(insp.get_table_names())
+    resultado = {}
+    for t in tabelas:
+        if t not in existentes:
+            resultado[t] = "tabela ausente"
+            continue
+        cols = [c["name"] for c in insp.get_columns(t)]
+        resultado[t] = "OK" if "organization_id" in cols else "SEM organization_id"
+    com = sum(1 for v in resultado.values() if v == "OK")
+    return {"com_organization_id": com, "total": len(tabelas), "tabelas": resultado}
+
+
 @router.get("/organizations", response_model=list[OrgOut])
 def list_orgs(
     _: User = Depends(require_superadmin),
