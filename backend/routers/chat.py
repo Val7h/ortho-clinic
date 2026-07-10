@@ -6,7 +6,9 @@ Sem acesso a prontuário, anamnese, exames ou histórico clínico do paciente.
 """
 import logging
 import os
-from datetime import date, datetime, timezone
+import re
+from datetime import date, datetime, timedelta, timezone
+from itertools import groupby
 from typing import List, Optional
 
 import httpx
@@ -16,7 +18,7 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from deps import get_current_user
-from models.clinic import Appointment
+from models.clinic import Appointment, Clinic
 from models.organization import User
 from models.patient import Patient
 from models.queue import WaitingRoomEntry
@@ -67,10 +69,22 @@ STATUS_LABELS = {
     "absent": "ausente",
 }
 
+# Nomes que denunciam agendamento/paciente de teste — filtrados do contexto da
+# agenda pra IA não misturar lixo de teste com paciente real (o Valth pede isso).
+_TEST_NAME_RE = re.compile(r"\b(testes?|debug|exemplo|demo|confirm)\b", re.IGNORECASE)
+
+# Quantos dias à frente a agenda entra no contexto (cobre "esta semana" + "semana que vem").
+AGENDA_HORIZON_DAYS = 14
+# Teto de agendamentos futuros no contexto (evita estourar o prompt em agendas cheias).
+MAX_FUTURE_APPTS = 60
+
+_DOW_PT = ["seg", "ter", "qua", "qui", "sex", "sáb", "dom"]
+
 SYSTEM_PERSONA = """Você é o assistente virtual da OrthoClinic, um sistema de gestão de consultório ortopédico.
-Seu papel é ajudar o médico e a secretária com informações OPERACIONAIS sobre a agenda e a fila de atendimento do dia.
+Seu papel é ajudar o médico e a secretária com informações OPERACIONAIS sobre a agenda e a fila de atendimento.
 Responda em português do Brasil, de forma curta e direta — isto é um chat, não um relatório.
-Você NÃO tem acesso a prontuário médico, anamnese, exames ou histórico clínico dos pacientes — apenas à fila de espera e à agenda do dia.
+Você tem acesso à fila de espera de HOJE e à agenda de hoje + próximos 14 dias (cobre esta semana e a semana que vem). Os agendamentos de teste já vêm filtrados do contexto — trate tudo que está na agenda como real.
+Você NÃO tem acesso a prontuário médico, anamnese, exames ou histórico clínico dos pacientes.
 Se perguntarem algo clínico (diagnóstico, receita, conduta), explique educadamente que isso não é sua função e sugira abrir o prontuário do paciente.
 
 Se o usuário pedir para avisar, notificar ou mandar uma mensagem de WhatsApp para um paciente, use a
@@ -143,25 +157,53 @@ def _build_context(db: Session, current_user: User) -> str:
         wait_txt = f", {waited}min de espera" if waited is not None and entry.status == "waiting" else ""
         queue_lines.append(f"- {name}: {STATUS_LABELS.get(entry.status, entry.status)}{wait_txt}")
 
-    appt_q = db.query(Appointment).filter(Appointment.date == today)
+    # Agenda de hoje + próximos AGENDA_HORIZON_DAYS dias (cobre "esta semana" e
+    # "semana que vem"). Escopo por Clinic.organization_id — NÃO por patient_id:
+    # Appointment.clinic_id é NOT NULL (seguro), mas patient_id é nullable, então
+    # um join por paciente descartaria agendamentos feitos só por nome (comuns,
+    # vindos do bot de WhatsApp / formulário pré-consulta).
+    horizon = today + timedelta(days=AGENDA_HORIZON_DAYS)
+    appt_q = db.query(Appointment).filter(
+        Appointment.date >= today,
+        Appointment.date <= horizon,
+        Appointment.status.notin_(["cancelled", "blocked"]),
+    )
     if current_user.role != "superadmin":
-        appt_q = appt_q.join(Patient, Appointment.patient_id == Patient.id).filter(
-            Patient.organization_id == current_user.organization_id
+        appt_q = appt_q.join(Clinic, Appointment.clinic_id == Clinic.id).filter(
+            Clinic.organization_id == current_user.organization_id
         )
-    appointments = appt_q.order_by(Appointment.start_time.asc()).all()
-    agenda_lines = [
-        f"- {appt.start_time or '?'}: {appt.patient_name} ({appt.status})"
-        for appt in appointments
+    all_appts = appt_q.order_by(Appointment.date.asc(), Appointment.start_time.asc()).all()
+    # Tira agendamentos de teste óbvios (nome com teste/debug/exemplo/demo/confirm).
+    real_appts = [a for a in all_appts if not _TEST_NAME_RE.search(a.patient_name or "")]
+
+    today_appts = [a for a in real_appts if a.date == today]
+    future_appts = [a for a in real_appts if a.date > today][:MAX_FUTURE_APPTS]
+
+    today_lines = [
+        f"- {a.start_time or '?'}: {a.patient_name} ({a.status})"
+        for a in today_appts
     ]
 
-    return f"""DATA DE HOJE: {today.strftime('%d/%m/%Y')}
+    future_blocks = []
+    for d, group in groupby(future_appts, key=lambda a: a.date):
+        items = list(group)
+        header = f"{_DOW_PT[d.weekday()]} {d.strftime('%d/%m')} ({len(items)}):"
+        lines = "\n".join(
+            f"  - {a.start_time or '?'}: {a.patient_name} ({a.status})" for a in items
+        )
+        future_blocks.append(f"{header}\n{lines}")
+
+    return f"""DATA DE HOJE: {today.strftime('%d/%m/%Y')} ({_DOW_PT[today.weekday()]})
 USUÁRIO LOGADO: {current_user.name} ({current_user.role})
 
 SALA DE ESPERA HOJE: {counts['waiting']} aguardando, {counts['attending']} em atendimento, {counts['attended']} atendidos, {counts['absent']} ausentes
 {chr(10).join(queue_lines) if queue_lines else '(fila vazia hoje)'}
 
-AGENDA DE HOJE ({len(appointments)} consulta(s)):
-{chr(10).join(agenda_lines) if agenda_lines else '(nenhuma consulta agendada hoje)'}
+AGENDA DE HOJE ({len(today_appts)} consulta(s)):
+{chr(10).join(today_lines) if today_lines else '(nenhuma consulta agendada hoje)'}
+
+AGENDA DOS PRÓXIMOS {AGENDA_HORIZON_DAYS} DIAS ({len(future_appts)} consulta(s), agendamentos de teste já removidos):
+{chr(10).join(future_blocks) if future_blocks else '(nenhuma consulta agendada nos próximos dias)'}
 """
 
 
