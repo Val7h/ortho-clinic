@@ -17,6 +17,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from database import get_db
+from tzutil import today_br
 from deps import get_current_user
 from models.clinic import Appointment, Clinic
 from models.organization import User
@@ -126,7 +127,7 @@ class SendWhatsAppResponse(BaseModel):
 
 
 def _build_context(db: Session, current_user: User) -> str:
-    today = date.today()
+    today = today_br()
     # tz-aware: no Postgres, colunas DateTime(timezone=True) voltam com tzinfo —
     # subtrair de um datetime.utcnow() (naive) lança TypeError. Nunca disparava
     # antes porque a fila de espera nunca tinha entrada real na hora do chat
@@ -210,7 +211,7 @@ AGENDA DOS PRÓXIMOS {AGENDA_HORIZON_DAYS} DIAS ({len(future_appts)} consulta(s)
 def _find_today_patient(db: Session, current_user: User, name_query: str) -> Optional[Patient]:
     """Procura, por nome, um paciente entre os que estão na fila ou na agenda de hoje.
     Retorna None se não achar exatamente um candidato — evita mandar mensagem pra pessoa errada."""
-    today = date.today()
+    today = today_br()
 
     waiting_q = db.query(WaitingRoomEntry.patient_id).filter(WaitingRoomEntry.entry_date == today)
     if current_user.role != "superadmin":

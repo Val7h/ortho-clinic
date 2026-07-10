@@ -13,6 +13,7 @@ import json
 import logging
 
 from database import get_db
+from tzutil import today_br
 from models.queue import ClinicQueue, PrescriptionSignature, AnamnesisTemplate, WaitingRoomEntry
 from models.clinic import Appointment, Clinic
 from models.patient import Patient
@@ -659,7 +660,7 @@ async def checkin_patient(
     if not patient:
         raise HTTPException(status_code=404, detail="Paciente não encontrado")
 
-    today = date.today()
+    today = today_br()
 
     # Calcula próxima posição do dia
     last_position = (
@@ -694,7 +695,7 @@ async def get_today_queue(
     db: Session = Depends(get_db),
 ):
     """Lista todos os pacientes da fila do dia, ordenados por hora de chegada."""
-    today = date.today()
+    today = today_br()
     query = db.query(WaitingRoomEntry).filter(WaitingRoomEntry.entry_date == today)
 
     if clinic_id is not None:

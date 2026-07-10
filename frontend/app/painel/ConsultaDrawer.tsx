@@ -810,9 +810,14 @@ function PrintModal({ rx, patient, clinic, onClose }: {
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.6)" }}>
       <style>{`
         @media print {
-          body > *:not(#print-rx-root) { display: none !important; }
-          #print-rx-root { position: fixed !important; inset: 0 !important; z-index: 9999 !important; background: white !important; padding: 10px !important; }
-          .no-print { display: none !important; }
+          /* Estratégia por visibility (não display): esconder o root via
+             "body > *:not(root)" apagava o documento, porque o modal é
+             renderizado DENTRO do drawer, não como filho direto do body. */
+          html, body { height: auto !important; overflow: visible !important; background: #fff !important; }
+          body * { visibility: hidden !important; }
+          #print-rx-root, #print-rx-root * { visibility: visible !important; overflow: visible !important; max-height: none !important; box-shadow: none !important; }
+          #print-rx-root .no-print, #print-rx-root .no-print * { visibility: hidden !important; }
+          #print-rx-root { position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; background: #fff !important; padding: 10px !important; }
           .rx-via-break { page-break-after: always; margin-bottom: 0 !important; }
           .rx-cut-line { display: block !important; }
         }
@@ -2065,9 +2070,11 @@ function PrintExamModal({ text, patientName, clinic, onClose, fontSize = 14, lin
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.6)" }}>
       <style>{`
         @media print {
-          body > *:not(#print-exam-root) { display: none !important; }
-          #print-exam-root { position: fixed !important; inset: 0 !important; z-index: 9999 !important; background: white !important; padding: 20px !important; }
-          .no-print { display: none !important; }
+          html, body { height: auto !important; overflow: visible !important; background: #fff !important; }
+          body * { visibility: hidden !important; }
+          #print-exam-root, #print-exam-root * { visibility: visible !important; overflow: visible !important; max-height: none !important; box-shadow: none !important; }
+          #print-exam-root .no-print, #print-exam-root .no-print * { visibility: hidden !important; }
+          #print-exam-root { position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; background: #fff !important; padding: 20px !important; }
         }
       `}</style>
       <div id="print-exam-root" className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-lg flex flex-col overflow-hidden">
@@ -2622,9 +2629,11 @@ function PrintDocModal({ title, content, onClose }: { title: string; content: Re
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.6)" }}>
       <style>{`
         @media print {
-          body > *:not(#print-doc-root) { display: none !important; }
-          #print-doc-root { position: fixed !important; inset: 0 !important; z-index: 9999 !important; background: white !important; padding: 16px !important; }
-          .no-print { display: none !important; }
+          html, body { height: auto !important; overflow: visible !important; background: #fff !important; }
+          body * { visibility: hidden !important; }
+          #print-doc-root, #print-doc-root * { visibility: visible !important; overflow: visible !important; max-height: none !important; box-shadow: none !important; }
+          #print-doc-root .no-print, #print-doc-root .no-print * { visibility: hidden !important; }
+          #print-doc-root { position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; background: #fff !important; padding: 16px !important; }
         }
       `}</style>
       <div id="print-doc-root" className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
@@ -2678,11 +2687,15 @@ function ConsultaPrintCenter({ docs, onRemove, onClose }: {
     <div className="fixed inset-0 z-[210] flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.6)" }}>
       <style>{`
         @media print {
-          body > *:not(#print-center-root) { display: none !important; }
-          #print-center-root { position: fixed !important; inset: 0 !important; z-index: 9999 !important; background: white !important; padding: 12px !important; overflow: visible !important; max-height: none !important; }
-          #print-center-root .no-print { display: none !important; }
+          html, body { height: auto !important; overflow: visible !important; background: #fff !important; }
+          body * { visibility: hidden !important; }
+          #print-center-root, #print-center-root * { visibility: visible !important; overflow: visible !important; max-height: none !important; box-shadow: none !important; }
+          #print-center-root .no-print, #print-center-root .no-print * { visibility: hidden !important; }
+          #print-center-root { position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; background: #fff !important; padding: 12px !important; }
           .pc-doc { page-break-after: always; }
           .pc-doc:last-child { page-break-after: auto; }
+          /* 2 vias de RCE/ATB quebram de página tambem na impressão em lote (M9) */
+          .rx-via-break { page-break-after: always; }
         }
       `}</style>
       <div id="print-center-root" className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden">

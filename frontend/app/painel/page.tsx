@@ -38,10 +38,19 @@ function formatWait(minutes: number | null): string {
   return m > 0 ? `${h}h ${m}min` : `${h}h`;
 }
 
-// Aceita "400", "400,00", "R$ 400,00" etc. Retorna centavos ou undefined se vazio/inválido.
+// Aceita "400", "400,00", "1.400", "R$ 1.500,00" etc. Retorna centavos ou undefined.
+// Convenção pt-BR: a vírgula é o decimal; o ponto é sempre separador de milhar.
+// (O bug antigo tratava "1.400" como 1,4 → R$ 1,40.)
 function parseReaisToCents(text: string): number | undefined {
-  const clean = text.trim().replace(/[^\d,.]/g, '').replace(/\.(?=\d{3},)/g, '').replace(',', '.');
+  let clean = text.trim().replace(/[^\d,.]/g, '');
   if (!clean) return undefined;
+  if (clean.includes(',')) {
+    // vírgula = decimal; remove os pontos de milhar e troca a vírgula por ponto
+    clean = clean.replace(/\./g, '').replace(',', '.');
+  } else {
+    // sem vírgula: qualquer ponto é separador de milhar (nunca decimal em pt-BR)
+    clean = clean.replace(/\./g, '');
+  }
   const n = Number(clean);
   return Number.isFinite(n) ? Math.round(n * 100) : undefined;
 }
@@ -601,6 +610,7 @@ export default function SalaDeEsperaPage() {
           {drawerOpen && selectedEntry && (
             <div className="flex-1 border-l border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col">
               <ConsultaDrawer
+                key={selectedEntry.patient_id}
                 entry={selectedEntry}
                 onClose={() => setSelectedEntry(null)}
                 onStatusChange={handleStatusChange}

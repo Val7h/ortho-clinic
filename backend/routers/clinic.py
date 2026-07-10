@@ -6,6 +6,7 @@ from datetime import date, datetime, timedelta
 from pydantic import BaseModel
 import secrets
 from database import get_db
+from tzutil import today_br
 from models.clinic import Clinic, ClinicSchedule, Appointment
 from models.patient import Patient
 from models.organization import User
@@ -274,7 +275,7 @@ def appointments_week(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    today = date.today()
+    today = today_br()
     if start is None:
         dow = today.weekday()
         start = today - timedelta(days=dow)
@@ -433,7 +434,7 @@ def get_available_slots(slug: str, date_req: date, db: Session = Depends(get_db)
     if not sched:
         return {"available": False, "message": "Sem atendimento neste dia", "schedule_type": None}
 
-    if date_req < date.today():
+    if date_req < today_br():
         return {"available": False, "message": "Data no passado", "schedule_type": sched.schedule_type}
 
     # ── Walk-in: return spot count ────────────────────────────────────────────
@@ -490,7 +491,7 @@ def book_slot(slug: str, data: BookIn, db: Session = Depends(get_db)):
     if not sched:
         raise HTTPException(400, "Sem atendimento neste dia")
 
-    if data.date < date.today():
+    if data.date < today_br():
         raise HTTPException(400, "Data no passado")
 
     token = secrets.token_urlsafe(32)
@@ -784,7 +785,7 @@ def get_doctor_availability(
 
     result = []
     current = date_from
-    today = date.today()
+    today = today_br()
     while current <= date_to:
         dow = current.weekday()
         sched = next((s for s in clinic.schedules if s.active and s.day_of_week == dow), None)
