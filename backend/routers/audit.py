@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, WebSocket, WebSocketDisconnect
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
 
 from database import get_db
@@ -58,6 +58,14 @@ class AuditEntryOut(BaseModel):
     request_id:       Optional[str]
     # signature intentionally excluded from default output
     model_config = {"from_attributes": True, "populate_by_name": True}
+
+    # No Postgres a coluna id é UUID (as_uuid=True) → vem como uuid.UUID, que o
+    # Pydantic 2 não coage para str (só no SQLite local, onde já é String). Coage
+    # aqui para evitar ResponseValidationError → 500 em /audit/logs.
+    @field_validator("id", "resource_id", "session_id", "request_id", mode="before")
+    @classmethod
+    def _coerce_uuid_to_str(cls, v):
+        return str(v) if v is not None else v
 
     @property
     def metadata(self) -> Optional[Dict[str, Any]]:
