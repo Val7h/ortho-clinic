@@ -302,6 +302,22 @@ function parseList(val: any): string[] {
   return [];
 }
 
+// S1 (LGPD): escopo de usuário para chaves de rascunho no localStorage. Assim o
+// rascunho de um médico não é restaurado na sessão de outro usuário no mesmo
+// navegador. Limitação: o localStorage não é apagado no logout aqui (fora do
+// escopo deste componente); o escopo por id do usuário mitiga o vazamento.
+function userScope(): string {
+  if (typeof window === "undefined") return "anon";
+  try {
+    const raw = localStorage.getItem("ortho_user");
+    if (raw) {
+      const u = JSON.parse(raw);
+      if (u?.id != null) return `u${u.id}`;
+    }
+  } catch {}
+  return "anon";
+}
+
 // ── Sub-components ─────────────────────────────────────────────────────────────
 
 function AllergyBanner({ patient }: { patient: any }) {
@@ -532,7 +548,7 @@ const PRESCRIPTION_TYPE_LABELS: Record<PrescriptionType, string> = {
 };
 
 // Print prescription modal — 3 tipos que o médico pode imprimir + aviso para A/B
-function PrintModal({ rx, patient, clinic, onClose }: {
+function PrintModal({ rx, patient, clinic, onClose, collectorId }: {
   rx: {
     date: string;
     medications: Medication[];
@@ -544,6 +560,10 @@ function PrintModal({ rx, patient, clinic, onClose }: {
   patient: any;
   clinic?: any;
   onClose: () => void;
+  // M8: id único do documento no coletor de impressão em lote. Quando null,
+  // o modal NÃO registra nada (ex.: reimpressão a partir do histórico), evitando
+  // que uma receita antiga sobreponha/apague a receita gerada hoje.
+  collectorId?: string | null;
 }) {
   const type = normalizePrescriptionType(rx.prescription_type);
   const isRCE = type === "controle_especial";
@@ -590,6 +610,9 @@ function PrintModal({ rx, patient, clinic, onClose }: {
         <div><span style={{ fontWeight: 700, color: "#666", textTransform: "uppercase", fontSize: "9px" }}>Data: </span><span>{dateStr}</span></div>
         {patient?.cpf && <div><span style={{ fontWeight: 700, color: "#666", textTransform: "uppercase", fontSize: "9px" }}>CPF: </span><span style={{ fontFamily: "monospace" }}>{patient.cpf}</span></div>}
         {patient?.birth_date && <div><span style={{ fontWeight: 700, color: "#666", textTransform: "uppercase", fontSize: "9px" }}>Nasc.: </span><span>{new Date(patient.birth_date + "T12:00:00").toLocaleDateString("pt-BR")}</span></div>}
+        {/* A11: endereço do paciente é obrigatório na RCE (Portaria SVS/MS 344/98) */}
+        {rx.patientAddress && <div style={{ gridColumn: "1 / -1" }}><span style={{ fontWeight: 700, color: "#666", textTransform: "uppercase", fontSize: "9px" }}>Endereço: </span><span>{rx.patientAddress}</span></div>}
+        {rx.patientPhone && <div><span style={{ fontWeight: 700, color: "#666", textTransform: "uppercase", fontSize: "9px" }}>Telefone: </span><span>{rx.patientPhone}</span></div>}
       </div>
 
       {/* Medicamentos */}
@@ -804,7 +827,10 @@ function PrintModal({ rx, patient, clinic, onClose }: {
   );
 
   // Registra a receita no coletor da consulta (impressão final em lote).
-  useRegisterPrintDoc({ id: `receita-${type}`, label: `Receita — ${labelMap[type]}`, content: sheetsBody });
+  // M8: id ÚNICO por documento (collectorId incremental do TabReceita), para que
+  // duas receitas do mesmo tipo não se sobreponham no coletor. collectorId null =
+  // reimpressão do histórico → não registra (não polui/apaga o lote de hoje).
+  useRegisterPrintDoc(collectorId ? { id: collectorId, label: `Receita — ${labelMap[type]}`, content: sheetsBody } : null);
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.6)" }}>
@@ -986,7 +1012,8 @@ async function openMemed(patient: any, _clinic: any): Promise<void> {
   try {
     sdk.command.send("platform.patient-management", "setPatient", {
       nome:            patient?.full_name || patient?.name || "",
-      data_nascimento: _isoToBR(patient?.date_of_birth || patient?.birth_date || ""),
+      // B3: o campo real do cadastro é `birthdate` (mantém fallbacks legados)
+      data_nascimento: _isoToBR(patient?.birthdate || patient?.date_of_birth || patient?.birth_date || ""),
       telefone:        patient?.phone || undefined,
       cpf:             patient?.cpf   || undefined,
     });
@@ -1462,6 +1489,13 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
     date: string; medications: Medication[]; instructions: string;
     prescription_type: PrescriptionType; patientAddress?: string; patientPhone?: string;
   } | null>(null);
+  // M8: id do documento a registrar no coletor de impressão em lote. Contador
+  // incremental via useRef (NÃO Date.now(), que pode quebrar o build). Null quando
+  // o preview vem do histórico (reimpressão) — aí não registra no coletor.
+  const [printRxCollectorId, setPrintRxCollectorId] = useState<string | null>(null);
+  const rxDocSeq = useRef(0);
+  // S8: auto-resize do editor de texto livre da receita
+  const freeTextRef = useRef<HTMLTextAreaElement>(null);
 
   // Templates
   const [templates, setTemplates] = useState<any[]>([]);
@@ -1506,6 +1540,53 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
     }
   }, [patient]);
 
+  // A14: rascunho da receita persistido no localStorage (por paciente + usuário),
+  // igual ao padrão de Laudos/Encaminhamentos. Sem isto, trocar de aba desmonta a
+  // TabReceita e o texto livre / medicamentos digitados se perdem.
+  const rxDraftKey = `orthoclinic_rx_draft_${userScope()}_${patientId}`;
+
+  // Restaura o rascunho ao montar
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const saved = localStorage.getItem(rxDraftKey);
+      if (!saved) return;
+      const p = JSON.parse(saved);
+      if (p.rxType) setRxType(normalizePrescriptionType(p.rxType));
+      if (typeof p.freeTextMode === "boolean") setFreeTextMode(p.freeTextMode);
+      if (typeof p.freeText === "string") setFreeText(p.freeText);
+      if (Array.isArray(p.medications) && p.medications.length) setMedications(p.medications);
+      if (typeof p.instructions === "string") setInstructions(p.instructions);
+      const hasContent = (typeof p.freeText === "string" && p.freeText.trim())
+        || (Array.isArray(p.medications) && p.medications.some((m: any) => m?.name?.trim()));
+      if (hasContent) toast.success("Rascunho de receita restaurado");
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rxDraftKey]);
+
+  // Autosave com debounce; grava só quando há conteúdo, limpa quando esvazia
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (typeof window === "undefined") return;
+      const hasContent = freeText.trim() || medications.some((m) => m.name.trim()) || instructions.trim();
+      if (hasContent) {
+        localStorage.setItem(rxDraftKey, JSON.stringify({ rxType, freeTextMode, freeText, medications, instructions }));
+      } else {
+        localStorage.removeItem(rxDraftKey);
+      }
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [rxType, freeTextMode, freeText, medications, instructions, rxDraftKey]);
+
+  // S8: mantém a altura do editor de texto livre acompanhando o conteúdo
+  useEffect(() => {
+    if (!freeTextMode) return;
+    const el = freeTextRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.max(el.scrollHeight, 220)}px`;
+  }, [freeText, freeTextMode]);
+
   const updateMed = (id: string, k: keyof Medication, v: string) => {
     setMedications((ms) => ms.map((m) => (m.id === id ? { ...m, [k]: v } : m)));
     // Trigger autocomplete suggestions when editing name
@@ -1534,9 +1615,14 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
 
   const isNotificacaoAB = rxType === "notificacao_ab";
   const isATB = rxType === "antimicrobiano";
+  const isRCE = rxType === "controle_especial";
+  // A16: endereço e telefone são obrigatórios na receita de antimicrobiano (RDC 20/2011)
+  const atbFieldsMissing = () => isATB && (!patientAddress.trim() || !patientPhone.trim());
 
   const handleSave = async () => {
     if (isNotificacaoAB) { toast.error("Notificação A/B não pode ser impressa pelo médico — use formulários SESA"); return; }
+    // A16: bloqueia salvar ATB sem endereço/telefone obrigatórios (RDC 20/2011)
+    if (atbFieldsMissing()) { toast.error("Antimicrobiano exige endereço e telefone do paciente (RDC 20/2011)"); return; }
     let validMeds: Medication[] = [];
     if (freeTextMode) {
       if (!freeText.trim()) { toast.error("Escreva o conteúdo da receita"); return; }
@@ -1551,12 +1637,18 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
         prescription_type: rxType,
         medications: validMeds,
         instructions: freeTextMode ? freeText : instructions,
+        // A16: persiste endereço/telefone (obrigatórios em ATB; úteis também na RCE).
+        // CONTRATO BACKEND: o create passa a gravar patient_address/patient_phone.
+        patient_address: patientAddress || undefined,
+        patient_phone: patientPhone || undefined,
       });
       toast.success("Receita salva!");
       setPrescriptions((prev) => [newRx, ...prev]);
       setMedications([emptyMed()]);
       setInstructions("");
       setFreeText("");
+      // A14: receita salva → limpa o rascunho persistido
+      if (typeof window !== "undefined") localStorage.removeItem(rxDraftKey);
       // Restore patient defaults (not wipe them)
       if (patient) {
         const parts = [patient.address_street, patient.address_city, patient.address_state].filter(Boolean);
@@ -1572,6 +1664,8 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
 
   const handlePrint = () => {
     if (isNotificacaoAB) return;
+    // A16: bloqueia imprimir ATB sem endereço/telefone obrigatórios (RDC 20/2011)
+    if (atbFieldsMissing()) { toast.error("Antimicrobiano exige endereço e telefone do paciente (RDC 20/2011)"); return; }
     let validMeds: Medication[] = [];
     if (freeTextMode) {
       if (!freeText.trim()) { toast.error("Escreva o conteúdo da receita para imprimir"); return; }
@@ -1579,6 +1673,9 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
       validMeds = medications.filter((m) => m.name.trim());
       if (validMeds.length === 0) { toast.error("Adicione pelo menos um medicamento para imprimir"); return; }
     }
+    // M8: id incremental por documento gerado hoje (registra no coletor de lote)
+    rxDocSeq.current += 1;
+    setPrintRxCollectorId(`receita-${rxDocSeq.current}`);
     setPrintRx({
       date: new Date().toISOString().split("T")[0],
       medications: validMeds,
@@ -1661,11 +1758,23 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
 
   const handleSendWhatsApp = async () => {
     if (isNotificacaoAB) { toast.error("Notificação A/B não pode ser enviada por aqui"); return; }
+    // A12: receita controlada (RCE / ATB) NÃO pode ir por WhatsApp — não tem
+    // validade legal sem 2 vias físicas assinadas e expõe substância controlada.
+    if (isRCE || isATB) {
+      toast.error("Receita controlada (Controle Especial / Antimicrobiano) exige 2 vias físicas assinadas — não pode ser enviada por WhatsApp");
+      return;
+    }
     const text = buildRxText();
     if (!text) { toast.error("Preencha a receita antes de enviar"); return; }
-    if (!patient?.phone) { toast.error("Paciente sem telefone cadastrado"); return; }
+    // P1: prioriza o telefone digitado na receita; cai para o do cadastro se vazio.
+    // Obs.: o envio real usa patient_id (chatApi.sendWhatsApp) e o backend resolve o
+    // número a partir do cadastro — este effectivePhone rege a validação/confirmação
+    // exibida ao médico. Tipos com campo de telefone editável (RCE/ATB) já são
+    // bloqueados acima, então na prática o número enviado = cadastro do paciente.
+    const effectivePhone = patientPhone.trim() || patient?.phone;
+    if (!effectivePhone) { toast.error("Paciente sem telefone cadastrado"); return; }
     if (typeof window !== "undefined" &&
-        !window.confirm(`Enviar esta receita por WhatsApp para ${patient.name} (${patient.phone})?\n\n${text}`)) {
+        !window.confirm(`Enviar esta receita por WhatsApp para ${patient.name} (${effectivePhone})?\n\n${text}`)) {
       return;
     }
     setSendingWa(true);
@@ -1694,7 +1803,7 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
 
   return (
     <div className="space-y-4 px-5 pb-6">
-      {printRx && <PrintModal rx={printRx} patient={patient} clinic={clinic} onClose={() => setPrintRx(null)} />}
+      {printRx && <PrintModal rx={printRx} patient={patient} clinic={clinic} collectorId={printRxCollectorId} onClose={() => setPrintRx(null)} />}
 
       {/* ── Tipo de Receita ── */}
       <div>
@@ -1809,7 +1918,8 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
                                 onClick={() => handleLoadTemplate(tmpl)}
                               >
                                 <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">{tmpl.name}</p>
-                                <p className="text-[10px] text-slate-400">{PRESCRIPTION_TYPE_LABELS[normalizePrescriptionType(tmpl.prescription_type)] || tmpl.prescription_type} · {tmpl.medications?.length || 0} med.</p>
+                                {/* S6: modelo de texto livre (sem medicamentos) é rotulado como "Texto livre" */}
+                                <p className="text-[10px] text-slate-400">{PRESCRIPTION_TYPE_LABELS[normalizePrescriptionType(tmpl.prescription_type)] || tmpl.prescription_type} · {(tmpl.medications?.length || 0) === 0 && (tmpl.instructions || "").trim() ? "Texto livre" : `${tmpl.medications?.length || 0} med.`}</p>
                               </button>
                               <button
                                 type="button"
@@ -1838,8 +1948,8 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
             */}
             <button
               type="button"
-              onClick={() => window.open("https://memed.com.br/", "_blank", "noopener,noreferrer")}
-              title="Abre o site do Memed numa nova aba para você prescrever com seu login de médico"
+              onClick={() => window.open("https://memed.com.br/login", "_blank", "noopener,noreferrer")}
+              title="Abre o login do Memed numa nova aba para você prescrever com seu login de médico"
               className="flex items-center gap-1.5 px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 text-xs font-semibold whitespace-nowrap"
             >
               <Pill className="w-3.5 h-3.5" />
@@ -1847,17 +1957,21 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
             </button>
           </div>
 
-          {/* ── Campos extras ATB: endereço e telefone do paciente ── */}
-          {isATB && (
+          {/* ── Campos extras ATB/RCE: endereço e telefone do paciente ──
+              A11: a RCE (Controle Especial) também exige endereço do paciente
+              (Portaria SVS/MS 344/98), não só o ATB (RDC 20/2011). */}
+          {(isRCE || isATB) && (
             <div className="space-y-2 border border-blue-200 dark:border-blue-800 rounded-lg p-3 bg-blue-50/40 dark:bg-blue-900/10">
-              <p className="text-xs font-bold text-blue-700 dark:text-blue-300 uppercase tracking-wide">Dados obrigatórios do paciente (RDC 20/2011)</p>
+              <p className="text-xs font-bold text-blue-700 dark:text-blue-300 uppercase tracking-wide">
+                {isATB ? "Dados obrigatórios do paciente (RDC 20/2011)" : "Dados do paciente (Portaria SVS/MS 344/98)"}
+              </p>
               <div className="grid grid-cols-2 gap-2">
                 <div className="col-span-2">
                   <label className={lbl}>Endereço do paciente *</label>
                   <input className={inp} placeholder="Rua, nº, bairro, cidade/UF" value={patientAddress} onChange={(e) => setPatientAddress(e.target.value)} />
                 </div>
                 <div>
-                  <label className={lbl}>Telefone do paciente *</label>
+                  <label className={lbl}>Telefone do paciente{isATB ? " *" : ""}</label>
                   <input className={inp} placeholder="(83) 9xxxx-xxxx" value={patientPhone} onChange={(e) => setPatientPhone(e.target.value)} />
                 </div>
               </div>
@@ -1869,8 +1983,11 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
             {freeTextMode ? (
               <div>
                 <label className={lbl}>Conteúdo da receita (texto livre)</label>
+                {/* S8: auto-resize + fonte alinhada à impressão (sem font-mono, que
+                    não bate com a fonte proporcional das folhas de receita) */}
                 <textarea
-                  className={inp + " min-h-[220px] resize-none font-mono"}
+                  ref={freeTextRef}
+                  className={inp + " min-h-[220px] resize-none"}
                   placeholder={"Escreva a receita à mão livre. Ex:\n\n1. Nimesulida 100mg — 1 cp de 12/12h por 5 dias\n2. Omeprazol 20mg — 1 cp em jejum por 30 dias\n\nOrientações: repouso relativo, retorno em 7 dias."}
                   value={freeText}
                   onChange={(e) => setFreeText(e.target.value)}
@@ -2010,8 +2127,24 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
                     <button
                       onClick={() => {
                         setRxType(normalizePrescriptionType(rx.prescription_type || "simples"));
-                        setMedications(rx.medications?.length ? rx.medications.map((m: any) => ({ ...emptyMed(), ...m })) : [emptyMed()]);
-                        setInstructions(rx.instructions || "");
+                        const meds = rx.medications?.length ? rx.medications.map((m: any) => ({ ...emptyMed(), ...m })) : [];
+                        // A15: receita de texto livre (sem medicamentos, texto em
+                        // instructions) deve voltar em modo texto livre — senão cai
+                        // no modo estruturado quebrado. Espelha handleLoadTemplate.
+                        if (meds.length === 0 && (rx.instructions || "").trim()) {
+                          setFreeTextMode(true);
+                          setFreeText(rx.instructions || "");
+                          setMedications([emptyMed()]);
+                          setInstructions("");
+                        } else {
+                          setFreeTextMode(false);
+                          setFreeText("");
+                          setMedications(meds.length ? meds : [emptyMed()]);
+                          setInstructions(rx.instructions || "");
+                        }
+                        // A16: reidrata endereço/telefone salvos na receita, se houver
+                        if (rx.patient_address) setPatientAddress(rx.patient_address);
+                        if (rx.patient_phone) setPatientPhone(rx.patient_phone);
                         toast.success("Receita carregada para edição");
                       }}
                       className="p-1 text-slate-400 hover:text-green-600"
@@ -2020,12 +2153,19 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
                       <ClipboardList className="w-3.5 h-3.5" />
                     </button>
                     <button
-                      onClick={() => setPrintRx({
-                        date: rx.date,
-                        medications: rx.medications || [],
-                        instructions: rx.instructions || "",
-                        prescription_type: normalizePrescriptionType(rx.prescription_type || "simples"),
-                      })}
+                      onClick={() => {
+                        // M8: reimpressão do histórico NÃO registra no coletor de lote
+                        setPrintRxCollectorId(null);
+                        setPrintRx({
+                          date: rx.date,
+                          medications: rx.medications || [],
+                          instructions: rx.instructions || "",
+                          prescription_type: normalizePrescriptionType(rx.prescription_type || "simples"),
+                          // A16: reidrata endereço/telefone salvos p/ reimpressão fiel
+                          patientAddress: rx.patient_address || undefined,
+                          patientPhone: rx.patient_phone || undefined,
+                        });
+                      }}
                       className="p-1 text-slate-400 hover:text-blue-600"
                       title="Imprimir"
                     >
@@ -2034,13 +2174,20 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
                   </div>
                 </div>
                 <div className="space-y-0.5">
-                  {rx.medications?.slice(0, 3).map((m: any, i: number) => (
-                    <p key={i} className="text-xs text-slate-600 dark:text-slate-400">
-                      {i + 1}. {m.name}{m.dose ? ` — ${m.dose}` : ""}{m.frequency ? ` · ${m.frequency}` : ""}{m.duration ? ` · ${m.duration}` : ""}
-                    </p>
-                  ))}
-                  {(rx.medications?.length || 0) > 3 && (
-                    <p className="text-xs text-slate-400">+{rx.medications.length - 3} mais...</p>
+                  {(rx.medications?.length || 0) === 0 && (rx.instructions || "").trim() ? (
+                    // S6: receita de texto livre — mostra trecho das instruções
+                    <p className="text-xs text-slate-600 dark:text-slate-400 italic line-clamp-2">{rx.instructions}</p>
+                  ) : (
+                    <>
+                      {rx.medications?.slice(0, 3).map((m: any, i: number) => (
+                        <p key={i} className="text-xs text-slate-600 dark:text-slate-400">
+                          {i + 1}. {m.name}{m.dose ? ` — ${m.dose}` : ""}{m.frequency ? ` · ${m.frequency}` : ""}{m.duration ? ` · ${m.duration}` : ""}
+                        </p>
+                      ))}
+                      {(rx.medications?.length || 0) > 3 && (
+                        <p className="text-xs text-slate-400">+{rx.medications.length - 3} mais...</p>
+                      )}
+                    </>
                   )}
                 </div>
               </div>
@@ -3242,9 +3389,13 @@ function TabAtestados({ patient, clinic }: { patient: any; clinic?: any }) {
   const [days, setDays] = useState("1");
   const [certType, setCertType] = useState("trabalho");
   const [obs, setObs] = useState("");
+  // M6: campos do atestado de acompanhamento agora são controlados (antes eram
+  // inputs não-controlados por id e não entravam no impresso)
+  const [accompName, setAccompName] = useState("");
+  const [accompRel, setAccompRel] = useState("");
   const todayStr = useMemo(() => new Date().toISOString().split("T")[0], []);
   const [startDate, setStartDate] = useState(todayStr);
-  const [printData, setPrintData] = useState<{ cid: string; days: string; certType: string; obs: string; startDate: string } | null>(null);
+  const [printData, setPrintData] = useState<{ cid: string; days: string; certType: string; obs: string; startDate: string; accompName: string; accompRel: string } | null>(null);
 
   // Declaração de Comparecimento
   const [compDate, setCompDate] = useState(todayStr);
@@ -3288,6 +3439,13 @@ function TabAtestados({ patient, clinic }: { patient: any; clinic?: any }) {
             {" "}foi avaliado(a) em {dateStr} e necessita afastar-se de <strong>{pTypeLabel}</strong> pelo
             período de <strong>{printData.days} dia{Number(printData.days) !== 1 ? "s" : ""}</strong>, a contar de {startFormatted}, com retorno previsto para <strong>{retDate}</strong>.
           </p>
+          {/* M6: dados do paciente acompanhado no atestado de acompanhamento */}
+          {printData.certType === "acompanhamento" && printData.accompName && (
+            <p style={{ marginTop: "12px" }}>
+              <strong>Paciente acompanhado:</strong> {printData.accompName}
+              {printData.accompRel ? ` (${printData.accompRel})` : ""}
+            </p>
+          )}
           {printData.cid && (
             <p style={{ marginTop: "12px" }}>
               <strong>CID-10:</strong> {printData.cid}
@@ -3474,11 +3632,11 @@ function TabAtestados({ patient, clinic }: { patient: any; clinic?: any }) {
         <div className="grid grid-cols-2 gap-3">
           <div className="col-span-2">
             <label className={lbl}>Nome do paciente acompanhado *</label>
-            <input className={inp} placeholder="Nome completo do paciente" id="accomp-name" />
+            <input className={inp} placeholder="Nome completo do paciente" value={accompName} onChange={e => setAccompName(e.target.value)} />
           </div>
           <div>
             <label className={lbl}>Grau de parentesco / relação</label>
-            <input className={inp} placeholder="Ex: filho(a), cônjuge, pai/mãe..." id="accomp-rel" />
+            <input className={inp} placeholder="Ex: filho(a), cônjuge, pai/mãe..." value={accompRel} onChange={e => setAccompRel(e.target.value)} />
           </div>
         </div>
       )}
@@ -3518,7 +3676,12 @@ function TabAtestados({ patient, clinic }: { patient: any; clinic?: any }) {
           disabled={!startDate || !days || Number(days) < 1}
           onClick={() => {
             if (!startDate || !days || Number(days) < 1) { toast.error("Informe os dias de afastamento"); return; }
-            setPrintData({ cid, days, certType, obs, startDate });
+            // S10: CID é exigido para trabalho/geral (empresas com PCMSO e INSS).
+            // Sem CID, confirma antes de imprimir.
+            if ((certType === "trabalho" || certType === "geral") && !cid.trim()) {
+              if (typeof window !== "undefined" && !window.confirm("Atestado para trabalho/INSS geralmente exige CID-10. Imprimir sem CID?")) return;
+            }
+            setPrintData({ cid, days, certType, obs, startDate, accompName, accompRel });
           }}
           className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold text-xs disabled:opacity-50 disabled:cursor-not-allowed"
         >
@@ -3541,7 +3704,7 @@ function TabLaudos({ patient, clinic }: { patient: any; clinic?: any }) {
   const [funcCapacity, setFuncCapacity] = useState("");
   const [funcDetail, setFuncDetail] = useState("");
   const [pendingLaudoTemplate, setPendingLaudoTemplate] = useState<typeof LAUDO_TEMPLATES[0] | null>(null);
-  const [printData, setPrintData] = useState<{ text: string; finalidade: string; cid: string; cidsSecundarios: string[]; funcCapacity: string; funcDetail: string } | null>(null);
+  const [printData, setPrintData] = useState<{ text: string; finalidade: string; cid: string; cidsSecundarios: string[]; funcCapacity: string; funcDetail: string; incapPercent: string } | null>(null);
   const textRef = useRef<HTMLTextAreaElement>(null);
 
   const today = new Date();
@@ -3551,8 +3714,8 @@ function TabLaudos({ patient, clinic }: { patient: any; clinic?: any }) {
   const [draftSaved, setDraftSaved] = useState(false);
   const [incapPercent, setIncapPercent] = useState("");
 
-  // Draft autosave
-  const draftKey = `orthoclinic_laudo_draft_${patient?.id || "0"}`;
+  // Draft autosave — S1 (LGPD): chave escopada por usuário + paciente
+  const draftKey = `orthoclinic_laudo_draft_${userScope()}_${patient?.id || "0"}`;
   useEffect(() => {
     if (typeof window === "undefined") return;
     const saved = localStorage.getItem(draftKey);
@@ -3565,6 +3728,7 @@ function TabLaudos({ patient, clinic }: { patient: any; clinic?: any }) {
         if (Array.isArray(parsed.cidsSecundarios)) setCidsSecundarios(parsed.cidsSecundarios);
         if (parsed.funcCapacity) setFuncCapacity(parsed.funcCapacity);
         if (parsed.funcDetail) setFuncDetail(parsed.funcDetail);
+        if (parsed.incapPercent) setIncapPercent(parsed.incapPercent); // A13
         if (parsed.text) toast.success("Rascunho de laudo restaurado");
       } catch {}
     }
@@ -3574,13 +3738,13 @@ function TabLaudos({ patient, clinic }: { patient: any; clinic?: any }) {
     if (!text.trim()) return;
     const timer = setTimeout(() => {
       if (typeof window !== "undefined") {
-        localStorage.setItem(draftKey, JSON.stringify({ text, finalidade, cid, cidsSecundarios, funcCapacity, funcDetail }));
+        localStorage.setItem(draftKey, JSON.stringify({ text, finalidade, cid, cidsSecundarios, funcCapacity, funcDetail, incapPercent }));
         setDraftSaved(true);
         setTimeout(() => setDraftSaved(false), 2000);
       }
     }, 1000);
     return () => clearTimeout(timer);
-  }, [text, finalidade, cid, cidsSecundarios, funcCapacity, funcDetail, draftKey]);
+  }, [text, finalidade, cid, cidsSecundarios, funcCapacity, funcDetail, incapPercent, draftKey]);
 
   const autoResizeLaudo = useCallback(() => {
     const ta = textRef.current;
@@ -3620,7 +3784,7 @@ function TabLaudos({ patient, clinic }: { patient: any; clinic?: any }) {
 
   const saveDraftNow = () => {
     if (typeof window !== "undefined") {
-      localStorage.setItem(draftKey, JSON.stringify({ text, finalidade, cid, cidsSecundarios, funcCapacity, funcDetail }));
+      localStorage.setItem(draftKey, JSON.stringify({ text, finalidade, cid, cidsSecundarios, funcCapacity, funcDetail, incapPercent }));
       setDraftSaved(true);
       setTimeout(() => setDraftSaved(false), 2000);
       toast.success("Rascunho salvo");
@@ -3656,7 +3820,13 @@ function TabLaudos({ patient, clinic }: { patient: any; clinic?: any }) {
         {printData.funcCapacity && (
           <div style={{ borderTop: "2px solid #0F2D5E", paddingTop: "10px", marginBottom: "24px" }}>
             <p style={{ fontWeight: 700, fontSize: "12px", marginBottom: "4px" }}>Conclusão Pericial Formal:</p>
-            <p style={{ fontSize: "12px" }}>{printData.funcCapacity}{printData.funcDetail ? ` — ${printData.funcDetail}` : ""}</p>
+            <p style={{ fontSize: "12px" }}>
+              {printData.funcCapacity}
+              {/* A13: grau de incapacidade (%) no laudo de incapacidade permanente */}
+              {printData.funcCapacity === "Incapacidade permanente" && printData.incapPercent
+                ? ` — ${printData.incapPercent}% (tabela SUSEP)`
+                : (printData.funcDetail ? ` — ${printData.funcDetail}` : "")}
+            </p>
           </div>
         )}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginTop: "32px" }}>
@@ -3828,7 +3998,7 @@ function TabLaudos({ patient, clinic }: { patient: any; clinic?: any }) {
             if (hasPlaceholders) { toast.error("Preencha todos os campos { } antes de imprimir"); return; }
             if (typeof window !== "undefined") localStorage.removeItem(draftKey);
             toast.success("Laudo gerado — use Ctrl+P ou salve como PDF");
-            setPrintData({ text, finalidade, cid, cidsSecundarios: cidsSecundarios.filter(c => c.trim()), funcCapacity, funcDetail });
+            setPrintData({ text, finalidade, cid, cidsSecundarios: cidsSecundarios.filter(c => c.trim()), funcCapacity, funcDetail, incapPercent });
           }}
           className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold text-xs"
         >
@@ -3842,6 +4012,13 @@ function TabLaudos({ patient, clinic }: { patient: any; clinic?: any }) {
 // ── Tab: Fotos ────────────────────────────────────────────────────────────────
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://ortho-clinic-ldcd.onrender.com";
+
+// S13: placeholder exibido quando a miniatura da foto falha ao carregar
+const PHOTO_PLACEHOLDER =
+  "data:image/svg+xml;utf8," +
+  encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 120 120"><rect width="120" height="120" fill="#e2e8f0"/><g fill="none" stroke="#94a3b8" stroke-width="4"><rect x="30" y="34" width="60" height="46" rx="4"/><circle cx="48" cy="52" r="7"/><path d="M34 78l20-18 14 12 10-8 12 14"/></g><text x="60" y="102" font-family="sans-serif" font-size="11" fill="#64748b" text-anchor="middle">imagem indisponível</text></svg>'
+  );
 
 interface PatientDocument {
   id: number;
@@ -3962,6 +4139,34 @@ function TabFotos({ patientId }: { patientId: number }) {
     }
   };
 
+  // S13: miniatura quebrada → placeholder (sem loop de erro)
+  const onImgError = (e: React.SyntheticEvent<HTMLImageElement>) => {
+    const img = e.currentTarget;
+    if (img.dataset.fallback) return;
+    img.dataset.fallback = "1";
+    img.src = PHOTO_PLACEHOLDER;
+  };
+
+  // S13: download via fetch + blob (o atributo download não funciona cross-origin).
+  // Se o fetch falhar (ex.: CORS), cai para abrir a imagem em nova aba.
+  const handleDownloadPhoto = async (photo: PatientDocument) => {
+    try {
+      const res = await fetch(photo.file_url);
+      if (!res.ok) throw new Error("fetch falhou");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = photo.title || `foto-${photo.id}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch {
+      window.open(photo.file_url, "_blank", "noopener,noreferrer");
+    }
+  };
+
   // Keyboard navigation for lightbox
   useEffect(() => {
     if (zoomedIndex === null) return;
@@ -4015,7 +4220,7 @@ function TabFotos({ patientId }: { patientId: number }) {
           >
             <ChevronUp className="w-5 h-5 -rotate-90" />
           </button>
-          <img src={zoomedPhoto.file_url} alt={zoomedPhoto.title || "Foto"} className="max-w-[85vw] max-h-[85vh] rounded-xl shadow-2xl" />
+          <img src={zoomedPhoto.file_url} alt={zoomedPhoto.title || "Foto"} onError={onImgError} className="max-w-[85vw] max-h-[85vh] rounded-xl shadow-2xl" />
           <button className="absolute top-4 right-4 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white" onClick={() => setZoomedIndex(null)}>
             <X className="w-5 h-5" />
           </button>
@@ -4139,6 +4344,7 @@ function TabFotos({ patientId }: { patientId: number }) {
               <img
                 src={photo.file_url}
                 alt={photo.title || "Foto"}
+                onError={onImgError}
                 className="w-full h-full object-cover cursor-pointer"
                 onClick={() => setZoomedIndex(idx)}
               />
@@ -4157,7 +4363,7 @@ function TabFotos({ patientId }: { patientId: number }) {
                     <ZoomIn className="w-3 h-3" />
                   </button>
                   <button
-                    onClick={() => { const a = document.createElement("a"); a.href = photo.file_url; a.download = photo.title || "foto"; a.target = "_blank"; a.click(); }}
+                    onClick={() => handleDownloadPhoto(photo)}
                     className="p-1 bg-white/20 hover:bg-white/40 rounded text-white"
                     title="Download"
                   >
@@ -4221,6 +4427,9 @@ export default function ConsultaDrawer({ entry, onClose, onStatusChange }: Consu
     setBusyStatus(true);
     try {
       await onStatusChange(entry.id, newStatus);
+      // S3: ao concluir o atendimento, fecha a gaveta — assim não fica parada no
+      // paciente já atendido. (Botão "chamar próximo" exigiria page.tsx, fora do escopo.)
+      if (newStatus === "attended") onClose();
     } finally {
       setBusyStatus(false);
     }

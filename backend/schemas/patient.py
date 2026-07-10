@@ -49,6 +49,9 @@ class PatientOut(PatientBase):
     photo_url: Optional[str] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
+    # A19-back: aviso SOFT de possível homônimo no cadastro (não bloqueia).
+    # Preenchido só no POST de criação; None nos demais retornos.
+    warning: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
@@ -56,6 +59,9 @@ class PatientOut(PatientBase):
 class PatientSummary(BaseModel):
     id: int
     name: str
+    # A17-back: cpf/phone/birthdate no resumo p/ o front buscar por CPF/telefone.
+    # Contrato com o front: estes 3 campos sempre presentes na listagem.
+    cpf: Optional[str] = None
     phone: Optional[str] = None
     birthdate: Optional[date] = None
     insurance: Optional[str] = None

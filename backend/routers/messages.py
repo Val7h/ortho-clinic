@@ -5,6 +5,7 @@ escrita sempre via REST (POST), que persiste e depois empurra pro
 socket de quem estiver conectado — evita duplicar validação/auth
 dentro do loop do WebSocket.
 """
+import asyncio
 import logging
 from datetime import datetime
 from typing import Dict, List, Set
@@ -12,7 +13,7 @@ from typing import Dict, List, Set
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from jose import jwt, JWTError
 from pydantic import BaseModel
-from sqlalchemy import or_, and_
+from sqlalchemy import or_, and_, func
 from sqlalchemy.orm import Session
 
 from database import get_db, SessionLocal
@@ -24,6 +25,11 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/messages", tags=["messages"])
 
+# Janela de debounce da presença: só transmite "offline" depois de N segundos
+# sem NENHUM socket do usuário. Reconexão antes disso cancela o offline e evita
+# o pisca-pisca offline→online em quedas curtas (ex.: WS ocioso no Render).
+OFFLINE_DEBOUNCE_SECONDS = 12
+
 
 # ── Schemas ──────────────────────────────────────────────────────────────
 
@@ -31,6 +37,7 @@ class ContactOut(BaseModel):
     id: int
     name: str
     role: str
+    unread_count: int = 0
 
     class Config:
         from_attributes = True
@@ -68,32 +75,69 @@ class DMConnectionManager:
     def __init__(self):
         self.connections: Dict[int, Set[WebSocket]] = {}
         self.user_org: Dict[int, int] = {}
+        # Timers de "offline" pendentes (debounce de presença), por user_id.
+        self._pending_offline: Dict[int, "asyncio.Task"] = {}
 
     async def connect(self, user_id: int, organization_id: int, websocket: WebSocket) -> bool:
-        """Registra o socket. Retorna True se o usuário estava OFFLINE (1º socket)."""
+        """Registra o socket. Retorna True se o usuário estava OFFLINE de verdade
+        (1º socket E sem 'offline' pendente). Numa reconexão dentro da janela de
+        debounce os colegas nunca viram o offline, então NÃO retransmite 'online'."""
         await websocket.accept()
+        pending = self._pending_offline.pop(user_id, None)
+        if pending is not None:
+            pending.cancel()
         was_offline = not self.connections.get(user_id)
         self.connections.setdefault(user_id, set()).add(websocket)
         self.user_org[user_id] = organization_id
-        return was_offline
+        return was_offline and pending is None
 
-    def disconnect(self, user_id: int, websocket: WebSocket) -> bool:
-        """Remove o socket. Retorna True se o usuário ficou OFFLINE (último socket)."""
+    def disconnect(self, user_id: int, websocket: WebSocket) -> None:
+        """Remove o socket. Se foi o último, AGENDA o 'offline' com debounce (não
+        transmite na hora) — uma reconexão dentro da janela cancela o offline."""
         sockets = self.connections.get(user_id)
         if not sockets:
-            return False
+            return
         sockets.discard(websocket)
         if not sockets:
             del self.connections[user_id]
-            self.user_org.pop(user_id, None)
-            return True
-        return False
+            # Mantém user_org até o offline confirmar: ainda conta como online.
+            self._schedule_offline(user_id)
+
+    def _schedule_offline(self, user_id: int) -> None:
+        org_id = self.user_org.get(user_id)
+        existing = self._pending_offline.get(user_id)
+        if existing is not None:
+            existing.cancel()
+        self._pending_offline[user_id] = asyncio.create_task(
+            self._offline_after_debounce(user_id, org_id)
+        )
+
+    async def _offline_after_debounce(self, user_id: int, org_id) -> None:
+        try:
+            await asyncio.sleep(OFFLINE_DEBOUNCE_SECONDS)
+        except asyncio.CancelledError:
+            return
+        # Reconectou durante a janela? Continua online; não faz nada.
+        if self.connections.get(user_id):
+            self._pending_offline.pop(user_id, None)
+            return
+        self._pending_offline.pop(user_id, None)
+        self.user_org.pop(user_id, None)
+        await self.broadcast_presence(user_id, org_id, False)
 
     def is_online(self, user_id: int) -> bool:
-        return bool(self.connections.get(user_id))
+        return bool(self.connections.get(user_id)) or user_id in self._pending_offline
 
     def online_in_org(self, organization_id: int) -> List[int]:
-        return [uid for uid in self.connections if self.user_org.get(uid) == organization_id]
+        ids = {uid for uid in self.connections if self.user_org.get(uid) == organization_id}
+        # Usuários em janela de debounce ainda contam como online.
+        for uid in self._pending_offline:
+            if self.user_org.get(uid) == organization_id:
+                ids.add(uid)
+        return list(ids)
+
+    def all_online(self) -> List[int]:
+        return list(set(self.connections.keys()) | set(self._pending_offline.keys()))
 
     async def send_raw(self, user_id: int, payload: dict):
         sockets = self.connections.get(user_id)
@@ -143,16 +187,48 @@ async def _mark_read_and_notify(db: Session, reader: User, sender_id: int) -> in
 
 # ── REST ─────────────────────────────────────────────────────────────────
 
+# Papéis considerados "conta de plataforma" — não aparecem como colega de chat.
+_PLATFORM_ROLES = ("superadmin",)
+
+
 @router.get("/contacts", response_model=List[ContactOut])
 def list_contacts(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Colegas com quem dá pra conversar: mesma organização, exceto eu mesmo."""
+    """Colegas com quem dá pra conversar (mesma organização, exceto eu mesmo),
+    já com a contagem de não-lidas por contato pra UI nascer com o badge certo."""
     q = db.query(User).filter(User.id != current_user.id, User.active == True)
     if current_user.role != "superadmin":
         q = q.filter(User.organization_id == current_user.organization_id)
-    return q.order_by(User.name).all()
+    # Exclui superadmin/contas de plataforma da lista de colegas.
+    q = q.filter(~User.role.in_(_PLATFORM_ROLES))
+    # A secretária só conversa com médicos/admin (mantém médico<->secretária).
+    if current_user.role == "secretary":
+        q = q.filter(User.role.in_(("doctor", "admin")))
+    users = q.order_by(User.name).all()
+
+    # Não-lidas por remetente: mensagens que me mandaram e ainda não li.
+    rows = (
+        db.query(DirectMessage.sender_id, func.count(DirectMessage.id))
+        .filter(
+            DirectMessage.recipient_id == current_user.id,
+            DirectMessage.read == False,  # noqa: E712
+        )
+        .group_by(DirectMessage.sender_id)
+        .all()
+    )
+    unread_map = {sender_id: count for sender_id, count in rows}
+
+    return [
+        ContactOut(
+            id=u.id,
+            name=u.name,
+            role=u.role,
+            unread_count=unread_map.get(u.id, 0),
+        )
+        for u in users
+    ]
 
 
 @router.get("/presence")
@@ -161,7 +237,7 @@ def get_presence(
 ):
     """IDs dos colegas online agora (com WebSocket aberto) na mesma organização."""
     if current_user.role == "superadmin":
-        ids = list(manager.connections.keys())
+        ids = manager.all_online()
     else:
         ids = manager.online_in_org(current_user.organization_id)
     return {"online_user_ids": [i for i in ids if i != current_user.id]}
@@ -197,9 +273,10 @@ async def get_conversation(
         .all()
     )
 
-    # Abrir a conversa = ler o que o colega mandou → marca lido e avisa ele.
-    await _mark_read_and_notify(db, current_user, other_user_id)
-
+    # A20: carregar a conversa NÃO marca como lido. O front pré-carrega a 1ª
+    # conversa no mount mesmo com o widget fechado; marcar aqui geraria recibo
+    # "Lida" falso. A marcação fica só no POST /{id}/read, chamado pelo front
+    # quando a aba está de fato aberta e visível.
     return msgs
 
 
@@ -275,6 +352,6 @@ async def messages_ws(websocket: WebSocket):
     except Exception as exc:
         logger.error(f"Erro no WebSocket de mensagens: {type(exc).__name__}")
     finally:
-        went_offline = manager.disconnect(user_id, websocket)
-        if went_offline:
-            await manager.broadcast_presence(user_id, user.organization_id, False)
+        # disconnect agenda o offline com debounce internamente (S9): evita o
+        # flicker offline→online em reconexões curtas.
+        manager.disconnect(user_id, websocket)

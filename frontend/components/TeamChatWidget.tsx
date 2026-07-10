@@ -24,6 +24,7 @@ export function TeamChatWidget() {
   const [unreadByContact, setUnreadByContact] = useState<Record<number, number>>({});
   const [onlineIds, setOnlineIds] = useState<Set<number>>(new Set());
   const [dmSending, setDmSending] = useState(false);
+  const [dmError, setDmError] = useState<string | null>(null);
   const loadedContactIds = useRef<Set<number>>(new Set());
   const wsRef = useRef<WebSocket | null>(null);
 
@@ -49,6 +50,17 @@ export function TeamChatWidget() {
     messagesApi.contacts().then((list) => {
       setContacts(list);
       setTab((prev) => prev ?? list[0]?.id ?? null);
+      // A21: badge nasce com as não-lidas anteriores ao login (o backend
+      // manda unread_count por contato). Não sobrescreve contagens que já
+      // subiram via WS enquanto a lista carregava.
+      setUnreadByContact((prev) => {
+        const next = { ...prev };
+        for (const c of list) {
+          const count = (c as { unread_count?: number }).unread_count ?? 0;
+          if (next[c.id] === undefined) next[c.id] = count;
+        }
+        return next;
+      });
     }).catch(() => {});
   }, [user]);
 
@@ -89,6 +101,22 @@ export function TeamChatWidget() {
     if (!user) return;
     let cancelled = false;
     let socket: WebSocket | null = null;
+    let isReconnect = false;
+
+    // M13: heartbeat do cliente — WS ocioso morre (~60s no Render). Enquanto o
+    // socket está OPEN, manda "ping" a cada 25s (o backend responde "pong").
+    let pingTimer: ReturnType<typeof setInterval> | null = null;
+    const stopPing = () => {
+      if (pingTimer) { clearInterval(pingTimer); pingTimer = null; }
+    };
+    const startPing = () => {
+      stopPing();
+      pingTimer = setInterval(() => {
+        if (socket && socket.readyState === WebSocket.OPEN) {
+          try { socket.send("ping"); } catch { /* ignora */ }
+        }
+      }, 25000);
+    };
 
     const connect = () => {
       if (cancelled) return;
@@ -97,6 +125,27 @@ export function TeamChatWidget() {
       const wsUrl = `${API_URL.replace(/^http/, "ws")}/api/messages/ws?token=${encodeURIComponent(token)}`;
       socket = new WebSocket(wsUrl);
       wsRef.current = socket;
+
+      socket.onopen = () => {
+        startPing();
+        // A22: numa RECONEXÃO, mensagens podem ter chegado enquanto o socket
+        // estava caído — a conversa da aba ativa já está em loadedContactIds e
+        // não recarregaria sozinha. Re-busca a conversa ativa e a presença.
+        if (isReconnect) {
+          const activeTab = tabRef.current;
+          if (activeTab !== null) {
+            messagesApi.conversation(activeTab).then((msgs) => {
+              setDmByContact((prev) => ({ ...prev, [activeTab]: msgs }));
+              // Se a aba está aberta, remarca como lido (get_conversation não marca).
+              if (openRef.current) messagesApi.markRead(activeTab).catch(() => {});
+            }).catch(() => {});
+          }
+          messagesApi.presence()
+            .then((r) => setOnlineIds(new Set(r.online_user_ids)))
+            .catch(() => {});
+        }
+        isReconnect = true;
+      };
 
       socket.onmessage = (event) => {
         if (event.data === "pong") return;
@@ -155,6 +204,7 @@ export function TeamChatWidget() {
       };
 
       socket.onclose = () => {
+        stopPing();
         if (!cancelled) setTimeout(connect, 3000);
       };
       socket.onerror = () => socket?.close();
@@ -163,6 +213,7 @@ export function TeamChatWidget() {
     connect();
     return () => {
       cancelled = true;
+      stopPing();
       socket?.close();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -172,6 +223,7 @@ export function TeamChatWidget() {
     const trimmed = text.trim();
     if (!trimmed || dmSending) return;
     setInput("");
+    setDmError(null);
     setDmSending(true);
     try {
       const msg = await messagesApi.send(contactId, trimmed);
@@ -181,7 +233,10 @@ export function TeamChatWidget() {
         return { ...prev, [contactId]: [...existing, msg] };
       });
     } catch {
-      // silencioso — o próximo fetch de histórico corrige o estado
+      // M12: não perde a mensagem — devolve o texto pro input (só se o usuário
+      // não digitou outra coisa nesse meio-tempo) e avisa o erro.
+      setInput((cur) => (cur.trim() ? cur : trimmed));
+      setDmError("Não foi possível enviar. Tente novamente.");
     } finally {
       setDmSending(false);
     }
@@ -341,6 +396,13 @@ export function TeamChatWidget() {
             )}
           </div>
 
+          {/* Aviso de falha no envio (M12) — a mensagem volta pro input */}
+          {dmError && (
+            <div className="px-3 py-1.5 text-xs text-error-600 dark:text-error-400 bg-error-50 dark:bg-error-500/10 border-t border-error-200 dark:border-error-700 shrink-0">
+              {dmError}
+            </div>
+          )}
+
           {/* Footer */}
           <div className="flex items-end gap-2 px-3 py-3 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0">
             <textarea
@@ -349,6 +411,7 @@ export function TeamChatWidget() {
               onChange={(e) => {
                 setInput(e.target.value);
                 autoGrow(e.target);
+                if (dmError) setDmError(null);
               }}
               onKeyDown={handleKeyDown}
               placeholder="Escreva uma mensagem…"

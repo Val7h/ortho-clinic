@@ -426,7 +426,9 @@ export const memedApi = {
 // ── Chat IA ───────────────────────────────────────────────────────────────
 export type ChatRole = "user" | "assistant";
 export interface WhatsAppDraft {
-  patient_id: number;
+  // patient_id pode ser null: agendamento de hoje só por nome (bot/formulário)
+  // não tem paciente cadastrado; nesse caso o destino é o phone do agendamento.
+  patient_id: number | null;
   patient_name: string;
   phone: string | null;
   message: string;
@@ -444,8 +446,11 @@ export const chatApi = {
     api.post<{ reply: string; draft?: WhatsAppDraft }>("/api/chat", {
       messages: messages.map(({ role, content }) => ({ role, content })),
     }).then((r) => r.data),
-  sendWhatsApp: (patient_id: number, message: string) =>
-    api.post<{ sent: boolean; demo: boolean; error?: string }>("/api/chat/send-whatsapp", { patient_id, message }).then((r) => r.data),
+  // Um dos dois identifica o destinatário: patient_id (paciente cadastrado) OU
+  // phone (agendamento de hoje só por nome). O backend valida o phone contra a
+  // fila/agenda de hoje, então não dá pra mandar pra número arbitrário.
+  sendWhatsApp: (patient_id: number | null, message: string, phone?: string | null) =>
+    api.post<{ sent: boolean; demo: boolean; error?: string }>("/api/chat/send-whatsapp", { patient_id, message, phone }).then((r) => r.data),
 };
 
 // ── Mensagens diretas (médico <-> secretária) ──────────────────────────────
@@ -453,6 +458,8 @@ export interface Contact {
   id: number;
   name: string;
   role: string;
+  // A21: não-lidas por contato, já vem do /contacts pra o badge nascer certo.
+  unread_count?: number;
 }
 export interface DirectMessageOut {
   id: number;

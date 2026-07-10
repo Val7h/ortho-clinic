@@ -55,6 +55,14 @@ function parseReaisToCents(text: string): number | undefined {
   return Number.isFinite(n) ? Math.round(n * 100) : undefined;
 }
 
+// Aceita "1990-05-20" ou ISO completo. Retorna "20/05/1990" (ou '' se inválido).
+function formatBirthdate(value: string | null | undefined): string {
+  if (!value) return '';
+  const d = new Date(value.length <= 10 ? `${value}T00:00:00` : value);
+  if (isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
 function formatCentsToReais(cents: number | null | undefined): string {
   if (cents == null) return '';
   return (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -156,7 +164,7 @@ function PatientCard({ entry, onStatusChange, onRemove, onSelect, busy, selected
           <div className="flex-shrink-0 flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
             <Clock className="w-3 h-3" />
             <span>{formatTime(entry.arrived_at)}</span>
-            <span className={`ml-1 font-medium ${(entry.waited_minutes ?? 0) > 30 ? 'text-red-500 dark:text-red-400' : ''}`}>
+            <span className={`ml-1 font-medium ${entry.status === 'waiting' && (entry.waited_minutes ?? 0) > 30 ? 'text-red-500 dark:text-red-400' : ''}`}>
               · {formatWait(entry.waited_minutes)}
             </span>
           </div>
@@ -253,7 +261,7 @@ export default function SalaDeEsperaPage() {
   const [selectedEntry, setSelectedEntry] = useState<WaitingRoomEntry | null>(null);
 
   const checkinModal = useModal();
-  const [allPatients, setAllPatients] = useState<any[]>([]);
+  const [patientResults, setPatientResults] = useState<any[]>([]);
   const [patientSearch, setPatientSearch] = useState('');
   const [selectedPatient, setSelectedPatient] = useState<any>(null);
   const [checkinReason, setCheckinReason] = useState('');
@@ -261,6 +269,8 @@ export default function SalaDeEsperaPage() {
   const [submitting, setSubmitting] = useState(false);
 
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Evita repetir o toast "paciente saiu da fila" a cada refresh de 30s
+  const leftQueueWarnedRef = useRef(false);
 
   const fetchQueue = useCallback(
     async (silent = false) => {
@@ -269,11 +279,21 @@ export default function SalaDeEsperaPage() {
       try {
         const data = await waitingRoomApi.today(selectedClinicId);
         setEntries(data);
-        // Sync selected entry with fresh data
+        // Sync selected entry with fresh data. Se o paciente sumiu da fila
+        // (ex.: removido em outra tela), NÃO fechamos a gaveta nem descartamos o
+        // conteúdo — mantemos aberto e avisamos uma única vez.
         setSelectedEntry((prev) => {
           if (!prev) return null;
           const fresh = data.find((e: WaitingRoomEntry) => e.id === prev.id);
-          return fresh ?? null;
+          if (fresh) {
+            leftQueueWarnedRef.current = false;
+            return fresh;
+          }
+          if (!leftQueueWarnedRef.current) {
+            leftQueueWarnedRef.current = true;
+            toast('Este paciente saiu da fila', { icon: 'ℹ️' });
+          }
+          return prev;
         });
       } catch {
         if (!silent) toast.error('Erro ao carregar sala de espera');
@@ -298,7 +318,9 @@ export default function SalaDeEsperaPage() {
     const tick = setInterval(() => {
       setEntries((prev) =>
         prev.map((e) => {
-          if (e.status === 'attended' || e.status === 'absent') return e;
+          // Só conta tempo de espera enquanto o paciente aguarda; ao ser chamado
+          // (attending) o cronômetro congela — não faz sentido "alarmar" durante o atendimento.
+          if (e.status !== 'waiting') return e;
           const arrived = new Date(e.arrived_at);
           const waited = Math.floor((Date.now() - arrived.getTime()) / 60_000);
           return { ...e, waited_minutes: waited };
@@ -312,11 +334,20 @@ export default function SalaDeEsperaPage() {
     clinicApi.list().then(setClinics).catch(() => {});
   }, []);
 
+  // Busca de pacientes do modal: server-side com debounce (~300ms). O backend
+  // limita os resultados (por nome), então filtrar no cliente sobre uma página
+  // fixa fazia pacientes fora dela "sumirem" — por isso a busca vai ao servidor.
   useEffect(() => {
-    if (checkinModal.open) {
-      patientsApi.list().then(setAllPatients).catch(() => {});
-    }
-  }, [checkinModal.open]);
+    if (!checkinModal.open) return;
+    const term = patientSearch.trim();
+    const handle = setTimeout(() => {
+      patientsApi
+        .list(term || undefined)
+        .then(setPatientResults)
+        .catch(() => {});
+    }, 300);
+    return () => clearTimeout(handle);
+  }, [checkinModal.open, patientSearch]);
 
   const countBy = (s: QueueStatus) => entries.filter((e) => e.status === s).length;
   const waitingCount = countBy('waiting');
@@ -326,7 +357,10 @@ export default function SalaDeEsperaPage() {
 
   const filtered = filter === 'all' ? entries : entries.filter((e) => e.status === filter);
 
-  const totalValueCents = entries.reduce((sum, e) => sum + (e.value_cents ?? 0), 0);
+  // "Total do dia" ignora pacientes ausentes (não compareceram → não gera receita)
+  const totalValueCents = entries
+    .filter((e) => e.status !== 'absent')
+    .reduce((sum, e) => sum + (e.value_cents ?? 0), 0);
 
   const handleStatusChange = async (id: number, newStatus: QueueStatus) => {
     setBusyIds((prev) => new Set(prev).add(id));
@@ -372,6 +406,20 @@ export default function SalaDeEsperaPage() {
     }
   };
 
+  const resetCheckinForm = () => {
+    setSelectedPatient(null);
+    setPatientSearch('');
+    setCheckinReason('');
+    setCheckinValue('');
+  };
+
+  // Fechar/cancelar o modal SEMPRE limpa o formulário (paciente/valor/motivo),
+  // para não vazar seleção antiga na próxima chegada.
+  const handleCheckinOpenChange = (open: boolean) => {
+    if (!open) resetCheckinForm();
+    checkinModal.onOpenChange(open);
+  };
+
   const handleCheckin = async () => {
     if (!selectedPatient) {
       toast.error('Selecione um paciente');
@@ -386,30 +434,25 @@ export default function SalaDeEsperaPage() {
         value_cents: parseReaisToCents(checkinValue),
       });
       setEntries((prev) => [...prev, entry]);
-      checkinModal.onOpenChange(false);
-      setSelectedPatient(null);
-      setPatientSearch('');
-      setCheckinReason('');
-      setCheckinValue('');
-      toast.success(`${selectedPatient.name} registrado na fila`);
-    } catch {
-      toast.error('Erro ao registrar chegada');
+      const name = selectedPatient.name;
+      handleCheckinOpenChange(false);
+      toast.success(`${name} registrado na fila`);
+    } catch (err: any) {
+      // Backend retorna 409 quando o paciente já tem entrada ativa hoje.
+      if (err?.response?.status === 409) {
+        toast.error('Este paciente já está na fila');
+      } else {
+        toast.error('Erro ao registrar chegada');
+      }
     } finally {
       setSubmitting(false);
     }
   };
 
   const handleSelectEntry = (entry: WaitingRoomEntry) => {
+    leftQueueWarnedRef.current = false;
     setSelectedEntry((prev) => (prev && prev.id === entry.id ? null : entry));
   };
-
-  const filteredPatients = patientSearch
-    ? allPatients.filter(
-        (p) =>
-          p.name?.toLowerCase().includes(patientSearch.toLowerCase()) ||
-          p.cpf?.includes(patientSearch)
-      )
-    : allPatients;
 
   const today = new Date().toLocaleDateString('pt-BR', {
     weekday: 'long',
@@ -477,7 +520,7 @@ export default function SalaDeEsperaPage() {
           {/* ── Queue list ── */}
           <main
             className={`flex-shrink-0 overflow-y-auto transition-all duration-300 ${
-              drawerOpen ? 'w-[40%] min-w-[280px]' : 'w-full'
+              drawerOpen ? 'hidden md:block md:w-[40%] md:min-w-[280px]' : 'w-full'
             }`}
           >
             <div className="px-4 py-6 space-y-6">
@@ -608,7 +651,7 @@ export default function SalaDeEsperaPage() {
 
           {/* ── Drawer panel ── */}
           {drawerOpen && selectedEntry && (
-            <div className="flex-1 border-l border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col">
+            <div className="fixed inset-0 z-40 bg-white dark:bg-slate-950 overflow-hidden flex flex-col md:static md:inset-auto md:z-auto md:flex-1 md:border-l md:border-slate-200 md:dark:border-slate-700">
               <ConsultaDrawer
                 key={selectedEntry.patient_id}
                 entry={selectedEntry}
@@ -622,12 +665,12 @@ export default function SalaDeEsperaPage() {
         {/* Checkin Modal */}
         <Modal
           open={checkinModal.open}
-          onOpenChange={checkinModal.onOpenChange}
+          onOpenChange={handleCheckinOpenChange}
           title="Registrar Chegada"
           size="md"
           footer={
             <div className="flex gap-3 justify-end">
-              <Button variant="tertiary" onClick={() => checkinModal.onOpenChange(false)}>
+              <Button variant="tertiary" onClick={() => handleCheckinOpenChange(false)}>
                 Cancelar
               </Button>
               <Button onClick={handleCheckin} isLoading={submitting}>
@@ -658,7 +701,7 @@ export default function SalaDeEsperaPage() {
 
             {!selectedPatient && (
               <div className="max-h-52 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-lg divide-y divide-slate-100 dark:divide-slate-800">
-                {filteredPatients.slice(0, 30).map((p: any) => (
+                {patientResults.slice(0, 30).map((p: any) => (
                   <button
                     key={p.id}
                     onClick={() => {
@@ -675,12 +718,17 @@ export default function SalaDeEsperaPage() {
                         </span>
                       )}
                     </div>
-                    {p.cpf && (
-                      <p className="text-xs text-slate-500 dark:text-slate-400">CPF: {p.cpf}</p>
+                    {/* Dados extras p/ distinguir homônimos (CPF, telefone, nascimento) */}
+                    {(p.cpf || p.phone || p.birthdate) && (
+                      <p className="text-xs text-slate-500 dark:text-slate-400 flex flex-wrap gap-x-2">
+                        {p.cpf && <span>CPF: {p.cpf}</span>}
+                        {p.phone && <span>Tel: {p.phone}</span>}
+                        {p.birthdate && <span>Nasc.: {formatBirthdate(p.birthdate)}</span>}
+                      </p>
                     )}
                   </button>
                 ))}
-                {filteredPatients.length === 0 && (
+                {patientResults.length === 0 && (
                   <p className="text-center py-6 text-sm text-slate-400">Nenhum paciente encontrado</p>
                 )}
               </div>

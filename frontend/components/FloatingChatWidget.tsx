@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { MessageCircle, X, Send, Sparkles, Copy, Check, MessageSquare } from "lucide-react";
+import { MessageCircle, X, Send, Sparkles, Copy, Check, MessageSquare, AlertTriangle } from "lucide-react";
 import toast from "react-hot-toast";
 import { useAuth } from "@/components/AuthProvider";
 import { chatApi, type ChatMessage } from "@/lib/api";
@@ -36,7 +36,12 @@ function loadHistory(): ChatMessage[] {
 
 function saveHistory(messages: ChatMessage[]) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(messages.slice(-MAX_STORED_MESSAGES)));
+    // LGPD: NÃO persistir o rascunho (telefone + mensagem do paciente) no localStorage.
+    // Só role/content são gravados; os drafts vivem apenas em memória na sessão atual.
+    const sanitized = messages
+      .slice(-MAX_STORED_MESSAGES)
+      .map(({ role, content }) => ({ role, content }));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(sanitized));
   } catch {
     // localStorage cheio/indisponível — histórico simplesmente não persiste
   }
@@ -50,6 +55,9 @@ export function FloatingChatWidget() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [sending, setSending] = useState(false);
   const [errored, setErrored] = useState(false);
+  // M10: índices de rascunhos "enviados" só no modo demo (não foram enviados de verdade).
+  // Estado local/efêmero — não persiste, serve só para mostrar um aviso neutro no lugar do check verde.
+  const [demoDrafts, setDemoDrafts] = useState<Set<number>>(new Set());
 
   const [input, setInput] = useState("");
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -103,15 +111,28 @@ export function FloatingChatWidget() {
   }, []);
 
   const approveDraft = useCallback(async (index: number, draft: NonNullable<ChatMessage["draft"]>) => {
+    // M11: confirmar mostrando o telefone COMPLETO antes de disparar (evita envio por toque acidental).
+    // Espelha o padrão da aba Receita (ConsultaDrawer).
+    if (
+      typeof window !== "undefined" &&
+      !window.confirm(`Enviar esta mensagem por WhatsApp para ${draft.patient_name} (${draft.phone ?? "sem telefone"})?\n\n${draft.message}`)
+    ) {
+      return;
+    }
     updateDraftStatus(index, "sending");
     try {
-      const result = await chatApi.sendWhatsApp(draft.patient_id, draft.message);
+      // Agendamento só por nome (bot/formulário) tem patient_id null; nesse caso
+      // o destino é o phone do rascunho, que o backend valida contra a agenda de hoje.
+      const result = await chatApi.sendWhatsApp(draft.patient_id, draft.message, draft.phone);
       if (result.sent) {
         toast.success(`Mensagem enviada para ${draft.patient_name.split(" ")[0]}`);
         updateDraftStatus(index, "sent");
       } else if (result.demo) {
+        // M10: modo demo NÃO envia de verdade — não marcar como "Enviado" (check verde).
+        // Volta o rascunho ao estado de ação e sinaliza visualmente como não enviado (demo).
         toast(`Modo demo: WhatsApp não configurado neste ambiente (mensagem não enviada de verdade)`, { icon: "⚠️" });
-        updateDraftStatus(index, "sent");
+        setDemoDrafts((prev) => new Set(prev).add(index));
+        updateDraftStatus(index, "pending");
       } else {
         toast.error("Falha ao enviar via WhatsApp");
         updateDraftStatus(index, "failed");
@@ -217,7 +238,11 @@ export function FloatingChatWidget() {
                     <p className="text-xs text-slate-700 dark:text-slate-200 whitespace-pre-wrap bg-white dark:bg-slate-800 rounded-lg px-2.5 py-2 border border-slate-200 dark:border-slate-700">
                       {m.draft.message}
                     </p>
-                    {m.draftStatus === "sent" ? (
+                    {demoDrafts.has(i) ? (
+                      <div className="flex items-center gap-1.5 text-xs font-medium text-amber-600 dark:text-amber-400">
+                        <AlertTriangle className="w-3.5 h-3.5" /> Não enviado (modo demo)
+                      </div>
+                    ) : m.draftStatus === "sent" ? (
                       <div className="flex items-center gap-1.5 text-xs font-medium text-success-600 dark:text-success-400">
                         <Check className="w-3.5 h-3.5" /> Enviado
                       </div>

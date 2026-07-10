@@ -74,7 +74,10 @@ interface ApptEvent {
 const MONTHS_PT = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 const WEEK_DAYS_LONG = ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'];
 
-function toISO(d: Date) { return d.toISOString().slice(0, 10); }
+function toISO(d: Date) {
+  // Usa componentes locais (não toISOString/UTC) para não pular de dia após 21h BRT
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
 function fmtDate(d: Date) { return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`; }
 function fmtTime(iso: string) {
   try { return new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }); }
@@ -96,6 +99,12 @@ function addDays(d: Date, n: number): Date {
 function isoToMinutes(t: string): number {
   const [h, m] = t.split(':').map(Number);
   return h * 60 + m;
+}
+
+// M14: mesmo filtro do chat da IA — esconde/não conta nomes de teste
+const TEST_NAME_RE = /\b(testes?|debug|exemplo|demo|confirm)\b/i;
+function isTestName(name?: string): boolean {
+  return !!name && TEST_NAME_RE.test(name);
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -126,6 +135,7 @@ export default function AgendaPage() {
   const [view, setView] = useState<ViewMode>('semana');
   const [cursor, setCursor] = useState<Date>(new Date()); // "anchor" date for all views
   const [events, setEvents] = useState<ApptEvent[]>([]);
+  const [blocks, setBlocks] = useState<Record<string, any[]>>({}); // M16: blocos de funcionamento por data
   const [clinics, setClinics] = useState<ClinicData[]>([]);
   const [availability, setAvailability] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(false);
@@ -184,7 +194,14 @@ export default function AgendaPage() {
         });
       }
 
+      // M16: agrupa blocos de funcionamento (clinic_block / walk_in_block) por data
+      const blockMap: Record<string, any[]> = {};
+
       for (const e of clinicEvents) {
+        if (e.source === 'clinic_block' || e.source === 'walk_in_block') {
+          (blockMap[e.date] ??= []).push(e);
+          continue;
+        }
         if (e.source !== 'appointment') continue;
         merged.push({
           id: e.id,
@@ -223,14 +240,27 @@ export default function AgendaPage() {
         }
       }
 
-      setEvents(merged);
+      // M14: esconde/não conta os nomes de teste (mesmo filtro do chat da IA)
+      setEvents(merged.filter(m => !isTestName(m.patient_name)));
+      setBlocks(blockMap); // M16
 
-      // Fetch availability for active clinic (first clinic by default)
+      // M17: disponibilidade de TODAS as clínicas ativas (disponível se qualquer uma tem vaga)
       if (clinicList.length > 0) {
-        appointmentsApi.availability(clinicList[0].id, rangeStart, rangeEnd)
-          .then(avail => {
+        Promise.all(
+          clinicList.map((c: ClinicData) =>
+            appointmentsApi.availability(c.id, rangeStart, rangeEnd).catch(() => [])
+          )
+        )
+          .then(results => {
             const map: Record<string, any> = {};
-            for (const a of avail) map[a.date] = a;
+            for (const avail of results) {
+              for (const a of avail) {
+                const existing = map[a.date];
+                map[a.date] = existing
+                  ? { ...existing, available: existing.available || a.available }
+                  : a;
+              }
+            }
             setAvailability(map);
           })
           .catch(() => {});
@@ -308,6 +338,11 @@ export default function AgendaPage() {
 
   function eventsForDate(date: string): ApptEvent[] {
     return events.filter(e => e.date === date && e.status !== 'cancelled');
+  }
+
+  // M16: blocos de funcionamento (faixa de fundo) para a data
+  function blocksForDate(date: string): any[] {
+    return blocks[date] ?? [];
   }
 
   // Month calendar grid
@@ -516,7 +551,25 @@ export default function AgendaPage() {
                     className="bg-slate-50 dark:bg-slate-900 min-h-[90px] p-1 space-y-1"
                     onClick={() => openCreate(iso)}
                   >
-                    {dayEvts.length === 0 && (
+                    {/* M16: blocos de funcionamento como faixa de fundo (encaixes X/Y) */}
+                    {blocksForDate(iso).map((b, bi) => (
+                      <div
+                        key={`blk-${bi}`}
+                        className="rounded-md px-1.5 py-0.5 text-[9px] font-semibold border truncate"
+                        style={{
+                          backgroundColor: `${b.clinic_color ?? '#0F2D5E'}1A`,
+                          borderColor: `${b.clinic_color ?? '#0F2D5E'}55`,
+                          color: b.clinic_color ?? '#0F2D5E',
+                        }}
+                        title={`${b.clinic_name ?? ''} · ${b.start_time}–${b.end_time}`}
+                      >
+                        {b.schedule_type === 'walk_in'
+                          ? `encaixes ${b.walk_in_count}/${b.walk_in_max}`
+                          : (b.clinic_name || 'Funcionamento')}
+                      </div>
+                    ))}
+
+                    {dayEvts.length === 0 && blocksForDate(iso).length === 0 && (
                       <div className="flex items-center justify-center py-5">
                         <p className="text-[10px] text-slate-300">—</p>
                       </div>
@@ -567,6 +620,36 @@ export default function AgendaPage() {
                         setFormOpen(true);
                       }}
                     />
+                  </div>
+                );
+              })}
+
+              {/* M16: blocos de funcionamento como faixa de fundo (encaixes X/Y) */}
+              {blocksForDate(toISO(cursor)).map((b, bi) => {
+                const bStart = isoToMinutes(b.start_time);
+                const bEnd = isoToMinutes(b.end_time);
+                if (bEnd <= DAY_START || bStart >= DAY_END) return null;
+                const top = Math.max((bStart - DAY_START) / 60 * ROW_H, 0);
+                const bottom = Math.min((bEnd - DAY_START) / 60 * ROW_H, (DAY_END - DAY_START) / 60 * ROW_H);
+                const color = b.clinic_color ?? '#0F2D5E';
+                return (
+                  <div
+                    key={`blk-${bi}`}
+                    className="absolute left-12 right-3 rounded-lg border pointer-events-none flex items-start justify-end px-2 py-1"
+                    style={{
+                      top: `${top}px`,
+                      height: `${Math.max(bottom - top, 24)}px`,
+                      backgroundColor: `${color}12`,
+                      borderColor: `${color}44`,
+                      zIndex: 1,
+                    }}
+                    title={`${b.clinic_name ?? ''} · ${b.start_time}–${b.end_time}`}
+                  >
+                    {b.schedule_type === 'walk_in' && (
+                      <span className="text-[9px] font-bold" style={{ color }}>
+                        encaixes {b.walk_in_count}/{b.walk_in_max}
+                      </span>
+                    )}
                   </div>
                 );
               })}

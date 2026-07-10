@@ -186,6 +186,11 @@ def migrate_db():
         pp_cols = [c["name"] for c in inspector.get_columns("patient_prescriptions")]
         if "prescription_type" not in pp_cols:
             migrations.append("ALTER TABLE patient_prescriptions ADD COLUMN prescription_type VARCHAR(30) NOT NULL DEFAULT 'simples'")
+        # A16-back: endereço/telefone do paciente gravados junto da receita (p/ impressão).
+        if "patient_address" not in pp_cols:
+            migrations.append("ALTER TABLE patient_prescriptions ADD COLUMN patient_address VARCHAR(400)")
+        if "patient_phone" not in pp_cols:
+            migrations.append("ALTER TABLE patient_prescriptions ADD COLUMN patient_phone VARCHAR(20)")
 
     # Prescription templates (modelos reutilizáveis de receitas)
     for table_name, ddl in [

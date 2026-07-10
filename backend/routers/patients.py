@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from sqlalchemy.orm import Session
 from sqlalchemy import func, or_
+from sqlalchemy.exc import IntegrityError
 from typing import List, Optional
-import os, uuid
+import os, uuid, re, unicodedata
 from services.storage import upload_file
 from database import get_db
 from models.patient import Patient
@@ -22,6 +23,15 @@ def _org_filter(q, current_user: User):
     if current_user.role != "superadmin":
         q = q.filter(Patient.organization_id == current_user.organization_id)
     return q
+
+
+def _normalize_name(name: Optional[str]) -> str:
+    """Normaliza nome p/ dedup soft: sem acento, minúsculo, espaços colapsados."""
+    if not name:
+        return ""
+    nfkd = unicodedata.normalize("NFKD", name)
+    sem_acento = "".join(c for c in nfkd if not unicodedata.combining(c))
+    return re.sub(r"\s+", " ", sem_acento).strip().lower()
 
 
 def _redact_clinical_for_secretary(result: PatientOut, current_user: User) -> PatientOut:
@@ -75,11 +85,45 @@ def create_patient(
         ).first()
         if existing:
             raise HTTPException(400, "CPF já cadastrado")
+
+    # A19-back: dedup SOFT por (nome normalizado + data de nascimento) na org.
+    # Cadastro rápido sem CPF não pega homônimos via constraint, então avisamos
+    # sem bloquear. Contrato com o front: quando há possível duplicata, o campo
+    # 'warning' do retorno vem preenchido (string); caso contrário vem null.
+    warning: Optional[str] = None
+    norm = _normalize_name(data.name)
+    if norm and data.birthdate:
+        candidatos = _org_filter(
+            db.query(Patient).filter(
+                Patient.active == True,
+                Patient.birthdate == data.birthdate,
+            ),
+            current_user,
+        ).all()
+        similar = next((c for c in candidatos if _normalize_name(c.name) == norm), None)
+        if similar:
+            warning = (
+                f"Já existe paciente com mesmo nome e data de nascimento "
+                f"(id {similar.id}). Verifique se não é duplicado."
+            )
+
     patient = Patient(**data.model_dump(), organization_id=current_user.organization_id)
     db.add(patient)
-    db.commit()
+    # M20: cpf é unique GLOBAL, mas o dedup acima filtra por org; um CPF já usado
+    # em OUTRA organização estoura IntegrityError. Capturamos p/ retornar 400 em
+    # vez de 500. RECOMENDAÇÃO (mantenedor): trocar a unique global de cpf por
+    # constraint composta (organization_id, cpf) — não feito aqui p/ não arriscar
+    # dados existentes; exige migração/ALTER TABLE dedicado.
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(400, "CPF já cadastrado")
     db.refresh(patient)
-    return patient
+
+    result = PatientOut.model_validate(patient)
+    result.warning = warning
+    return result
 
 
 @router.get("/{patient_id}", response_model=PatientOut)

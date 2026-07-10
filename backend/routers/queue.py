@@ -6,7 +6,7 @@ Includes WebSocket support for real-time updates.
 from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
-from sqlalchemy import or_
+from sqlalchemy import or_, func
 from datetime import datetime, timedelta, date
 from typing import List, Dict, Set, Optional
 from pydantic import BaseModel
@@ -749,13 +749,32 @@ async def checkin_patient(
 
     today = today_br()
 
-    # Calcula próxima posição do dia
-    last_position = (
+    # M4-back: impede o mesmo paciente 2x na fila do dia. Se já existe entrada
+    # ativa (aguardando ou em atendimento) hoje, retorna 409. Contrato front: 409.
+    ja_na_fila = (
         db.query(WaitingRoomEntry)
-        .filter(WaitingRoomEntry.entry_date == today)
-        .count()
+        .filter(
+            WaitingRoomEntry.patient_id == request.patient_id,
+            WaitingRoomEntry.entry_date == today,
+            WaitingRoomEntry.status.in_(["waiting", "attending"]),
+        )
+        .first()
     )
-    next_position = last_position + 1
+    if ja_na_fila:
+        raise HTTPException(status_code=409, detail="Paciente já está na fila")
+
+    # M2-back: posição derivada de max(position)+1 escopada por organização (via
+    # Patient) e pelo dia — robusto a remoções (não usa count() global, que gera
+    # buracos/duplicados quando uma entrada é deletada).
+    pos_query = db.query(func.max(WaitingRoomEntry.position)).filter(
+        WaitingRoomEntry.entry_date == today
+    )
+    if current_user.role != "superadmin":
+        pos_query = pos_query.join(
+            Patient, Patient.id == WaitingRoomEntry.patient_id
+        ).filter(Patient.organization_id == current_user.organization_id)
+    max_position = pos_query.scalar()
+    next_position = (max_position or 0) + 1
 
     entry = WaitingRoomEntry(
         patient_id=request.patient_id,

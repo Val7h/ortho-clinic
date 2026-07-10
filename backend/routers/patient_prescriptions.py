@@ -54,6 +54,10 @@ class PatientRxOut(BaseModel):
     medications: Optional[List[Any]] = None
     instructions: Optional[str] = None
     memed_id: Optional[str] = None
+    # A16-back: endereço/telefone do paciente persistidos p/ receita de ATB
+    # (RDC 20/2011); contrato com o front: patient_address, patient_phone.
+    patient_address: Optional[str] = None
+    patient_phone: Optional[str] = None
     created_at: Any
 
     class Config:
@@ -106,6 +110,9 @@ def create_prescription(
         medications=[m.model_dump() for m in data.medications],
         instructions=data.instructions or "",
         memed_id=data.memed_id,
+        # A16-back: persistir dados exigidos na receita de antimicrobiano.
+        patient_address=data.patient_address,
+        patient_phone=data.patient_phone,
     )
     db.add(rx)
     db.commit()

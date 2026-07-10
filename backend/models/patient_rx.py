@@ -23,6 +23,16 @@ class PatientRx(Base):
     instructions = Column(Text, nullable=True)  # orientações gerais
     memed_id = Column(String(100), nullable=True)  # id da receita Memed (se houver)
 
+    # A16-back: dados do paciente exigidos na receita de antimicrobiano
+    # (RDC 20/2011) — precisam ficar PERSISTIDOS p/ a reimpressão sair completa.
+    # TODO(mantenedor): tabela "patient_prescriptions" já existe em prod; estas
+    # 2 colunas só são criadas automaticamente em banco novo (create_all). Rodar
+    # ALTER TABLE no banco existente:
+    #   ALTER TABLE patient_prescriptions ADD COLUMN patient_address VARCHAR(400);
+    #   ALTER TABLE patient_prescriptions ADD COLUMN patient_phone   VARCHAR(20);
+    patient_address = Column(String(400), nullable=True)
+    patient_phone = Column(String(20), nullable=True)
+
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
