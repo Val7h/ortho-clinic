@@ -376,6 +376,7 @@ def health():
     #  - "sqlite" em produção = disco efêmero do Render = dados somem no deploy (RUIM)
     #  - "postgresql" + host neon/render = banco gerenciado persistente (BOM)
     from sqlalchemy import text as _text
+    from database import engine  # não importado no topo — sem isto o handler quebra (NameError) e o Render reprova o deploy no health check
     db_engine = engine.dialect.name  # "sqlite" | "postgresql"
     host = (engine.url.host or "").lower()
     if "neon" in host:
