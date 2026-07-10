@@ -6,7 +6,7 @@ Sem acesso a prontuário, anamnese, exames ou histórico clínico do paciente.
 """
 import logging
 import os
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import List, Optional
 
 import httpx
@@ -113,7 +113,11 @@ class SendWhatsAppResponse(BaseModel):
 
 def _build_context(db: Session, current_user: User) -> str:
     today = date.today()
-    now = datetime.utcnow()
+    # tz-aware: no Postgres, colunas DateTime(timezone=True) voltam com tzinfo —
+    # subtrair de um datetime.utcnow() (naive) lança TypeError. Nunca disparava
+    # antes porque a fila de espera nunca tinha entrada real na hora do chat
+    # (mascarado pelo bug de fuso horário do "hoje" do servidor).
+    now = datetime.now(timezone.utc)
 
     # Escopo por organização do PACIENTE, não por clinic_id da entrada — muitos
     # check-ins da sala de espera ficam com clinic_id nulo (não é obrigatório
@@ -134,7 +138,8 @@ def _build_context(db: Session, current_user: User) -> str:
         name = patient.name if patient else "Desconhecido"
         waited = None
         if entry.arrived_at:
-            waited = int((now - entry.arrived_at).total_seconds() / 60)
+            arrived_at = entry.arrived_at if entry.arrived_at.tzinfo else entry.arrived_at.replace(tzinfo=timezone.utc)
+            waited = int((now - arrived_at).total_seconds() / 60)
         wait_txt = f", {waited}min de espera" if waited is not None and entry.status == "waiting" else ""
         queue_lines.append(f"- {name}: {STATUS_LABELS.get(entry.status, entry.status)}{wait_txt}")
 
