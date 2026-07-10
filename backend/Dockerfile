@@ -16,4 +16,6 @@ RUN mkdir -p uploads/photos data
 
 EXPOSE 8000
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
+# --workers 1: chat (DMConnectionManager) mantém presença/lida/push em memória,
+# assume 1 processo. Só subir com pub-sub compartilhado (Redis/Upstash).
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
