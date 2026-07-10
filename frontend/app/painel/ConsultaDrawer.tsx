@@ -6,10 +6,10 @@ import {
   ClipboardList, Stethoscope, FileText, FlaskConical,
   Plus, Trash2, Printer, ChevronDown, ChevronUp, Save,
   Send, ClipboardCheck, Award, Camera, FileSearch2, Upload, ImageIcon, ZoomIn, ZoomOut,
-  Pencil, Download,
+  Pencil, Download, MessageSquare,
 } from "lucide-react";
 import toast from "react-hot-toast";
-import { patientsApi, consultationsApi, prescriptionsApi, prescriptionTemplatesApi, examsApi, evolutionApi, clinicApi } from "@/lib/api";
+import { patientsApi, consultationsApi, prescriptionsApi, prescriptionTemplatesApi, examsApi, evolutionApi, clinicApi, chatApi } from "@/lib/api";
 import { formatDate } from "@/lib/utils";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -1430,6 +1430,7 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
   const [templateNameInput, setTemplateNameInput] = useState("");
   const [confirmDeleteTemplateId, setConfirmDeleteTemplateId] = useState<number | null>(null);
   const [showAllRx, setShowAllRx] = useState(false);
+  const [sendingWa, setSendingWa] = useState(false);
 
   // Autocomplete suggestions keyed by med.id
   const [medSuggestions, setMedSuggestions] = useState<Record<string, OrthoMedPreset[]>>({});
@@ -1548,15 +1549,32 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
 
   const handleLoadTemplate = (tmpl: any) => {
     setRxType(normalizePrescriptionType(tmpl.prescription_type || "simples"));
-    setMedications(tmpl.medications?.length ? tmpl.medications : [emptyMed()]);
-    setInstructions(tmpl.instructions || "");
+    const meds = tmpl.medications || [];
+    // Modelo de TEXTO LIVRE = sem medicamentos estruturados, texto em instructions.
+    if (meds.length === 0 && (tmpl.instructions || "").trim()) {
+      setFreeTextMode(true);
+      setFreeText(tmpl.instructions || "");
+      setMedications([emptyMed()]);
+      setInstructions("");
+    } else {
+      setFreeTextMode(false);
+      setFreeText("");
+      setMedications(meds.length ? meds : [emptyMed()]);
+      setInstructions(tmpl.instructions || "");
+    }
     setShowTemplateDropdown(false);
     toast.success(`Modelo "${tmpl.name}" carregado`);
   };
 
   const handleSaveTemplate = async () => {
-    const validMeds = medications.filter((m) => m.name.trim());
-    if (validMeds.length === 0) { toast.error("Adicione medicamentos antes de salvar modelo"); return; }
+    // Aceita salvar modelo tanto estruturado quanto de texto livre.
+    let validMeds: Medication[] = [];
+    if (freeTextMode) {
+      if (!freeText.trim()) { toast.error("Escreva o texto da receita antes de salvar o modelo"); return; }
+    } else {
+      validMeds = medications.filter((m) => m.name.trim());
+      if (validMeds.length === 0) { toast.error("Adicione medicamentos antes de salvar modelo"); return; }
+    }
     if (!showSaveTemplateInput) { setShowSaveTemplateInput(true); setTemplateNameInput(""); return; }
     if (!templateNameInput.trim()) { toast.error("Informe um nome para o modelo"); return; }
     setSavingTemplate(true);
@@ -1565,7 +1583,7 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
         name: templateNameInput.trim(),
         prescription_type: rxType,
         medications: validMeds,
-        instructions,
+        instructions: freeTextMode ? freeText : instructions,
       });
       setTemplates((prev) => [...prev, tmpl].sort((a, b) => a.name.localeCompare(b.name)));
       toast.success(`Modelo "${templateNameInput.trim()}" salvo!`);
@@ -1575,6 +1593,49 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
       toast.error("Erro ao salvar modelo");
     } finally {
       setSavingTemplate(false);
+    }
+  };
+
+  // Monta o texto da receita (estruturada ou livre) para envio por WhatsApp.
+  const buildRxText = (): string => {
+    const header = `*Receita — ${patient?.name || ""}*`;
+    if (freeTextMode) {
+      return freeText.trim() ? `${header}\n\n${freeText.trim()}` : "";
+    }
+    const meds = medications.filter((m) => m.name.trim());
+    if (meds.length === 0) return "";
+    const lines = meds.map((m, i) => {
+      const posologia = [m.route && `Via ${m.route}`, m.frequency, m.duration].filter(Boolean).join(" · ");
+      let l = `${i + 1}. ${m.name}${m.dose ? ` — ${m.dose}` : ""}`;
+      if (posologia) l += `\n   ${posologia}`;
+      if (m.instructions) l += `\n   Obs: ${m.instructions}`;
+      return l;
+    });
+    let txt = `${header}\n\n${lines.join("\n")}`;
+    if (instructions.trim()) txt += `\n\n_Orientações:_ ${instructions.trim()}`;
+    txt += `\n\n— Dr. Valth Guimarães`;
+    return txt;
+  };
+
+  const handleSendWhatsApp = async () => {
+    if (isNotificacaoAB) { toast.error("Notificação A/B não pode ser enviada por aqui"); return; }
+    const text = buildRxText();
+    if (!text) { toast.error("Preencha a receita antes de enviar"); return; }
+    if (!patient?.phone) { toast.error("Paciente sem telefone cadastrado"); return; }
+    if (typeof window !== "undefined" &&
+        !window.confirm(`Enviar esta receita por WhatsApp para ${patient.name} (${patient.phone})?\n\n${text}`)) {
+      return;
+    }
+    setSendingWa(true);
+    try {
+      const res = await chatApi.sendWhatsApp(patientId, text);
+      if (res.sent) toast.success(`Receita enviada por WhatsApp para ${(patient.name || "").split(" ")[0]}!`);
+      else if (res.demo) toast("Modo demo: WhatsApp não configurado neste ambiente (não enviado de verdade)", { icon: "⚠️" });
+      else toast.error("Falha ao enviar por WhatsApp");
+    } catch {
+      toast.error("Falha ao enviar por WhatsApp");
+    } finally {
+      setSendingWa(false);
     }
   };
 
@@ -1826,16 +1887,15 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
 
             {/* ── Ações ── */}
             <div className="flex gap-2 flex-wrap">
-              {!freeTextMode && (
-                <button
-                  type="button"
-                  onClick={handleSaveTemplate}
-                  disabled={savingTemplate}
-                  className="flex items-center gap-1.5 px-3 py-2 border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-400 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 text-xs font-semibold disabled:opacity-50"
-                >
-                  <Save className="w-3.5 h-3.5" /> Salvar Modelo
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={handleSaveTemplate}
+                disabled={savingTemplate}
+                className="flex items-center gap-1.5 px-3 py-2 border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-400 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 text-xs font-semibold disabled:opacity-50"
+                title={freeTextMode ? "Salva este texto livre como modelo reutilizável" : "Salva os medicamentos como modelo reutilizável"}
+              >
+                <Save className="w-3.5 h-3.5" /> Salvar Modelo
+              </button>
               <button
                 type="button"
                 onClick={handlePrint}
@@ -1843,6 +1903,19 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
                 title="Imprimir sem salvar"
               >
                 <Printer className="w-3.5 h-3.5" /> Imprimir
+              </button>
+              <button
+                type="button"
+                onClick={handleSendWhatsApp}
+                disabled={sendingWa || !patient?.phone}
+                title={!patient?.phone ? "Paciente sem telefone cadastrado" : "Envia a receita pelo WhatsApp do paciente"}
+                className="flex items-center gap-1.5 px-3 py-2 border border-green-500 text-green-700 dark:text-green-400 rounded-lg hover:bg-green-50 dark:hover:bg-green-900/20 text-xs font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {sendingWa ? (
+                  <><div className="w-3.5 h-3.5 border-2 border-green-500 border-t-transparent rounded-full animate-spin" /> Enviando...</>
+                ) : (
+                  <><MessageSquare className="w-3.5 h-3.5" /> Enviar WhatsApp</>
+                )}
               </button>
               <button
                 type="button"
