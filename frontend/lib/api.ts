@@ -469,6 +469,10 @@ export const messagesApi = {
     api.get<DirectMessageOut[]>(`/api/messages/${otherId}`).then((r) => r.data),
   send: (recipient_id: number, content: string) =>
     api.post<DirectMessageOut>("/api/messages", { recipient_id, content }).then((r) => r.data),
+  presence: () =>
+    api.get<{ online_user_ids: number[] }>("/api/messages/presence").then((r) => r.data),
+  markRead: (otherId: number) =>
+    api.post(`/api/messages/${otherId}/read`, {}).then((r) => r.data),
 };
 
 // ── WhatsApp ──────────────────────────────────────────────────────────────

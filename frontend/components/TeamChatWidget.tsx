@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Users, X, Send, User as UserIcon } from "lucide-react";
+import { Users, X, Send, User as UserIcon, Check, CheckCheck } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import {
   messagesApi,
@@ -22,6 +22,7 @@ export function TeamChatWidget() {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [dmByContact, setDmByContact] = useState<Record<number, DirectMessageOut[]>>({});
   const [unreadByContact, setUnreadByContact] = useState<Record<number, number>>({});
+  const [onlineIds, setOnlineIds] = useState<Set<number>>(new Set());
   const [dmSending, setDmSending] = useState(false);
   const loadedContactIds = useRef<Set<number>>(new Set());
   const wsRef = useRef<WebSocket | null>(null);
@@ -51,6 +52,22 @@ export function TeamChatWidget() {
     }).catch(() => {});
   }, [user]);
 
+  // Presença: estado inicial via REST + refresh a cada 30s como rede de
+  // segurança (os eventos do WebSocket cobrem as mudanças em tempo real, mas
+  // um poll leve garante consistência se algum evento se perder na reconexão).
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    const refresh = () => {
+      messagesApi.presence()
+        .then((r) => { if (!cancelled) setOnlineIds(new Set(r.online_user_ids)); })
+        .catch(() => {});
+    };
+    refresh();
+    const id = setInterval(refresh, 30000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [user]);
+
   useEffect(() => {
     if (tab === null || loadedContactIds.current.has(tab)) return;
     loadedContactIds.current.add(tab);
@@ -59,9 +76,12 @@ export function TeamChatWidget() {
     }).catch(() => {});
   }, [tab]);
 
+  // Abrir uma conversa = marcar como lidas as mensagens do colega e zerar o
+  // contador. O markRead avisa o remetente (WS) pra UI dele mostrar "lida".
   useEffect(() => {
     if (open && tab !== null) {
       setUnreadByContact((prev) => (prev[tab] ? { ...prev, [tab]: 0 } : prev));
+      messagesApi.markRead(tab).catch(() => {});
     }
   }, [open, tab]);
 
@@ -80,20 +100,57 @@ export function TeamChatWidget() {
 
       socket.onmessage = (event) => {
         if (event.data === "pong") return;
-        let msg: DirectMessageOut;
+        let data: any;
         try {
-          msg = JSON.parse(event.data);
+          data = JSON.parse(event.data);
         } catch {
           return;
         }
+
+        // Colega entrou/saiu (online/offline).
+        if (data.type === "presence") {
+          setOnlineIds((prev) => {
+            const next = new Set(prev);
+            if (data.online) next.add(data.user_id);
+            else next.delete(data.user_id);
+            return next;
+          });
+          return;
+        }
+
+        // Colega leu minhas mensagens → marca tudo que MANDEI pra ele como lido.
+        if (data.type === "read") {
+          const readerId = data.reader_id as number;
+          setDmByContact((prev) => {
+            const existing = prev[readerId];
+            if (!existing) return prev;
+            return {
+              ...prev,
+              [readerId]: existing.map((m) =>
+                m.sender_id === user.id && !m.read ? { ...m, read: true } : m
+              ),
+            };
+          });
+          return;
+        }
+
+        // Caso contrário é uma mensagem (type "message" ou payload legado).
+        const msg = data as DirectMessageOut;
+        if (typeof msg.sender_id !== "number") return;
         const otherId = msg.sender_id === user.id ? msg.recipient_id : msg.sender_id;
         setDmByContact((prev) => {
           const existing = prev[otherId] || [];
           if (existing.some((m) => m.id === msg.id)) return prev;
           return { ...prev, [otherId]: [...existing, msg] };
         });
-        if (msg.sender_id !== user.id && !(openRef.current && tabRef.current === otherId)) {
-          setUnreadByContact((prev) => ({ ...prev, [otherId]: (prev[otherId] || 0) + 1 }));
+        if (msg.sender_id !== user.id) {
+          const convOpen = openRef.current && tabRef.current === otherId;
+          if (convOpen) {
+            // Conversa aberta na tela → já marca como lida e avisa o remetente.
+            messagesApi.markRead(otherId).catch(() => {});
+          } else {
+            setUnreadByContact((prev) => ({ ...prev, [otherId]: (prev[otherId] || 0) + 1 }));
+          }
         }
       };
 
@@ -150,7 +207,15 @@ export function TeamChatWidget() {
 
   const totalUnread = Object.values(unreadByContact).reduce((a, b) => a + b, 0);
   const activeContact = contacts.find((c) => c.id === tab) || null;
+  const activeOnline = activeContact ? onlineIds.has(activeContact.id) : false;
   const dmMessages = tab !== null ? (dmByContact[tab] || []) : [];
+  // Índice da última mensagem que EU enviei — só nela mostramos o recibo (enviada/lida).
+  const lastMineIdx = (() => {
+    for (let i = dmMessages.length - 1; i >= 0; i--) {
+      if (dmMessages[i].sender_id === user.id) return i;
+    }
+    return -1;
+  })();
 
   return (
     <>
@@ -177,14 +242,29 @@ export function TeamChatWidget() {
         >
           {/* Header */}
           <div className="flex items-center gap-3 px-4 py-3 bg-slate-700 text-white shrink-0">
-            <div className="w-9 h-9 rounded-full bg-white/15 flex items-center justify-center shrink-0">
+            <div className="relative w-9 h-9 rounded-full bg-white/15 flex items-center justify-center shrink-0">
               <UserIcon className="w-5 h-5" />
+              {activeContact && (
+                <span
+                  className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-slate-700 ${
+                    activeOnline ? "bg-green-400" : "bg-slate-400"
+                  }`}
+                  title={activeOnline ? "Online" : "Offline"}
+                />
+              )}
             </div>
             <div className="flex-1 min-w-0">
               <p className="font-semibold text-sm leading-tight truncate">
                 {activeContact?.name || "Equipe"}
               </p>
-              <p className="text-xs text-white/70 leading-tight truncate">Mensagem direta</p>
+              <p className="text-xs text-white/70 leading-tight truncate flex items-center gap-1">
+                {activeContact ? (
+                  <>
+                    <span className={`w-1.5 h-1.5 rounded-full ${activeOnline ? "bg-green-400" : "bg-slate-400"}`} />
+                    {activeOnline ? "Online agora" : "Offline"}
+                  </>
+                ) : "Mensagem direta"}
+              </p>
             </div>
             <button
               onClick={() => setOpen(false)}
@@ -202,12 +282,16 @@ export function TeamChatWidget() {
                 <button
                   key={c.id}
                   onClick={() => setTab(c.id)}
-                  className={`relative px-3 py-1.5 rounded-t-lg text-xs font-medium whitespace-nowrap ${
+                  className={`relative px-3 py-1.5 rounded-t-lg text-xs font-medium whitespace-nowrap inline-flex items-center gap-1.5 ${
                     tab === c.id
                       ? "bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-200 border-x border-t border-slate-200 dark:border-slate-800"
                       : "text-slate-500 dark:text-slate-400 hover:text-slate-700"
                   }`}
                 >
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full shrink-0 ${onlineIds.has(c.id) ? "bg-green-500" : "bg-slate-300 dark:bg-slate-600"}`}
+                    title={onlineIds.has(c.id) ? "Online" : "Offline"}
+                  />
                   {c.name.split(" ")[0]}
                   {unreadByContact[c.id] > 0 && (
                     <span className="ml-1.5 inline-flex min-w-[16px] h-4 px-1 rounded-full bg-error-500 text-white text-[10px] font-semibold items-center justify-center">
@@ -228,8 +312,8 @@ export function TeamChatWidget() {
                 </p>
               </div>
             )}
-            {dmMessages.map((m) => (
-              <div key={m.id} className={`flex ${m.sender_id === user.id ? "justify-end" : "justify-start"}`}>
+            {dmMessages.map((m, idx) => (
+              <div key={m.id} className={`flex flex-col ${m.sender_id === user.id ? "items-end" : "items-start"}`}>
                 <div
                   className={`max-w-[80%] px-3 py-2 rounded-2xl text-sm whitespace-pre-wrap ${
                     m.sender_id === user.id
@@ -239,6 +323,12 @@ export function TeamChatWidget() {
                 >
                   {m.content}
                 </div>
+                {idx === lastMineIdx && (
+                  <span className={`mt-0.5 flex items-center gap-0.5 text-[10px] ${m.read ? "text-green-600 dark:text-green-400" : "text-slate-400"}`}>
+                    {m.read ? <CheckCheck className="w-3 h-3" /> : <Check className="w-3 h-3" />}
+                    {m.read ? "Lida" : "Enviada"}
+                  </span>
+                )}
               </div>
             ))}
 

@@ -54,26 +54,51 @@ class MessageCreate(BaseModel):
 
 
 # ── Conexões WebSocket ativas (por user_id) ─────────────────────────────
+#
+# Além de entregar mensagens em tempo real, o manager serve de fonte de
+# PRESENÇA (quem está online = quem tem socket aberto) e empurra dois tipos
+# de evento além da mensagem em si:
+#   {"type": "message",  ...MessageOut}     — mensagem nova
+#   {"type": "presence", "user_id", "online"} — colega entrou/saiu
+#   {"type": "read",     "reader_id"}        — fulano leu suas mensagens
+# Estado em memória — assume 1 processo (Render single service, sem múltiplos
+# workers), mesma premissa que o WebSocket já exigia.
 
 class DMConnectionManager:
     def __init__(self):
         self.connections: Dict[int, Set[WebSocket]] = {}
+        self.user_org: Dict[int, int] = {}
 
-    async def connect(self, user_id: int, websocket: WebSocket):
+    async def connect(self, user_id: int, organization_id: int, websocket: WebSocket) -> bool:
+        """Registra o socket. Retorna True se o usuário estava OFFLINE (1º socket)."""
         await websocket.accept()
+        was_offline = not self.connections.get(user_id)
         self.connections.setdefault(user_id, set()).add(websocket)
+        self.user_org[user_id] = organization_id
+        return was_offline
 
-    def disconnect(self, user_id: int, websocket: WebSocket):
-        if user_id in self.connections:
-            self.connections[user_id].discard(websocket)
-            if not self.connections[user_id]:
-                del self.connections[user_id]
+    def disconnect(self, user_id: int, websocket: WebSocket) -> bool:
+        """Remove o socket. Retorna True se o usuário ficou OFFLINE (último socket)."""
+        sockets = self.connections.get(user_id)
+        if not sockets:
+            return False
+        sockets.discard(websocket)
+        if not sockets:
+            del self.connections[user_id]
+            self.user_org.pop(user_id, None)
+            return True
+        return False
 
-    async def send_to(self, user_id: int, message: MessageOut):
+    def is_online(self, user_id: int) -> bool:
+        return bool(self.connections.get(user_id))
+
+    def online_in_org(self, organization_id: int) -> List[int]:
+        return [uid for uid in self.connections if self.user_org.get(uid) == organization_id]
+
+    async def send_raw(self, user_id: int, payload: dict):
         sockets = self.connections.get(user_id)
         if not sockets:
             return
-        payload = message.model_dump(mode="json")
         dead = set()
         for ws in sockets:
             try:
@@ -83,8 +108,37 @@ class DMConnectionManager:
         for ws in dead:
             self.disconnect(user_id, ws)
 
+    async def send_message(self, user_id: int, message: MessageOut):
+        await self.send_raw(user_id, {"type": "message", **message.model_dump(mode="json")})
+
+    async def broadcast_presence(self, user_id: int, organization_id: int, online: bool):
+        payload = {"type": "presence", "user_id": user_id, "online": online}
+        for uid in list(self.connections.keys()):
+            if uid == user_id:
+                continue
+            if self.user_org.get(uid) == organization_id:
+                await self.send_raw(uid, payload)
+
 
 manager = DMConnectionManager()
+
+
+async def _mark_read_and_notify(db: Session, reader: User, sender_id: int) -> int:
+    """Marca como lidas as mensagens sender_id -> reader e avisa o remetente
+    (via WS) que foram lidas, pra UI dele mostrar 'lida'. Retorna quantas."""
+    updated = (
+        db.query(DirectMessage)
+        .filter(
+            DirectMessage.sender_id == sender_id,
+            DirectMessage.recipient_id == reader.id,
+            DirectMessage.read == False,  # noqa: E712
+        )
+        .update({"read": True}, synchronize_session=False)
+    )
+    db.commit()
+    if updated:
+        await manager.send_raw(sender_id, {"type": "read", "reader_id": reader.id})
+    return updated
 
 
 # ── REST ─────────────────────────────────────────────────────────────────
@@ -101,8 +155,31 @@ def list_contacts(
     return q.order_by(User.name).all()
 
 
+@router.get("/presence")
+def get_presence(
+    current_user: User = Depends(get_current_user),
+):
+    """IDs dos colegas online agora (com WebSocket aberto) na mesma organização."""
+    if current_user.role == "superadmin":
+        ids = list(manager.connections.keys())
+    else:
+        ids = manager.online_in_org(current_user.organization_id)
+    return {"online_user_ids": [i for i in ids if i != current_user.id]}
+
+
+@router.post("/{other_user_id}/read")
+async def mark_conversation_read(
+    other_user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Marca como lidas as mensagens que other_user_id me mandou e avisa ele."""
+    await _mark_read_and_notify(db, current_user, other_user_id)
+    return {"ok": True}
+
+
 @router.get("/{other_user_id}", response_model=List[MessageOut])
-def get_conversation(
+async def get_conversation(
     other_user_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -120,12 +197,8 @@ def get_conversation(
         .all()
     )
 
-    unread_ids = [m.id for m in msgs if m.recipient_id == current_user.id and not m.read]
-    if unread_ids:
-        db.query(DirectMessage).filter(DirectMessage.id.in_(unread_ids)).update(
-            {"read": True}, synchronize_session=False
-        )
-        db.commit()
+    # Abrir a conversa = ler o que o colega mandou → marca lido e avisa ele.
+    await _mark_read_and_notify(db, current_user, other_user_id)
 
     return msgs
 
@@ -157,8 +230,8 @@ async def send_message(
     db.refresh(msg)
 
     out = MessageOut.model_validate(msg)
-    await manager.send_to(current_user.id, out)
-    await manager.send_to(payload.recipient_id, out)
+    await manager.send_message(current_user.id, out)
+    await manager.send_message(payload.recipient_id, out)
 
     return out
 
@@ -189,7 +262,9 @@ async def messages_ws(websocket: WebSocket):
         await websocket.close(code=4003, reason="forbidden")
         return
 
-    await manager.connect(user_id, websocket)
+    was_offline = await manager.connect(user_id, user.organization_id, websocket)
+    if was_offline:
+        await manager.broadcast_presence(user_id, user.organization_id, True)
     try:
         while True:
             data = await websocket.receive_text()
@@ -200,4 +275,6 @@ async def messages_ws(websocket: WebSocket):
     except Exception as exc:
         logger.error(f"Erro no WebSocket de mensagens: {type(exc).__name__}")
     finally:
-        manager.disconnect(user_id, websocket)
+        went_offline = manager.disconnect(user_id, websocket)
+        if went_offline:
+            await manager.broadcast_presence(user_id, user.organization_id, False)
