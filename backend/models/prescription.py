@@ -48,6 +48,7 @@ class PrescriptionMedicineRoute(str, enum.Enum):
 class Prescription(Base):
     """Receita médica digital conforme CFM 2.299/21"""
     __tablename__ = "prescriptions"
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, default=1, index=True)
 
     id = Column(Integer, primary_key=True, index=True)
 

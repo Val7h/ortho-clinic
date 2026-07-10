@@ -7,6 +7,7 @@ import secrets
 
 class Anamnesis(Base):
     __tablename__ = "anamneses"
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, default=1, index=True)
 
     id = Column(Integer, primary_key=True, index=True)
     patient_id = Column(Integer, ForeignKey("patients.id"), nullable=False)

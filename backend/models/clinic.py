@@ -26,6 +26,7 @@ class Clinic(Base):
 
 class ClinicSchedule(Base):
     __tablename__ = "clinic_schedules"
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, default=1, index=True)
 
     id = Column(Integer, primary_key=True, index=True)
     clinic_id = Column(Integer, ForeignKey("clinics.id"), nullable=False)
@@ -41,6 +42,7 @@ class ClinicSchedule(Base):
 
 class Appointment(Base):
     __tablename__ = "appointments"
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, default=1, index=True)
 
     id = Column(Integer, primary_key=True, index=True)
     clinic_id = Column(Integer, ForeignKey("clinics.id"), nullable=False)

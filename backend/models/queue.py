@@ -12,6 +12,7 @@ class ClinicQueue(Base):
     Tracks patient flow from arrival through consultation.
     """
     __tablename__ = "clinic_queue"
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, default=1, index=True)
 
     id = Column(Integer, primary_key=True, index=True)
     clinic_id = Column(Integer, ForeignKey("clinics.id"), nullable=False, index=True)
@@ -87,6 +88,7 @@ class PrescriptionSignature(Base):
     Integrates with ClickSign or similar e-signature platform.
     """
     __tablename__ = "prescription_signatures"
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, default=1, index=True)
 
     id = Column(Integer, primary_key=True, index=True)
     prescription_id = Column(Integer, ForeignKey("prescriptions.id"), nullable=False, index=True)

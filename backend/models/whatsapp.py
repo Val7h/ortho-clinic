@@ -6,6 +6,7 @@ from database import Base
 
 class WhatsAppMessage(Base):
     __tablename__ = "whatsapp_messages"
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, default=1, index=True)
 
     id = Column(Integer, primary_key=True, index=True)
     patient_id = Column(Integer, ForeignKey("patients.id"), nullable=False)

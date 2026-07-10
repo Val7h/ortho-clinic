@@ -11,6 +11,7 @@ from database import Base
 class PatientRx(Base):
     """Receita médica simples vinculada a um paciente."""
     __tablename__ = "patient_prescriptions"
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, default=1, index=True)
 
     id = Column(Integer, primary_key=True, index=True)
     patient_id = Column(Integer, ForeignKey("patients.id"), nullable=False, index=True)

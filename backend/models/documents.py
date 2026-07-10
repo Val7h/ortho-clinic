@@ -6,6 +6,7 @@ from database import Base
 
 class Prescription(Base):
     __tablename__ = "prescriptions"
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, default=1, index=True)
 
     id = Column(Integer, primary_key=True, index=True)
     patient_id = Column(Integer, ForeignKey("patients.id"), nullable=False)
@@ -25,6 +26,7 @@ class Prescription(Base):
 
 class ExamRequest(Base):
     __tablename__ = "exam_requests"
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, default=1, index=True)
 
     id = Column(Integer, primary_key=True, index=True)
     patient_id = Column(Integer, ForeignKey("patients.id"), nullable=False)
@@ -44,6 +46,7 @@ class ExamRequest(Base):
 
 class PhysioRequest(Base):
     __tablename__ = "physio_requests"
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, default=1, index=True)
 
     id = Column(Integer, primary_key=True, index=True)
     patient_id = Column(Integer, ForeignKey("patients.id"), nullable=False)
@@ -66,6 +69,7 @@ class PhysioRequest(Base):
 
 class MedicalReport(Base):
     __tablename__ = "medical_reports"
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, default=1, index=True)
 
     id = Column(Integer, primary_key=True, index=True)
     patient_id = Column(Integer, ForeignKey("patients.id"), nullable=False)
@@ -84,6 +88,7 @@ class MedicalReport(Base):
 
 class Document(Base):
     __tablename__ = "documents"
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, default=1, index=True)
 
     id = Column(Integer, primary_key=True, index=True)
     patient_id = Column(Integer, ForeignKey("patients.id"), nullable=False)

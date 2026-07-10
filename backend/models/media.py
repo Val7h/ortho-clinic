@@ -6,6 +6,7 @@ from database import Base
 
 class ConsultationMedia(Base):
     __tablename__ = "consultation_media"
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, default=1, index=True)
 
     id = Column(Integer, primary_key=True, index=True)
     consultation_id = Column(Integer, ForeignKey("consultations.id"), nullable=False)

@@ -54,6 +54,7 @@ class PatientDocument(Base):
          generated_doc_type + generated_doc_id, sem file_url externo.
     """
     __tablename__ = "patient_documents"
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, default=1, index=True)
 
     id              = Column(Integer, primary_key=True, index=True)
     patient_id      = Column(Integer, ForeignKey("patients.id", ondelete="CASCADE"), nullable=False, index=True)

@@ -17,6 +17,7 @@ class ConsultationType(str, enum.Enum):
 
 class Consultation(Base):
     __tablename__ = "consultations"
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, default=1, index=True)
 
     id = Column(Integer, primary_key=True, index=True)
     patient_id = Column(Integer, ForeignKey("patients.id"), nullable=False)

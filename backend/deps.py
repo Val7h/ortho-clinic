@@ -29,6 +29,12 @@ def get_current_user(
     user = db.query(User).filter(User.id == user_id, User.active == True).first()
     if not user:
         raise HTTPException(status_code=401, detail="Usuário não encontrado")
+
+    # Fase 1c: amarra a conta do usuário NESTA sessão de banco — a trava central
+    # (tenant_guard) lê session.info e filtra todo SELECT pelos modelos-tenant.
+    # superadmin (dono do SaaS) tem bypass e enxerga todas as contas.
+    db.info["tenant_org_id"] = user.organization_id
+    db.info["tenant_bypass"] = (user.role == "superadmin")
     return user
 
 

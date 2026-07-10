@@ -190,6 +190,10 @@ def startup():
     from sqlalchemy import text as _text
     init_db()
     migrate_db()
+    # Fase 1c: trava central de isolamento multi-tenant (filtra SELECTs por conta;
+    # kill-switch TENANT_ISOLATION_ENFORCE=0 desliga sem deploy)
+    from tenant_guard import register_tenant_guard
+    register_tenant_guard()
     _ensure_superadmin()
     _ensure_default_clinic()
     _ensure_clinics()
