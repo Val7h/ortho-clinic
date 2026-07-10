@@ -338,10 +338,13 @@ def submit_pre_consulta(data: PreConsultaPayload, db: Session = Depends(get_db))
     clinic, inicio_sugerido, fim_sugerido = _resolver_clinic(db, data.unidade)
     data_consulta = _parse_data_consulta(data.data_consulta)
     if clinic and data_consulta:
+        # Dedup por TELEFONE (não só patient_id): se duas submissões quase simultâneas
+        # (ex: cold-start do Render + timeout/retry) criarem 2 registros de Patient
+        # diferentes pro mesmo telefone, ainda assim não deixa duplicar o agendamento.
         existente = (
             db.query(Appointment)
             .filter(
-                Appointment.patient_id == patient.id,
+                Appointment.patient_phone == data.telefone,
                 Appointment.clinic_id == clinic.id,
                 Appointment.date == data_consulta,
             )
