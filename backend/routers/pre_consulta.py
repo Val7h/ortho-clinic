@@ -14,7 +14,7 @@ import time
 import uuid
 from datetime import date, datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import HTMLResponse
@@ -53,7 +53,9 @@ def formulario_pre_consulta():
 class PreConsultaPayload(BaseModel):
     # auth
     token: str
-    exp: str
+    # aceita string ("1784325624565", como o navegador manda) OU número
+    # (como clientes de API mandam) — _validar_token faz int() de qualquer forma
+    exp: Union[str, int]
     agendamento_id: str
 
     # identificação
