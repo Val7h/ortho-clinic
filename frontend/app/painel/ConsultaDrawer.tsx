@@ -841,15 +841,17 @@ function _isoToBR(iso: string): string | undefined {
 
 async function _fetchMemedToken(): Promise<string> {
   const API = process.env.NEXT_PUBLIC_API_URL || "https://ortho-clinic-ldcd.onrender.com";
-  const bearerToken = typeof window !== "undefined" ? localStorage.getItem("orthoclinic_token") : null;
+  const bearerToken = typeof window !== "undefined" ? localStorage.getItem("ortho_token") : null;
   const res = await fetch(`${API}/memed/token`, {
     headers: bearerToken ? { Authorization: `Bearer ${bearerToken}` } : {},
   });
   if (!res.ok) throw new Error(`Memed /token retornou HTTP ${res.status}`);
   const data = await res.json();
   if (data.valid === false) {
-    // Token com data desatualizada — falha imediata com mensagem clara ao usuário
-    throw new Error(`Token Memed expirado (${data.date}). Atualize MEMED_JWT no Render.`);
+    // Token com data desatualizada — falha imediata com mensagem clara ao usuário.
+    // A correção definitiva é configurar MEMED_SECRET_KEY no Render (secret-key da
+    // conta Memed), que faz o backend renovar o JWT automaticamente todo dia.
+    throw new Error(`Memed não configurado: o token de acesso está expirado (${data.date}). Configure a MEMED_SECRET_KEY no Render (secret-key da sua conta Memed) para renovar automaticamente.`);
   }
   return data.token as string;
 }
@@ -3658,7 +3660,7 @@ function TabFotos({ patientId }: { patientId: number }) {
 
   // Compute auth headers inline — avoids stale closure from useMemo
   const getAuthHeaders = (): Record<string, string> => {
-    const token = typeof window !== "undefined" ? localStorage.getItem("orthoclinic_token") : null;
+    const token = typeof window !== "undefined" ? localStorage.getItem("ortho_token") : null;
     const h: Record<string, string> = {};
     if (token) h["Authorization"] = `Bearer ${token}`;
     return h;
