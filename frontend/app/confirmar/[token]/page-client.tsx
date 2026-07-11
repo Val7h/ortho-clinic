@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
+import { resolveDynamicParam } from "@/lib/utils";
 import {
   CheckCircle, XCircle, Calendar, Clock, MapPin,
   Loader2, AlertCircle, Hash,
@@ -62,7 +63,7 @@ const STATUS_MESSAGES: Record<string, { icon: any; title: string; text: string; 
 
 export default function ConfirmarPage() {
   const params = useParams();
-  const token = params?.token as string;
+  const token = resolveDynamicParam(params?.token as string, "_", "confirmar") as string;
   if (!token) return <div>Token inválido</div>;
   const [appt, setAppt] = useState<AppointmentInfo | null>(null);
   const [phase, setPhase] = useState<Phase>("loading");

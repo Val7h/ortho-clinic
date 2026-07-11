@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { ClipboardList, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
 import { anamnesisApi } from "@/lib/api";
+import { resolveDynamicParam } from "@/lib/utils";
 
 const PAIN_COLORS = [
   "bg-green-500","bg-green-400","bg-lime-400","bg-yellow-300",
@@ -12,7 +13,9 @@ const PAIN_COLORS = [
 
 export default function AnamnesePage() {
   const params = useParams();
-  const token = params?.token as string;
+  // Static export: num load direto o useParams devolve o placeholder "_" — cai
+  // pro token real do pathname (senão chama /anamnese/_ → 404 "não encontrado").
+  const token = resolveDynamicParam(params?.token as string, "_", "anamnese") as string;
   if (!token) return <div>Token inválido</div>;
 
   const [info, setInfo] = useState<any>(null);

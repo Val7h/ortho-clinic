@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
+import { resolveDynamicParam } from "@/lib/utils";
 import { FileText, Download, Clock, AlertTriangle, Loader2, Image as ImageIcon } from "lucide-react";
 import { api } from "@/lib/api";
 
@@ -16,7 +17,7 @@ interface SharedDoc {
 
 export default function PublicDocumentPage() {
   const params = useParams<{ token: string }>();
-  const token = params?.token ?? "";
+  const token = resolveDynamicParam(params?.token as string, "_", "publico") ?? "";
   const [doc, setDoc] = useState<SharedDoc | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

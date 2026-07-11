@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
+import { resolveDynamicParam } from "@/lib/utils";
 import {
   ChevronLeft, ChevronRight, CheckCircle, Loader2,
   AlertCircle, Clock, MapPin, Users, Hash,
@@ -14,7 +15,7 @@ function toISO(d: Date) { return d.toISOString().slice(0, 10); }
 
 export default function AgendarPage() {
   const params = useParams();
-  const slug = params?.slug as string;
+  const slug = resolveDynamicParam(params?.slug as string, "_", "agendar") as string;
   if (!slug) return <div>Clínica não encontrada</div>;
 
   const [clinic, setClinic] = useState<any>(null);
