@@ -260,6 +260,47 @@ def _parse_data_consulta(data_consulta: Optional[str]) -> Optional[date]:
         return None
 
 
+def _criar_agendamento_se_possivel(
+    db: Session, data: "PreConsultaPayload", patient: Patient,
+    origem: str = "formulário de pré-consulta",
+) -> tuple[Optional[int], bool]:
+    """Cria (ou reaproveita) o agendamento 'pending' na agenda a partir da unidade
+    e data que o bot mandou. Dedup por telefone+clínica+data (robusto a retries/
+    cold-start). Retorna (appointment_id, criado). Usado por /submit e /confirmar."""
+    clinic, inicio_sugerido, fim_sugerido = _resolver_clinic(db, data.unidade)
+    data_consulta = _parse_data_consulta(data.data_consulta)
+    if not (clinic and data_consulta):
+        return None, False
+    existente = (
+        db.query(Appointment)
+        .filter(
+            Appointment.patient_phone == data.telefone,
+            Appointment.clinic_id == clinic.id,
+            Appointment.date == data_consulta,
+        )
+        .first()
+    )
+    if existente:
+        return existente.id, False
+    agendamento = Appointment(
+        clinic_id=clinic.id,
+        date=data_consulta,
+        start_time=inicio_sugerido,
+        end_time=fim_sugerido,
+        patient_name=data.nome,
+        patient_phone=data.telefone,
+        patient_id=patient.id,
+        reason=data.descricao,
+        status="pending",
+        confirmation_token=secrets.token_urlsafe(32),
+        notes=f"Criado automaticamente pela {origem} (WhatsApp).",
+    )
+    db.add(agendamento)
+    db.commit()
+    db.refresh(agendamento)
+    return agendamento.id, True
+
+
 # ── Endpoint ───────────────────────────────────────────────────────────────────
 
 _UPLOADS_DIR = Path(os.getenv("UPLOADS_DIR", "/app/uploads/exames"))
@@ -335,50 +376,48 @@ def submit_pre_consulta(data: PreConsultaPayload, db: Session = Depends(get_db))
     # ── Agendamento automático (pedido do Dr. Valth, 09/07/2026): a pré-consulta já
     # deixa o paciente na agenda do dia certo, como "pending" — a secretária só revisa
     # e confirma/completa, não precisa criar o agendamento do zero. ──────────────────
-    appointment_id: Optional[int] = None
-    appointment_criado = False
-    clinic, inicio_sugerido, fim_sugerido = _resolver_clinic(db, data.unidade)
-    data_consulta = _parse_data_consulta(data.data_consulta)
-    if clinic and data_consulta:
-        # Dedup por TELEFONE (não só patient_id): se duas submissões quase simultâneas
-        # (ex: cold-start do Render + timeout/retry) criarem 2 registros de Patient
-        # diferentes pro mesmo telefone, ainda assim não deixa duplicar o agendamento.
-        existente = (
-            db.query(Appointment)
-            .filter(
-                Appointment.patient_phone == data.telefone,
-                Appointment.clinic_id == clinic.id,
-                Appointment.date == data_consulta,
-            )
-            .first()
-        )
-        if existente:
-            appointment_id = existente.id
-        else:
-            agendamento = Appointment(
-                clinic_id=clinic.id,
-                date=data_consulta,
-                start_time=inicio_sugerido,
-                end_time=fim_sugerido,
-                patient_name=data.nome,
-                patient_phone=data.telefone,
-                patient_id=patient.id,
-                reason=data.descricao,
-                status="pending",
-                confirmation_token=secrets.token_urlsafe(32),
-                notes="Criado automaticamente pelo formulário de pré-consulta (WhatsApp).",
-            )
-            db.add(agendamento)
-            db.commit()
-            db.refresh(agendamento)
-            appointment_id = agendamento.id
-            appointment_criado = True
+    appointment_id, appointment_criado = _criar_agendamento_se_possivel(db, data, patient)
 
     return PreConsultaOut(
         ok=True,
         patient_id=patient.id,
         anamnesis_id=anamnesis.id,
         criado=criado,
+        appointment_id=appointment_id,
+        appointment_criado=appointment_criado,
+    )
+
+
+# ── Confirmação de presença (bot WhatsApp.AI) ───────────────────────────────────
+#
+# Chamado pelo bot QUANDO O PACIENTE CONFIRMA presença — mesmo que ele NUNCA
+# preencha o formulário. Já cadastra o paciente no OrthoClinic (nome + telefone +
+# unidade) e o deixa na agenda como "pending". Casa por CPF/telefone (mesma lógica
+# do formulário) → NÃO duplica: se o formulário vier depois, ENRIQUECE o mesmo
+# paciente. Auth = mesmíssimo token HMAC/FORM_SECRET do formulário (o bot já gera).
+
+class ConfirmacaoOut(BaseModel):
+    ok: bool
+    patient_id: int
+    patient_criado: bool          # True = paciente novo, False = já existia (casou por tel/CPF)
+    appointment_id: Optional[int] = None
+    appointment_criado: bool = False
+
+
+@router.post("/confirmar", response_model=ConfirmacaoOut)
+def confirmar_presenca(data: PreConsultaPayload, db: Session = Depends(get_db)):
+    """Cadastro automático do paciente na confirmação de presença (sem formulário).
+    Bot envia: token, exp, agendamento_id, nome, telefone, e (opcional) unidade,
+    data_consulta, cidade. Os campos de saúde ficam pro formulário completar depois."""
+    _validar_token(data.agendamento_id, data.exp, data.token)
+    patient, criado = _buscar_ou_criar_paciente(db, data)
+    appointment_id, appointment_criado = _criar_agendamento_se_possivel(
+        db, data, patient, origem="confirmação de presença"
+    )
+    return ConfirmacaoOut(
+        ok=True,
+        patient_id=patient.id,
+        patient_criado=criado,
         appointment_id=appointment_id,
         appointment_criado=appointment_criado,
     )
