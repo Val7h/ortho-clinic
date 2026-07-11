@@ -71,10 +71,12 @@ export default function BottomTabBar() {
     },
   ];
 
-  // Não renderiza no login ou em rotas públicas
-  const isPublicRoute = ["/login", "/confirmar", "/privacidade", "/termos", "/contrato"].some(
-    (r) => (pathname as string).startsWith(r)
-  );
+  // Não renderiza no login nem em rotas PÚBLICAS (paciente sem login) — a paciente
+  // que abre um link de anamnese/pré-consulta NÃO deve ver a navegação da clínica.
+  const isPublicRoute = [
+    "/login", "/confirmar", "/privacidade", "/termos", "/contrato",
+    "/anamnese/", "/pre-consulta", "/agendar", "/documentos/publico",
+  ].some((r) => (pathname as string).startsWith(r));
   if (isPublicRoute) return null;
 
   return (

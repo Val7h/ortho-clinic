@@ -28,11 +28,22 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// Rotas PÚBLICAS (paciente, sem login): um 401 perdido de widget global
+// (chat, notificações) NÃO pode expulsar o paciente pro /login — senão ele
+// nunca vê o formulário. Nessas rotas, o interceptor ignora o 401.
+const PUBLIC_PATH_PREFIXES = [
+  "/anamnese/", "/pre-consulta", "/confirmar", "/agendar",
+  "/privacidade", "/termos", "/contrato", "/documentos/publico",
+];
+function isPublicPath(path: string): boolean {
+  return path === "/login" || PUBLIC_PATH_PREFIXES.some((p) => path.startsWith(p));
+}
+
 api.interceptors.response.use(
   function(r) { return r; },
   function(err) {
     if (err && err.response && err.response.status === 401 && typeof window !== "undefined") {
-      if (window.location.pathname !== "/login") {
+      if (!isPublicPath(window.location.pathname)) {
         localStorage.removeItem("ortho_token");
         localStorage.removeItem("ortho_user");
         window.location.href = "/login";
