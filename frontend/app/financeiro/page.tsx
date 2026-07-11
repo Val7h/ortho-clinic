@@ -5,6 +5,8 @@ import {
   DollarSign,
   Plus,
   Trash2,
+  Pencil,
+  Lock,
   CreditCard,
   Smartphone,
   Banknote,
@@ -48,6 +50,9 @@ export default function FinanceiroPage() {
   const [records, setRecords] = useState<any[]>([]);
   const [patients, setPatients] = useState<any[]>([]);
   const [saving, setSaving] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const privileged = ['doctor', 'admin', 'superadmin'].includes((user as any)?.role ?? '');
+  const emptyForm = () => ({ patient_id: "", amount: "", payment_method: "pix", description: "", status: "paid", date: today.toISOString().slice(0, 10), notes: "" });
   const [form, setForm] = useState({
     patient_id: "",
     amount: "",
@@ -76,11 +81,39 @@ export default function FinanceiroPage() {
     patientsApi.list().then(setPatients).catch(() => {});
   }, []);
 
+  const openNew = () => {
+    setEditingId(null);
+    setForm(emptyForm());
+    setShowForm(true);
+  };
+
+  const startEdit = (r: any) => {
+    setEditingId(r.id);
+    setForm({
+      patient_id: String(r.patient_id),
+      amount: String(r.amount),
+      payment_method: r.payment_method,
+      description: r.description || "",
+      status: r.status,
+      date: r.date,
+      notes: r.notes || "",
+    });
+    setShowForm(true);
+  };
+
   const handleDelete = async (id: number) => {
     if (!confirm("Remover este registro?")) return;
-    await financialApi.delete(id);
-    toast.success("Registro removido");
-    load();
+    try {
+      await financialApi.delete(id);
+      toast.success("Registro removido");
+      load();
+    } catch (e: any) {
+      toast.error(
+        e?.response?.status === 423
+          ? (e.response.data?.detail || "Registro fechado — só o médico exclui.")
+          : "Erro ao remover"
+      );
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -91,17 +124,32 @@ export default function FinanceiroPage() {
     }
     setSaving(true);
     try {
-      await financialApi.create({
-        ...form,
+      const payload = {
         patient_id: Number(form.patient_id),
         amount: parseFloat(form.amount.replace(",", ".")),
-      });
-      toast.success("Pagamento registrado!");
+        payment_method: form.payment_method,
+        status: form.status,
+        description: form.description,
+        date: form.date,
+        notes: form.notes,
+      };
+      if (editingId) {
+        await financialApi.update(editingId, payload);
+        toast.success("Pagamento atualizado!");
+      } else {
+        await financialApi.create(payload);
+        toast.success("Pagamento registrado!");
+      }
       setShowForm(false);
-      setForm({ patient_id: "", amount: "", payment_method: "pix", description: "", status: "paid", date: today.toISOString().slice(0, 10), notes: "" });
+      setEditingId(null);
+      setForm(emptyForm());
       load();
-    } catch {
-      toast.error("Erro ao salvar");
+    } catch (e: any) {
+      toast.error(
+        e?.response?.status === 423
+          ? (e.response.data?.detail || "Registro fechado — só o médico corrige.")
+          : "Erro ao salvar"
+      );
     } finally {
       setSaving(false);
     }
@@ -124,7 +172,7 @@ export default function FinanceiroPage() {
         subtitle="Controle de pagamentos"
         back="/"
         actions={
-          <Button size="md" icon={<Plus className="h-5 w-5" />} onClick={() => setShowForm(true)}>
+          <Button size="md" icon={<Plus className="h-5 w-5" />} onClick={openNew}>
             Registrar
           </Button>
         }
@@ -268,7 +316,7 @@ export default function FinanceiroPage() {
               <div className="space-y-4 py-12 text-center">
                 <DollarSign className="mx-auto h-10 w-10 text-slate-200" />
                 <p className="text-sm text-slate-600">Nenhum pagamento registrado</p>
-                <Button variant="primary" onClick={() => setShowForm(true)}>
+                <Button variant="primary" onClick={openNew}>
                   Registrar pagamento
                 </Button>
               </div>
@@ -292,7 +340,7 @@ export default function FinanceiroPage() {
                         {m.label} · {formatDate(r.date)}{r.description ? ` · ${r.description}` : ''}
                       </p>
                     </div>
-                    <div className="flex flex-shrink-0 items-center gap-3">
+                    <div className="flex flex-shrink-0 items-center gap-2">
                       <div className="text-right">
                         <p className="text-sm font-bold text-success-600">{formatBRL(r.amount)}</p>
                         {r.status !== 'paid' && (
@@ -301,13 +349,32 @@ export default function FinanceiroPage() {
                           </Badge>
                         )}
                       </div>
-                      <button
-                        onClick={() => handleDelete(r.id)}
-                        className="rounded-lg p-2 text-slate-300 transition-colors hover:bg-error-50 hover:text-error-600 focus:outline-none focus:ring-2 focus:ring-error-500 focus:ring-offset-2"
-                        aria-label={`Remover pagamento de ${patients.find((p) => p.id === r.patient_id)?.name || `Paciente #${r.patient_id}`}`}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                      {r.locked && (
+                        <span
+                          title={privileged ? 'Fechado — correções ficam registradas na trilha' : 'Fechado — só o médico pode corrigir'}
+                          className="p-2 text-slate-300"
+                        >
+                          <Lock className="h-4 w-4" />
+                        </span>
+                      )}
+                      {(!r.locked || privileged) && (
+                        <>
+                          <button
+                            onClick={() => startEdit(r)}
+                            className="rounded-lg p-2 text-slate-300 transition-colors hover:bg-brand-50 hover:text-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2"
+                            aria-label="Editar pagamento"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(r.id)}
+                            className="rounded-lg p-2 text-slate-300 transition-colors hover:bg-error-50 hover:text-error-600 focus:outline-none focus:ring-2 focus:ring-error-500 focus:ring-offset-2"
+                            aria-label="Remover pagamento"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
                 );
@@ -323,7 +390,7 @@ export default function FinanceiroPage() {
       <Modal
         open={showForm}
         onOpenChange={setShowForm}
-        title="Registrar Pagamento"
+        title={editingId ? "Editar pagamento" : "Registrar pagamento"}
         size="md"
         footer={
           <div className="flex gap-3">

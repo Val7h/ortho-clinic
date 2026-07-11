@@ -1,16 +1,63 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import func, extract
 from typing import List, Optional
-from datetime import date, datetime
+from datetime import date, datetime, timezone, timedelta
 from pydantic import BaseModel
 from database import get_db
 from models.patient import Patient
 from models.financial import FinancialRecord
 from deps import get_current_user
 from models.organization import User
+from services.audit_service import AuditLogService
 
 router = APIRouter(prefix="/financial", tags=["Financeiro"], dependencies=[Depends(get_current_user)])
+
+# Fuso de Recife (sem horário de verão). A trava usa o dia LOCAL do Brasil, não UTC.
+_BR_TZ = timezone(timedelta(hours=-3))
+# Papéis que podem corrigir/excluir um lançamento JÁ FECHADO (sempre com trilha de auditoria).
+_PRIVILEGED_ROLES = {"doctor", "admin", "superadmin"}
+
+
+def _br_today() -> date:
+    return datetime.now(_BR_TZ).date()
+
+
+def _is_locked(r: FinancialRecord) -> bool:
+    """Fecha no fim do dia em que foi criado: travado se criado ANTES de hoje (hora local BR)."""
+    ca = r.created_at
+    if ca is None:
+        return False
+    if ca.tzinfo is None:
+        ca = ca.replace(tzinfo=timezone.utc)
+    return ca.astimezone(_BR_TZ).date() < _br_today()
+
+
+def _snapshot(r: FinancialRecord) -> dict:
+    return {
+        "amount": r.amount,
+        "payment_method": r.payment_method,
+        "status": r.status,
+        "description": r.description,
+        "date": r.date.isoformat() if r.date else None,
+        "notes": r.notes,
+    }
+
+
+def _serialize(r: FinancialRecord) -> dict:
+    return {
+        "id": r.id,
+        "patient_id": r.patient_id,
+        "consultation_id": r.consultation_id,
+        "amount": r.amount,
+        "payment_method": r.payment_method,
+        "status": r.status,
+        "description": r.description,
+        "date": r.date,
+        "notes": r.notes,
+        "created_at": r.created_at,
+        "locked": _is_locked(r),
+    }
 
 
 class FinancialIn(BaseModel):
@@ -35,6 +82,7 @@ class FinancialOut(BaseModel):
     date: date
     notes: Optional[str]
     created_at: datetime
+    locked: bool = False
 
     model_config = {"from_attributes": True}
 
@@ -52,7 +100,7 @@ def create_record(data: FinancialIn, db: Session = Depends(get_db), current_user
     db.add(record)
     db.commit()
     db.refresh(record)
-    return record
+    return _serialize(record)
 
 
 @router.get("", response_model=List[FinancialOut])
@@ -74,7 +122,7 @@ def list_records(
         q = q.filter(extract("year", FinancialRecord.date) == year)
     if month:
         q = q.filter(extract("month", FinancialRecord.date) == month)
-    return q.order_by(FinancialRecord.date.desc()).all()
+    return [_serialize(r) for r in q.order_by(FinancialRecord.date.desc()).all()]
 
 
 @router.get("/summary")
@@ -183,8 +231,16 @@ def get_summary(
     }
 
 
-@router.delete("/{record_id}", status_code=204)
-def delete_record(record_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+class FinancialUpdate(BaseModel):
+    amount: Optional[float] = None
+    payment_method: Optional[str] = None
+    status: Optional[str] = None
+    description: Optional[str] = None
+    date: Optional[date] = None
+    notes: Optional[str] = None
+
+
+def _load_owned(record_id: int, db: Session, current_user: User) -> FinancialRecord:
     r = db.query(FinancialRecord).filter(FinancialRecord.id == record_id).first()
     if not r:
         raise HTTPException(404, "Registro não encontrado")
@@ -192,5 +248,60 @@ def delete_record(record_id: int, db: Session = Depends(get_db), current_user: U
         p = db.query(Patient).filter(Patient.id == r.patient_id).first()
         if not p or p.organization_id != current_user.organization_id:
             raise HTTPException(403, "Acesso negado: registro não pertence à sua organização")
+    return r
+
+
+@router.put("/{record_id}", response_model=FinancialOut)
+def update_record(
+    record_id: int,
+    data: FinancialUpdate,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    r = _load_owned(record_id, db, current_user)
+    locked = _is_locked(r)
+    privileged = current_user.role in _PRIVILEGED_ROLES
+    if locked and not privileged:
+        raise HTTPException(423, "Registro fechado (lançamento de dia anterior). Só o médico pode corrigir.")
+    changes = data.model_dump(exclude_unset=True)
+    if not changes:
+        return _serialize(r)
+    before = _snapshot(r)
+    for k, v in changes.items():
+        setattr(r, k, v)
+    # Correção de um lançamento JÁ FECHADO fica na trilha (quem, quando, de→para).
+    if locked and privileged:
+        AuditLogService.from_request(
+            db, request, current_user,
+            action="financial.updated", resource_type="financial_record",
+            resource_id=str(r.id), before_state=before, after_state=_snapshot(r),
+            metadata={"locked_edit": True},
+        )
+    db.commit()
+    db.refresh(r)
+    return _serialize(r)
+
+
+@router.delete("/{record_id}", status_code=204)
+def delete_record(
+    record_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    r = _load_owned(record_id, db, current_user)
+    locked = _is_locked(r)
+    privileged = current_user.role in _PRIVILEGED_ROLES
+    if locked and not privileged:
+        raise HTTPException(423, "Registro fechado (lançamento de dia anterior). Só o médico pode excluir.")
+    # Exclusão de um lançamento JÁ FECHADO fica na trilha antes de sumir.
+    if locked and privileged:
+        AuditLogService.from_request(
+            db, request, current_user,
+            action="financial.deleted", resource_type="financial_record",
+            resource_id=str(r.id), before_state=_snapshot(r),
+            metadata={"locked_delete": True},
+        )
     db.delete(r)
     db.commit()

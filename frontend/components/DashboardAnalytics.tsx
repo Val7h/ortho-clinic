@@ -55,9 +55,9 @@ export const DashboardAnalytics = ({ stats }: DashboardAnalyticsProps) => {
   const avgDuration = s.avg_duration_minutes;
   const ticketMedio = consultas > 0 && receita > 0 ? receita / consultas : null;
 
-  // Receita por mês (real) — fin.monthly = { <mês 1-12>: total }.
+  // Receita por mês (real) — fin.monthly_totals = { "<mês 1-12>": total }.
   const receitaMensal = useMemo(() => {
-    const m = fin?.monthly ?? {};
+    const m = fin?.monthly_totals ?? {};
     const keys = Object.keys(m);
     if (!keys.length) return [];
     return keys

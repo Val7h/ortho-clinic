@@ -332,6 +332,7 @@ export const financialApi = {
   summary: (params?: { month?: number; year?: number }) =>
     api.get("/financial/summary", { params }).then((r) => r.data),
   create: (data: any) => api.post("/financial", data).then((r) => r.data),
+  update: (id: number, data: any) => api.put(`/financial/${id}`, data).then((r) => r.data),
   delete: (id: number) => api.delete(`/financial/${id}`),
 };
 

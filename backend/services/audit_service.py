@@ -88,6 +88,9 @@ AUDITABLE_ACTIONS: Dict[str, str] = {
     "subscription.changed": "Billing",
     "invoice.paid":         "Billing",
     "invoice.failed":       "Billing",
+    # Financeiro (lançamentos de pagamento já fechados)
+    "financial.updated":    "Financeiro",
+    "financial.deleted":    "Financeiro",
     # Security
     "mfa.enabled":          "Security",
     "mfa.disabled":         "Security",
