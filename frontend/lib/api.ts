@@ -1,16 +1,24 @@
 import axios from "axios";
 
 // API URL with fallbacks for different environments
-export const API_URL =
-  process.env.NEXT_PUBLIC_API_URL ||
-  (typeof window !== 'undefined' && (
-    window.location.hostname === 'localhost' ||
-    window.location.hostname === '127.0.0.1' ||
-    window.location.hostname.startsWith('localhost:')
-  )
-    ? 'http://localhost:8003'
-    : 'https://ortho-clinic-ldcd.onrender.com') ||
-  'https://ortho-clinic-ldcd.onrender.com';
+// À PROVA DE BALA: em produção (rodando num host remoto), SEMPRE usa a mesma
+// origem que serviu a página — assim, mesmo que o build embuta NEXT_PUBLIC_API_URL
+// apontando pra localhost (ex.: .env.local de dev vazando pro build de prod via o
+// out/ commitado), a produção NUNCA tenta localhost. Só usa localhost quando a
+// própria página está em localhost/127.0.0.1 (dev de verdade).
+export const API_URL = (() => {
+  if (typeof window !== "undefined") {
+    const host = window.location.hostname;
+    const isLocal = host === "localhost" || host === "127.0.0.1";
+    if (isLocal) {
+      return process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003";
+    }
+    // host remoto (produção): mesma origem da página, sempre.
+    return window.location.origin;
+  }
+  // SSR/build (sem window): não é usado no static export em runtime.
+  return process.env.NEXT_PUBLIC_API_URL || "https://ortho-clinic-ldcd.onrender.com";
+})();
 
 export const api = axios.create({
   baseURL: API_URL,
