@@ -17,7 +17,12 @@
  * }
  */
 
-const CACHE_NAME = "orthoclinic-v1";
+const CACHE_NAME = "orthoclinic-v2";
+
+// Rotas PÚBLICAS do paciente (link de WhatsApp/celular): NUNCA passar pelo cache
+// do SW — sempre buscar direto da rede. Cache aqui causava "Erro ao carregar" /
+// conteúdo velho no celular de quem já tinha aberto antes.
+const PUBLIC_BYPASS = ["/anamnese/", "/pre-consulta", "/confirmar", "/agendar", "/documentos/publico"];
 
 // ── Install ────────────────────────────────────────────────────────────────
 self.addEventListener("install", (event) => {
@@ -47,8 +52,9 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
   const url = new URL(event.request.url);
-  // Skip API calls and Next.js HMR
+  // Skip API calls, Next.js HMR, e as rotas públicas do paciente (fetch direto).
   if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/_next/webpack-hmr")) return;
+  if (PUBLIC_BYPASS.some((p) => url.pathname.startsWith(p))) return;
 
   event.respondWith(
     fetch(event.request)
