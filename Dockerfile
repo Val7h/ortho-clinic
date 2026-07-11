@@ -1,21 +1,9 @@
-# ===== ESTÁGIO 1: Build do Next.js =====
-FROM node:18-slim AS frontend-builder
-
-WORKDIR /app/frontend
-
-# Copiar package files
-COPY frontend/package*.json ./
-
-# Instalar dependências
-RUN npm ci
-
-# Copiar código
-COPY frontend/ .
-
-# Build do Next.js (FALHAR se houver erro!)
-RUN npm run build
-
-# ===== ESTÁGIO 2: Runtime com FastAPI =====
+# ===== Runtime com FastAPI (frontend NÃO builda aqui) =====
+# O frontend é buildado LOCALMENTE (npm run build) e o resultado (frontend/out)
+# é commitado no repo. O Render NÃO roda mais `npm run build` — o build do Next
+# estourava a memória no plano free (512MB) e travava/falhava os deploys.
+# Regra do fluxo: SEMPRE `cd frontend && npm run build` + commitar frontend/out
+# antes de dar push, senão a produção sobe com o frontend velho.
 FROM python:3.11-slim
 
 WORKDIR /app
@@ -35,8 +23,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copiar código backend
 COPY backend/ .
 
-# Copiar o frontend buildado (static export → out/)
-COPY --from=frontend-builder /app/frontend/out ./frontend_out
+# Copiar o frontend JÁ BUILDADO e commitado (static export → out/)
+COPY frontend/out ./frontend_out
 
 RUN mkdir -p uploads/photos data
 
