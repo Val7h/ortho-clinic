@@ -9,7 +9,7 @@ import {
   Pencil, Download, MessageSquare,
 } from "lucide-react";
 import toast from "react-hot-toast";
-import { patientsApi, consultationsApi, prescriptionsApi, prescriptionTemplatesApi, examsApi, evolutionApi, clinicApi, chatApi } from "@/lib/api";
+import { patientsApi, consultationsApi, prescriptionsApi, prescriptionTemplatesApi, examsApi, evolutionApi, clinicApi, chatApi, reportsApi } from "@/lib/api";
 import { formatDate } from "@/lib/utils";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -3420,6 +3420,52 @@ function TabAtestados({ patient, clinic }: { patient: any; clinic?: any }) {
     setObs(prev => prev ? prev + "; " + chip : chip);
   };
 
+  const [savingDoc, setSavingDoc] = useState(false);
+
+  const salvarAtestado = async () => {
+    if (!startDate || !days || Number(days) < 1) { toast.error("Informe os dias de afastamento"); return; }
+    if (!patient?.id) { toast.error("Paciente inválido"); return; }
+    setSavingDoc(true);
+    try {
+      const typeLabel = CERTIFICATE_TYPES.find(c => c.value === certType)?.label ?? certType;
+      const retDate = calcReturnDate(startDate, days) ?? "";
+      const content =
+        `Atesto que o(a) paciente ${patient?.name}` +
+        (patient?.cpf ? `, CPF ${patient.cpf}` : "") +
+        ` foi avaliado(a) em ${dateStr} e necessita afastar-se de ${typeLabel} pelo período de ${days} dia(s), a contar de ${formatDateBR(startDate)}, com retorno previsto para ${retDate}.` +
+        (certType === "acompanhamento" && accompName ? `\nPaciente acompanhado: ${accompName}${accompRel ? ` (${accompRel})` : ""}` : "") +
+        (cid ? `\nCID-10: ${cid}` : "") +
+        (obs ? `\nRestrições/Observações: ${obs}` : "");
+      await reportsApi.create(patient.id, { date: startDate, report_type: "atestado", title: `Atestado — ${typeLabel}`, content });
+      toast.success("Atestado salvo no prontuário");
+    } catch {
+      toast.error("Erro ao salvar atestado");
+    } finally {
+      setSavingDoc(false);
+    }
+  };
+
+  const salvarComparecimento = async () => {
+    if (!compDate) { toast.error("Informe a data do comparecimento"); return; }
+    if (!patient?.id) { toast.error("Paciente inválido"); return; }
+    setSavingDoc(true);
+    try {
+      const content =
+        `Declaro, para os devidos fins, que ${compAcompanhante ? `o(a) acompanhante ${compAcompanhante}` : `o(a) paciente ${patient?.name}`}` +
+        (compAcompanhante ? ` esteve presente acompanhando o(a) paciente ${patient?.name}` : "") +
+        ` compareceu a esta unidade de saúde no dia ${formatDateBR(compDate)}` +
+        (horaEntrada ? `, das ${horaEntrada}` : "") +
+        (horaSaida ? ` às ${horaSaida}` : "") +
+        ` para atendimento médico.`;
+      await reportsApi.create(patient.id, { date: compDate, report_type: "comparecimento", title: "Declaração de Comparecimento", content });
+      toast.success("Declaração salva no prontuário");
+    } catch {
+      toast.error("Erro ao salvar declaração");
+    } finally {
+      setSavingDoc(false);
+    }
+  };
+
   const printContent = useMemo(() => {
     if (!printData) return null;
     const pTypeLabel = CERTIFICATE_TYPES.find(c => c.value === printData.certType)?.label ?? printData.certType;
@@ -3547,13 +3593,11 @@ function TabAtestados({ patient, clinic }: { patient: any; clinic?: any }) {
           <div className="flex gap-2 pt-1">
             <button
               type="button"
-              onClick={() => {
-                if (!compDate) { toast.error("Informe a data do comparecimento"); return; }
-                toast.success("Declaração registrada (pendente persistência no servidor)");
-              }}
-              className="flex items-center gap-1.5 px-4 py-2 border border-blue-600 text-blue-600 rounded-lg hover:bg-blue-50 font-semibold text-xs"
+              onClick={salvarComparecimento}
+              disabled={savingDoc}
+              className="flex items-center gap-1.5 px-4 py-2 border border-blue-600 text-blue-600 rounded-lg hover:bg-blue-50 font-semibold text-xs disabled:opacity-50"
             >
-              <Save className="w-3.5 h-3.5" /> Salvar
+              <Save className="w-3.5 h-3.5" /> {savingDoc ? "Salvando..." : "Salvar"}
             </button>
             <button
               type="button"
@@ -3663,13 +3707,11 @@ function TabAtestados({ patient, clinic }: { patient: any; clinic?: any }) {
       <div className="flex gap-2 pt-1">
         <button
           type="button"
-          onClick={() => {
-            if (!startDate || !days || Number(days) < 1) { toast.error("Informe os dias de afastamento"); return; }
-            toast.success("Atestado registrado (pendente persistência no servidor)");
-          }}
-          className="flex items-center gap-1.5 px-4 py-2 border border-blue-600 text-blue-600 rounded-lg hover:bg-blue-50 font-semibold text-xs"
+          onClick={salvarAtestado}
+          disabled={savingDoc}
+          className="flex items-center gap-1.5 px-4 py-2 border border-blue-600 text-blue-600 rounded-lg hover:bg-blue-50 font-semibold text-xs disabled:opacity-50"
         >
-          <Save className="w-3.5 h-3.5" /> Salvar
+          <Save className="w-3.5 h-3.5" /> {savingDoc ? "Salvando..." : "Salvar"}
         </button>
         <button
           type="button"
