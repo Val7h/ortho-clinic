@@ -32,10 +32,12 @@ FORM_SECRET = os.getenv("FORM_SECRET", "")
 PRE_CONSULTA_ORG_ID = int(os.getenv("PRE_CONSULTA_ORG_ID", "3"))
 
 _HERE = os.path.dirname(__file__)
+# Fonte ÚNICA do formulário: o build do Next (app/pre-consulta/page.tsx → out/pre-consulta.html).
+# Cópias estáticas antigas (backend/static e frontend/public/pre-consulta) serviam versão
+# desatualizada por cima do build e foram removidas em 01/08/2026 — não recriar.
 _HTML_CANDIDATES = [
-    os.path.join(_HERE, "..", "static", "pre-consulta.html"),          # Docker: /app/static/
-    os.path.join(_HERE, "..", "frontend_out", "pre-consulta", "index.html"),  # Docker: /app/frontend_out/
-    os.path.join(_HERE, "..", "..", "frontend", "public", "pre-consulta", "index.html"),  # local dev
+    os.path.join(_HERE, "..", "frontend_out", "pre-consulta.html"),          # Docker: /app/frontend_out/
+    os.path.join(_HERE, "..", "..", "frontend", "out", "pre-consulta.html"),  # local dev
 ]
 
 

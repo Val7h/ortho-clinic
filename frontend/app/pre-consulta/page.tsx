@@ -317,14 +317,8 @@ const HTML_CONTENT = `<!DOCTYPE html>
 
   <div class="progresso">
     <div class="prog-dots">
-      <div class="dot" id="d1"></div>
-      <div class="dot" id="d2"></div>
-      <div class="dot" id="d3"></div>
-      <div class="dot" id="d4"></div>
-      <div class="dot" id="d5"></div>
-      <span id="prog-label" class="prog-texto"></span>
+      <span class="prog-texto">⚡ Rapidinho: leva menos de 1 minuto</span>
     </div>
-    <div class="prog-bar"><div class="prog-fill" id="prog-fill"></div></div>
   </div>
 
   <main>
@@ -368,15 +362,6 @@ const HTML_CONTENT = `<!DOCTYPE html>
       </div>
 
       <div class="campo">
-        <label>Como começou?</label>
-        <div class="radio-group" id="mecanismo">
-          <label><input type="radio" name="mecanismo" value="gradual" /> Gradual</label>
-          <label><input type="radio" name="mecanismo" value="trauma" /> Após trauma / queda</label>
-          <label><input type="radio" name="mecanismo" value="esforco" /> Após esforço</label>
-        </div>
-      </div>
-
-      <div class="campo">
         <label>Intensidade da dor agora</label>
         <div class="slider-wrap">
           <div class="eva-val" id="eva-val">5</div>
@@ -386,45 +371,6 @@ const HTML_CONTENT = `<!DOCTYPE html>
         </div>
       </div>
 
-      <div class="campo">
-        <label>O que piora a dor? <span class="opt">(opcional)</span></label>
-        <input type="text" id="piora" placeholder="Ex: escadas, agachar, caminhar…" />
-      </div>
-
-      <div class="campo">
-        <label>O que alivia? <span class="opt">(opcional)</span></label>
-        <input type="text" id="melhora" placeholder="Ex: repouso, gelo, compressa…" />
-      </div>
-
-      <div class="campo">
-        <label>Fez algum tratamento antes? <span class="opt">(opcional)</span></label>
-        <input type="text" id="tratamento_anterior" placeholder="Ex: fisioterapia, medicação, cirurgia, nenhum…" />
-      </div>
-
-      <div class="campo">
-        <label>Usa algum analgésico? <span class="opt">(opcional)</span></label>
-        <input type="text" id="uso_analgesicos" placeholder="Ex: Ibuprofeno 400mg quando necessário…" />
-      </div>
-    </div>
-
-    <!-- Seção 2: Identificação -->
-    <div class="secao" id="sec2">
-      <div class="secao-titulo">Identificação</div>
-
-      <div class="info-box">
-        Os campos abaixo já foram preenchidos com as informações do agendamento. Verifique se estão corretos.
-      </div>
-
-      <div class="campo">
-        <label>Nome completo</label>
-        <input type="text" id="nome" readonly />
-      </div>
-
-      <div class="campo">
-        <label>Telefone</label>
-        <input type="text" id="telefone" readonly />
-      </div>
-
       <div class="campo" id="c-nasc">
         <label>Data de nascimento</label>
         <input type="date" id="nascimento" />
@@ -432,71 +378,18 @@ const HTML_CONTENT = `<!DOCTYPE html>
       </div>
 
       <div class="campo">
-        <label>CPF <span class="opt">(opcional)</span></label>
-        <input type="text" id="cpf" placeholder="000.000.000-00" maxlength="14" />
-      </div>
-
-      <div class="campo" id="c-cidade">
-        <label>Cidade</label>
-        <input type="text" id="cidade" placeholder="Ex: Campina Grande" />
-        <div class="erro-campo">Informe sua cidade.</div>
-      </div>
-
-      <div class="campo" id="c-unidade">
-        <label>Unidade / clínica do atendimento</label>
-        <select id="unidade">
-          <option value="">Selecione…</option>
-          <option value="CTO">CTO</option>
-          <option value="Artro">Artro</option>
-          <option value="Instituto Pernambuco">Instituto Pernambuco</option>
-          <option value="Unimagem">Unimagem</option>
-          <option value="Mário Bento">Mário Bento (Palmares)</option>
-        </select>
-        <div class="erro-campo">Selecione a unidade do atendimento.</div>
+        <label>Alergias a medicamentos <span class="opt">(especialmente dipirona / anti-inflamatórios)</span></label>
+        <input type="text" id="alergias" placeholder="Ex: Dipirona — ou 'nenhuma conhecida'" />
       </div>
 
       <div class="campo">
-        <label>Bairro <span class="opt">(opcional)</span></label>
-        <input type="text" id="bairro" placeholder="Ex: Catolé" />
-      </div>
-
-      <div class="campo" id="c-profissao">
-        <label>Profissão</label>
-        <input type="text" id="profissao" placeholder="Ex: Pedreiro, professora, motorista…" />
-        <div class="erro-campo">Informe sua profissão.</div>
-      </div>
-
-      <div class="campo">
-        <label>Estado civil</label>
-        <select id="estado_civil">
-          <option value="">Selecione…</option>
-          <option value="solteiro">Solteiro(a)</option>
-          <option value="casado">Casado(a)</option>
-          <option value="uniao_estavel">União estável</option>
-          <option value="divorciado">Divorciado(a)</option>
-          <option value="viuvo">Viúvo(a)</option>
-        </select>
-      </div>
-
-      <div class="campo">
-        <label>Número de filhos</label>
-        <input type="number" id="filhos" min="0" max="20" value="0" />
-      </div>
-    </div>
-
-    <!-- Seção 3: Saúde Geral -->
-    <div class="secao" id="sec3">
-      <div class="secao-titulo">Saúde Geral</div>
-
-      <div class="campo">
-        <label>Doenças crônicas <span class="opt">(marque todas que se aplicam)</span></label>
+        <label>Doenças que você tem <span class="opt">(marque as que se aplicam)</span></label>
         <div class="check-group">
-          <label><input type="checkbox" name="doencas" value="has" /> HAS (pressão alta)</label>
+          <label><input type="checkbox" name="doencas" value="has" /> Pressão alta</label>
           <label><input type="checkbox" name="doencas" value="dm" /> Diabetes</label>
           <label><input type="checkbox" name="doencas" value="osteoporose" /> Osteoporose</label>
           <label><input type="checkbox" name="doencas" value="artrite" /> Artrite</label>
           <label><input type="checkbox" name="doencas" value="artrose" /> Artrose</label>
-          <label><input type="checkbox" name="doencas" value="obesidade" /> Obesidade</label>
           <label><input type="checkbox" name="doencas" value="outra" /> Outra</label>
         </div>
       </div>
@@ -507,59 +400,7 @@ const HTML_CONTENT = `<!DOCTYPE html>
       </div>
 
       <div class="campo">
-        <label>Alergias a medicamentos <span class="opt">(especialmente dipirona / AINES)</span></label>
-        <input type="text" id="alergias" placeholder="Ex: Dipirona — ou 'nenhuma conhecida'" />
-      </div>
-
-      <div class="campo">
-        <label>Cirurgias anteriores <span class="opt">(opcional)</span></label>
-        <input type="text" id="cirurgias_anteriores" placeholder="Ex: Apendicectomia 2010, joelho 2018" />
-      </div>
-
-      <div class="campo">
-        <label>Tabagismo</label>
-        <div class="radio-group" id="tabagismo">
-          <label><input type="radio" name="tabagismo" value="nunca" /> Nunca fumei</label>
-          <label><input type="radio" name="tabagismo" value="ex" /> Ex-fumante</label>
-          <label><input type="radio" name="tabagismo" value="atual" /> Fumante atual</label>
-        </div>
-      </div>
-
-      <div class="campo">
-        <label>Consumo de álcool</label>
-        <div class="radio-group" id="alcool">
-          <label><input type="radio" name="alcool" value="nao" /> Não bebo</label>
-          <label><input type="radio" name="alcool" value="ocasional" /> Ocasional</label>
-          <label><input type="radio" name="alcool" value="frequente" /> Frequente</label>
-        </div>
-      </div>
-    </div>
-
-    <!-- Seção 4: Exames -->
-    <div class="secao" id="sec4">
-      <div class="secao-titulo">Exames <span style="font-weight:400;font-size:13px;color:#999">(opcional)</span></div>
-
-      <p style="font-size:13px;color:#666;margin-bottom:16px;">
-        Se tiver exames (raio-X, ressonância, laudos), envie aqui. Máximo 5 arquivos de até 10MB cada.
-      </p>
-
-      <div class="upload-area" onclick="document.getElementById('upload-input').click()">
-        <div class="upload-icon">📎</div>
-        <p>Toque para selecionar imagens ou PDF</p>
-        <p style="font-size:11px;margin-top:2px;">JPG · PNG · PDF</p>
-        <div class="spinner" id="spinner-upload"></div>
-      </div>
-      <input type="file" id="upload-input" accept=".jpg,.jpeg,.png,.pdf" multiple />
-
-      <div class="miniaturas" id="miniaturas"></div>
-    </div>
-
-    <!-- Seção 5: Plano / Pagamento -->
-    <div class="secao" id="sec5">
-      <div class="secao-titulo">Forma de Pagamento</div>
-
-      <div class="campo">
-        <label>Como você vai pagar a consulta?</label>
+        <label>Como vai pagar a consulta?</label>
         <div class="radio-group" id="forma_pagamento">
           <label><input type="radio" name="pagamento" value="particular" /> Particular</label>
           <label><input type="radio" name="pagamento" value="convenio" /> Convênio / plano</label>
@@ -571,16 +412,22 @@ const HTML_CONTENT = `<!DOCTYPE html>
         <input type="text" id="plano_saude" placeholder="Ex: Unimed, Bradesco Saúde…" />
       </div>
 
-      <div class="info-box" style="margin-top: 24px;">
-        ✅ Revise suas respostas antes de enviar. Após o envio, o Dr. Valth receberá um resumo antes da sua consulta.
+      <div class="campo">
+        <label>Tem exames? Envie foto <span class="opt">(opcional — raio-X, ressonância, laudos)</span></label>
+        <div class="upload-area" onclick="document.getElementById('upload-input').click()">
+          <div class="upload-icon">📎</div>
+          <p>Toque para selecionar imagens ou PDF</p>
+          <div class="spinner" id="spinner-upload"></div>
+        </div>
+        <input type="file" id="upload-input" accept=".jpg,.jpeg,.png,.pdf" multiple />
+        <div class="miniaturas" id="miniaturas"></div>
       </div>
     </div>
 
   </main>
 
   <div class="botoes" id="botoes">
-    <button class="btn-ant" id="btn-ant" onclick="anterior()" style="display:none">← Voltar</button>
-    <button class="btn-prox" id="btn-prox" onclick="proximo()">Próximo →</button>
+    <button class="btn-enviar" id="btn-prox" onclick="enviar()">✓ Enviar</button>
   </div>
 
 </div>
@@ -596,9 +443,6 @@ const EXP         = params.get('exp')    || '';
 const TOKEN       = params.get('token')  || '';
 const UNIDADE     = params.get('unidade')|| '';
 
-const TOTAL_SECOES = 5;
-const TEMPO_EST = ['~5 min restantes','~4 min restantes','~3 min restantes','~2 min restantes','Última etapa'];
-let secaoAtual = 1;
 const examesUrls = [];
 
 function init() {
@@ -612,29 +456,25 @@ function init() {
   }
 
   document.getElementById('app').style.display = 'block';
-  document.getElementById('nome').value      = NOME;
-  document.getElementById('telefone').value  = TEL;
 
-  if (UNIDADE) {
-    const selU = document.getElementById('unidade');
-    for (const opt of selU.options) {
-      if (opt.value.toLowerCase() === UNIDADE.toLowerCase()) { opt.selected = true; break; }
-    }
+  // Identificação vem do agendamento (link do WhatsApp) — não perguntamos de novo.
+  if (NOME) {
+    const t = document.querySelector('.secao-titulo');
+    if (t) t.textContent = 'Olá, ' + NOME.split(' ')[0] + '! Conte sobre sua queixa';
   }
 
   const sel = document.getElementById('regiao_corpo');
   for (const opt of sel.options) {
-    if (MOTIVO.toLowerCase().includes(opt.value.replace('_',' '))) {
+    // opt.value vazio ("Selecione…") casaria com qualquer motivo — pular.
+    if (opt.value && MOTIVO.toLowerCase().includes(opt.value.replace('_',' '))) {
       opt.selected = true;
       break;
     }
   }
 
-  atualizarProgresso();
   initEva();
   initUpload();
   initPagamento();
-  initCPF();
 }
 
 function mostrarExpirado() {
@@ -715,50 +555,6 @@ function initPagamento() {
   });
 }
 
-function initCPF() {
-  const inp = document.getElementById('cpf');
-  inp.addEventListener('input', () => {
-    let v = inp.value.replace(/\\D/g,'').slice(0,11);
-    if (v.length > 9) v = v.replace(/(\\d{3})(\\d{3})(\\d{3})(\\d{1,2})/,'$1.$2.$3-$4');
-    else if (v.length > 6) v = v.replace(/(\\d{3})(\\d{3})(\\d{1,3})/,'$1.$2.$3');
-    else if (v.length > 3) v = v.replace(/(\\d{3})(\\d{1,3})/,'$1.$2');
-    inp.value = v;
-  });
-}
-
-function atualizarProgresso() {
-  for (let i = 1; i <= TOTAL_SECOES; i++) {
-    const d = document.getElementById('d' + i);
-    if (i < secaoAtual)        d.className = 'dot feito';
-    else if (i === secaoAtual) d.className = 'dot ativo';
-    else                        d.className = 'dot';
-  }
-  document.getElementById('prog-label').textContent =
-    'Seção ' + secaoAtual + ' de ' + TOTAL_SECOES + '  ·  ' + TEMPO_EST[secaoAtual-1];
-  document.getElementById('prog-fill').style.width =
-    ((secaoAtual - 1) / (TOTAL_SECOES - 1) * 100) + '%';
-
-  const btnProx = document.getElementById('btn-prox');
-  const btnAnt  = document.getElementById('btn-ant');
-  btnAnt.style.display = secaoAtual > 1 ? 'block' : 'none';
-  btnProx.textContent  = secaoAtual === TOTAL_SECOES ? '✓ Enviar formulário' : 'Próximo →';
-  btnProx.className    = secaoAtual === TOTAL_SECOES ? 'btn-enviar' : 'btn-prox';
-}
-
-function validarSecao(n) {
-  let ok = true;
-  if (n === 1) {
-    ok = validarCampo('c-regiao', 'regiao_corpo') & validarCampo('c-desc', 'descricao') && ok;
-  }
-  if (n === 2) {
-    ok = validarCampo('c-nasc', 'nascimento') &
-         validarCampo('c-cidade', 'cidade') &
-         validarCampo('c-unidade', 'unidade') &
-         validarCampo('c-profissao', 'profissao') && ok;
-  }
-  return ok;
-}
-
 function validarCampo(idCampo, idInput) {
   const campo = document.getElementById(idCampo);
   const inp   = document.getElementById(idInput);
@@ -768,68 +564,55 @@ function validarCampo(idCampo, idInput) {
   return !vazio;
 }
 
-function proximo() {
-  if (!validarSecao(secaoAtual)) return;
-  if (secaoAtual === TOTAL_SECOES) {
-    enviar();
+async function enviar() {
+  // Folha única: só 3 obrigatórios (região, descrição, nascimento).
+  const ok = validarCampo('c-regiao', 'regiao_corpo') &
+             validarCampo('c-desc', 'descricao') &
+             validarCampo('c-nasc', 'nascimento');
+  if (!ok) {
+    const inv = document.querySelector('.campo.invalido');
+    if (inv) inv.scrollIntoView({ behavior: 'smooth', block: 'center' });
     return;
   }
-  document.getElementById('sec' + secaoAtual).classList.remove('ativa');
-  secaoAtual++;
-  document.getElementById('sec' + secaoAtual).classList.add('ativa');
-  atualizarProgresso();
-  window.scrollTo(0, 0);
-}
-
-function anterior() {
-  document.getElementById('sec' + secaoAtual).classList.remove('ativa');
-  secaoAtual--;
-  document.getElementById('sec' + secaoAtual).classList.add('ativa');
-  atualizarProgresso();
-  window.scrollTo(0, 0);
-}
-
-async function enviar() {
   const btnProx = document.getElementById('btn-prox');
   btnProx.disabled = true;
   btnProx.textContent = 'Enviando…';
 
-  const mecanismo = document.querySelector('input[name="mecanismo"]:checked');
-  const tabagismo = document.querySelector('input[name="tabagismo"]:checked');
-  const alcool    = document.querySelector('input[name="alcool"]:checked');
   const pagamento = document.querySelector('input[name="pagamento"]:checked');
   const doencas   = Array.from(document.querySelectorAll('input[name="doencas"]:checked')).map(i => i.value);
 
+  // Identificação (nome/tel/unidade/data) vem do link do agendamento — sem re-perguntar.
+  // Campos cortados da folha única vão vazios (backend trata todos como opcionais).
   const payload = {
     token: TOKEN,
     exp: EXP,
     agendamento_id: AID,
-    nome:           document.getElementById('nome').value,
-    telefone:       document.getElementById('telefone').value,
+    nome:           NOME,
+    telefone:       TEL,
     data_consulta:  DATA,
     nascimento:     document.getElementById('nascimento').value,
-    cpf:            document.getElementById('cpf').value,
-    cidade:         document.getElementById('cidade').value,
-    unidade:        (document.getElementById('unidade').value || UNIDADE),
-    bairro:         document.getElementById('bairro').value,
-    profissao:      document.getElementById('profissao').value,
-    estado_civil:   document.getElementById('estado_civil').value,
-    filhos:         parseInt(document.getElementById('filhos').value) || 0,
+    cpf:            '',
+    cidade:         '',
+    unidade:        UNIDADE,
+    bairro:         '',
+    profissao:      '',
+    estado_civil:   '',
+    filhos:         0,
     doencas_cronicas: doencas,
     medicacoes:         document.getElementById('medicacoes').value,
     alergias:           document.getElementById('alergias').value,
-    cirurgias_anteriores: document.getElementById('cirurgias_anteriores').value,
-    tabagismo:      tabagismo ? tabagismo.value : '',
-    alcool:         alcool    ? alcool.value    : '',
+    cirurgias_anteriores: '',
+    tabagismo:      '',
+    alcool:         '',
     regiao_corpo:   document.getElementById('regiao_corpo').value,
     descricao:      document.getElementById('descricao').value,
     tempo_sintomas: document.getElementById('tempo_sintomas').value,
-    mecanismo:      mecanismo ? mecanismo.value : '',
+    mecanismo:      '',
     eva:            parseInt(document.getElementById('eva').value),
-    piora:          document.getElementById('piora').value,
-    melhora:        document.getElementById('melhora').value,
-    tratamento_anterior: document.getElementById('tratamento_anterior').value,
-    uso_analgesicos:     document.getElementById('uso_analgesicos').value,
+    piora:          '',
+    melhora:        '',
+    tratamento_anterior: '',
+    uso_analgesicos:     '',
     exames_urls:    examesUrls,
     forma_pagamento: pagamento ? pagamento.value : 'particular',
     plano_saude:    document.getElementById('plano_saude').value || null,

@@ -437,15 +437,10 @@ async def serve_frontend(full_path: str, request: Request):
     if full_path.startswith(("api/", "auth/", "health", "docs", "openapi")):
         return {"error": "Not found"}
 
-    # Formulário pré-consulta — serve HTML estático diretamente
-    if full_path == "pre-consulta" or full_path.startswith("pre-consulta/"):
-        _app_dir = Path(__file__).parent
-        for _candidate in [
-            _app_dir / "static" / "pre-consulta.html",
-            _app_dir / "frontend_out" / "pre-consulta" / "index.html",
-        ]:
-            if _candidate.is_file():
-                return FileResponse(str(_candidate), media_type="text/html")
+    # Formulário pré-consulta: fonte única é o build do Next (out/pre-consulta.html),
+    # resolvido pelos candidatos genéricos abaixo. Havia cópias estáticas antigas
+    # (backend/static e out/pre-consulta/index.html) que ganhavam a prioridade e
+    # serviam versão desatualizada do formulário — removidas em 01/08/2026.
 
     if out_dir is None:
         return {"error": "Frontend not properly built"}
