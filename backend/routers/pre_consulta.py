@@ -414,6 +414,13 @@ def confirmar_presenca(data: PreConsultaPayload, db: Session = Depends(get_db)):
     appointment_id, appointment_criado = _criar_agendamento_se_possivel(
         db, data, patient, origem="confirmação de presença"
     )
+    # Presença confirmada pelo paciente (SIM no WhatsApp) → agenda mostra
+    # "confirmado" pra secretária, não "pendente". Não mexe em cancelados.
+    if appointment_id:
+        appt = db.query(Appointment).filter(Appointment.id == appointment_id).first()
+        if appt and appt.status == "pending":
+            appt.status = "confirmed"
+            db.commit()
     return ConfirmacaoOut(
         ok=True,
         patient_id=patient.id,

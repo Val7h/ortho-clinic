@@ -127,6 +127,18 @@ def login(data: LoginIn, request: Request, db: Session = Depends(get_db)):
         raise HTTPException(401, "Email ou senha incorretos")
 
     token = _make_token(user)
+
+    # Telemetria de adoção: sem isso não dá pra saber quem de fato usa o app
+    # (last_login_at ficava eternamente NULL; auditoria é a fonte detalhada).
+    try:
+        from datetime import timezone as _tz
+        user.last_login_at = datetime.now(_tz.utc)
+        user.last_ip_address = actor_ip
+        db.commit()
+    except Exception as _tel_exc:
+        logger.warning("last_login_at non-fatal: %s", _tel_exc)
+        db.rollback()
+
     try:
         AuditLogService.record(
             db=db,
