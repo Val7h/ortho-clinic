@@ -234,6 +234,8 @@ export const leafletsApi = {
 // ── Dashboard ─────────────────────────────────────────────────────────────
 export const dashboardApi = {
   get: () => api.get("/dashboard").then((r) => r.data),
+  v2: () => api.get("/dashboard/v2").then((r) => r.data),
+  recall: () => api.get("/dashboard/v2/recall").then((r) => r.data),
 };
 
 // ── Auditoria LGPD ────────────────────────────────────────────────────────

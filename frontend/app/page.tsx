@@ -23,27 +23,20 @@ import { formatDateTime } from '@/lib/utils';
 import { useAuth } from '@/components/AuthProvider';
 import { Card, CardContent, Button, Badge } from '@/components/ui';
 
-// Recharts is ~120 KB gzipped — load only when stats are available.
-// This keeps the dashboard TTI under 2s on 4G.
-const DashboardAnalytics = dynamic(
-  () => import('@/components/DashboardAnalytics').then(m => ({ default: m.DashboardAnalytics })),
+// Dashboard v2: sem recharts (números + tabela + barras CSS) — leve, mas mantém
+// o dynamic import p/ não pesar o bundle da home da secretária.
+const DashboardV2 = dynamic(
+  () => import('@/components/DashboardV2').then(m => ({ default: m.DashboardV2 })),
   {
     loading: () => (
       <div className="h-64 rounded-2xl bg-slate-100 dark:bg-slate-800 animate-pulse" />
     ),
-    ssr: false, // chart renders only on client
+    ssr: false,
   }
 );
 
 export default function Dashboard() {
   const { user } = useAuth();
-  const [stats, setStats] = useState<any>(null);
-
-  useEffect(() => {
-    if (user) {
-      dashboardApi.get().then(setStats).catch(() => {});
-    }
-  }, [user]);
 
   // HOME DA SECRETÁRIA (decisão Valth 02/08): só atalhos operacionais — sem
   // analytics, sem número de faturamento, sem módulos clínicos.
@@ -69,10 +62,9 @@ export default function Dashboard() {
   return (
     <ProtectedPageLayout title="OrthoClinic" subtitle="Gestão de Consultório Premium">
       <div className="mx-auto max-w-7xl space-y-8">
-        {/* Grade de "Módulos" REMOVIDA (decisão Valth 02/08): tudo que ela
-            oferecia já vive no menu lateral (Agenda, Pacientes, Sala de Espera,
-            Financeiro, Documentos, Equipe) — a home do médico é o dashboard. */}
-        {stats && <DashboardAnalytics stats={stats} />}
+        {/* Dashboard v2 (redesign aprovado 02/08): HOJE → mês em 4 números →
+            por clínica → funil+recall. Substitui o DashboardAnalytics antigo. */}
+        <DashboardV2 />
       </div>
     </ProtectedPageLayout>
   );

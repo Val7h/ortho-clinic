@@ -146,6 +146,8 @@ app.include_router(clinic_router)
 
 # Routers protegidos
 app.include_router(dashboard.router)
+from routers.dashboard_v2 import router as dashboard_v2_router  # noqa: E402
+app.include_router(dashboard_v2_router)
 app.include_router(patients.router)
 app.include_router(consultations.router)
 app.include_router(memed_router)

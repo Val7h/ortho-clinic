@@ -108,51 +108,112 @@ const ORTHO_TESTS = [
   { key: "tinel_carpal", label: "Tinel (carpo)", region: "Punho" },
 ];
 
-const ORTHO_CIDS = [
-  { code: "M17.1", label: "Gonartrose primária unilateral" },
-  { code: "M17.0", label: "Gonartrose primária bilateral" },
-  { code: "M16.1", label: "Coxartrose primária unilateral" },
-  { code: "M16.0", label: "Coxartrose primária bilateral" },
-  { code: "M54.5", label: "Lombalgia" },
-  { code: "M54.4", label: "Lumbociatalgia" },
-  { code: "M51.1", label: "Hérnia de disco lombar com radiculopatia" },
-  { code: "M50.1", label: "Hérnia de disco cervical com radiculopatia" },
-  { code: "M75.1", label: "Síndrome do manguito rotador" },
-  { code: "M75.5", label: "Bursite do ombro" },
-  { code: "M75.0", label: "Síndrome do impacto do ombro" },
-  { code: "M23.2", label: "Lesão do menisco por ruptura" },
-  { code: "M23.6", label: "Outras afecções internas do joelho" },
-  { code: "M06.9", label: "Artrite reumatoide inespecífica" },
-  { code: "M10.9", label: "Gota inespecífica" },
-  { code: "M65.1", label: "Tenossinovite do tendão" },
-  { code: "M72.2", label: "Fibromatose plantar (esporão)" },
-  { code: "M77.0", label: "Epicondilite medial" },
-  { code: "M77.1", label: "Epicondilite lateral" },
-  { code: "S83.2", label: "Ruptura do ligamento cruzado anterior" },
-  { code: "S83.0", label: "Luxação da rótula" },
-  { code: "S72.0", label: "Fratura do colo do fêmur" },
-  { code: "S52.5", label: "Fratura distal do rádio" },
-  { code: "M84.3", label: "Fratura por estresse" },
-  { code: "M19.9", label: "Artrose inespecífica" },
-  { code: "M81.0", label: "Osteoporose pós-menopáusica" },
-  { code: "M81.9", label: "Osteoporose não especificada" },
-  { code: "M80.9", label: "Osteoporose com fratura patológica" },
-  { code: "M41.9", label: "Escoliose inespecífica" },
-  { code: "M48.0", label: "Estenose espinhal" },
-  { code: "M47.8", label: "Espondilose com outras mielopatias" },
-  { code: "M62.6", label: "Distensão muscular" },
-  { code: "S93.4", label: "Entorse e distensão do tornozelo" },
-  { code: "M54.2", label: "Cervicalgia" },
-  { code: "S42.2", label: "Fratura da diáfise do úmero" },
-  { code: "S82.0", label: "Fratura da rótula" },
-  { code: "M23.0", label: "Corpo livre em articulação do joelho" },
-  { code: "M79.3", label: "Paniculite" },
-  { code: "S72.1", label: "Fratura pertrocantérica do fêmur" },
-  { code: "S62.5", label: "Fratura dos metacarpos" },
-  { code: "M25.5", label: "Dor articular" },
-  { code: "M79.6", label: "Dor em membro" },
-  { code: "T14.0", label: "Fratura de região não especificada do corpo" },
-  { code: "S00.9", label: "Traumatismo superficial não especificado da cabeça" },
+// Busca REVERSA de CID (pedido Valth 02/08): ele não decora códigos — digita a
+// condição em português ("joelho", "esporão", "joanete", "tenista") e acha o
+// CID. `k` = palavras-chave/apelidos populares; busca ignora acentos.
+function normTxt(s: string): string {
+  return s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+}
+
+function cidMatches(c: { code: string; label: string; k?: string }, query: string): boolean {
+  const q = normTxt(query);
+  return (
+    normTxt(c.code).includes(q) ||
+    normTxt(c.label).includes(q) ||
+    (!!c.k && normTxt(c.k).includes(q))
+  );
+}
+
+const ORTHO_CIDS: { code: string; label: string; k?: string }[] = [
+  // ── Joelho ──
+  { code: "M17.1", label: "Gonartrose primária unilateral", k: "joelho artrose desgaste" },
+  { code: "M17.0", label: "Gonartrose primária bilateral", k: "joelho artrose bilateral" },
+  { code: "M23.2", label: "Lesão do menisco por ruptura antiga", k: "joelho menisco" },
+  { code: "M23.0", label: "Menisco cístico / corpo livre no joelho", k: "joelho" },
+  { code: "M22.2", label: "Síndrome patelofemoral", k: "joelho patela dor anterior" },
+  { code: "M22.4", label: "Condromalácia da rótula", k: "joelho patela cartilagem" },
+  { code: "S83.2", label: "Ruptura do menisco (atual)", k: "joelho menisco trauma" },
+  { code: "S83.5", label: "Entorse do joelho — ligamento cruzado (LCA/LCP)", k: "joelho lca ligamento cruzado" },
+  { code: "S83.0", label: "Luxação da rótula", k: "joelho patela" },
+  { code: "M70.5", label: "Bursite do joelho", k: "joelho" },
+  { code: "M76.5", label: "Tendinite patelar", k: "joelho saltador" },
+  // ── Ombro ──
+  { code: "M75.0", label: "Capsulite adesiva (ombro congelado)", k: "ombro congelado rigidez" },
+  { code: "M75.1", label: "Síndrome do manguito rotador", k: "ombro supraespinhal manguito" },
+  { code: "M75.2", label: "Tendinite bicipital", k: "ombro biceps" },
+  { code: "M75.3", label: "Tendinite calcificante do ombro", k: "ombro calcificacao calcarea" },
+  { code: "M75.4", label: "Síndrome de colisão do ombro (impacto)", k: "ombro impacto" },
+  { code: "M75.5", label: "Bursite do ombro", k: "ombro" },
+  { code: "S43.0", label: "Luxação do ombro", k: "ombro luxacao" },
+  { code: "S43.4", label: "Entorse do ombro", k: "ombro" },
+  // ── Coluna ──
+  { code: "M54.5", label: "Lombalgia (dor lombar baixa)", k: "coluna lombar costas" },
+  { code: "M54.4", label: "Lumbago com ciática (lumbociatalgia)", k: "coluna ciatico perna" },
+  { code: "M54.3", label: "Ciática", k: "coluna nervo ciatico" },
+  { code: "M54.2", label: "Cervicalgia (dor no pescoço)", k: "coluna cervical pescoco" },
+  { code: "M54.6", label: "Dor na coluna torácica (dorsalgia)", k: "coluna dorsal" },
+  { code: "M51.1", label: "Hérnia de disco lombar com radiculopatia", k: "coluna hernia disco" },
+  { code: "M50.1", label: "Hérnia de disco cervical com radiculopatia", k: "coluna hernia cervical braco" },
+  { code: "M48.0", label: "Estenose do canal vertebral", k: "coluna canal estreito claudicacao" },
+  { code: "M47.8", label: "Espondilose (artrose da coluna)", k: "coluna bico de papagaio" },
+  { code: "M43.1", label: "Espondilolistese", k: "coluna escorregamento vertebra" },
+  { code: "M41.9", label: "Escoliose", k: "coluna desvio curvatura" },
+  // ── Quadril ──
+  { code: "M16.1", label: "Coxartrose primária unilateral", k: "quadril artrose" },
+  { code: "M16.0", label: "Coxartrose primária bilateral", k: "quadril artrose" },
+  { code: "M70.6", label: "Bursite trocantérica", k: "quadril dor lateral trocanter" },
+  { code: "M87.0", label: "Osteonecrose da cabeça femoral", k: "quadril necrose avascular" },
+  // ── Mão e punho ──
+  { code: "G56.0", label: "Síndrome do túnel do carpo", k: "mao punho formigamento dormencia" },
+  { code: "M65.3", label: "Dedo em gatilho", k: "mao dedo trava" },
+  { code: "M65.4", label: "Tenossinovite de De Quervain", k: "punho polegar tendinite" },
+  { code: "M65.1", label: "Tenossinovite", k: "tendinite bainha" },
+  { code: "M18.1", label: "Rizartrose (artrose do polegar)", k: "mao polegar base artrose" },
+  { code: "M72.0", label: "Contratura de Dupuytren", k: "mao palma fibrose dedo" },
+  { code: "M67.4", label: "Cisto sinovial (gânglio)", k: "punho mao carocinho" },
+  // ── Cotovelo ──
+  { code: "M77.1", label: "Epicondilite lateral (cotovelo de tenista)", k: "cotovelo tenista" },
+  { code: "M77.0", label: "Epicondilite medial (cotovelo de golfista)", k: "cotovelo golfista" },
+  // ── Tornozelo e pé ──
+  { code: "S93.4", label: "Entorse do tornozelo", k: "tornozelo torcao pe" },
+  { code: "M77.3", label: "Esporão do calcâneo", k: "pe calcanhar esporao" },
+  { code: "M72.2", label: "Fasciíte plantar (fibromatose da fáscia)", k: "pe calcanhar fascite sola" },
+  { code: "M76.6", label: "Tendinite do tendão de Aquiles", k: "pe calcanhar aquileu" },
+  { code: "M20.1", label: "Hálux valgo (joanete)", k: "pe joanete dedao" },
+  { code: "M21.4", label: "Pé plano (chato)", k: "pe chato plano" },
+  { code: "M77.4", label: "Metatarsalgia", k: "pe dor planta antepe" },
+  { code: "G57.6", label: "Neuroma de Morton", k: "pe neuroma dedos queimacao" },
+  { code: "M20.2", label: "Hálux rígido", k: "pe dedao rigido artrose" },
+  // ── Fraturas ──
+  { code: "S42.0", label: "Fratura da clavícula", k: "fratura ombro" },
+  { code: "S42.2", label: "Fratura da extremidade superior do úmero", k: "fratura ombro braco" },
+  { code: "S52.5", label: "Fratura distal do rádio (punho)", k: "fratura punho radio" },
+  { code: "S62.0", label: "Fratura do escafoide", k: "fratura punho navicular" },
+  { code: "S62.5", label: "Fratura de metacarpo", k: "fratura mao" },
+  { code: "S72.0", label: "Fratura do colo do fêmur", k: "fratura quadril idoso" },
+  { code: "S72.1", label: "Fratura pertrocantérica do fêmur", k: "fratura quadril" },
+  { code: "S82.0", label: "Fratura da rótula (patela)", k: "fratura joelho" },
+  { code: "S82.6", label: "Fratura do maléolo lateral", k: "fratura tornozelo" },
+  { code: "S92.0", label: "Fratura do calcâneo", k: "fratura pe calcanhar" },
+  { code: "S32.0", label: "Fratura de vértebra lombar", k: "fratura coluna" },
+  { code: "M84.3", label: "Fratura por estresse", k: "fratura fadiga corrida" },
+  { code: "M84.4", label: "Fratura patológica", k: "fratura osteoporose" },
+  // ── Osteoporose / reumato / geral ──
+  { code: "M81.0", label: "Osteoporose pós-menopáusica", k: "osso densitometria" },
+  { code: "M81.9", label: "Osteoporose não especificada", k: "osso densitometria" },
+  { code: "M80.9", label: "Osteoporose com fratura patológica", k: "osso fratura" },
+  { code: "M06.9", label: "Artrite reumatoide", k: "reumatismo articulacoes" },
+  { code: "M10.9", label: "Gota", k: "acido urico dedao" },
+  { code: "M15.9", label: "Poliartrose (artrose múltipla)", k: "artrose varias articulacoes" },
+  { code: "M19.9", label: "Artrose não especificada", k: "artrose desgaste" },
+  { code: "M79.7", label: "Fibromialgia", k: "dor difusa generalizada corpo" },
+  { code: "M62.6", label: "Distensão muscular", k: "musculo estiramento" },
+  { code: "M79.1", label: "Mialgia (dor muscular)", k: "musculo dor" },
+  { code: "M25.5", label: "Dor articular", k: "dor articulacao" },
+  { code: "M79.6", label: "Dor em membro", k: "dor braco perna" },
+  { code: "M70.9", label: "Bursite não especificada", k: "bursa inflamacao" },
+  { code: "M76.9", label: "Entesopatia do membro inferior", k: "tendinite perna" },
+  { code: "T14.0", label: "Traumatismo superficial (contusão)", k: "trauma pancada batida" },
 ];
 
 const ROUTE_OPTIONS = ["oral", "tópico", "IM", "SC", "IV", "transdérmico", "intraarticular", "inalatório", "sublingual", "retal"];
@@ -375,11 +436,7 @@ function CidSearch({ value, onChange }: { value: string; onChange: (v: string) =
   const ref = useRef<HTMLDivElement>(null);
 
   const filtered = query.length >= 2
-    ? ORTHO_CIDS.filter(
-        (c) =>
-          c.code.toLowerCase().includes(query.toLowerCase()) ||
-          c.label.toLowerCase().includes(query.toLowerCase())
-      ).slice(0, 6)
+    ? ORTHO_CIDS.filter((c) => cidMatches(c, query)).slice(0, 6)
     : [];
 
   useEffect(() => {
@@ -505,9 +562,8 @@ function DiagnosticosCids({ patientId, patient }: { patientId: number; patient: 
 
   const filtered = query.length >= 2
     ? ORTHO_CIDS.filter(
-        c => !cids.some(x => x.startsWith(c.code)) &&
-          (c.code.toLowerCase().includes(query.toLowerCase()) || c.label.toLowerCase().includes(query.toLowerCase()))
-      ).slice(0, 6)
+        c => !cids.some(x => x.startsWith(c.code)) && cidMatches(c, query)
+      ).slice(0, 8)
     : [];
 
   const ofertas = ofertasParaCids(cids).filter(o => !dismissed.includes(o.prefix));

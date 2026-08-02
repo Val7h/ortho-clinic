@@ -17,6 +17,9 @@ class FinancialRecord(Base):
     status = Column(String(20), default="paid")
     # paid | pending | cancelled
     description = Column(String(300), nullable=True)
+    # Clínica onde o pagamento aconteceu (dashboard v2, 02/08) — preenchida a
+    # partir de agora; histórico antigo fica NULL (proxy = sala de espera)
+    clinic_id = Column(Integer, ForeignKey("clinics.id"), nullable=True, index=True)
     date = Column(Date, nullable=False)
     notes = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

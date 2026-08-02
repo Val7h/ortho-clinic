@@ -93,6 +93,13 @@ def migrate_db():
         if "cids" not in cols:
             migrations.append("ALTER TABLE patients ADD COLUMN cids JSON")
 
+    # Dashboard v2 (02/08): receita por clínica — coluna pro futuro; hoje o
+    # dashboard usa value_cents da sala de espera como proxy
+    if "financial_records" in existing_tables:
+        fin_cols = [c["name"] for c in inspector.get_columns("financial_records")]
+        if "clinic_id" not in fin_cols:
+            migrations.append("ALTER TABLE financial_records ADD COLUMN clinic_id INTEGER")
+
     # Sala de Espera — timer de atendimento + valor (called_at/attended_at/value_cents)
     if "waiting_room_entries" in existing_tables:
         wre_cols = [c["name"] for c in inspector.get_columns("waiting_room_entries")]
