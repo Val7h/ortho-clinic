@@ -1,40 +1,42 @@
 'use client';
 /**
- * AgendaPage — Sprint 6 complete rewrite
+ * AgendaPage — redesign aprovado pelo Dr. Valth em 02/08 (mockup "proposta-v1").
  *
- * Features shipped:
- * - Three calendar views: Mês (month), Semana (week, 7 cols), Dia (day timeline)
- * - "Hoje" quick-jump in all views
- * - Floating "+ Agendar" FAB opens AppointmentFormModal
- * - Click on existing appointment opens edit modal
- * - Offline queue badge in header
- * - Conflict badge on calendar cells
- * - Doctor availability colour-coded dots on month view
+ * Modelo mental: agenda de TURNOS, não de slots — 12-14 pacientes marcados no
+ * mesmo horário de início, atendidos por ordem de chegada, 5 clínicas em dias
+ * fixos da semana. Decisões de design (crítica UX + fluxo, 02/08):
  *
- * Design challenges:
- * - Month view needed to support click-to-create — clicking an empty cell
- *   pre-fills the date and opens the form directly.
- * - Day view renders a 60-min-per-row timeline from 07:00–20:00; appointments
- *   that span overlapping times use negative margin offset to avoid collapse.
- * - Offline items use negative IDs (optimistic) and show a distinct amber badge
- *   so the doctor knows they haven't been confirmed by the server yet.
- * - The availability query is debounced per view-change to avoid N+1 calls
- *   when the user rapidly flips between weeks.
+ * - Visão padrão = DIA (hoje). "Hoje" volta pra hoje NA visão atual.
+ * - Barra de comando única: ‹ [Mês Ano ▾] › · Hoje · Dia/Semana/Mês.
+ *   Clicar no título abre o seletor de mês/ano (2 cliques p/ qualquer data).
+ * - Dia: faixa da semana (1 clique por dia), clínica como título do dia,
+ *   barra de progresso atendidos/faltam, cartões de 1 linha.
+ * - Status por FORMA, nunca só por cor: pendente = tracejado ⏱, confirmado =
+ *   sólido, atendido = ✓ apagado, cancelado = riscado compacto (VISÍVEL — o
+ *   buraco no turno é informação; antes era filtrado e escondido).
+ * - Semana: a grade de 7 colunas saiu (era p/ consultório de slot de 30min);
+ *   virou LISTA "Minha semana" — 1 linha por dia com confirmados/pendentes.
+ * - Mês: células claras, chips por clínica com contagem + pendentes.
+ * - Cor pertence à CLÍNICA (paleta fixa no banco: fundo pastel derivado +
+ *   borda forte). Âmbar/vermelho reservados p/ offline/conflito.
+ * - Removidos: dots de disponibilidade (5 chamadas de API por navegação p/ um
+ *   pixel ilegível), clique-cria na área vazia da coluna (misclick), resíduo
+ *   da timeline 07-20h, STATUS_COLOR morto.
+ * - Bug corrigido: paciente SEM horário sumia da visão Dia (filtro start_time)
+ *   — agora entra no grupo "Ordem de chegada".
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ChevronLeft, ChevronRight, Plus, RefreshCw,
-  WifiOff, Wifi, AlertTriangle, Loader2, CalendarDays,
+  WifiOff, AlertTriangle, Loader2, CalendarDays,
 } from 'lucide-react';
-import Link from 'next/link';
 import NavBar from '@/components/NavBar';
 import { PageWithSidebar } from '@/components/PageWithSidebar';
 import { AppointmentFormModal } from '@/components/AppointmentFormModal';
-import { agendaApi, appointmentsApi, clinicApi, patientsApi } from '@/lib/api';
+import { agendaApi, clinicApi, patientsApi } from '@/lib/api';
 import { useProtectedPage } from '@/components/AuthProvider';
 import { useOfflineAppointmentQueue } from '@/hooks/useOfflineAppointmentQueue';
-import { Badge } from '@/components/ui';
 import toast from 'react-hot-toast';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -72,13 +74,15 @@ interface ApptEvent {
 // ── Utilities ─────────────────────────────────────────────────────────────────
 
 const MONTHS_PT = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+const MONTHS_SHORT = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
 const WEEK_DAYS_LONG = ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'];
+
+const FALLBACK_COLOR = '#1D4ED8';
 
 function toISO(d: Date) {
   // Usa componentes locais (não toISOString/UTC) para não pular de dia após 21h BRT
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
-function fmtDate(d: Date) { return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`; }
 function fmtTime(iso: string) {
   try { return new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }); }
   catch { return ''; }
@@ -96,9 +100,13 @@ function addDays(d: Date, n: number): Date {
   return r;
 }
 
-function isoToMinutes(t: string): number {
-  const [h, m] = t.split(':').map(Number);
-  return h * 60 + m;
+function shortClinic(name?: string): string {
+  return (name || 'Clínica').replace(/^Clínica\s+/i, '');
+}
+
+// Fundo pastel derivado da cor forte da clínica (~12% de opacidade sobre branco)
+function pastel(color: string, alpha = '1F'): string {
+  return /^#[0-9a-fA-F]{6}$/.test(color) ? `${color}${alpha}` : color;
 }
 
 // M14: mesmo filtro do chat da IA — esconde/não conta nomes de teste
@@ -113,37 +121,61 @@ const STATUS_LABEL: Record<string, string> = {
   blocked: 'Bloqueado', pending_offline: 'Offline',
 };
 
-const STATUS_COLOR: Record<string, string> = {
-  pending: 'text-amber-700 bg-amber-100',
-  confirmed: 'text-emerald-700 bg-emerald-100',
-  cancelled: 'text-slate-500 bg-slate-100 line-through',
-  completed: 'text-blue-700 bg-blue-100',
-  blocked: 'text-red-700 bg-red-100',
-  pending_offline: 'text-amber-800 bg-amber-200',
+const APPT_TYPE_COLOR: Record<string, string> = {
+  consulta: '#1D4ED8', retorno: '#06B6D4', teleconsulta: '#7C3AED',
+  procedimento: '#0891B2', urgencia: '#EF4444',
 };
 
-const APPT_TYPE_COLOR: Record<string, string> = {
-  consulta: '#0F2D5E', retorno: '#06B6D4', teleconsulta: '#7C3AED',
-  procedimento: '#F59E0B', urgencia: '#EF4444',
-};
+// Agregado de um dia: contagens + clínicas presentes (p/ faixa, lista e mês)
+interface DayAgg {
+  total: number;          // sem cancelados
+  pend: number;
+  conf: number;
+  done: number;
+  cancelled: number;
+  clinics: { name: string; color: string; n: number; pend: number }[];
+}
+
+function aggregateDay(evts: ApptEvent[]): DayAgg {
+  const active = evts.filter(e => e.status !== 'cancelled');
+  const byClinic: Record<string, { name: string; color: string; n: number; pend: number }> = {};
+  for (const e of active) {
+    const name = shortClinic(e.clinic_name);
+    if (!byClinic[name]) byClinic[name] = { name, color: e.clinic_color || FALLBACK_COLOR, n: 0, pend: 0 };
+    byClinic[name].n += 1;
+    if (e.status === 'pending' || e.status === 'pending_offline') byClinic[name].pend += 1;
+  }
+  return {
+    total: active.length,
+    pend: active.filter(e => e.status === 'pending' || e.status === 'pending_offline').length,
+    conf: active.filter(e => e.status === 'confirmed').length,
+    done: active.filter(e => e.status === 'completed').length,
+    cancelled: evts.length - active.length,
+    clinics: Object.keys(byClinic).map(k => byClinic[k]),
+  };
+}
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function AgendaPage() {
   const { user } = useProtectedPage();
 
-  const [view, setView] = useState<ViewMode>('semana');
-  const [cursor, setCursor] = useState<Date>(new Date()); // "anchor" date for all views
+  // Visão padrão = DIA de hoje: a pergunta nº 1 é "e hoje?"
+  const [view, setView] = useState<ViewMode>('dia');
+  const [cursor, setCursor] = useState<Date>(new Date());
   const [events, setEvents] = useState<ApptEvent[]>([]);
   const [blocks, setBlocks] = useState<Record<string, any[]>>({}); // M16: blocos de funcionamento por data
   const [clinics, setClinics] = useState<ClinicData[]>([]);
-  const [availability, setAvailability] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [editingAppt, setEditingAppt] = useState<ApptEvent | null>(null);
   const [createDate, setCreateDate] = useState<string | undefined>();
 
-  const { queue, isOnline, pendingCount, conflictCount, syncPending, removeFromQueue } =
+  // Seletor de mês/ano (popover do título)
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerYear, setPickerYear] = useState<number>(new Date().getFullYear());
+
+  const { queue, isOnline, pendingCount, conflictCount, syncPending } =
     useOfflineAppointmentQueue();
 
   const fetchRef = useRef<AbortController | null>(null);
@@ -156,8 +188,10 @@ export default function AgendaPage() {
   const monthStart = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
   const monthEnd = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0);
 
-  const rangeStart = view === 'mes' ? toISO(monthStart) : view === 'semana' ? toISO(weekDays[0]) : toISO(cursor);
-  const rangeEnd   = view === 'mes' ? toISO(monthEnd)   : view === 'semana' ? toISO(weekDays[6]) : toISO(cursor);
+  // Dia busca a SEMANA inteira: alimenta a faixa de dias e evita refetch ao
+  // navegar dentro da mesma semana.
+  const rangeStart = view === 'mes' ? toISO(monthStart) : toISO(weekDays[0]);
+  const rangeEnd   = view === 'mes' ? toISO(monthEnd)   : toISO(weekDays[6]);
 
   // ── Fetch data ─────────────────────────────────────────────────────────────
 
@@ -187,7 +221,7 @@ export default function AgendaPage() {
           patient_name: c.patient_name ?? '',
           patient_id: c.patient_id,
           clinic_name: 'Prontuário',
-          clinic_color: APPT_TYPE_COLOR[c.type] ?? '#888',
+          clinic_color: APPT_TYPE_COLOR[c.type] ?? '#64748B',
           appointment_type: c.type,
           status: 'completed',
           reason: c.diagnosis,
@@ -243,28 +277,6 @@ export default function AgendaPage() {
       // M14: esconde/não conta os nomes de teste (mesmo filtro do chat da IA)
       setEvents(merged.filter(m => !isTestName(m.patient_name)));
       setBlocks(blockMap); // M16
-
-      // M17: disponibilidade de TODAS as clínicas ativas (disponível se qualquer uma tem vaga)
-      if (clinicList.length > 0) {
-        Promise.all(
-          clinicList.map((c: ClinicData) =>
-            appointmentsApi.availability(c.id, rangeStart, rangeEnd).catch(() => [])
-          )
-        )
-          .then(results => {
-            const map: Record<string, any> = {};
-            for (const avail of results) {
-              for (const a of avail) {
-                const existing = map[a.date];
-                map[a.date] = existing
-                  ? { ...existing, available: existing.available || a.available }
-                  : a;
-              }
-            }
-            setAvailability(map);
-          })
-          .catch(() => {});
-      }
     } catch (err: any) {
       if (err?.name !== 'AbortError') {
         toast.error('Erro ao carregar agenda');
@@ -293,7 +305,6 @@ export default function AgendaPage() {
     });
     if (!isOptimistic) toast.success(editingAppt ? 'Agendamento atualizado' : 'Agendamento criado');
     setEditingAppt(null);
-    // Refresh from server after a short delay so optimistic + server both show correctly
     if (!isOptimistic) setTimeout(fetchData, 600);
   };
 
@@ -309,8 +320,7 @@ export default function AgendaPage() {
   };
 
   // Vindo da ficha do paciente ("Agendar" → /agenda?paciente=ID): abre o modal
-  // de novo agendamento já com o paciente preenchido. (Antes o botão apontava
-  // pra /agendar?paciente=..., rota inexistente, e caía na home — bug 02/08.)
+  // de novo agendamento já com o paciente preenchido.
   const [prefillPatient, setPrefillPatient] = useState<{ id: number; name: string; phone?: string } | null>(null);
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -323,7 +333,6 @@ export default function AgendaPage() {
         setFormOpen(true);
       })
       .catch(() => toast.error('Paciente não encontrado para agendar'));
-    // limpa o parâmetro pra não reabrir o modal em cada volta à página
     window.history.replaceState({}, '', '/agenda');
   }, []);
 
@@ -349,19 +358,34 @@ export default function AgendaPage() {
     });
   };
 
-  // "Hoje" abre o CALENDÁRIO DO MÊS pra escolher o dia (decisão Valth 02/08);
-  // clicar num dia do mês abre a visão Dia daquele dia.
-  const goToday = () => { setCursor(new Date()); setView('mes'); };
+  // "Hoje" faz o que o nome diz: volta pra hoje NA VISÃO ATUAL. Escolher um
+  // dia distante é papel do seletor de mês/ano + visão Mês.
+  const goToday = () => { setCursor(new Date()); };
+
+  const openPicker = () => {
+    setPickerYear(cursor.getFullYear());
+    setPickerOpen(o => !o);
+  };
+
+  // Escolheu um mês no popover → mostra o MÊS pra escolher o dia (clicar no
+  // dia leva pra visão Dia, como sempre).
+  const pickMonth = (m: number) => {
+    setCursor(new Date(pickerYear, m, 1));
+    setView('mes');
+    setPickerOpen(false);
+  };
 
   // ── Calendar helpers ───────────────────────────────────────────────────────
 
   const today = toISO(new Date());
+  const isCursorToday = toISO(cursor) === today;
 
-  function eventsForDate(date: string): ApptEvent[] {
-    return events.filter(e => e.date === date && e.status !== 'cancelled');
+  // TODOS os eventos do dia, cancelados INCLUSIVE (visão Dia mostra o buraco
+  // no turno; contagens usam aggregateDay, que separa cancelados).
+  function allForDate(date: string): ApptEvent[] {
+    return events.filter(e => e.date === date);
   }
 
-  // M16: blocos de funcionamento (faixa de fundo) para a data
   function blocksForDate(date: string): any[] {
     return blocks[date] ?? [];
   }
@@ -375,22 +399,6 @@ export default function AgendaPage() {
   }
   while (calendarDays.length % 7 !== 0) calendarDays.push(null);
 
-  // Day timeline (07:00–20:00, 60 min rows)
-  const DAY_START = 7 * 60;
-  const DAY_END   = 20 * 60;
-  const ROW_H = 56; // px per 60-min row
-  const dayEvents = eventsForDate(toISO(cursor)).filter(e => e.start_time);
-
-  // ── Title string ───────────────────────────────────────────────────────────
-
-  let title = '';
-  if (view === 'mes') title = `${MONTHS_PT[cursor.getMonth()]} ${cursor.getFullYear()}`;
-  else if (view === 'semana') title = `${fmtDate(weekDays[0])} – ${fmtDate(weekDays[6])} · ${cursor.getFullYear()}`;
-  else {
-    const nDia = eventsForDate(toISO(cursor)).length;
-    title = `${cursor.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })} · ${nDia} paciente${nDia !== 1 ? 's' : ''}`;
-  }
-
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
@@ -402,7 +410,6 @@ export default function AgendaPage() {
         back="/"
         actions={
           <div className="flex items-center gap-2">
-            {/* Offline queue badge */}
             {!isOnline && (
               <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-amber-500/20 border border-amber-400/40">
                 <WifiOff className="w-3.5 h-3.5 text-amber-300" />
@@ -427,120 +434,390 @@ export default function AgendaPage() {
                 <span className="text-xs font-bold text-red-300">{conflictCount} conflito{conflictCount > 1 ? 's' : ''}</span>
               </div>
             )}
-
-            {/* Nav arrows */}
-            <button onClick={() => navigate(-1)} className="rounded-lg p-2 hover:bg-white/20 text-white transition-colors">
-              <ChevronLeft className="h-5 w-5" />
-            </button>
-            <button
-              onClick={goToday}
-              className="rounded-lg px-3 py-1.5 bg-white/15 hover:bg-white/25 text-white text-xs font-semibold border border-white/20 transition-colors"
-            >
-              Hoje
-            </button>
-            <button onClick={() => navigate(1)} className="rounded-lg p-2 hover:bg-white/20 text-white transition-colors">
-              <ChevronRight className="h-5 w-5" />
-            </button>
           </div>
         }
       />
 
-      {/* View switcher */}
-      <div className="sticky top-16 z-10 flex gap-0 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950">
-        {(['mes', 'semana', 'dia'] as ViewMode[]).map(v => (
+      {/* ── Barra de comando única: ‹ [Mês Ano ▾] › · Hoje · visões ─────────── */}
+      <div className="sticky top-16 z-20 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950">
+        <div className="mx-auto max-w-6xl px-4 py-2.5 flex items-center gap-2 flex-wrap relative">
           <button
-            key={v}
-            onClick={() => setView(v)}
-            className={`flex-1 border-b-2 py-3 text-sm font-semibold capitalize transition-colors ${
-              view === v
-                ? 'border-brand-600 text-brand-600'
-                : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+            onClick={() => navigate(-1)}
+            className="w-9 h-9 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center justify-center transition-colors"
+            aria-label="Anterior"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+
+          <button
+            onClick={openPicker}
+            className="flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3.5 py-1.5 text-base font-bold text-slate-900 dark:text-slate-50 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+            aria-label="Escolher mês e ano"
+          >
+            {MONTHS_PT[cursor.getMonth()]} {cursor.getFullYear()}
+            <span className="text-[10px] text-brand-600">▼</span>
+          </button>
+
+          <button
+            onClick={() => navigate(1)}
+            className="w-9 h-9 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center justify-center transition-colors"
+            aria-label="Próximo"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+
+          <button
+            onClick={goToday}
+            disabled={isCursorToday}
+            className={`rounded-lg px-3.5 py-1.5 text-sm font-semibold border transition-colors ${
+              isCursorToday
+                ? 'text-slate-300 dark:text-slate-600 border-slate-100 dark:border-slate-800 cursor-default'
+                : 'text-brand-600 bg-brand-50 dark:bg-brand-950/40 border-brand-200 dark:border-brand-900 hover:bg-brand-100'
             }`}
           >
-            {v === 'mes' ? 'Mês' : v === 'semana' ? 'Semana' : 'Dia'}
+            Hoje
           </button>
-        ))}
+
+          {loading && <Loader2 className="w-4 h-4 animate-spin text-slate-400" />}
+
+          <div className="ml-auto inline-flex bg-slate-100 dark:bg-slate-800 rounded-lg p-0.5">
+            {(['dia', 'semana', 'mes'] as ViewMode[]).map(v => (
+              <button
+                key={v}
+                onClick={() => setView(v)}
+                className={`px-4 py-1.5 rounded-md text-sm font-semibold transition-colors ${
+                  view === v
+                    ? 'bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-50 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                }`}
+              >
+                {v === 'mes' ? 'Mês' : v === 'semana' ? 'Semana' : 'Dia'}
+              </button>
+            ))}
+          </div>
+
+          {/* Popover mês/ano */}
+          {pickerOpen && (
+            <>
+              <div className="fixed inset-0 z-30" onClick={() => setPickerOpen(false)} />
+              <div className="absolute left-4 top-full mt-1 z-40 w-[290px] rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-2xl p-3.5">
+                <div className="flex items-center justify-between mb-2.5">
+                  <button
+                    onClick={() => setPickerYear(y => y - 1)}
+                    className="w-8 h-8 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center justify-center"
+                    aria-label="Ano anterior"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </button>
+                  <span className="text-base font-bold text-slate-900 dark:text-slate-50">{pickerYear}</span>
+                  <button
+                    onClick={() => setPickerYear(y => y + 1)}
+                    className="w-8 h-8 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center justify-center"
+                    aria-label="Próximo ano"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+                </div>
+                <div className="grid grid-cols-4 gap-1.5">
+                  {MONTHS_SHORT.map((m, i) => {
+                    const isCur = i === cursor.getMonth() && pickerYear === cursor.getFullYear();
+                    return (
+                      <button
+                        key={m}
+                        onClick={() => pickMonth(i)}
+                        className={`py-2 rounded-lg text-sm font-semibold transition-colors ${
+                          isCur
+                            ? 'bg-brand-600 text-white'
+                            : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                        }`}
+                      >
+                        {m}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
-      {/* Period title */}
-      <div className="mx-auto max-w-6xl px-4 pt-4 pb-2 flex items-center gap-3">
-        <h2 className="text-lg font-bold text-slate-900 dark:text-slate-50 capitalize flex-1 truncate">{title}</h2>
-        {loading && <Loader2 className="w-4 h-4 animate-spin text-slate-400 flex-shrink-0" />}
-      </div>
+      <main className="mx-auto max-w-6xl px-4 pb-24 pt-4">
 
-      <main className="mx-auto max-w-6xl px-4 pb-24">
+        {/* ── VISÃO DIA (padrão) ────────────────────────────────────────────── */}
+        {view === 'dia' && (() => {
+          const iso = toISO(cursor);
+          const all = allForDate(iso);
+          const active = all.filter(e => e.status !== 'cancelled');
+          const cancelledEvts = all.filter(e => e.status === 'cancelled');
+          const agg = aggregateDay(all);
+          const domColor = agg.clinics[0]?.color || FALLBACK_COLOR;
+          const clinicTitle = agg.clinics.map(c => c.name).join(' + ') || 'Sem atendimento';
+          const dateLabel = cursor.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' });
 
-        {/* ── MONTH VIEW ────────────────────────────────────────────────────── */}
+          // Agrupa por horário de início; SEM horário = "Ordem de chegada"
+          // (antes esses pacientes eram filtrados e sumiam da visão Dia — bug).
+          const grupos: Record<string, ApptEvent[]> = {};
+          active.forEach(e => {
+            const k = e.start_time || 'chegada';
+            (grupos[k] = grupos[k] || []).push(e);
+          });
+          const horarios = Object.keys(grupos).sort((a, b) => {
+            if (a === 'chegada') return 1;
+            if (b === 'chegada') return -1;
+            return a < b ? -1 : 1;
+          });
+
+          return (
+            <div className="space-y-4">
+              {/* Faixa da semana: 1 clique pra qualquer dia (seg=CTO, ter=M.Bento…) */}
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                {weekDays.map(day => {
+                  const dIso = toISO(day);
+                  const dAgg = aggregateDay(allForDate(dIso));
+                  const isActive = dIso === iso;
+                  const dColor = dAgg.clinics[0]?.color || FALLBACK_COLOR;
+                  const label = dAgg.total > 0
+                    ? `${dAgg.clinics.map(c => c.name).join('+')} · ${dAgg.total}`
+                    : '—';
+                  return (
+                    <button
+                      key={dIso}
+                      onClick={() => setCursor(day)}
+                      className={`min-w-[86px] flex-shrink-0 rounded-xl border px-2 py-2 text-center transition-all ${
+                        isActive
+                          ? 'text-white border-transparent shadow-md'
+                          : dAgg.total === 0
+                          ? 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 opacity-45'
+                          : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-slate-300'
+                      }`}
+                      style={isActive ? { backgroundColor: dColor } : undefined}
+                    >
+                      <p className={`text-[11px] font-bold uppercase tracking-wide ${isActive ? 'text-white/80' : 'text-slate-400'}`}>
+                        {WEEK_DAYS_LONG[day.getDay() === 0 ? 6 : day.getDay() - 1]}
+                      </p>
+                      <p className={`text-lg font-extrabold leading-tight ${isActive ? 'text-white' : dIso === today ? 'text-brand-600' : 'text-slate-800 dark:text-slate-100'}`}>
+                        {day.getDate()}
+                      </p>
+                      <p className={`text-[11px] font-semibold truncate ${isActive ? 'text-white/90' : 'text-slate-500'}`}>
+                        {label}
+                      </p>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Cabeçalho do dia: a CLÍNICA é o título (dia fixo = clínica) */}
+              <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 p-4">
+                <div className="flex items-center gap-3 flex-wrap">
+                  <span className="w-3.5 h-3.5 rounded flex-shrink-0" style={{ backgroundColor: domColor }} />
+                  <h2 className="text-lg font-bold text-slate-900 dark:text-slate-50 capitalize">
+                    {clinicTitle !== 'Sem atendimento' ? `${clinicTitle} — ` : ''}{dateLabel}
+                  </h2>
+                  {agg.total > 0 && (
+                    <span className="text-sm text-slate-500 dark:text-slate-400">
+                      {agg.total} paciente{agg.total !== 1 ? 's' : ''}
+                      {agg.done > 0 && <> · <span className="text-emerald-600 font-semibold">✓ {agg.done} atendido{agg.done !== 1 ? 's' : ''}</span> · faltam {agg.total - agg.done}</>}
+                    </span>
+                  )}
+                  {/* M16: encaixes do dia, agora visíveis onde importam */}
+                  {blocksForDate(iso).filter(b => b.schedule_type === 'walk_in').map((b, bi) => (
+                    <span key={`blk-${bi}`} className="text-xs font-semibold rounded-lg px-2 py-1"
+                      style={{ backgroundColor: pastel(b.clinic_color || FALLBACK_COLOR), color: b.clinic_color || FALLBACK_COLOR }}>
+                      encaixes {b.walk_in_count}/{b.walk_in_max}
+                    </span>
+                  ))}
+                </div>
+                {/* Placar do turno: barra de progresso */}
+                {agg.total > 0 && (
+                  <div className="mt-3 h-1.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-emerald-500 transition-all"
+                      style={{ width: `${Math.round((agg.done / agg.total) * 100)}%` }}
+                    />
+                  </div>
+                )}
+
+                {agg.total === 0 && cancelledEvts.length === 0 && (
+                  <p className="py-8 text-center text-sm text-slate-400">Nenhum paciente neste dia.</p>
+                )}
+
+                {/* Grupos por horário de início */}
+                {horarios.map(h => {
+                  const gAgg = aggregateDay(grupos[h]);
+                  return (
+                    <div key={h} className="mt-4">
+                      <div className="flex items-baseline gap-2.5 mb-2">
+                        <span className="text-[15px] font-mono font-bold text-slate-800 dark:text-slate-100">
+                          {h === 'chegada' ? 'Ordem de chegada' : h}
+                        </span>
+                        <span className="text-xs text-slate-500">
+                          {gAgg.total} paciente{gAgg.total !== 1 ? 's' : ''}
+                          {gAgg.conf > 0 && ` · ${gAgg.conf} confirmado${gAgg.conf !== 1 ? 's' : ''}`}
+                          {gAgg.pend > 0 && ` · ${gAgg.pend} pendente${gAgg.pend !== 1 ? 's' : ''}`}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                        {grupos[h].map(e => {
+                          const color = e.clinic_color || FALLBACK_COLOR;
+                          const done = e.status === 'completed';
+                          const pend = e.status === 'pending' || e.status === 'pending_offline';
+                          return (
+                            <div
+                              key={e.id}
+                              onClick={() => openEdit(e)}
+                              className={`cursor-pointer flex items-center gap-2.5 rounded-xl px-3 py-2 min-h-[44px] transition-all hover:shadow-sm ${
+                                done ? 'opacity-55' : ''
+                              }`}
+                              style={{
+                                backgroundColor: pend ? pastel(color, '0D') : pastel(color),
+                                borderLeft: `4px ${pend ? 'dashed' : 'solid'} ${color}`,
+                                border: pend ? undefined : undefined,
+                                outline: pend ? `1.5px dashed ${color}66` : undefined,
+                                outlineOffset: pend ? '-1.5px' : undefined,
+                              }}
+                              title={`${e.patient_name} · ${STATUS_LABEL[e.status] ?? e.status}`}
+                            >
+                              <p className="flex-1 min-w-0 text-sm font-semibold text-slate-800 dark:text-slate-100 truncate">
+                                {done && <span className="text-emerald-600 font-extrabold">✓ </span>}
+                                {pend && <span>⏱ </span>}
+                                {e._isOffline && '⚠ '}
+                                {e.patient_name}
+                              </p>
+                              <span className="text-xs text-slate-500 flex-shrink-0">
+                                {e.appointment_type || (pend ? 'pendente' : '')}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {/* Cancelados: visíveis (o buraco no turno é informação), compactos */}
+                {cancelledEvts.length > 0 && (
+                  <div className="mt-4 space-y-1">
+                    {cancelledEvts.map(e => (
+                      <div
+                        key={e.id}
+                        onClick={() => openEdit(e)}
+                        className="cursor-pointer flex items-center gap-2.5 rounded-lg px-3 py-1.5 bg-slate-50 dark:bg-slate-900 border-l-4 border-slate-300 dark:border-slate-700 opacity-70"
+                      >
+                        <p className="flex-1 min-w-0 text-sm text-slate-400 line-through truncate">{e.patient_name}</p>
+                        <span className="text-xs text-slate-400">cancelou</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* ── VISÃO SEMANA = LISTA "Minha semana" ───────────────────────────── */}
+        {view === 'semana' && (
+          <div className="space-y-2">
+            {weekDays.map(day => {
+              const dIso = toISO(day);
+              const dAgg = aggregateDay(allForDate(dIso));
+              const isToday = dIso === today;
+              const empty = dAgg.total === 0 && dAgg.cancelled === 0;
+              const stParts: string[] = [];
+              if (dAgg.conf > 0) stParts.push(`${dAgg.conf} confirmado${dAgg.conf !== 1 ? 's' : ''}`);
+              if (dAgg.pend > 0) stParts.push(`${dAgg.pend} pendente${dAgg.pend !== 1 ? 's' : ''}`);
+              if (dAgg.done > 0) stParts.push(`✓ ${dAgg.done} atendido${dAgg.done !== 1 ? 's' : ''}`);
+              if (dAgg.cancelled > 0) stParts.push(`${dAgg.cancelled} cancelado${dAgg.cancelled !== 1 ? 's' : ''}`);
+              return (
+                <button
+                  key={dIso}
+                  onClick={() => { setCursor(day); setView('dia'); }}
+                  className={`w-full flex items-center gap-3.5 rounded-2xl border bg-white dark:bg-slate-950 px-4 py-3 text-left transition-all hover:shadow-sm ${
+                    isToday
+                      ? 'border-2 border-brand-500'
+                      : 'border-slate-200 dark:border-slate-800'
+                  } ${empty ? 'opacity-50' : ''}`}
+                >
+                  <span className="w-14 text-center flex-shrink-0">
+                    <span className="block text-[11px] font-bold uppercase tracking-wide text-slate-400">
+                      {WEEK_DAYS_LONG[day.getDay() === 0 ? 6 : day.getDay() - 1]}
+                    </span>
+                    <span className={`text-xl font-extrabold ${isToday ? 'text-brand-600' : 'text-slate-800 dark:text-slate-100'}`}>
+                      {day.getDate()}
+                    </span>
+                  </span>
+                  <span className="w-1 self-stretch rounded-full flex flex-col overflow-hidden flex-shrink-0">
+                    {dAgg.clinics.length > 0
+                      ? dAgg.clinics.map(c => (
+                          <span key={c.name} className="flex-1" style={{ backgroundColor: c.color }} />
+                        ))
+                      : <span className="flex-1 bg-slate-200 dark:bg-slate-700" />}
+                  </span>
+                  <span className="flex-1 min-w-0">
+                    <span className="block text-[15px] font-bold text-slate-800 dark:text-slate-100 truncate">
+                      {dAgg.clinics.map(c => c.name).join(' + ') || 'Sem atendimento'}
+                    </span>
+                    {stParts.length > 0 && (
+                      <span className="block text-xs text-slate-500 truncate">{stParts.join(' · ')}</span>
+                    )}
+                  </span>
+                  {dAgg.total > 0 && (
+                    <span className="text-sm font-bold text-slate-600 dark:text-slate-300 whitespace-nowrap flex-shrink-0">
+                      {dAgg.total} pac.
+                    </span>
+                  )}
+                  <span className="text-slate-300 dark:text-slate-600 flex-shrink-0">›</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* ── VISÃO MÊS (planejamento / remarcação) ─────────────────────────── */}
         {view === 'mes' && (
           <div className="rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden bg-white dark:bg-slate-950">
-            {/* Day-of-week headers */}
             <div className="grid grid-cols-7 border-b border-slate-200 dark:border-slate-800">
               {WEEK_DAYS_LONG.map(d => (
-                <div key={d} className="py-2 text-center text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                <div key={d} className="py-2 text-center text-[11px] font-bold uppercase tracking-wider text-slate-400">
                   {d}
                 </div>
               ))}
             </div>
 
-            {/* Calendar cells */}
             <div className="grid grid-cols-7">
               {calendarDays.map((day, i) => {
                 if (!day) return (
-                  <div key={`empty-${i}`} className="min-h-[90px] border-b border-r border-slate-100 dark:border-slate-800/50 bg-slate-50/50 dark:bg-slate-900/30" />
+                  <div key={`empty-${i}`} className="min-h-[96px] border-b border-r border-slate-100 dark:border-slate-800/50 bg-slate-50/50 dark:bg-slate-900/30" />
                 );
                 const iso = toISO(day);
-                const dayEvts = eventsForDate(iso);
+                const dAgg = aggregateDay(allForDate(iso));
                 const isToday = iso === today;
-                const avail = availability[iso];
-                const isCurrentMonth = day.getMonth() === cursor.getMonth();
 
                 return (
                   <div
                     key={iso}
-                    className={`min-h-[90px] border-b border-r border-slate-100 dark:border-slate-800/50 p-1 cursor-pointer transition-colors
-                      ${isToday ? 'bg-brand-50 dark:bg-brand-950/30' : 'hover:bg-slate-50 dark:hover:bg-slate-900/50'}
-                      ${!isCurrentMonth ? 'opacity-40' : ''}`}
+                    className={`min-h-[96px] border-b border-r border-slate-100 dark:border-slate-800/50 p-1.5 cursor-pointer transition-colors space-y-1
+                      ${isToday ? 'bg-brand-50 dark:bg-brand-950/30' : 'hover:bg-slate-50 dark:hover:bg-slate-900/50'}`}
                     onClick={() => { setCursor(day); setView('dia'); }}
                   >
-                    {/* Day number */}
-                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold mb-1 ${
+                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
                       isToday ? 'bg-brand-600 text-white' : 'text-slate-600 dark:text-slate-400'
                     }`}>
                       {day.getDate()}
                     </div>
 
-                    {/* Availability dot */}
-                    {avail && (
-                      <div className={`w-1.5 h-1.5 rounded-full mb-1 ${avail.available ? 'bg-emerald-400' : 'bg-slate-300'}`} />
-                    )}
-
-                    {/* Mês = resumo (decisão Valth 02/08): NÚMERO de pacientes +
-                        NOME da unidade; clicar na célula abre o Dia. */}
-                    {dayEvts.length > 0 && (() => {
-                      const porClinica: Record<string, { n: number; color: string }> = {};
-                      dayEvts.forEach(e => {
-                        const nome = (e.clinic_name || 'Clínica').replace(/^Clínica\s+/i, '');
-                        if (!porClinica[nome]) porClinica[nome] = { n: 0, color: e.clinic_color ?? '#0F2D5E' };
-                        porClinica[nome].n += 1;
-                      });
-                      return (
-                        <div className="space-y-0.5">
-                          <p className="text-[13px] font-extrabold text-slate-800 dark:text-slate-100 leading-none">
-                            {dayEvts.length} <span className="text-[9px] font-semibold text-slate-400">pac.</span>
-                          </p>
-                          {Object.entries(porClinica).map(([nome, info]) => (
-                            <div
-                              key={nome}
-                              className="rounded px-1 py-0.5 text-[10px] font-semibold truncate"
-                              style={{ backgroundColor: `${info.color}1A`, color: info.color }}
-                              title={`${info.n} paciente(s) · ${nome}`}
-                            >
-                              {info.n} · {nome}
-                            </div>
-                          ))}
-                        </div>
-                      );
-                    })()}
+                    {/* Chips por clínica: contagem + pendentes (decide "cabe mais um?") */}
+                    {dAgg.clinics.map(c => (
+                      <div
+                        key={c.name}
+                        className="rounded-md px-1.5 py-0.5 text-[11px] font-bold truncate flex items-baseline justify-between gap-1"
+                        style={{ backgroundColor: pastel(c.color), color: c.color }}
+                        title={`${c.n} paciente(s) · ${c.name}${c.pend > 0 ? ` · ${c.pend} pendente(s)` : ''}`}
+                      >
+                        <span className="truncate">{c.name} {c.n}</span>
+                        {c.pend > 0 && <span className="text-[10px] font-semibold opacity-75 flex-shrink-0">{c.pend} pend.</span>}
+                      </div>
+                    ))}
                   </div>
                 );
               })}
@@ -548,164 +825,8 @@ export default function AgendaPage() {
           </div>
         )}
 
-        {/* ── WEEK VIEW ─────────────────────────────────────────────────────── */}
-        {view === 'semana' && (
-          <div className="grid grid-cols-7 gap-1.5">
-            {weekDays.map(day => {
-              const iso = toISO(day);
-              const isToday = iso === today;
-              const dayEvts = eventsForDate(iso);
-              const avail = availability[iso];
-
-              return (
-                <div
-                  key={iso}
-                  className={`rounded-xl overflow-hidden border ${isToday ? 'border-brand-400 shadow-md' : 'border-slate-200 dark:border-slate-800'}`}
-                >
-                  {/* Header */}
-                  <div
-                    className={`px-1 py-2 text-center cursor-pointer ${isToday ? 'bg-brand-600' : 'bg-white dark:bg-slate-950'}`}
-                    onClick={() => { setCursor(day); setView('dia'); }}
-                    title={`Ver dia ${fmtDate(day)}`}
-                  >
-                    <p className={`text-[10px] font-bold uppercase tracking-wide ${isToday ? 'text-blue-200' : 'text-slate-400'}`}>
-                      {WEEK_DAYS_LONG[day.getDay() === 0 ? 6 : day.getDay() - 1]}
-                    </p>
-                    <p className={`text-lg font-extrabold leading-none mt-0.5 ${isToday ? 'text-white' : 'text-slate-700 dark:text-slate-200'}`}>
-                      {day.getDate()}
-                    </p>
-                    {/* Availability dot */}
-                    {avail && (
-                      <div className={`w-1.5 h-1.5 rounded-full mx-auto mt-0.5 ${
-                        avail.available ? 'bg-emerald-400' : 'bg-slate-300'
-                      }`} />
-                    )}
-                  </div>
-
-                  {/* Content */}
-                  <div
-                    className="bg-slate-50 dark:bg-slate-900 min-h-[90px] p-1 space-y-1"
-                    onClick={() => openCreate(iso)}
-                  >
-                    {/* M16: blocos de funcionamento como faixa de fundo (encaixes X/Y) */}
-                    {blocksForDate(iso).map((b, bi) => (
-                      <div
-                        key={`blk-${bi}`}
-                        className="rounded-md px-1.5 py-0.5 text-[9px] font-semibold border truncate"
-                        style={{
-                          backgroundColor: `${b.clinic_color ?? '#0F2D5E'}1A`,
-                          borderColor: `${b.clinic_color ?? '#0F2D5E'}55`,
-                          color: b.clinic_color ?? '#0F2D5E',
-                        }}
-                        title={`${b.clinic_name ?? ''} · ${b.start_time}–${b.end_time}`}
-                      >
-                        {b.schedule_type === 'walk_in'
-                          ? `encaixes ${b.walk_in_count}/${b.walk_in_max}`
-                          : (b.clinic_name || 'Funcionamento')}
-                      </div>
-                    ))}
-
-                    {dayEvts.length === 0 && blocksForDate(iso).length === 0 && (
-                      <div className="flex items-center justify-center py-5">
-                        <p className="text-[10px] text-slate-300">—</p>
-                      </div>
-                    )}
-
-                    {dayEvts.map(e => (
-                      <div
-                        key={e.id}
-                        className="rounded-lg px-1.5 py-1 cursor-pointer hover:opacity-90 transition-opacity text-white"
-                        style={{ backgroundColor: e._isOffline ? '#F59E0B' : (e.clinic_color ?? '#0F2D5E') }}
-                        onClick={ev => { ev.stopPropagation(); openEdit(e); }}
-                        title={`${e.patient_name} · ${e.start_time}`}
-                      >
-                        {e._isOffline && <span className="text-[8px] opacity-80 block">⚠ offline</span>}
-                        <p className="text-[10px] font-bold truncate">{e.patient_name}</p>
-                        <p className="text-[9px] opacity-80">{e.start_time || 'chegada'}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {/* ── DAY VIEW ──────────────────────────────────────────────────────────
-            Redesenho (Valth 02/08): sem blocões escuros do tamanho do turno.
-            Lista clara agrupada por horário de INÍCIO, 2-3 pacientes por linha,
-            nome legível, cor da clínica só como detalhe; ATENDIDO fica verde ✓. */}
-        {view === 'dia' && (() => {
-          const grupos: Record<string, typeof dayEvents> = {};
-          dayEvents.forEach(e => {
-            const k = e.start_time || 'chegada';
-            (grupos[k] = grupos[k] || []).push(e);
-          });
-          const horarios = Object.keys(grupos).sort();
-          const atendidos = dayEvents.filter(e => e.status === 'completed').length;
-          return (
-            <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 p-4 space-y-1">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800 mb-2">
-                <p className="text-sm font-bold text-slate-700 dark:text-slate-200">
-                  {dayEvents.length} paciente{dayEvents.length !== 1 ? 's' : ''} no dia
-                </p>
-                {atendidos > 0 && (
-                  <p className="text-xs font-semibold text-emerald-600">
-                    ✓ {atendidos} atendido{atendidos !== 1 ? 's' : ''} · faltam {dayEvents.length - atendidos}
-                  </p>
-                )}
-              </div>
-              {horarios.length === 0 && (
-                <p className="py-10 text-center text-sm text-slate-400">Nenhum paciente neste dia.</p>
-              )}
-              {horarios.map(h => (
-                <div key={h} className="flex gap-3 py-2 border-b border-slate-50 dark:border-slate-900 last:border-0">
-                  <div className="w-14 flex-shrink-0 pt-1.5 text-xs font-mono font-bold text-slate-500">{h}</div>
-                  <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
-                    {grupos[h].map(e => {
-                      const done = e.status === 'completed';
-                      const cancel = e.status === 'cancelled';
-                      const color = e.clinic_color ?? '#0F2D5E';
-                      return (
-                        <div
-                          key={e.id}
-                          onClick={() => openEdit(e)}
-                          className={`cursor-pointer rounded-xl px-3 py-2 shadow-sm hover:shadow-md transition-all border border-l-4 ${
-                            done
-                              ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800'
-                              : cancel
-                              ? 'bg-slate-50 dark:bg-slate-900 border-slate-200 opacity-60'
-                              : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800'
-                          }`}
-                          style={{ borderLeftColor: done ? '#10b981' : cancel ? '#94a3b8' : color }}
-                          title={`${e.patient_name} · ${e.clinic_name ?? ''}`}
-                        >
-                          <p className={`text-sm font-bold truncate ${cancel ? 'line-through text-slate-400' : 'text-slate-800 dark:text-slate-100'}`}>
-                            {done && <span className="text-emerald-600">✓ </span>}
-                            {e._isOffline && '⚠ '}
-                            {e.patient_name}
-                          </p>
-                          <p className="text-[11px] text-slate-500 truncate">
-                            {(e.clinic_name || '').replace(/^Clínica\s+/i, '')}
-                            {' · '}
-                            {STATUS_LABEL[e.status] ?? e.status}
-                          </p>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-            </div>
-          );
-        })()}
-
-        {/* "Detalhes do período" removido (decisão Valth 02/08): duplicava o
-            calendário — agora TODOS os pacientes aparecem nas próprias células
-            (mês inclusive), clicáveis para editar. */}
-
         {/* Empty state */}
-        {events.filter(e => e.date >= rangeStart && e.date <= rangeEnd).length === 0 && !loading && (
+        {events.filter(e => e.date >= rangeStart && e.date <= rangeEnd).length === 0 && !loading && view !== 'dia' && (
           <div className="mt-8 text-center py-16 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800">
             <CalendarDays className="mx-auto mb-3 h-10 w-10 text-slate-200 dark:text-slate-700" />
             <p className="font-medium text-slate-400 dark:text-slate-500">Nenhum agendamento neste período</p>
@@ -719,10 +840,10 @@ export default function AgendaPage() {
         )}
       </main>
 
-      {/* FAB */}
+      {/* FAB — sempre pré-preenche uma data (dia = cursor; demais = hoje) */}
       {/* right-44: não fica atrás dos botões flutuantes de chat (IA/equipe) */}
       <button
-        onClick={() => openCreate(view === 'dia' ? toISO(cursor) : undefined)}
+        onClick={() => openCreate(view === 'dia' ? toISO(cursor) : today)}
         className="fixed bottom-6 right-44 w-14 h-14 rounded-full bg-brand-600 hover:bg-brand-700 active:bg-brand-800 text-white shadow-lg hover:shadow-xl transition-all flex items-center justify-center z-30"
         aria-label="Novo agendamento"
       >
