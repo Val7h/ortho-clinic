@@ -858,7 +858,9 @@ async def update_waiting_status(
     if not entry_patient or not _same_org(current_user, entry_patient.organization_id):
         raise HTTPException(status_code=404, detail="Entrada não encontrada")
 
-    now = datetime.utcnow()
+    # TZ-AWARE (fix 02/08): timestamp naive era serializado sem 'Z' e o browser
+    # lia como hora LOCAL (3h no futuro) → cronômetro da tela travado em 0.
+    now = datetime.now(timezone.utc)
 
     # ── Cronômetro com pausa (fluxo real do Dr. Valth, 02/08) ────────────────
     # active_seconds acumula SÓ o tempo em atendimento; segment_started_at marca
@@ -868,8 +870,8 @@ async def update_waiting_status(
     def _fechar_trecho():
         if entry.segment_started_at is not None:
             seg = entry.segment_started_at
-            if seg.tzinfo is not None:
-                seg = seg.astimezone(timezone.utc).replace(tzinfo=None)
+            if seg.tzinfo is None:
+                seg = seg.replace(tzinfo=timezone.utc)
             entry.active_seconds = (entry.active_seconds or 0) + max(
                 int((now - seg).total_seconds()), 0
             )

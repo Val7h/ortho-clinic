@@ -4604,8 +4604,13 @@ function DrawerCrono({ entry }: { entry: WaitingRoomEntry }) {
     return () => clearInterval(t);
   }, [entry.status, entry.segment_started_at]);
   const base = entry.active_seconds ?? 0;
+  // Timestamp do servidor é UTC; sem 'Z'/offset o browser leria como hora
+  // local (cronômetro travava em 0 — bug 02/08). Força UTC no parse.
+  const segMs = entry.segment_started_at
+    ? new Date(/[zZ]$|[+-]\d{2}:?\d{2}$/.test(entry.segment_started_at) ? entry.segment_started_at : entry.segment_started_at + "Z").getTime()
+    : 0;
   const sec = entry.segment_started_at
-    ? base + Math.max(Math.floor((nowMs - new Date(entry.segment_started_at).getTime()) / 1000), 0)
+    ? base + Math.max(Math.floor((nowMs - segMs) / 1000), 0)
     : base;
   if (sec <= 0 && entry.status !== "attending") return null;
   const h = Math.floor(sec / 3600);

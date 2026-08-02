@@ -90,11 +90,17 @@ function statusBadgeVariant(s: QueueStatus): 'warning' | 'success' | 'neutral' |
   return map[s] ?? 'neutral';
 }
 
+// Timestamp do servidor é UTC; se vier sem 'Z'/offset, força UTC (senão o
+// browser lê como hora local e o cronômetro trava em 0 — bug visto 02/08).
+function parseUtcMs(s: string): number {
+  return new Date(/[zZ]$|[+-]\d{2}:?\d{2}$/.test(s) ? s : s + 'Z').getTime();
+}
+
 // Cronômetro do atendimento: segundos acumulados (+ trecho ao vivo se rodando)
 function elapsedSeconds(entry: { active_seconds?: number; segment_started_at?: string | null }, nowMs: number): number {
   const base = entry.active_seconds ?? 0;
   if (entry.segment_started_at) {
-    return base + Math.max(Math.floor((nowMs - new Date(entry.segment_started_at).getTime()) / 1000), 0);
+    return base + Math.max(Math.floor((nowMs - parseUtcMs(entry.segment_started_at)) / 1000), 0);
   }
   return base;
 }
