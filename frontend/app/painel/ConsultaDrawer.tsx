@@ -226,6 +226,8 @@ const LS_EXAM_LINE_HEIGHT_KEY = "orthoclinic_exam_line_height";
 
 // Quick exam templates built-in (ortopedia ambulatorial)
 const EXAM_QUICK_TEMPLATES = [
+  // Pedido Valth 02/08: pré-operatório de 1 clique (bateria + ECG/risco cirúrgico)
+  { name: "🔪 Pré-Operatório", content: "SOLICITO — EXAMES PRÉ-OPERATÓRIOS:\n- HEMOGRAMA COMPLETO COM PLAQUETAS\n- COAGULOGRAMA (TP/INR, TTPa)\n- GLICEMIA DE JEJUM\n- UREIA E CREATININA\n- SÓDIO E POTÁSSIO\n- SUMÁRIO DE URINA\n- ELETROCARDIOGRAMA (ECG) DE REPOUSO\n- AVALIAÇÃO CARDIOLÓGICA COM RISCO CIRÚRGICO\n\nPROGRAMAÇÃO CIRÚRGICA: [PROCEDIMENTO]\nHD: [CID]\n\nObs: trazer todos os resultados na consulta de revisão pré-anestésica." },
   { name: "RNM Joelho", content: "SOLICITO: RESSONÂNCIA MAGNÉTICA DO JOELHO [D/E] SEM CONTRASTE\nINCIDÊNCIAS: Coronal, Sagital, Axial\nHD: LESÃO MENISCAL / LCA" },
   { name: "RNM Coluna", content: "SOLICITO: RESSONÂNCIA MAGNÉTICA DA COLUNA [CERVICAL/TORÁCICA/LOMBAR] SEM CONTRASTE\nHD: HÉRNIA DISCAL / ESTENOSE DO CANAL" },
   { name: "RX Coluna LS", content: "SOLICITO: RADIOGRAFIA DA COLUNA LOMBOSSACRA\nINCIDÊNCIAS: AP e Perfil\nHD: LOMBALGIA / ESPONDILODISCOARTROSE" },
