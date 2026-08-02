@@ -14,7 +14,7 @@ import { formatDate } from "@/lib/utils";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
-type QueueStatus = "waiting" | "attending" | "attended" | "absent";
+type QueueStatus = "waiting" | "attending" | "suspended" | "attended" | "absent";
 
 export interface WaitingRoomEntry {
   id: number;
@@ -31,6 +31,9 @@ export interface WaitingRoomEntry {
   waited_minutes: number | null;
   duration_minutes?: number | null;
   value_cents?: number | null;
+  // Cronômetro com pausa (suspender/continuar)
+  active_seconds?: number;
+  segment_started_at?: string | null;
 }
 
 interface ConsultaDrawerProps {
@@ -4591,6 +4594,35 @@ function TabFotos({ patientId }: { patientId: number }) {
 
 // ── Main Drawer ────────────────────────────────────────────────────────────────
 
+// Cronômetro da consulta no cabeçalho do drawer: soma o tempo acumulado
+// (active_seconds) + o trecho atual ao vivo; congela quando suspenso.
+function DrawerCrono({ entry }: { entry: WaitingRoomEntry }) {
+  const [nowMs, setNowMs] = useState(Date.now());
+  useEffect(() => {
+    if (entry.status !== "attending" || !entry.segment_started_at) return;
+    const t = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [entry.status, entry.segment_started_at]);
+  const base = entry.active_seconds ?? 0;
+  const sec = entry.segment_started_at
+    ? base + Math.max(Math.floor((nowMs - new Date(entry.segment_started_at).getTime()) / 1000), 0)
+    : base;
+  if (sec <= 0 && entry.status !== "attending") return null;
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = sec % 60;
+  const label = h > 0 ? `${h}h ${String(m).padStart(2, "0")}min` : `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  const style =
+    entry.status === "attending" ? "bg-green-600 text-white"
+    : entry.status === "suspended" ? "bg-amber-500 text-white"
+    : "bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200";
+  return (
+    <span className={`font-mono text-sm font-bold px-2.5 py-1 rounded-lg ${style}`} title="Tempo de consulta (pausas descontadas)">
+      {entry.status === "suspended" ? "⏸" : "⏱"} {label}
+    </span>
+  );
+}
+
 export default function ConsultaDrawer({ entry, onClose, onStatusChange }: ConsultaDrawerProps) {
   const [activeTab, setActiveTab] = useState<DrawerTab>("anamnese");
   const [patient, setPatient] = useState<any>(null);
@@ -4743,15 +4775,45 @@ export default function ConsultaDrawer({ entry, onClose, onStatusChange }: Consu
             </>
           )}
           {entry.status === "attending" && (
+            <>
+              <button
+                onClick={() => handleStatus("suspended")}
+                disabled={busyStatus}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 text-white text-xs font-semibold hover:bg-amber-600 disabled:opacity-50"
+                title="Paciente saiu (ex.: fazer RX) e volta no mesmo turno — pausa o cronômetro"
+              >
+                ⏸ Suspender
+              </button>
+              <button
+                onClick={() => handleStatus("attended")}
+                disabled={busyStatus}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 disabled:opacity-50"
+              >
+                <CheckCircle className="w-3.5 h-3.5" /> Finalizar Consulta
+              </button>
+            </>
+          )}
+          {entry.status === "suspended" && (
             <button
-              onClick={() => handleStatus("attended")}
+              onClick={() => handleStatus("attending")}
               disabled={busyStatus}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 disabled:opacity-50"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 disabled:opacity-50"
+              title="Paciente voltou — cronômetro continua de onde parou"
             >
-              <CheckCircle className="w-3.5 h-3.5" /> Concluir Atendimento
+              <Play className="w-3.5 h-3.5" /> Continuar Consulta
             </button>
           )}
-          {(entry.status === "attended" || entry.status === "absent") && (
+          {entry.status === "attended" && (
+            <button
+              onClick={() => handleStatus("attending")}
+              disabled={busyStatus}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 disabled:opacity-50"
+              title="Paciente voltou (esqueceu de pedir algo) — reabre para editar e finalizar de novo"
+            >
+              <Play className="w-3.5 h-3.5" /> Reabrir Consulta
+            </button>
+          )}
+          {entry.status === "absent" && (
             <button
               onClick={() => handleStatus("waiting")}
               disabled={busyStatus}
@@ -4760,12 +4822,15 @@ export default function ConsultaDrawer({ entry, onClose, onStatusChange }: Consu
               <Play className="w-3.5 h-3.5" /> Recolocar na Fila
             </button>
           )}
+          {/* Cronômetro da consulta: vivo em atendimento, congelado quando suspenso */}
+          <DrawerCrono entry={entry} />
           <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
             entry.status === "attending" ? "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300"
+            : entry.status === "suspended" ? "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
             : entry.status === "waiting" ? "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
             : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400"
           }`}>
-            {entry.status === "attending" ? "Em Atendimento" : entry.status === "waiting" ? "Aguardando" : entry.status === "attended" ? "Atendido" : "Ausente"}
+            {entry.status === "attending" ? "Em Atendimento" : entry.status === "suspended" ? "Suspenso" : entry.status === "waiting" ? "Aguardando" : entry.status === "attended" ? "Atendido" : "Ausente"}
           </span>
 
           {/* Impressão final em lote — só aparece quando há documentos gerados */}

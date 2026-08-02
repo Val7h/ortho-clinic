@@ -15,7 +15,7 @@ import ConsultaDrawer, { WaitingRoomEntry } from './ConsultaDrawer';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
-type QueueStatus = 'waiting' | 'attending' | 'attended' | 'absent';
+type QueueStatus = 'waiting' | 'attending' | 'suspended' | 'attended' | 'absent';
 
 type Filter = 'all' | QueueStatus;
 
@@ -72,6 +72,7 @@ function statusLabel(s: QueueStatus): string {
   const map: Record<QueueStatus, string> = {
     waiting: 'Aguardando',
     attending: 'Em Atendimento',
+    suspended: 'Suspenso',
     attended: 'Atendido',
     absent: 'Ausente',
   };
@@ -82,10 +83,28 @@ function statusBadgeVariant(s: QueueStatus): 'warning' | 'success' | 'neutral' |
   const map: Record<QueueStatus, 'warning' | 'success' | 'neutral' | 'error'> = {
     waiting: 'warning',
     attending: 'success',
+    suspended: 'warning',
     attended: 'neutral',
     absent: 'error',
   };
   return map[s] ?? 'neutral';
+}
+
+// Cronômetro do atendimento: segundos acumulados (+ trecho ao vivo se rodando)
+function elapsedSeconds(entry: { active_seconds?: number; segment_started_at?: string | null }, nowMs: number): number {
+  const base = entry.active_seconds ?? 0;
+  if (entry.segment_started_at) {
+    return base + Math.max(Math.floor((nowMs - new Date(entry.segment_started_at).getTime()) / 1000), 0);
+  }
+  return base;
+}
+
+function formatElapsed(totalSec: number): string {
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  if (h > 0) return `${h}h ${String(m).padStart(2, '0')}min`;
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
 const INSURANCE_COLORS = [
@@ -117,6 +136,15 @@ function PatientCard({ entry, onStatusChange, onRemove, onSelect, busy, selected
   const isAttended = entry.status === 'attended';
   const isAbsent = entry.status === 'absent';
   const isDimmed = isAttended || isAbsent;
+
+  // Cronômetro ao vivo enquanto está EM ATENDIMENTO (1s); congelado se suspenso
+  const [nowMs, setNowMs] = useState(Date.now());
+  useEffect(() => {
+    if (entry.status !== 'attending' || !entry.segment_started_at) return;
+    const t = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [entry.status, entry.segment_started_at]);
+  const cronoSec = elapsedSeconds(entry, nowMs);
 
   return (
     <div
@@ -180,6 +208,22 @@ function PatientCard({ entry, onStatusChange, onRemove, onSelect, busy, selected
               {formatCentsToReais(entry.value_cents)}
             </span>
           )}
+          {/* Cronômetro: vivo em atendimento · congelado se suspenso · duração final no atendido */}
+          {entry.status === 'attending' && (
+            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold flex-shrink-0 bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 font-mono">
+              ⏱ {formatElapsed(cronoSec)}
+            </span>
+          )}
+          {entry.status === 'suspended' && (
+            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold flex-shrink-0 bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 font-mono">
+              ⏸ {formatElapsed(cronoSec)}
+            </span>
+          )}
+          {entry.status === 'attended' && cronoSec > 0 && (
+            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold flex-shrink-0 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-mono">
+              ⏱ durou {formatElapsed(cronoSec)}
+            </span>
+          )}
           {entry.reason && (
             <span className="text-[10px] text-slate-400 truncate min-w-0 flex-1">{entry.reason}</span>
           )}
@@ -203,15 +247,46 @@ function PatientCard({ entry, onStatusChange, onRemove, onSelect, busy, selected
               </>
             )}
             {entry.status === 'attending' && (
+              <>
+                {/* Suspender: paciente saiu pra exame e volta no turno — cronômetro CONGELA */}
+                <button
+                  onClick={() => onStatusChange(entry.id, 'suspended')}
+                  disabled={busy}
+                  className="flex items-center gap-1 px-2 py-1 rounded-lg bg-amber-500 text-white text-[10px] font-semibold hover:bg-amber-600 disabled:opacity-50"
+                  title="Paciente saiu (ex.: RX) e volta no mesmo turno — pausa o cronômetro"
+                >
+                  ⏸ Suspender
+                </button>
+                <button
+                  onClick={() => onStatusChange(entry.id, 'attended')}
+                  disabled={busy}
+                  className="flex items-center gap-1 px-2 py-1 rounded-lg bg-blue-600 text-white text-[10px] font-semibold hover:bg-blue-700 disabled:opacity-50"
+                >
+                  <CheckCircle className="w-3 h-3" /> Finalizar
+                </button>
+              </>
+            )}
+            {entry.status === 'suspended' && (
               <button
-                onClick={() => onStatusChange(entry.id, 'attended')}
+                onClick={() => onStatusChange(entry.id, 'attending')}
                 disabled={busy}
-                className="flex items-center gap-1 px-2 py-1 rounded-lg bg-blue-600 text-white text-[10px] font-semibold hover:bg-blue-700 disabled:opacity-50"
+                className="flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-600 text-white text-[10px] font-semibold hover:bg-emerald-700 disabled:opacity-50"
+                title="Paciente voltou — retoma o cronômetro de onde parou"
               >
-                <CheckCircle className="w-3 h-3" /> Concluir
+                <Play className="w-3 h-3" /> Continuar
               </button>
             )}
-            {(entry.status === 'attended' || entry.status === 'absent') && (
+            {entry.status === 'attended' && (
+              <button
+                onClick={() => onStatusChange(entry.id, 'attending')}
+                disabled={busy}
+                className="flex items-center gap-1 px-2 py-1 rounded-lg bg-indigo-600 text-white text-[10px] font-semibold hover:bg-indigo-700 disabled:opacity-50"
+                title="Paciente voltou (esqueceu de pedir algo) — reabre e o cronômetro continua"
+              >
+                <Play className="w-3 h-3" /> Reabrir
+              </button>
+            )}
+            {entry.status === 'absent' && (
               <button
                 onClick={() => onStatusChange(entry.id, 'waiting')}
                 disabled={busy}
@@ -352,6 +427,7 @@ export default function SalaDeEsperaPage() {
   const countBy = (s: QueueStatus) => entries.filter((e) => e.status === s).length;
   const waitingCount = countBy('waiting');
   const attendingCount = countBy('attending');
+  const suspendedCount = countBy('suspended');
   const attendedCount = countBy('attended');
   const absentCount = countBy('absent');
 
@@ -371,7 +447,8 @@ export default function SalaDeEsperaPage() {
       setSelectedEntry((prev) => (prev && prev.id === id ? { ...prev, ...updated } : prev));
       const labels: Record<QueueStatus, string> = {
         waiting: 'voltou para aguardando',
-        attending: 'chamado para atendimento',
+        attending: 'em atendimento — cronômetro rodando',
+        suspended: 'suspenso — cronômetro pausado ⏸',
         attended: 'atendimento concluído',
         absent: 'marcado como ausente',
       };
@@ -478,6 +555,7 @@ export default function SalaDeEsperaPage() {
     { key: 'all', label: 'Todos', count: entries.length },
     { key: 'waiting', label: 'Aguardando', count: waitingCount },
     { key: 'attending', label: 'Em Atendimento', count: attendingCount },
+    { key: 'suspended', label: 'Suspensos', count: suspendedCount },
     { key: 'attended', label: 'Atendidos', count: attendedCount },
     { key: 'absent', label: 'Ausentes', count: absentCount },
   ];

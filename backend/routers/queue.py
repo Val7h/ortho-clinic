@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSock
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, func
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta, date, timezone
 from typing import List, Dict, Set, Optional
 from pydantic import BaseModel
 import json
@@ -685,13 +685,17 @@ class WaitingRoomEntryOut(BaseModel):
     waited_minutes: Optional[int]
     duration_minutes: Optional[int]
     value_cents: Optional[int]
+    # Cronômetro com pausa: segundos ACUMULADOS em atendimento + início do
+    # trecho atual (null = pausado/parado). O front soma (now - segment) ao vivo.
+    active_seconds: int = 0
+    segment_started_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
 
 
 class WaitingStatusUpdate(BaseModel):
-    status: str  # waiting | attending | attended | absent
+    status: str  # waiting | attending | suspended | attended | absent
 
 
 def _minutes_between(start: Optional[datetime], end: Optional[datetime]) -> Optional[int]:
@@ -708,7 +712,10 @@ def _minutes_between(start: Optional[datetime], end: Optional[datetime]) -> Opti
 
 def _build_entry_out(entry: WaitingRoomEntry, patient: Patient, now: datetime) -> WaitingRoomEntryOut:
     waited = _minutes_between(entry.arrived_at, now)
-    duration = _minutes_between(entry.called_at, entry.attended_at)
+    # Duração REAL do atendimento: tempo acumulado do cronômetro (com pausas
+    # descontadas). Fallback pro cálculo antigo chamada→conclusão.
+    active = getattr(entry, "active_seconds", 0) or 0
+    duration = round(active / 60) if active > 0 else _minutes_between(entry.called_at, entry.attended_at)
 
     return WaitingRoomEntryOut(
         id=entry.id,
@@ -727,6 +734,8 @@ def _build_entry_out(entry: WaitingRoomEntry, patient: Patient, now: datetime) -
         waited_minutes=waited,
         duration_minutes=duration,
         value_cents=entry.value_cents,
+        active_seconds=active,
+        segment_started_at=getattr(entry, "segment_started_at", None),
     )
 
 
@@ -833,7 +842,7 @@ async def update_waiting_status(
     current_user: User = Depends(get_current_user),
 ):
     """Atualiza o status de uma entrada na sala de espera."""
-    valid_statuses = {"waiting", "attending", "attended", "absent"}
+    valid_statuses = {"waiting", "attending", "suspended", "attended", "absent"}
     if request.status not in valid_statuses:
         raise HTTPException(
             status_code=422,
@@ -850,13 +859,35 @@ async def update_waiting_status(
         raise HTTPException(status_code=404, detail="Entrada não encontrada")
 
     now = datetime.utcnow()
-    # Timer do atendimento: marca o início na primeira vez que entra em "attending"
-    # e o fim na primeira vez que vira "attended" — não sobrescreve se já setado
-    # (evita reabrir o cronômetro se o status for alternado por engano).
-    if request.status == "attending" and entry.called_at is None:
-        entry.called_at = now
-    if request.status == "attended" and entry.attended_at is None:
-        entry.attended_at = now
+
+    # ── Cronômetro com pausa (fluxo real do Dr. Valth, 02/08) ────────────────
+    # active_seconds acumula SÓ o tempo em atendimento; segment_started_at marca
+    # o trecho atual. Suspender congela na hora; Continuar retoma de onde parou;
+    # Finalizar fecha o trecho e grava attended_at; Reabrir (attended→attending)
+    # zera attended_at e SEGUE somando no mesmo cronômetro.
+    def _fechar_trecho():
+        if entry.segment_started_at is not None:
+            seg = entry.segment_started_at
+            if seg.tzinfo is not None:
+                seg = seg.astimezone(timezone.utc).replace(tzinfo=None)
+            entry.active_seconds = (entry.active_seconds or 0) + max(
+                int((now - seg).total_seconds()), 0
+            )
+            entry.segment_started_at = None
+
+    if request.status == "attending":
+        if entry.called_at is None:
+            entry.called_at = now
+        if entry.segment_started_at is None:
+            entry.segment_started_at = now          # inicia/retoma o cronômetro
+        entry.attended_at = None                    # reabrir finalizado volta pra ativo
+    elif request.status == "suspended":
+        _fechar_trecho()                            # congela o cronômetro na hora
+    elif request.status == "attended":
+        _fechar_trecho()
+        entry.attended_at = now                     # re-finalização sobrescreve
+    else:  # waiting | absent
+        _fechar_trecho()
 
     entry.status = request.status
     db.commit()

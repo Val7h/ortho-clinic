@@ -67,7 +67,14 @@ class WaitingRoomEntry(Base):
     called_at = Column(DateTime(timezone=True), nullable=True)
     attended_at = Column(DateTime(timezone=True), nullable=True)
 
-    # Status: waiting | attending | attended | absent
+    # Cronômetro com PAUSA (fluxo real do Dr. Valth 02/08): a consulta pode ser
+    # SUSPENSA (ex.: paciente foi fazer RX e volta no mesmo turno) e retomada.
+    # active_seconds acumula só o tempo EM ATENDIMENTO; segment_started_at marca
+    # o início do trecho atual (null = cronômetro parado).
+    active_seconds = Column(Integer, nullable=False, default=0)
+    segment_started_at = Column(DateTime(timezone=True), nullable=True)
+
+    # Status: waiting | attending | suspended | attended | absent
     status = Column(String(20), default="waiting", index=True, nullable=False)
 
     # Valor do atendimento em centavos (evita erro de arredondamento com float).

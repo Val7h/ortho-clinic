@@ -432,7 +432,7 @@ export const waitingRoomApi = {
   today: (clinic_id?: number) =>
     api.get("/api/clinic/waiting-room/today", { params: clinic_id ? { clinic_id } : {} }).then((r) => r.data),
 
-  updateStatus: (entry_id: number, status: "waiting" | "attending" | "attended" | "absent") =>
+  updateStatus: (entry_id: number, status: "waiting" | "attending" | "suspended" | "attended" | "absent") =>
     api.patch(`/api/clinic/waiting-room/${entry_id}/status`, { status }).then((r) => r.data),
 
   remove: (entry_id: number) =>

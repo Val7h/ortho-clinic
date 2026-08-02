@@ -99,6 +99,11 @@ def migrate_db():
             migrations.append("ALTER TABLE waiting_room_entries ADD COLUMN attended_at TIMESTAMP")
         if "value_cents" not in wre_cols:
             migrations.append("ALTER TABLE waiting_room_entries ADD COLUMN value_cents INTEGER")
+        # Cronômetro com pausa (suspender/continuar consulta — 02/08)
+        if "active_seconds" not in wre_cols:
+            migrations.append("ALTER TABLE waiting_room_entries ADD COLUMN active_seconds INTEGER NOT NULL DEFAULT 0")
+        if "segment_started_at" not in wre_cols:
+            migrations.append("ALTER TABLE waiting_room_entries ADD COLUMN segment_started_at TIMESTAMP")
 
     # Push notification tables — Sprint 6
     # These tables are created by Base.metadata.create_all via init_db.
