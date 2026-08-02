@@ -16,6 +16,10 @@ import {
 import NavBar from '@/components/NavBar';
 import { PageWithSidebar } from '@/components/PageWithSidebar';
 import { financialApi, patientsApi } from '@/lib/api';
+import {
+  ResponsiveContainer, LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
+  XAxis, YAxis, CartesianGrid, Tooltip,
+} from 'recharts';
 import { useProtectedPage } from '@/components/AuthProvider';
 import toast from 'react-hot-toast';
 import { Button, Card, Input, Select, Badge, Modal, useModal } from '@/components/ui';
@@ -75,10 +79,16 @@ export default function FinanceiroPage() {
     }
   }, [showForm]);
 
+  const [analytics, setAnalytics] = useState<any>(null);
+
   const load = () => {
     if (!isSecretary) financialApi.summary({ month, year }).then(setSummary).catch(() => {});
     financialApi.list(isSecretary ? undefined : { month, year }).then(setRecords).catch(() => {});
   };
+
+  useEffect(() => {
+    if (user && !isSecretary) financialApi.analytics().then(setAnalytics).catch(() => {});
+  }, [user, isSecretary]);
 
   useEffect(() => { load(); }, [month, year]);
   useEffect(() => {
@@ -417,6 +427,168 @@ export default function FinanceiroPage() {
             </Card>
           )}
         </div>
+
+        {/* ── ANÁLISES (médico/admin) — decisão Valth 02/08 ─────────────── */}
+        {!isSecretary && analytics && (
+          <div className="space-y-6 pt-4">
+            <h3 className="text-sm font-bold uppercase tracking-wider text-slate-600">📊 Análises</h3>
+
+            {/* KPIs do ano */}
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+              {[
+                { label: `Receita ${new Date().getFullYear()}`, value: formatBRL(analytics.receita_ano || 0) },
+                { label: 'Ticket médio', value: analytics.ticket_medio != null ? formatBRL(analytics.ticket_medio) : '—' },
+                { label: 'Pagamentos no ano', value: String(analytics.pagamentos_ano ?? 0) },
+                { label: 'Pacientes', value: String(analytics.total_pacientes ?? 0) },
+              ].map((k) => (
+                <Card key={k.label} shadow="sm">
+                  <div className="p-4">
+                    <p className="mb-1 text-xs font-bold uppercase tracking-wider text-slate-500">{k.label}</p>
+                    <p className="text-xl font-bold text-slate-900 dark:text-slate-50">{k.value}</p>
+                  </div>
+                </Card>
+              ))}
+            </div>
+
+            {/* Receita: mês a mês + últimos 30 dias */}
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+              <Card shadow="sm">
+                <div className="p-5">
+                  <p className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-500">Receita — últimos 12 meses</p>
+                  {analytics.receita_por_mes?.some((x: any) => x.total > 0) ? (
+                    <ResponsiveContainer width="100%" height={220}>
+                      <LineChart data={analytics.receita_por_mes}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                        <XAxis dataKey="mes" stroke="#64748b" fontSize={11} />
+                        <YAxis stroke="#64748b" fontSize={11} />
+                        <Tooltip formatter={(v: any) => formatBRL(Number(v))} />
+                        <Line type="monotone" dataKey="total" stroke="#0F2D5E" strokeWidth={2} dot={{ r: 3 }} name="Receita" />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <p className="py-16 text-center text-sm text-slate-400">Sem receita registrada ainda.</p>
+                  )}
+                </div>
+              </Card>
+              <Card shadow="sm">
+                <div className="p-5">
+                  <p className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-500">Receita — últimos 30 dias</p>
+                  {analytics.receita_por_dia?.some((x: any) => x.total > 0) ? (
+                    <ResponsiveContainer width="100%" height={220}>
+                      <BarChart data={analytics.receita_por_dia}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                        <XAxis dataKey="dia" stroke="#64748b" fontSize={10} interval={4} />
+                        <YAxis stroke="#64748b" fontSize={11} />
+                        <Tooltip formatter={(v: any) => formatBRL(Number(v))} />
+                        <Bar dataKey="total" fill="#06b6d4" radius={[4, 4, 0, 0]} name="Receita" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <p className="py-16 text-center text-sm text-slate-400">Sem receita nos últimos 30 dias.</p>
+                  )}
+                </div>
+              </Card>
+            </div>
+
+            {/* Convênio × Particular + Top convênios */}
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+              <Card shadow="sm">
+                <div className="p-5">
+                  <p className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-500">Pacientes — Convênio × Particular</p>
+                  <ResponsiveContainer width="100%" height={220}>
+                    <PieChart>
+                      <Pie
+                        data={[
+                          { name: 'Convênio', value: analytics.convenio_particular?.convenio || 0, fill: '#06b6d4' },
+                          { name: 'Particular', value: analytics.convenio_particular?.particular || 0, fill: '#0F2D5E' },
+                          { name: 'Sem info', value: analytics.convenio_particular?.sem_info || 0, fill: '#cbd5e1' },
+                        ].filter((x) => x.value > 0)}
+                        dataKey="value"
+                        label={({ name, value, percent }: any) => `${name}: ${value} (${Math.round((percent || 0) * 100)}%)`}
+                        outerRadius={70}
+                      />
+                      <Tooltip />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              </Card>
+              <Card shadow="sm">
+                <div className="p-5">
+                  <p className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-500">Top convênios</p>
+                  {analytics.convenio_particular?.top_convenios?.length ? (
+                    <ResponsiveContainer width="100%" height={220}>
+                      <BarChart data={analytics.convenio_particular.top_convenios} layout="vertical">
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                        <XAxis type="number" stroke="#64748b" fontSize={11} allowDecimals={false} />
+                        <YAxis dataKey="nome" type="category" width={110} stroke="#64748b" fontSize={11} />
+                        <Tooltip />
+                        <Bar dataKey="qtd" fill="#0F2D5E" radius={[0, 4, 4, 0]} name="Pacientes" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <p className="py-16 text-center text-sm text-slate-400">Nenhum convênio informado ainda.</p>
+                  )}
+                </div>
+              </Card>
+            </div>
+
+            {/* Cidades + Sexo */}
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+              <Card shadow="sm">
+                <div className="p-5">
+                  <p className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-500">Pacientes por cidade</p>
+                  {analytics.por_cidade?.length ? (
+                    <ResponsiveContainer width="100%" height={220}>
+                      <BarChart data={analytics.por_cidade} layout="vertical">
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                        <XAxis type="number" stroke="#64748b" fontSize={11} allowDecimals={false} />
+                        <YAxis dataKey="cidade" type="category" width={120} stroke="#64748b" fontSize={11} />
+                        <Tooltip />
+                        <Bar dataKey="qtd" fill="#2563eb" radius={[0, 4, 4, 0]} name="Pacientes" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <p className="py-16 text-center text-sm text-slate-400">Nenhuma cidade informada ainda (o campo agora é obrigatório no cadastro).</p>
+                  )}
+                </div>
+              </Card>
+              <Card shadow="sm">
+                <div className="p-5">
+                  <p className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-500">Pacientes por sexo</p>
+                  <ResponsiveContainer width="100%" height={220}>
+                    <PieChart>
+                      <Pie
+                        data={[
+                          { name: 'Feminino', value: analytics.por_sexo?.F || 0, fill: '#ec4899' },
+                          { name: 'Masculino', value: analytics.por_sexo?.M || 0, fill: '#2563eb' },
+                          { name: 'Não informado', value: analytics.por_sexo?.outro || 0, fill: '#cbd5e1' },
+                        ].filter((x) => x.value > 0)}
+                        dataKey="value"
+                        label={({ name, value, percent }: any) => `${name}: ${value} (${Math.round((percent || 0) * 100)}%)`}
+                        outerRadius={70}
+                      />
+                      <Tooltip />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              </Card>
+            </div>
+
+            {/* Receita por ano */}
+            {analytics.receita_por_ano?.length > 0 && analytics.receita_por_ano.some((x: any) => x.total > 0) && (
+              <Card shadow="sm">
+                <div className="flex flex-wrap gap-6 p-5">
+                  {analytics.receita_por_ano.map((a: any) => (
+                    <div key={a.ano}>
+                      <p className="text-xs font-bold uppercase tracking-wider text-slate-500">{a.ano}</p>
+                      <p className="text-lg font-bold text-slate-900 dark:text-slate-50">{formatBRL(a.total)}</p>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            )}
+          </div>
+        )}
 
       </main>
 

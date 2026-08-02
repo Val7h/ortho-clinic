@@ -490,21 +490,21 @@ export default function AgendaPage() {
                       <div className={`w-1.5 h-1.5 rounded-full mb-1 ${avail.available ? 'bg-emerald-400' : 'bg-slate-300'}`} />
                     )}
 
-                    {/* Events */}
-                    {dayEvts.slice(0, 3).map(e => (
-                      <div
-                        key={e.id}
-                        className="rounded px-1 py-0.5 mb-0.5 text-[10px] font-semibold truncate text-white cursor-pointer hover:opacity-80"
-                        style={{ backgroundColor: e.clinic_color ?? '#0F2D5E' }}
-                        onClick={ev => { ev.stopPropagation(); openEdit(e); }}
-                        title={`${e.patient_name} · ${e.start_time}`}
-                      >
-                        {e._isOffline && '⚠ '}{e.patient_name}
-                      </div>
-                    ))}
-                    {dayEvts.length > 3 && (
-                      <p className="text-[10px] text-slate-400 px-1">+{dayEvts.length - 3}</p>
-                    )}
+                    {/* Events — TODOS os pacientes aparecem (decisão Valth 02/08);
+                        dia lotado rola dentro da própria célula */}
+                    <div className="max-h-40 overflow-y-auto">
+                      {dayEvts.map(e => (
+                        <div
+                          key={e.id}
+                          className="rounded px-1 py-0.5 mb-0.5 text-[10px] font-semibold truncate text-white cursor-pointer hover:opacity-80"
+                          style={{ backgroundColor: e.clinic_color ?? '#0F2D5E' }}
+                          onClick={ev => { ev.stopPropagation(); openEdit(e); }}
+                          title={`${e.patient_name} · ${e.start_time}`}
+                        >
+                          {e._isOffline && '⚠ '}{e.patient_name}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 );
               })}
@@ -688,48 +688,9 @@ export default function AgendaPage() {
           </div>
         )}
 
-        {/* Detail list below calendar (week/month) */}
-        {view !== 'dia' && events.filter(e => e.date >= rangeStart && e.date <= rangeEnd && e.status !== 'cancelled').length > 0 && (
-          <div className="mt-6">
-            <h3 className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-              Detalhes do período
-            </h3>
-            <div className="rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden bg-white dark:bg-slate-950 divide-y divide-slate-100 dark:divide-slate-800">
-              {events
-                .filter(e => e.date >= rangeStart && e.date <= rangeEnd && e.status !== 'cancelled')
-                .sort((a, b) => `${a.date}${a.start_time}`.localeCompare(`${b.date}${b.start_time}`))
-                .map(e => (
-                  <div
-                    key={e.id}
-                    className="flex items-center gap-4 px-5 py-3.5 hover:bg-slate-50 dark:hover:bg-slate-900 transition-colors cursor-pointer"
-                    onClick={() => openEdit(e)}
-                  >
-                    <div
-                      className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-white text-xs font-bold"
-                      style={{ backgroundColor: e._isOffline ? '#F59E0B' : (e.clinic_color ?? '#0F2D5E') }}
-                    >
-                      {e._isOffline ? '⚠' : e.patient_name.slice(0, 2).toUpperCase()}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate">{e.patient_name}</p>
-                      <p className="text-xs text-slate-400 truncate">
-                        {e.clinic_name} · {e.start_time || 'chegada'}
-                        {e.reason ? ` · ${e.reason}` : ''}
-                      </p>
-                    </div>
-                    <div className="text-right flex-shrink-0">
-                      <p className="text-xs font-medium text-slate-600 dark:text-slate-400">
-                        {new Date(e.date + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' })}
-                      </p>
-                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${STATUS_COLOR[e.status] ?? 'text-slate-600 bg-slate-100'}`}>
-                        {STATUS_LABEL[e.status] ?? e.status}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-            </div>
-          </div>
-        )}
+        {/* "Detalhes do período" removido (decisão Valth 02/08): duplicava o
+            calendário — agora TODOS os pacientes aparecem nas próprias células
+            (mês inclusive), clicáveis para editar. */}
 
         {/* Empty state */}
         {events.filter(e => e.date >= rangeStart && e.date <= rangeEnd).length === 0 && !loading && (

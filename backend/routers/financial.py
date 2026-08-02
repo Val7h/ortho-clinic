@@ -294,6 +294,115 @@ def update_record(
     return _serialize(r)
 
 
+@router.get("/analytics")
+def get_analytics(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Central de análises do médico/admin (decisão Valth 02/08): séries de
+    receita (dia/mês/ano), formas de pagamento, ticket médio e demografia de
+    pacientes (convênio×particular, cidades, sexo)."""
+    if current_user.role == "secretary":
+        raise HTTPException(403, "Análises disponíveis apenas para o médico/administração")
+
+    org_id = current_user.organization_id
+    hoje = _br_today()
+
+    def _pagos_q():
+        q = db.query(FinancialRecord).filter(FinancialRecord.status == "paid")
+        if current_user.role != "superadmin":
+            q = q.join(Patient, FinancialRecord.patient_id == Patient.id).filter(
+                Patient.organization_id == org_id
+            )
+        return q
+
+    pagos = _pagos_q().all()
+
+    # ── Séries de receita ────────────────────────────────────────────────────
+    por_dia: dict = {}
+    por_mes: dict = {}
+    por_ano: dict = {}
+    por_metodo: dict = {}
+    d30 = hoje - timedelta(days=29)
+    ano_corrente = hoje.year
+    receita_ano_corrente = 0.0
+    count_ano_corrente = 0
+    for r in pagos:
+        if not r.date:
+            continue
+        a = r.date.year
+        por_ano[a] = por_ano.get(a, 0.0) + r.amount
+        if a == ano_corrente:
+            receita_ano_corrente += r.amount
+            count_ano_corrente += 1
+            por_metodo[r.payment_method] = por_metodo.get(r.payment_method, 0.0) + r.amount
+        mkey = f"{r.date.year:04d}-{r.date.month:02d}"
+        por_mes[mkey] = por_mes.get(mkey, 0.0) + r.amount
+        if r.date >= d30:
+            dkey = r.date.isoformat()
+            por_dia[dkey] = por_dia.get(dkey, 0.0) + r.amount
+
+    # últimos 12 meses contínuos (zera os vazios pro gráfico não "pular")
+    meses_12 = []
+    y, m = hoje.year, hoje.month
+    for _ in range(12):
+        meses_12.append(f"{y:04d}-{m:02d}")
+        m -= 1
+        if m == 0:
+            y, m = y - 1, 12
+    meses_12.reverse()
+    dias_30 = [(d30 + timedelta(days=i)).isoformat() for i in range(30)]
+
+    # ── Demografia dos pacientes da organização ─────────────────────────────
+    pq = db.query(Patient)
+    if current_user.role != "superadmin":
+        pq = pq.filter(Patient.organization_id == org_id)
+    pacientes = pq.all()
+    total_pac = len(pacientes)
+    particular = convenio = sem_info = 0
+    top_convenios: dict = {}
+    por_cidade: dict = {}
+    por_sexo: dict = {"M": 0, "F": 0, "outro": 0}
+    for p in pacientes:
+        ins = (p.insurance or "").strip()
+        if not ins:
+            sem_info += 1
+        elif ins.lower() == "particular":
+            particular += 1
+        else:
+            convenio += 1
+            top_convenios[ins] = top_convenios.get(ins, 0) + 1
+        cid = (p.address_city or "").strip().title()
+        if cid:
+            por_cidade[cid] = por_cidade.get(cid, 0) + 1
+        g = (getattr(p, "gender", None) or "").upper()
+        if g in ("M", "F"):
+            por_sexo[g] += 1
+        else:
+            por_sexo["outro"] += 1
+
+    return {
+        "receita_por_dia": [{"dia": d[8:10] + "/" + d[5:7], "total": round(por_dia.get(d, 0.0), 2)} for d in dias_30],
+        "receita_por_mes": [{"mes": mk[5:7] + "/" + mk[2:4], "total": round(por_mes.get(mk, 0.0), 2)} for mk in meses_12],
+        "receita_por_ano": [{"ano": a, "total": round(t, 2)} for a, t in sorted(por_ano.items())],
+        "por_metodo": {k: round(v, 2) for k, v in por_metodo.items()},
+        "receita_ano": round(receita_ano_corrente, 2),
+        "ticket_medio": round(receita_ano_corrente / count_ano_corrente, 2) if count_ano_corrente else None,
+        "pagamentos_ano": count_ano_corrente,
+        "convenio_particular": {
+            "particular": particular,
+            "convenio": convenio,
+            "sem_info": sem_info,
+            "top_convenios": sorted(
+                [{"nome": k, "qtd": v} for k, v in top_convenios.items()],
+                key=lambda x: -x["qtd"],
+            )[:8],
+        },
+        "por_cidade": sorted(
+            [{"cidade": k, "qtd": v} for k, v in por_cidade.items()], key=lambda x: -x["qtd"]
+        )[:8],
+        "por_sexo": por_sexo,
+        "total_pacientes": total_pac,
+    }
+
+
 @router.delete("/{record_id}", status_code=204)
 def delete_record(
     record_id: int,

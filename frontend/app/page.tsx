@@ -113,13 +113,8 @@ export default function Dashboard() {
                 href: '/usuarios',
                 color: 'bg-indigo-500',
               },
-              {
-                label: 'Atendimento',
-                icon: Clock,
-                description: 'Fila de atendimento e triagem',
-                href: '/painel',
-                color: 'bg-orange-500',
-              },
+              // Card "Atendimento" removido (decisão Valth 02/08): é a mesma
+              // Sala de Espera que já está no menu lateral — redundante.
               {
                 label: 'Documentos',
                 icon: FileText,
