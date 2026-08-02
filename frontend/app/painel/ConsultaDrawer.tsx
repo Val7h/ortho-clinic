@@ -2776,11 +2776,13 @@ function PrintDocModal({ title, content, onClose }: { title: string; content: Re
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.6)" }}>
       <style>{`
         @media print {
+          /* Papel A4 retrato com margens de documento oficial (pedido do Dr. Valth) */
+          @page { size: A4 portrait; margin: 16mm 15mm 18mm; }
           html, body { height: auto !important; overflow: visible !important; background: #fff !important; }
           body * { visibility: hidden !important; }
           #print-doc-root, #print-doc-root * { visibility: visible !important; overflow: visible !important; max-height: none !important; box-shadow: none !important; }
           #print-doc-root .no-print, #print-doc-root .no-print * { visibility: hidden !important; }
-          #print-doc-root { position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; background: #fff !important; padding: 16px !important; }
+          #print-doc-root { position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; max-width: none !important; background: #fff !important; padding: 0 !important; border-radius: 0 !important; }
         }
       `}</style>
       <div id="print-doc-root" className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
@@ -3937,7 +3939,8 @@ function TabLaudos({ patient, clinic }: { patient: any; clinic?: any }) {
           </div>
         )}
 
-        {/* ── Local, data e assinatura ── */}
+        {/* ── Local, data e assinatura (não quebrar entre páginas no A4) ── */}
+        <div style={{ pageBreakInside: "avoid", breakInside: "avoid" } as any}>
         <p style={{ fontSize: "12.5px", color: "#1a1a1a", margin: "30px 0 44px", textAlign: "right", fontStyle: "italic" }}>{cidadeExtenso}, {dataExtenso}.</p>
         <div style={{ display: "flex", justifyContent: "center" }}>
           <div style={{ textAlign: "center", width: "310px" }}>
@@ -3947,6 +3950,7 @@ function TabLaudos({ patient, clinic }: { patient: any; clinic?: any }) {
               <p style={{ fontSize: "10.5px", color: "#444", margin: "2px 0 0", letterSpacing: "0.5px" }}>CRM-PB 6326 · TEOT 15090</p>
             </div>
           </div>
+        </div>
         </div>
       </div>
     );
