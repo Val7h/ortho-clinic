@@ -71,6 +71,8 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-brand-600 via-brand-500 to-accent-500 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 px-4 py-12">
       <div className="w-full max-w-sm animate-fade-in">
         {/* Logo & Branding */}
+        {/* Login é a cara do PRODUTO (OrthoClinic). A marca da clínica usuária
+            (OrthoMedic) aparece depois do login: sidebar + documentos. */}
         <div className="mb-10 text-center">
           <div className="mb-4 inline-flex items-center justify-center rounded-2xl bg-white/20 p-4 backdrop-blur-sm">
             <div className="text-white">

@@ -331,6 +331,7 @@ def appointments_week(
         result.append({
             "source": "appointment",
             "id": a.id,
+            "patient_id": a.patient_id,
             "clinic_id": a.clinic_id,
             "clinic_name": clinic.name if clinic else "",
             "clinic_color": clinic.color if clinic else "#888",

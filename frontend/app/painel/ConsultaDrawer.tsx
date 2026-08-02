@@ -2816,6 +2816,77 @@ function DrHeader({ clinic }: { clinic?: any }) {
   );
 }
 
+// ── Identidade visual dos documentos oficiais (aprovada pelo Dr. Valth) ──────
+const DOC_SERIF = "Georgia, 'Times New Roman', serif";
+const OM_NAVY = "#142A4D";
+const OM_TEAL = "#3FB3A0";
+
+// Logomarca OrthoMedic em SVG (fundo transparente — nítida no papel branco).
+function OrthoMedicLogo({ size = 46 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 100 100" style={{ display: "block", margin: "0 auto" }}>
+      <circle cx="50" cy="50" r="44" fill="none" stroke={OM_NAVY} strokeWidth="7" />
+      <circle cx="50" cy="50" r="33" fill="none" stroke={OM_TEAL} strokeWidth="6" />
+      <circle cx="50" cy="50" r="23" fill="none" stroke={OM_NAVY} strokeWidth="3.5" />
+      <circle cx="6" cy="50" r="4.5" fill={OM_NAVY} />
+      <circle cx="94" cy="50" r="4.5" fill={OM_NAVY} />
+      <path d="M42 30 h16 v12 h12 v16 h-12 v12 h-16 v-12 h-12 v-16 h12 z" fill={OM_TEAL} rx="4" />
+    </svg>
+  );
+}
+
+function dataExtensoHoje(): string {
+  const MESES = ["janeiro","fevereiro","março","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"];
+  const h = new Date();
+  return `${h.getDate() === 1 ? "1º" : h.getDate()} de ${MESES[h.getMonth()]} de ${h.getFullYear()}`;
+}
+
+function cidadeUf(clinic?: any): string {
+  return clinic?.city ? `${clinic.city} – ${clinic.state}` : "____________________";
+}
+
+// Papel timbrado oficial: logomarca + wordmark + médico + clínica + filete duplo.
+function TimbradoOficial({ clinic }: { clinic?: any }) {
+  return (
+    <>
+      <div style={{ textAlign: "center", paddingBottom: "10px" }}>
+        <OrthoMedicLogo size={46} />
+        <p style={{ fontSize: "12px", fontWeight: 700, letterSpacing: "4px", margin: "6px 0 8px" }}>
+          <span style={{ color: OM_NAVY }}>ORTHO</span><span style={{ color: OM_TEAL }}>MEDIC</span>
+        </p>
+        <p style={{ fontFamily: DOC_SERIF, fontSize: "18px", fontWeight: 700, letterSpacing: "1px", margin: 0, color: "#0F2D5E" }}>Dr. Valth Menezes Guimarães</p>
+        <p style={{ fontSize: "10px", textTransform: "uppercase", letterSpacing: "3px", color: "#555", margin: "3px 0 0" }}>Ortopedia e Traumatologia</p>
+        <p style={{ fontSize: "9.5px", color: "#777", margin: "3px 0 0", letterSpacing: "0.5px" }}>CRM-PB 6326 · TEOT 15090</p>
+        {clinic && (
+          <p style={{ fontSize: "9px", color: "#999", margin: "4px 0 0" }}>
+            {clinic.name}{clinic.city ? ` · ${clinic.city} – ${clinic.state}` : ""}{clinic.phone ? ` · ${clinic.phone}` : ""}
+          </p>
+        )}
+      </div>
+      <div style={{ borderTop: `2.5px solid ${OM_NAVY}`, marginBottom: "2px" }} />
+      <div style={{ borderTop: `1px solid ${OM_TEAL}`, marginBottom: "18px" }} />
+    </>
+  );
+}
+
+// Local/data por extenso + bloco de assinatura (nunca quebra de página).
+function FechoOficial({ clinic }: { clinic?: any }) {
+  return (
+    <div style={{ pageBreakInside: "avoid", breakInside: "avoid" } as any}>
+      <p style={{ fontFamily: DOC_SERIF, fontSize: "12.5px", color: "#1a1a1a", margin: "30px 0 44px", textAlign: "right", fontStyle: "italic" }}>{cidadeUf(clinic)}, {dataExtensoHoje()}.</p>
+      <div style={{ display: "flex", justifyContent: "center" }}>
+        <div style={{ textAlign: "center", width: "310px" }}>
+          <div style={{ borderTop: "1px solid #1a1a1a", paddingTop: "9px" }}>
+            <p style={{ fontFamily: DOC_SERIF, fontSize: "13.5px", fontWeight: 700, margin: 0, letterSpacing: "0.5px" }}>Dr. Valth Menezes Guimarães</p>
+            <p style={{ fontSize: "10.5px", color: "#444", margin: "2px 0 0", textTransform: "uppercase", letterSpacing: "1.5px" }}>Ortopedista e Traumatologista</p>
+            <p style={{ fontSize: "10.5px", color: "#444", margin: "2px 0 0", letterSpacing: "0.5px" }}>CRM-PB 6326 · TEOT 15090</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Centro de impressão final da consulta ─────────────────────────────────────
 // Lista todos os documentos gerados no atendimento, com checkbox pra escolher
 // quais imprimir, e imprime os selecionados de uma vez (cada um em sua página).
@@ -3474,13 +3545,14 @@ function TabAtestados({ patient, clinic }: { patient: any; clinic?: any }) {
     const startFormatted = formatDateBR(printData.startDate);
     const retDate = calcReturnDate(printData.startDate, printData.days) ?? "";
     return (
-      <div style={{ fontFamily: "Arial, sans-serif", color: "#111", fontSize: "13px" }}>
-        <DrHeader clinic={clinic} />
-        <div style={{ textAlign: "center", marginBottom: "20px" }}>
-          <p style={{ fontWeight: 700, fontSize: "15px", textTransform: "uppercase", letterSpacing: "2px", color: "#0F2D5E", margin: 0 }}>Atestado Médico</p>
+      <div style={{ fontFamily: DOC_SERIF, color: "#1a1a1a", fontSize: "12.5px", lineHeight: 1.75 }}>
+        <TimbradoOficial clinic={clinic} />
+        <div style={{ textAlign: "center", margin: "0 0 22px" }}>
+          <p style={{ fontFamily: DOC_SERIF, fontWeight: 700, fontSize: "17px", textTransform: "uppercase", letterSpacing: "7px", color: "#1a1a1a", margin: 0 }}>Atestado Médico</p>
+          <div style={{ width: "80px", borderTop: `1.5px solid ${OM_NAVY}`, margin: "10px auto 0" }} />
         </div>
-        <div style={{ lineHeight: "1.8", marginBottom: "24px" }}>
-          <p>
+        <div style={{ lineHeight: 1.85, marginBottom: "20px", textAlign: "justify" }}>
+          <p style={{ margin: 0 }}>
             Atesto que o(a) paciente <strong>{patient?.name}</strong>
             {patient?.cpf ? `, CPF ${patient.cpf},` : ""}
             {patient?.birth_date ? ` nascido(a) em ${new Date(patient.birth_date + "T12:00:00").toLocaleDateString("pt-BR")},` : ""}
@@ -3500,21 +3572,12 @@ function TabAtestados({ patient, clinic }: { patient: any; clinic?: any }) {
             </p>
           )}
           {printData.obs && (
-            <p style={{ marginTop: "12px", color: "#555", fontSize: "12px" }}>
+            <p style={{ marginTop: "12px", color: "#444", fontSize: "11.5px" }}>
               <strong>Restrições/Observações:</strong> {printData.obs}
             </p>
           )}
         </div>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginTop: "40px" }}>
-          <p style={{ fontSize: "11px", color: "#888", margin: 0 }}>{cityState}, {dateStr}</p>
-          <div style={{ textAlign: "center", width: "200px" }}>
-            <div style={{ borderTop: "2px solid #0F2D5E", paddingTop: "6px" }}>
-              <p style={{ fontSize: "12px", fontWeight: 700, margin: "0" }}>Dr. Valth Guimarães</p>
-              <p style={{ fontSize: "11px", color: "#666", margin: "0" }}>CRM/PB 6326 | CRM/PE 16551</p>
-            </div>
-          </div>
-        </div>
-        <p style={{ fontSize: "10px", color: "#aaa", textAlign: "center", marginTop: "24px" }}>Válido somente com assinatura e carimbo do médico</p>
+        <FechoOficial clinic={clinic} />
       </div>
     );
   }, [printData, patient, clinic]);
@@ -3523,13 +3586,14 @@ function TabAtestados({ patient, clinic }: { patient: any; clinic?: any }) {
     if (!compPrintData) return null;
     const startFormatted = formatDateBR(compPrintData.compDate);
     return (
-      <div style={{ fontFamily: "Arial, sans-serif", color: "#111", fontSize: "13px" }}>
-        <DrHeader clinic={clinic} />
-        <div style={{ textAlign: "center", marginBottom: "20px" }}>
-          <p style={{ fontWeight: 700, fontSize: "15px", textTransform: "uppercase", letterSpacing: "2px", color: "#0F2D5E", margin: 0 }}>Declaração de Comparecimento</p>
+      <div style={{ fontFamily: DOC_SERIF, color: "#1a1a1a", fontSize: "12.5px", lineHeight: 1.75 }}>
+        <TimbradoOficial clinic={clinic} />
+        <div style={{ textAlign: "center", margin: "0 0 22px" }}>
+          <p style={{ fontFamily: DOC_SERIF, fontWeight: 700, fontSize: "16px", textTransform: "uppercase", letterSpacing: "5px", color: "#1a1a1a", margin: 0 }}>Declaração de Comparecimento</p>
+          <div style={{ width: "80px", borderTop: `1.5px solid ${OM_NAVY}`, margin: "10px auto 0" }} />
         </div>
-        <div style={{ lineHeight: "1.8", marginBottom: "24px" }}>
-          <p>
+        <div style={{ lineHeight: 1.85, marginBottom: "20px", textAlign: "justify" }}>
+          <p style={{ margin: 0 }}>
             Declaro, para os devidos fins, que o(a) {compPrintData.compAcompanhante ? "acompanhante" : "paciente"} <strong>{compPrintData.compAcompanhante || patient?.name}</strong>
             {patient?.cpf && !compPrintData.compAcompanhante ? `, CPF ${patient.cpf},` : ""}
             {compPrintData.compAcompanhante ? <> esteve presente acompanhando o(a) paciente <strong>{patient?.name}</strong></> : null}
@@ -3539,19 +3603,10 @@ function TabAtestados({ patient, clinic }: { patient: any; clinic?: any }) {
             {" "}para atendimento médico.
           </p>
         </div>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginTop: "40px" }}>
-          <p style={{ fontSize: "11px", color: "#888", margin: 0 }}>{cityState}, {dateStr}</p>
-          <div style={{ textAlign: "center", width: "200px" }}>
-            <div style={{ borderTop: "2px solid #0F2D5E", paddingTop: "6px" }}>
-              <p style={{ fontSize: "12px", fontWeight: 700, margin: "0" }}>Dr. Valth Guimarães</p>
-              <p style={{ fontSize: "11px", color: "#666", margin: "0" }}>CRM/PB 6326 | CRM/PE 16551</p>
-            </div>
-          </div>
-        </div>
-        <p style={{ fontSize: "10px", color: "#aaa", textAlign: "center", marginTop: "24px" }}>Válido somente com assinatura e carimbo do médico</p>
+        <FechoOficial clinic={clinic} />
       </div>
     );
-  }, [compPrintData, patient, clinic, cityState, dateStr, horaEntrada, horaSaida]);
+  }, [compPrintData, patient, clinic, dateStr, horaEntrada, horaSaida]);
 
   return (
     <div className="px-5 pb-5 space-y-4">
@@ -3876,26 +3931,10 @@ function TabLaudos({ patient, clinic }: { patient: any; clinic?: any }) {
     const bodyText = printData.text
       .replace(/\n\s*[A-ZÀ-Ú][^\n]{2,60}\s[–-]\s?[A-Z]{2},[^\n]{3,60}\d{4}\.?\s*$/, "")
       .trimEnd();
-    const MESES = ["janeiro","fevereiro","março","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"];
-    const hoje = new Date();
-    const dataExtenso = `${hoje.getDate() === 1 ? "1º" : hoje.getDate()} de ${MESES[hoje.getMonth()]} de ${hoje.getFullYear()}`;
-    const cidadeExtenso = clinic ? `${clinic.city} – ${clinic.state}` : "____________________";
-    const serif = "Georgia, 'Times New Roman', serif";
+    const serif = DOC_SERIF;
     return (
       <div style={{ fontFamily: serif, color: "#1a1a1a", fontSize: "12.5px", lineHeight: 1.75 }}>
-        {/* ── Papel timbrado ── */}
-        <div style={{ textAlign: "center", paddingBottom: "10px" }}>
-          <p style={{ fontFamily: serif, fontSize: "19px", fontWeight: 700, letterSpacing: "1px", margin: 0, color: "#0F2D5E" }}>Dr. Valth Menezes Guimarães</p>
-          <p style={{ fontSize: "10.5px", textTransform: "uppercase", letterSpacing: "3px", color: "#555", margin: "3px 0 0" }}>Ortopedia e Traumatologia</p>
-          <p style={{ fontSize: "10px", color: "#777", margin: "3px 0 0", letterSpacing: "0.5px" }}>CRM-PB 6326 · TEOT 15090</p>
-          {clinic && (
-            <p style={{ fontSize: "9.5px", color: "#999", margin: "4px 0 0" }}>
-              {clinic.name}{clinic.address ? ` · ${clinic.address}` : ""}{clinic.phone ? ` · ${clinic.phone}` : ""}
-            </p>
-          )}
-        </div>
-        <div style={{ borderTop: "2.5px solid #0F2D5E", marginBottom: "2px" }} />
-        <div style={{ borderTop: "1px solid #0F2D5E", marginBottom: "18px" }} />
+        <TimbradoOficial clinic={clinic} />
 
         {/* ── Identificação do paciente ── */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "3px 18px", margin: "0 0 20px", fontSize: "11.5px", padding: "10px 14px", background: "#f8f7f4", border: "1px solid #e3e0d8", borderRadius: "2px" }}>
@@ -3939,19 +3978,7 @@ function TabLaudos({ patient, clinic }: { patient: any; clinic?: any }) {
           </div>
         )}
 
-        {/* ── Local, data e assinatura (não quebrar entre páginas no A4) ── */}
-        <div style={{ pageBreakInside: "avoid", breakInside: "avoid" } as any}>
-        <p style={{ fontSize: "12.5px", color: "#1a1a1a", margin: "30px 0 44px", textAlign: "right", fontStyle: "italic" }}>{cidadeExtenso}, {dataExtenso}.</p>
-        <div style={{ display: "flex", justifyContent: "center" }}>
-          <div style={{ textAlign: "center", width: "310px" }}>
-            <div style={{ borderTop: "1px solid #1a1a1a", paddingTop: "9px" }}>
-              <p style={{ fontFamily: serif, fontSize: "13.5px", fontWeight: 700, margin: 0, letterSpacing: "0.5px" }}>Dr. Valth Menezes Guimarães</p>
-              <p style={{ fontSize: "10.5px", color: "#444", margin: "2px 0 0", textTransform: "uppercase", letterSpacing: "1.5px" }}>Ortopedista e Traumatologista</p>
-              <p style={{ fontSize: "10.5px", color: "#444", margin: "2px 0 0", letterSpacing: "0.5px" }}>CRM-PB 6326 · TEOT 15090</p>
-            </div>
-          </div>
-        </div>
-        </div>
+        <FechoOficial clinic={clinic} />
       </div>
     );
   }, [printData, patient, clinic]);
@@ -4592,11 +4619,36 @@ export default function ConsultaDrawer({ entry, onClose, onStatusChange }: Consu
   }, [entry.patient_id]);
 
   useEffect(() => {
-    if (!entry.clinic_id) return;
-    clinicApi.get(entry.clinic_id)
-      .then(setClinic)
-      .catch(() => {}); // silencioso — telefone é opcional
-  }, [entry.clinic_id]);
+    // Cidade/UF do documento vêm da clínica. O Dr. Valth atende em várias
+    // unidades, então NUNCA deixar sem: (1) clínica do check-in; (2) clínica
+    // da marcação de HOJE do paciente; (3) última unidade usada no aparelho.
+    let cancelled = false;
+    const aplicar = (c: any) => {
+      if (cancelled || !c) return;
+      setClinic(c);
+      try { localStorage.setItem("ortho_last_clinic_id", String(c.id)); } catch {}
+    };
+    if (entry.clinic_id) {
+      clinicApi.get(entry.clinic_id).then(aplicar).catch(() => {});
+      return () => { cancelled = true; };
+    }
+    (async () => {
+      try {
+        const hoje = new Date().toISOString().slice(0, 10);
+        const wk = await clinicApi.week(hoje, hoje);
+        const appt = (wk || []).find((a: any) =>
+          a.source === "appointment" && a.clinic_id &&
+          (a.patient_id === entry.patient_id ||
+           (a.patient_phone && entry.patient_name && a.patient_name === entry.patient_name)));
+        if (appt?.clinic_id) { aplicar(await clinicApi.get(appt.clinic_id)); return; }
+      } catch {}
+      try {
+        const last = localStorage.getItem("ortho_last_clinic_id");
+        if (last) aplicar(await clinicApi.get(Number(last)));
+      } catch {}
+    })();
+    return () => { cancelled = true; };
+  }, [entry.clinic_id, entry.patient_id, entry.patient_name]);
 
   const handleStatus = async (newStatus: QueueStatus) => {
     setBusyStatus(true);

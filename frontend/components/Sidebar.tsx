@@ -46,9 +46,11 @@ export function Sidebar() {
       <aside
         className="fixed left-0 top-0 h-screen w-64 bg-gradient-to-b from-blue-900 to-blue-800 text-white overflow-y-auto z-40"
       >
-        {/* Logo */}
-        <div className="p-4 border-b border-blue-700 flex justify-center">
-          <Logo width={160} />
+        {/* Logomarca OrthoMedic (pedido do Dr. Valth) */}
+        <div className="p-4 border-b border-blue-700 flex flex-col items-center gap-1.5">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/orthomedic-logo.png" alt="OrthoMedic" className="h-16 w-16 rounded-xl object-cover shadow" />
+          <p className="text-sm font-bold tracking-widest"><span className="text-white">ORTHO</span><span className="text-teal-300">MEDIC</span></p>
         </div>
 
         {/* Menu Principal */}
