@@ -102,6 +102,14 @@ function UserMenu() {
 
           {/* Actions */}
           <div className="py-1">
+            <button
+              onClick={() => { setOpen(false); router.push("/perfil"); }}
+              className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-900 transition-colors focus:outline-none focus:bg-slate-50 dark:focus:bg-slate-900"
+              role="menuitem"
+            >
+              <User className="w-4 h-4 text-slate-400 dark:text-slate-500" />
+              Meu perfil e senha
+            </button>
             {isAdmin && (
               <button
                 onClick={() => { setOpen(false); router.push("/usuarios"); }}

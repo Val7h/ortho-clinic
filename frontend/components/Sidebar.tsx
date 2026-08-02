@@ -103,6 +103,19 @@ export function Sidebar() {
         <div className="p-4">
           <p className="text-xs font-semibold text-blue-300 mb-3 uppercase">Minha Conta</p>
 
+          {/* Acesso ao /perfil no desktop (antes só existia na navegação mobile) */}
+          <Link
+            href="/perfil"
+            className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-sm mb-2 ${
+              isActive('/perfil')
+                ? 'bg-white text-blue-900 font-semibold shadow-md'
+                : 'text-blue-100 hover:bg-blue-700 hover:text-white'
+            }`}
+          >
+            <span className="text-lg w-6 text-center">👤</span>
+            <span>Meu Perfil</span>
+          </Link>
+
           <div className="bg-blue-700 rounded-lg p-3 mb-3" suppressHydrationWarning>
             {mounted && (
               <>
