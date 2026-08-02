@@ -502,6 +502,11 @@ const CID_OFERTAS: { prefix: string; nome: string; opcoes: string[] }[] = [
   { prefix: "M65", nome: "Tenossinovite", opcoes: ["Infiltração", "Proloterapia"] },
   { prefix: "M25.5", nome: "Dor articular", opcoes: ["Proloterapia", "Infiltração"] },
   { prefix: "E66", nome: "Obesidade / Sobrepeso", opcoes: ["Protocolo metabólico (Tirzepatida)"] },
+  // Cirurgia do joelho (ditado Valth 02/08 — ele é cirurgião de joelho):
+  { prefix: "M23.2", nome: "Lesão de menisco", opcoes: ["Avaliação cirúrgica (artroscopia)", "Folheto do menisco"] },
+  { prefix: "S83.2", nome: "Ruptura de menisco", opcoes: ["Avaliação cirúrgica (artroscopia)", "Folheto do menisco"] },
+  { prefix: "S83.5", nome: "Lesão ligamentar (LCA/LCP)", opcoes: ["Reconstrução ligamentar (avaliar)", "Folheto do LCA"] },
+  { prefix: "S83.0", nome: "Luxação da patela", opcoes: ["Reconstrução do MPFL (se recidivante)", "Folheto da patela"] },
 ];
 
 function ofertasParaCids(cids: string[]): { prefix: string; nome: string; opcoes: string[] }[] {
