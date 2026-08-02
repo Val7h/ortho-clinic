@@ -266,6 +266,10 @@ export const clinicApi = {
   deleteAppointment: (id: number) => api.delete(`/appointments/${id}`),
   blockSlot: (clinicId: number, data: { date: string; start_time: string; reason?: string }) =>
     api.post(`/clinics/${clinicId}/block`, { ...data, patient_name: "[BLOQUEADO]" }).then((r) => r.data),
+  blockPeriod: (
+    clinicId: number,
+    data: { start_date: string; end_date?: string; start_time?: string; end_time?: string; reason?: string },
+  ) => api.post(`/clinics/${clinicId}/block-period`, data).then((r) => r.data),
   // Edit clinic
   get: (clinicId: number) => api.get(`/clinics/${clinicId}`).then((r) => r.data),
   updateClinic: (clinicId: number, data: { name: string; slug: string; city?: string; state?: string; address?: string; color?: string; phone?: string }) =>

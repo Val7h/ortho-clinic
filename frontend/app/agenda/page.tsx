@@ -128,16 +128,18 @@ const APPT_TYPE_COLOR: Record<string, string> = {
 
 // Agregado de um dia: contagens + clínicas presentes (p/ faixa, lista e mês)
 interface DayAgg {
-  total: number;          // sem cancelados
+  total: number;          // sem cancelados e sem bloqueios
   pend: number;
   conf: number;
   done: number;
   cancelled: number;
+  blocked: ApptEvent[];   // faixas de bloqueio (férias/almoço) do dia
   clinics: { name: string; color: string; n: number; pend: number }[];
 }
 
 function aggregateDay(evts: ApptEvent[]): DayAgg {
-  const active = evts.filter(e => e.status !== 'cancelled');
+  const blocked = evts.filter(e => e.status === 'blocked');
+  const active = evts.filter(e => e.status !== 'cancelled' && e.status !== 'blocked');
   const byClinic: Record<string, { name: string; color: string; n: number; pend: number }> = {};
   for (const e of active) {
     const name = shortClinic(e.clinic_name);
@@ -150,7 +152,8 @@ function aggregateDay(evts: ApptEvent[]): DayAgg {
     pend: active.filter(e => e.status === 'pending' || e.status === 'pending_offline').length,
     conf: active.filter(e => e.status === 'confirmed').length,
     done: active.filter(e => e.status === 'completed').length,
-    cancelled: evts.length - active.length,
+    cancelled: evts.filter(e => e.status === 'cancelled').length,
+    blocked,
     clinics: Object.keys(byClinic).map(k => byClinic[k]),
   };
 }
@@ -174,6 +177,54 @@ export default function AgendaPage() {
   // Seletor de mês/ano (popover do título)
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerYear, setPickerYear] = useState<number>(new Date().getFullYear());
+
+  // Modal "Bloquear horário" (férias/almoço — 02/08)
+  const [blockOpen, setBlockOpen] = useState(false);
+  const [blkClinic, setBlkClinic] = useState<number | ''>('');
+  const [blkDe, setBlkDe] = useState('');
+  const [blkAte, setBlkAte] = useState('');
+  const [blkPeriodo, setBlkPeriodo] = useState<'dia' | 'manha' | 'tarde' | 'custom'>('dia');
+  const [blkIni, setBlkIni] = useState('12:00');
+  const [blkFim, setBlkFim] = useState('13:00');
+  const [blkMotivo, setBlkMotivo] = useState('');
+  const [blkSaving, setBlkSaving] = useState(false);
+
+  const salvarBloqueio = async () => {
+    if (!blkClinic || !blkDe) { toast.error('Escolha a clínica e a data.'); return; }
+    const horas =
+      blkPeriodo === 'dia' ? {} :
+      blkPeriodo === 'manha' ? { start_time: '07:00', end_time: '12:00' } :
+      blkPeriodo === 'tarde' ? { start_time: '12:00', end_time: '19:00' } :
+      { start_time: blkIni, end_time: blkFim };
+    setBlkSaving(true);
+    try {
+      const r = await clinicApi.blockPeriod(Number(blkClinic), {
+        start_date: blkDe,
+        end_date: blkAte || undefined,
+        reason: blkMotivo || undefined,
+        ...horas,
+      });
+      toast.success(`${r.created} dia${r.created !== 1 ? 's' : ''} bloqueado${r.created !== 1 ? 's' : ''}`);
+      setBlockOpen(false);
+      setBlkDe(''); setBlkAte(''); setBlkMotivo('');
+      fetchData();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.detail ?? 'Erro ao bloquear');
+    } finally {
+      setBlkSaving(false);
+    }
+  };
+
+  const removerBloqueio = async (e: ApptEvent) => {
+    if (!window.confirm(`Remover o bloqueio de ${e.start_time}–${e.end_time}?`)) return;
+    try {
+      await clinicApi.deleteAppointment(e.id);
+      toast.success('Bloqueio removido');
+      fetchData();
+    } catch {
+      toast.error('Erro ao remover bloqueio');
+    }
+  };
 
   const { queue, isOnline, pendingCount, conflictCount, syncPending } =
     useOfflineAppointmentQueue();
@@ -250,6 +301,7 @@ export default function AgendaPage() {
           clinic_color: e.clinic_color,
           status: e.status,
           queue_number: e.queue_number,
+          notes: e.notes,
         });
       }
 
@@ -478,6 +530,14 @@ export default function AgendaPage() {
             Hoje
           </button>
 
+          <button
+            onClick={() => { setBlkDe(toISO(cursor)); setBlkClinic(clinics[0]?.id ?? ''); setBlockOpen(true); }}
+            className="rounded-lg px-3 py-1.5 text-sm font-semibold border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+            title="Bloquear período na agenda (férias, almoço, congresso)"
+          >
+            🚫 Bloquear
+          </button>
+
           {loading && <Loader2 className="w-4 h-4 animate-spin text-slate-400" />}
 
           <div className="ml-auto inline-flex bg-slate-100 dark:bg-slate-800 rounded-lg p-0.5">
@@ -548,7 +608,7 @@ export default function AgendaPage() {
         {view === 'dia' && (() => {
           const iso = toISO(cursor);
           const all = allForDate(iso);
-          const active = all.filter(e => e.status !== 'cancelled');
+          const active = all.filter(e => e.status !== 'cancelled' && e.status !== 'blocked');
           const cancelledEvts = all.filter(e => e.status === 'cancelled');
           const agg = aggregateDay(all);
           const domColor = agg.clinics[0]?.color || FALLBACK_COLOR;
@@ -628,6 +688,27 @@ export default function AgendaPage() {
                     </span>
                   ))}
                 </div>
+                {/* Faixas de bloqueio (férias/almoço) — clicar no ✕ remove */}
+                {agg.blocked.map(b => (
+                  <div
+                    key={`blk-${b.id}`}
+                    className="mt-3 flex items-center gap-2.5 rounded-xl px-3 py-2 bg-slate-100 dark:bg-slate-800 border-l-4 border-slate-400 dark:border-slate-600"
+                  >
+                    <span className="text-sm font-semibold text-slate-600 dark:text-slate-300">
+                      🚫 Bloqueado {b.start_time}–{b.end_time}
+                      {b.notes ? <span className="font-normal text-slate-500"> · {b.notes}</span> : null}
+                      {b.clinic_name ? <span className="font-normal text-slate-400"> · {shortClinic(b.clinic_name)}</span> : null}
+                    </span>
+                    <button
+                      onClick={() => removerBloqueio(b)}
+                      className="ml-auto text-xs font-bold text-slate-400 hover:text-red-500 px-2 py-1"
+                      aria-label="Remover bloqueio"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+
                 {/* Placar do turno: barra de progresso */}
                 {agg.total > 0 && (
                   <div className="mt-3 h-1.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
@@ -731,6 +812,7 @@ export default function AgendaPage() {
               if (dAgg.pend > 0) stParts.push(`${dAgg.pend} pendente${dAgg.pend !== 1 ? 's' : ''}`);
               if (dAgg.done > 0) stParts.push(`✓ ${dAgg.done} atendido${dAgg.done !== 1 ? 's' : ''}`);
               if (dAgg.cancelled > 0) stParts.push(`${dAgg.cancelled} cancelado${dAgg.cancelled !== 1 ? 's' : ''}`);
+              if (dAgg.blocked.length > 0) stParts.push(`🚫 bloqueio ${dAgg.blocked[0].start_time}–${dAgg.blocked[0].end_time}`);
               return (
                 <button
                   key={dIso}
@@ -809,6 +891,13 @@ export default function AgendaPage() {
                       {day.getDate()}
                     </div>
 
+                    {/* Bloqueio do dia (férias/almoço) */}
+                    {dAgg.blocked.length > 0 && (
+                      <div className="rounded-md px-1.5 py-0.5 text-[11px] font-bold truncate bg-slate-100 dark:bg-slate-800 text-slate-500">
+                        🚫 Bloqueado
+                      </div>
+                    )}
+
                     {/* Chips por clínica: contagem + pendentes (decide "cabe mais um?") */}
                     {dAgg.clinics.map(c => (
                       <div
@@ -852,6 +941,91 @@ export default function AgendaPage() {
       >
         <Plus className="w-7 h-7" />
       </button>
+
+      {/* Modal Bloquear período */}
+      {blockOpen && (
+        <>
+          <div className="fixed inset-0 z-40 bg-black/50" onClick={() => setBlockOpen(false)} />
+          <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-[92vw] max-w-md rounded-2xl bg-white dark:bg-slate-900 shadow-2xl p-5 space-y-3">
+            <p className="text-base font-bold text-slate-900 dark:text-slate-50">🚫 Bloquear horário</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Férias, almoço, congresso… O bot e as secretárias não conseguem marcar em cima de um bloqueio.
+            </p>
+
+            <label className="block text-xs font-semibold text-slate-500">Clínica</label>
+            <select
+              value={blkClinic}
+              onChange={e => setBlkClinic(Number(e.target.value))}
+              className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5 text-sm"
+            >
+              {clinics.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1">De</label>
+                <input type="date" value={blkDe} onChange={e => setBlkDe(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1">Até (opcional)</label>
+                <input type="date" value={blkAte} onChange={e => setBlkAte(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm" />
+              </div>
+            </div>
+
+            <label className="block text-xs font-semibold text-slate-500">Período</label>
+            <div className="grid grid-cols-4 gap-1.5">
+              {([['dia', 'Dia todo'], ['manha', 'Manhã'], ['tarde', 'Tarde'], ['custom', 'Horário']] as const).map(([k, label]) => (
+                <button
+                  key={k}
+                  onClick={() => setBlkPeriodo(k)}
+                  className={`rounded-lg px-2 py-2 text-xs font-semibold border transition-colors ${
+                    blkPeriodo === k
+                      ? 'bg-brand-600 text-white border-brand-600'
+                      : 'border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            {blkPeriodo === 'custom' && (
+              <div className="grid grid-cols-2 gap-3">
+                <input type="time" value={blkIni} onChange={e => setBlkIni(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm" />
+                <input type="time" value={blkFim} onChange={e => setBlkFim(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm" />
+              </div>
+            )}
+
+            <label className="block text-xs font-semibold text-slate-500">Motivo (opcional)</label>
+            <input
+              value={blkMotivo}
+              onChange={e => setBlkMotivo(e.target.value)}
+              placeholder="Férias, congresso, almoço…"
+              className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5 text-sm"
+            />
+
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={() => setBlockOpen(false)}
+                className="flex-1 rounded-xl border border-slate-200 dark:border-slate-700 py-2.5 text-sm font-semibold text-slate-600 dark:text-slate-300"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={salvarBloqueio}
+                disabled={blkSaving}
+                className="flex-1 rounded-xl bg-brand-600 hover:bg-brand-700 disabled:opacity-60 text-white py-2.5 text-sm font-semibold flex items-center justify-center gap-2"
+              >
+                {blkSaving && <Loader2 className="w-4 h-4 animate-spin" />}
+                Bloquear
+              </button>
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Form modal */}
       {formOpen && (

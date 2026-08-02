@@ -292,7 +292,9 @@ def appointments_week(
         db.query(Appointment)
         .filter(Appointment.clinic_id.in_(clinic_ids))
         .filter(Appointment.date >= start, Appointment.date <= end)
-        .filter(Appointment.status.notin_(["cancelled", "blocked"]))
+        # Bloqueios (status=blocked) AGORA entram no feed — a agenda mostra a
+        # faixa "Bloqueado" (férias/almoço, 02/08); só cancelados ficam de fora.
+        .filter(Appointment.status != "cancelled")
         .order_by(Appointment.date, Appointment.queue_number, Appointment.start_time)
         .all()
     ) if clinic_ids else []
@@ -393,6 +395,62 @@ def block_slot(clinic_id: int, data: BookIn, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(a)
     return a
+
+
+class BlockPeriodIn(BaseModel):
+    start_date: date
+    end_date: Optional[date] = None       # None = só o start_date
+    start_time: Optional[str] = None      # None = dia todo (07:00)
+    end_time: Optional[str] = None        # None = dia todo (19:00)
+    reason: Optional[str] = None
+
+
+@router.post("/clinics/{clinic_id}/block-period", status_code=201)
+def block_period(clinic_id: int, data: BlockPeriodIn, db: Session = Depends(get_db)):
+    """Bloqueia um PERÍODO na agenda (férias, almoço, congresso — 02/08).
+
+    Cria um Appointment status=blocked por dia do intervalo. O agendamento
+    público/bot já trata blocked como horário ocupado; a agenda mostra a faixa.
+    """
+    clinic = db.query(Clinic).filter(Clinic.id == clinic_id).first()
+    if not clinic:
+        raise HTTPException(404, "Clínica não encontrada")
+    end_date = data.end_date or data.start_date
+    if end_date < data.start_date:
+        raise HTTPException(422, "Data final antes da inicial")
+    if (end_date - data.start_date).days > 90:
+        raise HTTPException(422, "Bloqueio máximo de 90 dias por vez")
+    start_t = data.start_time or "07:00"
+    end_t = data.end_time or "19:00"
+    if end_t <= start_t:
+        raise HTTPException(422, "Horário final deve ser depois do inicial")
+
+    created_ids = []
+    d = data.start_date
+    while d <= end_date:
+        exists = db.query(Appointment).filter(
+            Appointment.clinic_id == clinic_id,
+            Appointment.date == d,
+            Appointment.status == "blocked",
+            Appointment.start_time == start_t,
+            Appointment.end_time == end_t,
+        ).first()
+        if not exists:
+            a = Appointment(
+                clinic_id=clinic_id,
+                date=d,
+                start_time=start_t,
+                end_time=end_t,
+                patient_name="[BLOQUEADO]",
+                status="blocked",
+                notes=data.reason,
+            )
+            db.add(a)
+            db.flush()
+            created_ids.append(a.id)
+        d = d + timedelta(days=1)
+    db.commit()
+    return {"created": len(created_ids), "ids": created_ids}
 
 
 # ── PUBLIC endpoints ───────────────────────────────────────────────────────────
