@@ -56,12 +56,6 @@ export default function DocumentosPage() {
                   <p className="text-sm font-semibold text-slate-800 dark:text-slate-50">{sec.label}</p>
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{sec.description}</p>
                 </div>
-                {"badge" in sec && sec.badge && (
-                  <span className="absolute top-3 right-3 text-[10px] font-bold px-1.5 py-0.5
-                                   rounded-full bg-brand-600 text-white">
-                    {sec.badge}
-                  </span>
-                )}
               </Link>
             );
           })}
