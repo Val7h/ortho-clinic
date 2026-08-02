@@ -858,6 +858,30 @@ async def update_waiting_status(
     if not entry_patient or not _same_org(current_user, entry_patient.organization_id):
         raise HTTPException(status_code=404, detail="Entrada não encontrada")
 
+    # SÓ UMA CONSULTA POR VEZ (Valth 02/08): não dá pra iniciar uma consulta com
+    # outra em andamento — o médico é um só e o cronômetro é individual. Precisa
+    # finalizar ou suspender a atual antes.
+    if request.status == "attending":
+        outra_q = (
+            db.query(WaitingRoomEntry)
+            .join(Patient, WaitingRoomEntry.patient_id == Patient.id)
+            .filter(
+                WaitingRoomEntry.status == "attending",
+                WaitingRoomEntry.id != entry.id,
+                WaitingRoomEntry.entry_date == entry.entry_date,
+            )
+        )
+        if current_user.role != "superadmin":
+            outra_q = outra_q.filter(Patient.organization_id == current_user.organization_id)
+        outra = outra_q.first()
+        if outra:
+            op = db.query(Patient).filter(Patient.id == outra.patient_id).first()
+            raise HTTPException(
+                409,
+                f"Já existe uma consulta em andamento ({op.name if op else 'outro paciente'}). "
+                "Finalize ou suspenda antes de iniciar outra.",
+            )
+
     # TZ-AWARE (fix 02/08): timestamp naive era serializado sem 'Z' e o browser
     # lia como hora LOCAL (3h no futuro) → cronômetro da tela travado em 0.
     now = datetime.now(timezone.utc)

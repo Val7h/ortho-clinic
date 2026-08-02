@@ -241,7 +241,7 @@ function PatientCard({ entry, onStatusChange, onRemove, onSelect, busy, selected
                   disabled={busy}
                   className="flex items-center gap-1 px-2 py-1 rounded-lg bg-green-600 text-white text-[10px] font-semibold hover:bg-green-700 disabled:opacity-50"
                 >
-                  <Play className="w-3 h-3" /> Chamar
+                  <Play className="w-3 h-3" /> Iniciar
                 </button>
                 <button
                   onClick={() => onStatusChange(entry.id, 'absent')}
@@ -472,8 +472,9 @@ export default function SalaDeEsperaPage() {
       } else {
         toast.success(`Paciente ${labels[newStatus]}`);
       }
-    } catch {
-      toast.error('Erro ao atualizar status');
+    } catch (err: any) {
+      // 409 = já existe consulta em andamento (regra: uma por vez)
+      toast.error(err?.response?.data?.detail || 'Erro ao atualizar status', { duration: 5000 });
     } finally {
       setBusyIds((prev) => {
         const next = new Set(prev);

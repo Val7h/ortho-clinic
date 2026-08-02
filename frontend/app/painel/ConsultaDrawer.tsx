@@ -4768,7 +4768,7 @@ export default function ConsultaDrawer({ entry, onClose, onStatusChange }: Consu
                 disabled={busyStatus}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-600 text-white text-xs font-semibold hover:bg-green-700 disabled:opacity-50"
               >
-                <Play className="w-3.5 h-3.5" /> Chamar
+                <Play className="w-3.5 h-3.5" /> Iniciar Consulta
               </button>
               <button
                 onClick={() => handleStatus("absent")}
@@ -4872,13 +4872,33 @@ export default function ConsultaDrawer({ entry, onClose, onStatusChange }: Consu
       </div>
 
       {/* ── Tab content (scrollable) ── */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto relative">
+        {/* Prontuário só editável com a consulta INICIADA (Valth 02/08):
+            garante que todo registro aconteça com o cronômetro rodando. */}
+        {!loadingPatient && entry.status !== "attending" && (
+          <div className="absolute inset-0 z-30 bg-white/75 dark:bg-slate-950/75 backdrop-blur-[2px] flex items-start justify-center pt-20">
+            <div className="text-center px-6 max-w-sm">
+              <p className="text-3xl mb-2">
+                {entry.status === "suspended" ? "⏸" : entry.status === "attended" ? "✅" : "🔒"}
+              </p>
+              <p className="text-sm font-bold text-slate-700 dark:text-slate-200">
+                {entry.status === "waiting" && "Clique em Iniciar Consulta para abrir o prontuário"}
+                {entry.status === "suspended" && "Consulta suspensa — clique em Continuar Consulta para retomar"}
+                {entry.status === "attended" && "Consulta finalizada — clique em Reabrir Consulta para editar"}
+                {entry.status === "absent" && "Paciente ausente — recoloque na fila para atender"}
+              </p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5">
+                O prontuário só é editável com a consulta em andamento (cronômetro rodando).
+              </p>
+            </div>
+          </div>
+        )}
         {loadingPatient ? (
           <div className="flex items-center justify-center h-40">
             <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
           </div>
         ) : (
-          <div className="pt-4">
+          <div className={`pt-4 ${entry.status !== "attending" ? "pointer-events-none select-none opacity-50" : ""}`}>
             {activeTab === "anamnese"        && <TabProntuario patientId={entry.patient_id} />}
             {activeTab === "exames"          && <TabExames patientId={entry.patient_id} patient={patient} clinic={clinic} />}
             {activeTab === "receitas"        && <TabReceita patientId={entry.patient_id} patient={patient} clinic={clinic} />}
