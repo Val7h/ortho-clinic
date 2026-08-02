@@ -73,9 +73,9 @@ export function AppointmentFormModal({
   // preenche assim que disponível — sem sobrescrever o que já foi digitado.
   useEffect(() => {
     if (!initialPatient || editingAppointment) return;
-    setPatientName((prev) => prev || initialPatient.name);
-    setPatientId((prev) => prev ?? initialPatient.id);
-    setPatientPhone((prev) => prev || (initialPatient.phone ?? ''));
+    setPatientName((prev: string) => prev || initialPatient.name);
+    setPatientId((prev: number | null) => prev ?? initialPatient.id);
+    setPatientPhone((prev: string) => prev || (initialPatient.phone ?? ''));
   }, [initialPatient, editingAppointment]);
   const [apptType, setApptType] = useState(editingAppointment?.appointment_type ?? 'consulta');
   const [reason, setReason] = useState(editingAppointment?.reason ?? '');
