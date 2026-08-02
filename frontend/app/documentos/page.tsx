@@ -1,31 +1,18 @@
 "use client";
 
 /**
- * /documentos — hub de documentos clínicos (atualizado Sprint 6 Day 7).
+ * /documentos — documentos DA CLÍNICA (decisão Valth 02/08).
  *
- * Agora inclui acesso direto ao novo gestor de documentos por paciente.
+ * Só o que não pertence a paciente nenhum: folhetos informativos e contratos.
+ * Tudo que é do paciente (prontuário, documentos, receitas) vive na FICHA
+ * dele — busca o paciente e está tudo lá.
  */
 
-import { FileText, FileHeart, FileSignature, BookOpen, FolderOpen } from "lucide-react";
+import { FileSignature, BookOpen } from "lucide-react";
 import Link from "next/link";
 import { ProtectedPageLayout } from "@/components/ProtectedPageLayout";
 
 const DOC_SECTIONS = [
-  {
-    href: "/pacientes",
-    label: "Documentos por Paciente",
-    description: "Upload, exames, assinatura, compartilhamento",
-    icon: FolderOpen,
-    color: "bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400",
-    badge: "Novo",
-  },
-  {
-    href: "/pacientes",
-    label: "Prontuários",
-    description: "Anamnese e evolução de consultas",
-    icon: FileHeart,
-    color: "bg-rose-50 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400",
-  },
   {
     href: "/folhetos",
     label: "Folhetos Informativos",
@@ -40,13 +27,6 @@ const DOC_SECTIONS = [
     icon: FileSignature,
     color: "bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400",
   },
-  {
-    href: "/pacientes",
-    label: "Receitas",
-    description: "Prescrições médicas emitidas",
-    icon: FileText,
-    color: "bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400",
-  },
 ];
 
 export default function DocumentosPage() {
@@ -54,7 +34,9 @@ export default function DocumentosPage() {
     <ProtectedPageLayout title="Documentos">
       <div className="max-w-2xl mx-auto px-4 py-6 space-y-4">
         <p className="text-sm text-slate-500 dark:text-slate-400">
-          Acesse e gerencie todos os documentos clínicos da clínica.
+          Documentos da clínica. Os documentos do paciente (prontuário, receitas,
+          exames) ficam na ficha dele — busque em{" "}
+          <Link href="/pacientes" className="font-semibold text-brand-600 hover:underline">Pacientes</Link>.
         </p>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
