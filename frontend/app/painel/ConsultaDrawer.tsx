@@ -212,6 +212,8 @@ const ORTHO_CIDS: { code: string; label: string; k?: string }[] = [
   { code: "M25.5", label: "Dor articular", k: "dor articulacao" },
   { code: "M79.6", label: "Dor em membro", k: "dor braco perna" },
   { code: "M70.9", label: "Bursite não especificada", k: "bursa inflamacao" },
+  { code: "E66.9", label: "Obesidade", k: "peso sobrepeso emagrecimento imc metabolico" },
+  { code: "E66.0", label: "Obesidade por excesso de calorias", k: "peso sobrepeso emagrecimento" },
   { code: "M76.9", label: "Entesopatia do membro inferior", k: "tendinite perna" },
   { code: "T14.0", label: "Traumatismo superficial (contusão)", k: "trauma pancada batida" },
 ];
@@ -486,16 +488,20 @@ function CidSearch({ value, onChange }: { value: string; onChange: (v: string) =
 // "não esquecer de oferecer" nunca dispara. Mapeamentos ditados por ele:
 // dor no ombro → infiltração de corticoide; osteoporose → ácido zoledrônico.
 const CID_OFERTAS: { prefix: string; nome: string; opcoes: string[] }[] = [
-  { prefix: "M17", nome: "Gonartrose", opcoes: ["Viscossuplementação", "Infiltração", "Programa de dor"] },
+  { prefix: "M17", nome: "Gonartrose", opcoes: ["Viscossuplementação", "Infiltração", "Programa de dor", "Protocolo metabólico (peso)"] },
   { prefix: "M16", nome: "Coxartrose", opcoes: ["Infiltração guiada", "Programa de dor"] },
   { prefix: "M19", nome: "Artrose", opcoes: ["Viscossuplementação", "Infiltração", "Programa de dor"] },
-  { prefix: "M75", nome: "Ombro doloroso", opcoes: ["Infiltração de corticoide", "Ondas de choque"] },
+  { prefix: "M75", nome: "Ombro doloroso", opcoes: ["Infiltração de corticoide", "Ondas de choque", "Proloterapia"] },
   { prefix: "M80", nome: "Osteoporose c/ fratura", opcoes: ["Ácido zoledrônico (aplicação)", "Acompanhamento semestral"] },
   { prefix: "M81", nome: "Osteoporose", opcoes: ["Ácido zoledrônico (aplicação)", "Acompanhamento semestral"] },
   { prefix: "M72.2", nome: "Fascite plantar / esporão", opcoes: ["Ondas de choque", "Palmilha sob medida"] },
-  { prefix: "M77", nome: "Epicondilite", opcoes: ["Ondas de choque", "Infiltração"] },
+  { prefix: "M77.3", nome: "Esporão do calcâneo", opcoes: ["Ondas de choque", "Palmilha sob medida"] },
+  { prefix: "M77", nome: "Epicondilite / entesopatia", opcoes: ["Ondas de choque", "Infiltração", "Proloterapia"] },
+  { prefix: "M76", nome: "Tendinite (patelar/Aquiles)", opcoes: ["Ondas de choque", "Proloterapia"] },
   { prefix: "M54", nome: "Lombalgia", opcoes: ["Programa de dor crônica", "Medicina integrativa"] },
-  { prefix: "M65", nome: "Tenossinovite", opcoes: ["Infiltração"] },
+  { prefix: "M65", nome: "Tenossinovite", opcoes: ["Infiltração", "Proloterapia"] },
+  { prefix: "M25.5", nome: "Dor articular", opcoes: ["Proloterapia", "Infiltração"] },
+  { prefix: "E66", nome: "Obesidade / Sobrepeso", opcoes: ["Protocolo metabólico (Tirzepatida)"] },
 ];
 
 function ofertasParaCids(cids: string[]): { prefix: string; nome: string; opcoes: string[] }[] {
