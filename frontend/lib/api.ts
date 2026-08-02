@@ -236,6 +236,18 @@ export const dashboardApi = {
   get: () => api.get("/dashboard").then((r) => r.data),
 };
 
+// ── Auditoria LGPD ────────────────────────────────────────────────────────
+export const auditApi = {
+  logs: (params: Record<string, any>) =>
+    api.get("/audit/logs", { params }).then((r) => r.data),
+  patientAccess: (params: Record<string, any>) =>
+    api.get("/audit/patient-access-report", { params }).then((r) => r.data),
+  monthlySummary: (year: number, month: number) =>
+    api.get("/audit/monthly-summary", { params: { year, month } }).then((r) => r.data),
+  exportCsv: (params: Record<string, any>) =>
+    api.get("/audit/export/csv", { params, responseType: "blob" }).then((r) => r.data),
+};
+
 // ── Agenda ────────────────────────────────────────────────────────────────
 export const agendaApi = {
   get: (start?: string, end?: string) =>

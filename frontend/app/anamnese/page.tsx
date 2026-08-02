@@ -97,14 +97,14 @@ export default function AnamnesePage() {
                     </div>
                     <div className="flex flex-shrink-0 items-center gap-2">
                       <button
-                        onClick={() => router.push(`/anamnese/patient/${p.id}`)}
+                        onClick={() => router.push(`/pacientes/${p.id}`)}
                         className="flex items-center gap-1.5 rounded-lg border border-purple-200 dark:border-purple-700 bg-purple-50 dark:bg-purple-900/30 px-3 py-1.5 text-xs font-medium text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/50 transition-colors"
                       >
                         <Send className="h-3 w-3" />
                         Enviar
                       </button>
                       <button
-                        onClick={() => router.push(`/anamnese/patient/${p.id}`)}
+                        onClick={() => router.push(`/pacientes/${p.id}`)}
                         className="flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
                       >
                         Ver

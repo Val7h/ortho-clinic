@@ -7,6 +7,8 @@ import {
   RefreshCw, Building2, ArrowUpRight,
 } from "lucide-react";
 import { Card, Badge, Button } from "@/components/ui";
+import { api } from "@/lib/api";
+import toast from "react-hot-toast";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -489,10 +491,30 @@ export default function BillingPage() {
 
         {/* ── Quick links ──────────────────────────────────────────── */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {/* Cancelar: era um Link pra /billing/cancelar, página que nunca
+              existiu (auditoria 02/08) — agora chama o POST /billing/cancel
+              direto, com confirmação. */}
+          <button
+            onClick={async () => {
+              if (!window.confirm("Cancelar a assinatura? O acesso continua até o fim do período já pago.")) return;
+              try {
+                await api.post("/billing/cancel");
+                toast.success("Assinatura cancelada.");
+              } catch (e: any) {
+                toast.error(e?.response?.data?.detail ?? "Não foi possível cancelar — fale com o suporte.");
+              }
+            }}
+            className="border border-slate-200 rounded-xl p-4 hover:border-red-400 hover:shadow-sm transition-all flex items-center justify-between bg-white cursor-pointer text-left"
+          >
+            <div className="flex items-center gap-3">
+              <AlertTriangle className="w-4 h-4 text-slate-400" />
+              <span className="text-sm font-medium text-slate-700">Cancelar assinatura</span>
+            </div>
+            <ChevronRight className="w-4 h-4 text-slate-300" />
+          </button>
           {[
-            { label: "Cancelar assinatura", href: "/billing/cancelar", icon: AlertTriangle, variant: "danger" },
-            { label: "Solicitar plano Enterprise", href: "/billing/enterprise", icon: Building2, variant: "neutral" },
-            { label: "Ver todos os planos", href: "/planos", icon: ChevronRight, variant: "neutral" },
+            { label: "Solicitar plano Enterprise", href: "/billing/enterprise", icon: Building2 },
+            { label: "Ver todos os planos", href: "/planos", icon: ChevronRight },
           ].map(({ label, href, icon: Icon }) => (
             <Link key={label} href={href}>
               <div className="border border-slate-200 rounded-xl p-4 hover:border-brand-400 hover:shadow-sm transition-all flex items-center justify-between bg-white cursor-pointer">

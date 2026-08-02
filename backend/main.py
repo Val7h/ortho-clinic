@@ -25,7 +25,7 @@ from routers.patient_documents import router as patient_docs_router, public_rout
 from routers.oauth2 import router as oauth2_router, well_known_router as oauth2_well_known_router
 from routers.pre_consulta import router as pre_consulta_router
 from routers.patient_prescriptions import router as patient_prescriptions_router
-from routers.clinical_evolutions import router as clinical_evolutions_router
+from routers.clinical_evolutions import router as clinical_evolutions_router, flat_router as evolutions_flat_router
 from routers.laudo_inss import router as laudo_inss_router
 from routers.prescription_templates import router as prescription_templates_router
 from routers.chat import router as chat_router
@@ -160,6 +160,7 @@ app.include_router(patient_docs_router)
 app.include_router(patient_docs_public_router)
 app.include_router(patient_prescriptions_router)
 app.include_router(clinical_evolutions_router)
+app.include_router(evolutions_flat_router)
 app.include_router(laudo_inss_router)
 app.include_router(prescription_templates_router)
 app.include_router(chat_router)

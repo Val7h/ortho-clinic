@@ -5,13 +5,21 @@ from datetime import date, datetime
 from pydantic import BaseModel
 from database import get_db
 from models.clinical_evolution import ClinicalEvolution
+from models.patient import Patient
 from routers.auth import get_current_user
 
 router = APIRouter(prefix="/patients", tags=["clinical_evolutions"])
 
+# Rotas sem o prefixo /patients (o adendo do prontuário chama PATCH /evolutions/{id})
+flat_router = APIRouter(tags=["clinical_evolutions"])
+
 
 class EvolutionCreate(BaseModel):
     entry_date: date
+    content: str
+
+
+class EvolutionUpdate(BaseModel):
     content: str
 
 
@@ -53,6 +61,36 @@ def create_evolution(
         content=data.content.strip(),
     )
     db.add(ev)
+    db.commit()
+    db.refresh(ev)
+    return ev
+
+
+@flat_router.patch("/evolutions/{evolution_id}", response_model=EvolutionOut)
+def update_evolution(
+    evolution_id: int,
+    data: EvolutionUpdate,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Atualiza o conteúdo de uma evolução (usado pelo ADENDO do prontuário).
+
+    A tela chamava PATCH /evolutions/{id}, que não existia — o adendo falhava
+    sempre (auditoria 02/08). Isolamento por organização via join no paciente.
+    """
+    if not data.content.strip():
+        raise HTTPException(status_code=422, detail="Conteúdo não pode ser vazio")
+    q = (
+        db.query(ClinicalEvolution)
+        .join(Patient, Patient.id == ClinicalEvolution.patient_id)
+        .filter(ClinicalEvolution.id == evolution_id)
+    )
+    if current_user.role != "superadmin":
+        q = q.filter(Patient.organization_id == current_user.organization_id)
+    ev = q.first()
+    if not ev:
+        raise HTTPException(status_code=404, detail="Evolução não encontrada")
+    ev.content = data.content.strip()
     db.commit()
     db.refresh(ev)
     return ev

@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException
+import base64
+
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 from typing import List
@@ -6,9 +8,8 @@ from datetime import date
 from database import get_db
 from models.patient import Patient
 from models.organization import User
-from models.documents import Prescription, ExamRequest, PhysioRequest, MedicalReport, TreatmentLeaflet
+from models.documents import ExamRequest, PhysioRequest, MedicalReport, TreatmentLeaflet
 from schemas.documents import (
-    PrescriptionCreate, PrescriptionOut,
     ExamRequestCreate, ExamRequestOut,
     PhysioRequestCreate, PhysioRequestOut,
     MedicalReportCreate, MedicalReportOut,
@@ -37,39 +38,10 @@ def _get_patient_or_404(db: Session, patient_id: int, current_user: User) -> Pat
 
 
 # ── RECEITAS ──────────────────────────────────────────────────────────────────
-
-presc_router = APIRouter(prefix="/patients/{patient_id}/prescriptions", dependencies=[Depends(require_doctor)])
-
-@presc_router.get("", response_model=List[PrescriptionOut])
-def list_prescriptions(patient_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    _get_patient_or_404(db, patient_id, current_user)
-    return db.query(Prescription).filter(Prescription.patient_id == patient_id).order_by(Prescription.date.desc()).all()
-
-@presc_router.post("", response_model=PrescriptionOut, status_code=201)
-def create_prescription(patient_id: int, data: PrescriptionCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    _get_patient_or_404(db, patient_id, current_user)
-    obj = Prescription(patient_id=patient_id, **data.model_dump())
-    db.add(obj)
-    db.commit()
-    db.refresh(obj)
-    return obj
-
-@presc_router.get("/{doc_id}", response_model=PrescriptionOut)
-def get_prescription(patient_id: int, doc_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    _get_patient_or_404(db, patient_id, current_user)
-    obj = db.query(Prescription).filter(Prescription.id == doc_id, Prescription.patient_id == patient_id).first()
-    if not obj:
-        raise HTTPException(404, "Receita não encontrada")
-    return obj
-
-@presc_router.delete("/{doc_id}", status_code=204)
-def delete_prescription(patient_id: int, doc_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    _get_patient_or_404(db, patient_id, current_user)
-    obj = db.query(Prescription).filter(Prescription.id == doc_id, Prescription.patient_id == patient_id).first()
-    if not obj:
-        raise HTTPException(404, "Receita não encontrada")
-    db.delete(obj)
-    db.commit()
+# O presc_router que vivia aqui foi REMOVIDO (auditoria 02/08): registrava o
+# mesmo prefixo /patients/{id}/prescriptions de routers/patient_prescriptions.py
+# (registrado antes em main.py) e ficava 100% sombreado — dois modelos de dados
+# distintos disputando a mesma URL. Quem atende a rota é patient_prescriptions.
 
 
 # ── SOLICITAÇÕES DE EXAME ─────────────────────────────────────────────────────
@@ -221,9 +193,48 @@ def delete_leaflet(leaflet_id: int, db: Session = Depends(get_db)):
     db.commit()
 
 
+_UPLOAD_MAX_BYTES = 8 * 1024 * 1024  # 8 MB
+_UPLOAD_MIMES = {"application/pdf", "image/png", "image/jpeg", "image/webp"}
+
+
+@leaflet_router.post("/upload", response_model=TreatmentLeafletOut, status_code=201)
+async def upload_leaflet(
+    title: str = Form(...),
+    category: str = Form("Geral"),
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    """Upload de folheto em ARQUIVO (PDF/imagem) — o botão da tela /folhetos
+    chamava esta rota, que não existia (auditoria 02/08).
+
+    O arquivo vira um data-URI embutido em content_html, então listagem,
+    visualização, impressão e exclusão funcionam sem mudar modelo nem tela.
+    """
+    mime = (file.content_type or "").lower()
+    if mime not in _UPLOAD_MIMES:
+        raise HTTPException(415, "Formato não suportado — envie PDF, PNG, JPG ou WEBP")
+    raw = await file.read()
+    if len(raw) > _UPLOAD_MAX_BYTES:
+        raise HTTPException(413, "Arquivo muito grande (máximo 8 MB)")
+    if not raw:
+        raise HTTPException(422, "Arquivo vazio")
+    b64 = base64.b64encode(raw).decode()
+    if mime == "application/pdf":
+        html = (
+            f'<embed src="data:{mime};base64,{b64}" type="{mime}" '
+            'style="width:100%;min-height:75vh;border:0"/>'
+        )
+    else:
+        html = f'<img src="data:{mime};base64,{b64}" style="max-width:100%" alt=""/>'
+    obj = TreatmentLeaflet(title=title.strip(), category=category.strip() or "Geral", content_html=html, tags=[])
+    db.add(obj)
+    db.commit()
+    db.refresh(obj)
+    return obj
+
+
 # Exporta todos os roteadores
 def include_all(app):
-    app.include_router(presc_router)
     app.include_router(exam_router)
     app.include_router(physio_router)
     app.include_router(report_router)

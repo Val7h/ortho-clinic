@@ -36,6 +36,14 @@ logger = logging.getLogger("orthoclinic.routers.audit")
 router = APIRouter(prefix="/audit", tags=["Audit Log"])
 
 
+def require_audit_viewer(current_user: User = Depends(get_current_user)) -> User:
+    """Admin, superadmin ou MÉDICO (dono da clínica usa o login doctor no dia a
+    dia — decisão 02/08 ao criar a tela /auditoria). Secretárias não veem."""
+    if current_user.role not in ("admin", "superadmin", "doctor"):
+        raise HTTPException(403, "Sem permissão para ver a auditoria")
+    return current_user
+
+
 # ---------------------------------------------------------------------------
 # Response schemas
 # ---------------------------------------------------------------------------
@@ -103,7 +111,7 @@ def get_audit_logs(
     until:         Optional[datetime] = Query(None),
     limit:         int                = Query(100, ge=1, le=1000),
     offset:        int                = Query(0, ge=0),
-    current_user:  User               = Depends(require_admin),
+    current_user:  User               = Depends(require_audit_viewer),
     db:            Session            = Depends(get_db),
 ):
     """
@@ -137,7 +145,7 @@ def patient_access_report(
     patient_id:   Optional[int]      = Query(None, description="Filter to a specific patient"),
     since:        Optional[datetime] = Query(None),
     until:        Optional[datetime] = Query(None),
-    current_user: User               = Depends(require_admin),
+    current_user: User               = Depends(require_audit_viewer),
     db:           Session            = Depends(get_db),
 ):
     """
@@ -190,7 +198,7 @@ def chain_integrity(
 def export_csv(
     since:        Optional[datetime] = Query(None),
     until:        Optional[datetime] = Query(None),
-    current_user: User               = Depends(require_admin),
+    current_user: User               = Depends(require_audit_viewer),
     db:           Session            = Depends(get_db),
 ):
     """
@@ -219,7 +227,7 @@ def export_csv(
 def monthly_summary(
     year:         int  = Query(..., ge=2020, le=2099),
     month:        int  = Query(..., ge=1,    le=12),
-    current_user: User = Depends(require_admin),
+    current_user: User = Depends(require_audit_viewer),
     db:           Session = Depends(get_db),
 ) -> Dict[str, Any]:
     """
@@ -240,7 +248,7 @@ def monthly_summary(
 
 @router.get("/actions")
 def list_actions(
-    _: User = Depends(require_admin),
+    _: User = Depends(require_audit_viewer),
 ) -> Dict[str, str]:
     """Return the full catalogue of auditable action strings and their categories."""
     return AUDITABLE_ACTIONS
