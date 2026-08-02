@@ -25,13 +25,6 @@ function OrthoIcon() {
   );
 }
 
-const ROLE_LABELS: Record<string, string> = {
-  superadmin: 'Super Admin',
-  admin: 'Administrador',
-  doctor: 'Médico',
-  secretary: 'Secretária',
-};
-
 export default function LoginPage() {
   const { user, loading, login } = useAuth();
   const router = useRouter();
@@ -128,35 +121,6 @@ export default function LoginPage() {
             </Button>
           </form>
 
-          {/* Demo Credentials */}
-          <div className="mt-8 border-t border-slate-200 dark:border-slate-800 pt-6">
-            <p className="mb-4 text-center text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-              Demonstração
-            </p>
-            <div className="grid grid-cols-2 gap-3">
-              {[
-                { email: 'medico@clinica.com', pass: 'medico123', role: 'doctor' },
-                { email: 'secretaria@clinica.com', pass: 'secretaria123', role: 'secretary' },
-                { email: 'admin@clinica.com', pass: 'admin123', role: 'admin' },
-                { email: 'super@ortho.app', pass: 'super123', role: 'superadmin' },
-              ].map((u) => (
-                <button
-                  key={u.email}
-                  type="button"
-                  onClick={() => {
-                    setEmail(u.email);
-                    setPassword(u.pass);
-                  }}
-                  className="flex flex-col gap-1 rounded-lg bg-brand-50 dark:bg-brand-900/40 p-3 text-left transition-all hover:bg-brand-100 dark:hover:bg-brand-900/60 hover:shadow-sm border border-brand-200 dark:border-brand-700"
-                >
-                  <span className="text-xs font-bold uppercase tracking-wider text-brand-700 dark:text-brand-300">
-                    {ROLE_LABELS[u.role]}
-                  </span>
-                  <span className="truncate text-xs text-slate-600 dark:text-slate-400 font-mono">{u.email}</span>
-                </button>
-              ))}
-            </div>
-          </div>
         </Card>
 
         <p className="text-center text-sm font-medium text-white/60">
