@@ -301,7 +301,7 @@ export default function AgendaPage() {
           clinic_color: e.clinic_color,
           status: e.status,
           queue_number: e.queue_number,
-          notes: e.notes,
+          notes: e.notes ?? e.reason,
         });
       }
 

@@ -443,6 +443,7 @@ def block_period(clinic_id: int, data: BlockPeriodIn, db: Session = Depends(get_
                 end_time=end_t,
                 patient_name="[BLOQUEADO]",
                 status="blocked",
+                reason=data.reason,  # o feed da agenda expõe 'reason' (motivo na faixa)
                 notes=data.reason,
             )
             db.add(a)
