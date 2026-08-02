@@ -118,6 +118,14 @@ async def serve_frontend_for_browser(request, call_next):
         and _is_frontend_conflict(path)
         and out_dir is not None
     ):
+        # 1) Arquivo literal primeiro — rotas ESTÁTICAS que colidem com a API
+        # (ex.: /agenda → out/agenda.html). Sem isso, "agenda" caía direto no
+        # placeholder "_" (que não existe pra ela) e servia o index (home) —
+        # a Agenda "não abria": redirecionava pro dashboard.
+        for candidate in [out_dir / f"{path}.html", out_dir / path / "index.html"]:
+            if candidate.is_file():
+                return FileResponse(str(candidate), media_type="text/html")
+        # 2) Rotas dinâmicas: substitui cada segmento por "_" (ex.: anamnese/<token>)
         parts = [p for p in path.split("/") if p]
         for i in range(len(parts)):
             test = parts.copy(); test[i] = "_"
@@ -453,6 +461,12 @@ async def serve_frontend(full_path: str, request: Request):
     is_rsc = full_path.endswith(".txt") or "_rsc" in request.query_params
     if is_rsc:
         rsc_base = full_path[:-4] if full_path.endswith(".txt") else full_path
+        # Arquivo literal primeiro (rota estática, ex.: agenda.txt) — sem isso a
+        # navegação client-side pra /agenda dava 404 e forçava hard-nav (que por
+        # sua vez caía na home; ver middleware acima).
+        for candidate in [out_dir / f"{rsc_base}.txt", out_dir / rsc_base / "index.txt"]:
+            if candidate.is_file():
+                return FileResponse(candidate, media_type="text/x-component")
         parts = [p for p in rsc_base.split("/") if p]
         for i in range(len(parts)):
             test = parts.copy()
