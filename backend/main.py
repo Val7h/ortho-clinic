@@ -283,34 +283,20 @@ def _ensure_superadmin():
 
 
 def _ensure_default_clinic():
-    """Cria ou corrige a clínica padrão e seus horários."""
+    """Bootstrap: cria UMA clínica padrão apenas se o banco estiver VAZIO.
+
+    NUNCA mexe em clínicas existentes. A versão antiga 'corrigia' a primeira
+    clínica renomeando-a pro seed — em 02/08 isso RENOMEOU a Clínica Mário
+    Bento (real, com agendamentos) para 'Dr. Valth Guimarães' a cada deploy.
+    As clínicas de produção são geridas pelo app/banco, não por seed.
+    """
     from database import SessionLocal
     from models.clinic import Clinic, ClinicSchedule
 
-    CLINIC_NAME = os.getenv("SEED_CLINIC_NAME", "Dr. Valth Guimarães")
-    CLINIC_SLUG = os.getenv("SEED_CLINIC_SLUG", "dr-valth")
-    SLOT_MIN    = int(os.getenv("SEED_SLOT_DURATION", "12"))  # 5 consultas/hora
-
     db = SessionLocal()
     try:
-        clinic = db.query(Clinic).first()
-        if clinic:
-            # Corrige nome/slug/cor se estiver desatualizado
-            changed = False
-            if clinic.name != CLINIC_NAME:
-                clinic.name = CLINIC_NAME; changed = True
-            if clinic.slug != CLINIC_SLUG:
-                clinic.slug = CLINIC_SLUG; changed = True
-            if changed:
-                db.commit()
-                print(f"✓ Clínica atualizada: {CLINIC_NAME}")
-            # Corrige slot_duration em todos os horários
-            for s in db.query(ClinicSchedule).filter_by(clinic_id=clinic.id).all():
-                if s.slot_duration != SLOT_MIN:
-                    s.slot_duration = SLOT_MIN
-            db.commit()
-            print(f"✓ Horários: slot={SLOT_MIN}min")
-            return
+        if db.query(Clinic).count() > 0:
+            return  # banco já tem clínicas reais — seed não toca em NADA
         clinic = Clinic(
             name=os.getenv("SEED_CLINIC_NAME", "Dr. Valth Guimarães"),
             slug=os.getenv("SEED_CLINIC_SLUG", "dr-valth"),
@@ -343,39 +329,11 @@ def _ensure_default_clinic():
 
 
 def _ensure_clinics():
-    """Cria as 3 clínicas padrão do Dr. Valth se ainda não existirem."""
-    from database import SessionLocal
-    from models.clinic import Clinic
-
-    CLINICS = [
-        {"name": "Dr. Valth - Caruaru",       "slug": "caruaru",       "city": "Caruaru",       "state": "PE", "color": "#0F2D5E"},
-        {"name": "Dr. Valth - Campina Grande", "slug": "campina-grande","city": "Campina Grande","state": "PB", "color": "#0F2D5E"},
-        {"name": "Dr. Valth - Palmares",       "slug": "palmares",      "city": "Palmares",      "state": "PE", "color": "#0F2D5E"},
-    ]
-
-    db = SessionLocal()
-    try:
-        for c in CLINICS:
-            existing = db.query(Clinic).filter(Clinic.slug == c["slug"]).first()
-            if not existing:
-                clinic = Clinic(
-                    name=c["name"],
-                    slug=c["slug"],
-                    city=c["city"],
-                    state=c["state"],
-                    address="",
-                    color=c["color"],
-                    active=True,
-                )
-                db.add(clinic)
-                db.commit()
-                print(f"✓ Clínica criada: {c['name']}")
-            else:
-                print(f"✓ Clínica já existe: {c['name']}")
-    except Exception as e:
-        print(f"! Erro ao criar clínicas: {e}")
-    finally:
-        db.close()
+    """DESATIVADO (02/08, decisão Valth): as clínicas placeholder 'Dr. Valth -
+    Caruaru/Campina Grande/Palmares' foram removidas do sistema — ele atende
+    nas clínicas reais (Artro, CTO, IP, Mário Bento, Unimagem). Este seed as
+    recriava a cada deploy mesmo depois de apagadas do banco. NÃO reativar."""
+    return
 
 
 @app.get("/health")

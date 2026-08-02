@@ -701,9 +701,10 @@ export default function AgendaPage() {
       </main>
 
       {/* FAB */}
+      {/* right-44: não fica atrás dos botões flutuantes de chat (IA/equipe) */}
       <button
         onClick={() => openCreate(view === 'dia' ? toISO(cursor) : undefined)}
-        className="fixed bottom-6 right-6 w-14 h-14 rounded-full bg-brand-600 hover:bg-brand-700 active:bg-brand-800 text-white shadow-lg hover:shadow-xl transition-all flex items-center justify-center z-30"
+        className="fixed bottom-6 right-44 w-14 h-14 rounded-full bg-brand-600 hover:bg-brand-700 active:bg-brand-800 text-white shadow-lg hover:shadow-xl transition-all flex items-center justify-center z-30"
         aria-label="Novo agendamento"
       >
         <Plus className="w-7 h-7" />
