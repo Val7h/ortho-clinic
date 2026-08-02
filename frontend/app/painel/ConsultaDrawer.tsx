@@ -3874,35 +3874,60 @@ function TabLaudos({ patient, clinic }: { patient: any; clinic?: any }) {
     const bodyText = printData.text
       .replace(/\n\s*[A-ZÀ-Ú][^\n]{2,60}\s[–-]\s?[A-Z]{2},[^\n]{3,60}\d{4}\.?\s*$/, "")
       .trimEnd();
+    const MESES = ["janeiro","fevereiro","março","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"];
+    const hoje = new Date();
+    const dataExtenso = `${hoje.getDate() === 1 ? "1º" : hoje.getDate()} de ${MESES[hoje.getMonth()]} de ${hoje.getFullYear()}`;
+    const cidadeExtenso = clinic ? `${clinic.city} – ${clinic.state}` : "____________________";
+    const serif = "Georgia, 'Times New Roman', serif";
     return (
-      <div style={{ fontFamily: "Arial, sans-serif", color: "#111", fontSize: "13px" }}>
-        <DrHeader clinic={clinic} />
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px", marginBottom: "16px", fontSize: "11px", border: "1px solid #eee", borderRadius: "4px", padding: "8px" }}>
+      <div style={{ fontFamily: serif, color: "#1a1a1a", fontSize: "12.5px", lineHeight: 1.75 }}>
+        {/* ── Papel timbrado ── */}
+        <div style={{ textAlign: "center", paddingBottom: "10px" }}>
+          <p style={{ fontFamily: serif, fontSize: "19px", fontWeight: 700, letterSpacing: "1px", margin: 0, color: "#0F2D5E" }}>Dr. Valth Menezes Guimarães</p>
+          <p style={{ fontSize: "10.5px", textTransform: "uppercase", letterSpacing: "3px", color: "#555", margin: "3px 0 0" }}>Ortopedia e Traumatologia</p>
+          <p style={{ fontSize: "10px", color: "#777", margin: "3px 0 0", letterSpacing: "0.5px" }}>CRM-PB 6326 · TEOT 15090</p>
+          {clinic && (
+            <p style={{ fontSize: "9.5px", color: "#999", margin: "4px 0 0" }}>
+              {clinic.name}{clinic.address ? ` · ${clinic.address}` : ""}{clinic.phone ? ` · ${clinic.phone}` : ""}
+            </p>
+          )}
+        </div>
+        <div style={{ borderTop: "2.5px solid #0F2D5E", marginBottom: "2px" }} />
+        <div style={{ borderTop: "1px solid #0F2D5E", marginBottom: "18px" }} />
+
+        {/* ── Identificação do paciente ── */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "3px 18px", margin: "0 0 20px", fontSize: "11.5px", padding: "10px 14px", background: "#f8f7f4", border: "1px solid #e3e0d8", borderRadius: "2px" }}>
           <p style={{ margin: 0 }}><strong>Paciente:</strong> {patient?.name}</p>
           <p style={{ margin: 0 }}><strong>Data da avaliação:</strong> {dateStr}</p>
-          {patient?.birth_date && <p style={{ margin: 0 }}><strong>Nasc.:</strong> {new Date(patient.birth_date + "T12:00:00").toLocaleDateString("pt-BR")}{age ? ` (${age})` : ""}</p>}
+          {patient?.birth_date && <p style={{ margin: 0 }}><strong>Nascimento:</strong> {new Date(patient.birth_date + "T12:00:00").toLocaleDateString("pt-BR")}{age ? ` (${age})` : ""}</p>}
           {patient?.occupation && <p style={{ margin: 0 }}><strong>Profissão:</strong> {patient.occupation}</p>}
           {patient?.cpf && <p style={{ margin: 0 }}><strong>CPF:</strong> {patient.cpf}</p>}
         </div>
-        <div style={{ textAlign: "center", margin: "4px 0 20px" }}>
-          <p style={{ fontWeight: 700, fontSize: "16px", textTransform: "uppercase", letterSpacing: "3px", color: "#0F2D5E", margin: 0 }}>Laudo Médico</p>
+
+        {/* ── Título ── */}
+        <div style={{ textAlign: "center", margin: "0 0 22px" }}>
+          <p style={{ fontFamily: serif, fontWeight: 700, fontSize: "17px", textTransform: "uppercase", letterSpacing: "7px", color: "#1a1a1a", margin: 0 }}>Laudo Médico</p>
           {printData.finalidade && (
-            <p style={{ fontWeight: 600, fontSize: "11px", textTransform: "uppercase", color: "#64748b", margin: "3px 0 0", letterSpacing: "1px" }}>{printData.finalidade}</p>
+            <p style={{ fontSize: "10.5px", textTransform: "uppercase", color: "#666", margin: "4px 0 0", letterSpacing: "2px" }}>{printData.finalidade}</p>
           )}
+          <div style={{ width: "80px", borderTop: "1.5px solid #0F2D5E", margin: "10px auto 0" }} />
         </div>
         {printData.cid && (
-          <p style={{ fontWeight: 700, marginBottom: printData.cidsSecundarios.length ? "4px" : "12px", fontSize: "12px", borderLeft: "3px solid #0F2D5E", paddingLeft: "8px" }}>CID-10: {printData.cid}</p>
+          <p style={{ fontWeight: 700, marginBottom: printData.cidsSecundarios.length ? "4px" : "14px", fontSize: "11.5px", borderLeft: "2.5px solid #0F2D5E", paddingLeft: "10px", letterSpacing: "0.3px" }}>CID-10: {printData.cid}</p>
         )}
         {printData.cidsSecundarios.length > 0 && (
-          <p style={{ fontWeight: 400, marginBottom: "12px", fontSize: "11px", borderLeft: "3px solid #0F2D5E", paddingLeft: "8px", color: "#555" }}>CID-10 secundário(s): {printData.cidsSecundarios.join(", ")}</p>
+          <p style={{ fontWeight: 400, marginBottom: "14px", fontSize: "11px", borderLeft: "2.5px solid #0F2D5E", paddingLeft: "10px", color: "#555" }}>CID-10 secundário(s): {printData.cidsSecundarios.join(", ")}</p>
         )}
-        <div style={{ borderTop: "1px solid #ddd", paddingTop: "14px", whiteSpace: "pre-wrap", lineHeight: "1.7", fontSize: "12px", marginBottom: "16px" }}>
+
+        {/* ── Corpo ── */}
+        <div style={{ whiteSpace: "pre-wrap", textAlign: "justify", lineHeight: 1.85, fontSize: "12.5px", marginBottom: "20px", textJustify: "inter-word" as any }}>
           {bodyText}
         </div>
+
         {printData.funcCapacity && (
-          <div style={{ borderTop: "2px solid #0F2D5E", paddingTop: "10px", marginBottom: "24px" }}>
-            <p style={{ fontWeight: 700, fontSize: "12px", marginBottom: "4px" }}>Conclusão Pericial Formal:</p>
-            <p style={{ fontSize: "12px" }}>
+          <div style={{ borderTop: "1px solid #cfcabe", paddingTop: "12px", marginBottom: "20px" }}>
+            <p style={{ fontWeight: 700, fontSize: "11px", marginBottom: "4px", textTransform: "uppercase", letterSpacing: "1.5px", color: "#0F2D5E" }}>Conclusão</p>
+            <p style={{ fontSize: "12.5px", margin: 0, textAlign: "justify" }}>
               {printData.funcCapacity}
               {/* A13: grau de incapacidade (%) no laudo de incapacidade permanente */}
               {printData.funcCapacity === "Incapacidade permanente" && printData.incapPercent
@@ -3911,13 +3936,15 @@ function TabLaudos({ patient, clinic }: { patient: any; clinic?: any }) {
             </p>
           </div>
         )}
-        <p style={{ fontSize: "12px", color: "#333", margin: "28px 0 40px", textAlign: "left" }}>{cityState}, {dateStr}.</p>
-        <div style={{ display: "flex", justifyContent: "center", marginTop: "8px" }}>
-          <div style={{ textAlign: "center", width: "300px" }}>
-            <div style={{ borderTop: "1.5px solid #111", paddingTop: "8px" }}>
-              <p style={{ fontSize: "13px", fontWeight: 700, margin: "0" }}>Dr. Valth Menezes Guimarães</p>
-              <p style={{ fontSize: "11px", color: "#333", margin: "2px 0 0" }}>Ortopedista e Traumatologista</p>
-              <p style={{ fontSize: "11px", color: "#333", margin: "2px 0 0" }}>CRM-PB 6326 · TEOT 15090</p>
+
+        {/* ── Local, data e assinatura ── */}
+        <p style={{ fontSize: "12.5px", color: "#1a1a1a", margin: "30px 0 44px", textAlign: "right", fontStyle: "italic" }}>{cidadeExtenso}, {dataExtenso}.</p>
+        <div style={{ display: "flex", justifyContent: "center" }}>
+          <div style={{ textAlign: "center", width: "310px" }}>
+            <div style={{ borderTop: "1px solid #1a1a1a", paddingTop: "9px" }}>
+              <p style={{ fontFamily: serif, fontSize: "13.5px", fontWeight: 700, margin: 0, letterSpacing: "0.5px" }}>Dr. Valth Menezes Guimarães</p>
+              <p style={{ fontSize: "10.5px", color: "#444", margin: "2px 0 0", textTransform: "uppercase", letterSpacing: "1.5px" }}>Ortopedista e Traumatologista</p>
+              <p style={{ fontSize: "10.5px", color: "#444", margin: "2px 0 0", letterSpacing: "0.5px" }}>CRM-PB 6326 · TEOT 15090</p>
             </div>
           </div>
         </div>
