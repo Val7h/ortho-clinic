@@ -37,6 +37,11 @@ export const metadata: Metadata = {
   title: "OrthoClinic",
   description: "Sistema de gestão de consultório ortopédico",
   manifest: "/manifest.json",
+  icons: {
+    icon: "/favicon.svg",
+    shortcut: "/favicon.svg",
+    apple: "/favicon.svg",
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",

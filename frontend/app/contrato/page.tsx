@@ -2,9 +2,20 @@
 import Link from "next/link";
 
 function OrthoIcon() {
+  // Logomarca OrthoClinic "Articulacao" (Opcao 2 aprovada pelo Dr. Valth):
+  // o "O" de Ortho como articulacao bola-e-soquete.
   return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M18 6a3 3 0 0 0-3-3 3 3 0 0 0-2.1 5.1L6.1 14.9A3 3 0 0 0 3 17a3 3 0 0 0 3 3 3 3 0 0 0 2.1-5.1l6.8-6.8A3 3 0 0 0 18 6z"/>
+    <svg width="32" height="32" viewBox="0 0 100 100">
+      <defs>
+        <linearGradient id="ocg-contrato" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#0F2D5E" />
+          <stop offset="1" stopColor="#2563eb" />
+        </linearGradient>
+      </defs>
+      <rect x="2" y="2" width="96" height="96" rx="24" fill="url(#ocg-contrato)" />
+      <path d="M50 18 a32 32 0 1 0 32 32" fill="none" stroke="#fff" strokeWidth="11" strokeLinecap="round" />
+      <circle cx="63" cy="37" r="14" fill="#22d3ee" />
+      <circle cx="58" cy="32" r="4" fill="#fff" opacity="0.85" />
     </svg>
   );
 }
