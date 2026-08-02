@@ -488,9 +488,9 @@ function CidSearch({ value, onChange }: { value: string; onChange: (v: string) =
 // "não esquecer de oferecer" nunca dispara. Mapeamentos ditados por ele:
 // dor no ombro → infiltração de corticoide; osteoporose → ácido zoledrônico.
 const CID_OFERTAS: { prefix: string; nome: string; opcoes: string[] }[] = [
-  { prefix: "M17", nome: "Gonartrose", opcoes: ["Viscossuplementação", "Infiltração", "Programa de dor", "Protocolo metabólico (peso)"] },
+  { prefix: "M17", nome: "Gonartrose", opcoes: ["Viscossuplementação", "Infiltração", "Bloqueio geniculares", "Programa de dor", "Protocolo metabólico (peso)"] },
   { prefix: "M16", nome: "Coxartrose", opcoes: ["Infiltração guiada", "Programa de dor"] },
-  { prefix: "M19", nome: "Artrose", opcoes: ["Viscossuplementação", "Infiltração", "Programa de dor"] },
+  { prefix: "M19", nome: "Artrose", opcoes: ["Viscossuplementação", "Infiltração", "Bloqueio geniculares (joelho)", "Programa de dor"] },
   { prefix: "M75", nome: "Ombro doloroso", opcoes: ["Infiltração de corticoide", "Ondas de choque", "Proloterapia"] },
   { prefix: "M80", nome: "Osteoporose c/ fratura", opcoes: ["Ácido zoledrônico (aplicação)", "Acompanhamento semestral"] },
   { prefix: "M81", nome: "Osteoporose", opcoes: ["Ácido zoledrônico (aplicação)", "Acompanhamento semestral"] },
