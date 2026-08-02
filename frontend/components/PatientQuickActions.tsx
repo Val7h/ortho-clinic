@@ -97,7 +97,7 @@ export default function PatientQuickActions({ patientId, patientName, phone, onC
       <ActionButton
         icon={<CalendarPlus className="w-5 h-5" />}
         label="Agendar"
-        href={`/agendar?paciente=${patientId}`}
+        href={`/agenda?paciente=${patientId}`}
         color="bg-brand-600 hover:bg-brand-700"
       />
       <ActionButton

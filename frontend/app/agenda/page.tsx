@@ -31,7 +31,7 @@ import Link from 'next/link';
 import NavBar from '@/components/NavBar';
 import { PageWithSidebar } from '@/components/PageWithSidebar';
 import { AppointmentFormModal } from '@/components/AppointmentFormModal';
-import { agendaApi, appointmentsApi, clinicApi } from '@/lib/api';
+import { agendaApi, appointmentsApi, clinicApi, patientsApi } from '@/lib/api';
 import { useProtectedPage } from '@/components/AuthProvider';
 import { useOfflineAppointmentQueue } from '@/hooks/useOfflineAppointmentQueue';
 import { Badge } from '@/components/ui';
@@ -307,6 +307,25 @@ export default function AgendaPage() {
     setEditingAppt(null);
     setFormOpen(true);
   };
+
+  // Vindo da ficha do paciente ("Agendar" → /agenda?paciente=ID): abre o modal
+  // de novo agendamento já com o paciente preenchido. (Antes o botão apontava
+  // pra /agendar?paciente=..., rota inexistente, e caía na home — bug 02/08.)
+  const [prefillPatient, setPrefillPatient] = useState<{ id: number; name: string; phone?: string } | null>(null);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const pid = new URLSearchParams(window.location.search).get('paciente');
+    if (!pid) return;
+    patientsApi.get(Number(pid))
+      .then((p: any) => {
+        setPrefillPatient({ id: p.id, name: p.name, phone: p.phone ?? '' });
+        setEditingAppt(null);
+        setFormOpen(true);
+      })
+      .catch(() => toast.error('Paciente não encontrado para agendar'));
+    // limpa o parâmetro pra não reabrir o modal em cada volta à página
+    window.history.replaceState({}, '', '/agenda');
+  }, []);
 
   const openEdit = (appt: ApptEvent) => {
     if (appt._isOffline) {
@@ -714,10 +733,11 @@ export default function AgendaPage() {
       {formOpen && (
         <AppointmentFormModal
           open={formOpen}
-          onOpenChange={setFormOpen}
+          onOpenChange={(o) => { setFormOpen(o); if (!o) setPrefillPatient(null); }}
           clinics={clinics}
           initialDate={createDate}
           editingAppointment={editingAppt}
+          initialPatient={prefillPatient}
           onSaved={handleSaved}
           onCancelled={handleCancelled}
         />

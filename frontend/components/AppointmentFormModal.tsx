@@ -44,6 +44,8 @@ interface AppointmentFormModalProps {
   clinics: Clinic[];
   initialDate?: string;          // YYYY-MM-DD pre-fill
   editingAppointment?: any;      // if set, we're editing
+  // Vindo da ficha do paciente ("Agendar"): abre já com o paciente preenchido
+  initialPatient?: { id: number; name: string; phone?: string } | null;
   onSaved: (appt: any, isOptimistic?: boolean) => void;
   onCancelled?: (id: number) => void;
 }
@@ -54,6 +56,7 @@ export function AppointmentFormModal({
   clinics,
   initialDate,
   editingAppointment,
+  initialPatient,
   onSaved,
   onCancelled,
 }: AppointmentFormModalProps) {
@@ -62,9 +65,18 @@ export function AppointmentFormModal({
   const [clinicId, setClinicId] = useState<number | ''>(editingAppointment?.clinic_id ?? (clinics[0]?.id ?? ''));
   const [date, setDate] = useState(editingAppointment?.date ?? initialDate ?? '');
   const [startTime, setStartTime] = useState(editingAppointment?.start_time ?? '');
-  const [patientName, setPatientName] = useState(editingAppointment?.patient_name ?? '');
-  const [patientId, setPatientId] = useState<number | null>(editingAppointment?.patient_id ?? null);
-  const [patientPhone, setPatientPhone] = useState(editingAppointment?.patient_phone ?? '');
+  const [patientName, setPatientName] = useState(editingAppointment?.patient_name ?? initialPatient?.name ?? '');
+  const [patientId, setPatientId] = useState<number | null>(editingAppointment?.patient_id ?? initialPatient?.id ?? null);
+  const [patientPhone, setPatientPhone] = useState(editingAppointment?.patient_phone ?? initialPatient?.phone ?? '');
+
+  // Se o initialPatient chegar DEPOIS do modal montado (fetch da ficha),
+  // preenche assim que disponível — sem sobrescrever o que já foi digitado.
+  useEffect(() => {
+    if (!initialPatient || editingAppointment) return;
+    setPatientName((prev) => prev || initialPatient.name);
+    setPatientId((prev) => prev ?? initialPatient.id);
+    setPatientPhone((prev) => prev || (initialPatient.phone ?? ''));
+  }, [initialPatient, editingAppointment]);
   const [apptType, setApptType] = useState(editingAppointment?.appointment_type ?? 'consulta');
   const [reason, setReason] = useState(editingAppointment?.reason ?? '');
   const [notes, setNotes] = useState(editingAppointment?.notes ?? '');
