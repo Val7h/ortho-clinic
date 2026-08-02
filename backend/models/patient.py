@@ -31,6 +31,8 @@ class Patient(Base):
     allergies = Column(Text, nullable=True)
     alergias = Column(Text, nullable=True)  # Campo duplicado em PT-BR
     chronic_conditions = Column(Text, nullable=True)
+    # CIDs fixos do paciente (lembretes de oferta por diagnostico — 02/08)
+    cids = Column(JSON, default=list)
     current_medications = Column(Text, nullable=True)
     medicacoes_uso_continuo = Column(JSON, nullable=True)  # Lista estruturada de medicações
     surgeries_history = Column(Text, nullable=True)

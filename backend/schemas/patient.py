@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr
-from typing import Optional
+from typing import List, Optional
 from datetime import date, datetime
 
 
@@ -21,6 +21,7 @@ class PatientBase(BaseModel):
     blood_type: Optional[str] = None
     allergies: Optional[str] = None
     chronic_conditions: Optional[str] = None
+    cids: Optional[List[str]] = None
     current_medications: Optional[str] = None
     surgeries_history: Optional[str] = None
     family_history: Optional[str] = None

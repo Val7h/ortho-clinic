@@ -233,9 +233,43 @@ async def upload_leaflet(
     return obj
 
 
+# ── Folheto PÚBLICO (link enviado ao paciente por WhatsApp — 02/08) ───────────
+# Material educativo não é dado sensível; o link abre no navegador do paciente.
+
+public_leaflet_router = APIRouter()
+
+
+@public_leaflet_router.get("/folheto-publico/{leaflet_id}", response_class=HTMLResponse)
+def view_leaflet_public(leaflet_id: int, db: Session = Depends(get_db)):
+    obj = db.query(TreatmentLeaflet).filter(
+        TreatmentLeaflet.id == leaflet_id, TreatmentLeaflet.active == True
+    ).first()
+    if not obj:
+        raise HTTPException(404, "Folheto não encontrado")
+    return HTMLResponse(f"""<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{obj.title}</title>
+<style>
+  body {{ margin:0; font-family: Georgia, serif; background:#f5f5f0; color:#1e293b; }}
+  .wrap {{ max-width: 720px; margin: 0 auto; padding: 24px 18px 48px; }}
+  header {{ border-bottom: 3px double #142A4D; padding-bottom: 12px; margin-bottom: 20px; }}
+  header h1 {{ font-size: 22px; margin: 0; color: #142A4D; }}
+  header p {{ margin: 4px 0 0; font-size: 13px; color: #64748b; }}
+  .content img, .content embed {{ max-width: 100%; }}
+  footer {{ margin-top: 32px; font-size: 12px; color: #94a3b8; text-align: center; }}
+</style></head><body><div class="wrap">
+<header><h1>{obj.title}</h1>
+<p>Material informativo — Dr. Valth Menezes Guimarães · Ortopedia e Traumatologia · CRM-PB 6326</p></header>
+<div class="content">{obj.content_html}</div>
+<footer>Este material é educativo e não substitui a avaliação médica individual.</footer>
+</div></body></html>""")
+
+
 # Exporta todos os roteadores
 def include_all(app):
     app.include_router(exam_router)
     app.include_router(physio_router)
     app.include_router(report_router)
     app.include_router(leaflet_router)
+    app.include_router(public_leaflet_router)

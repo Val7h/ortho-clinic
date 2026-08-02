@@ -89,6 +89,9 @@ def migrate_db():
             migrations.append("ALTER TABLE patients ADD COLUMN altura_cm NUMERIC(5,2)")
         if "comorbidades" not in cols:
             migrations.append("ALTER TABLE patients ADD COLUMN comorbidades JSON")
+        # CIDs fixos do paciente (lembretes de oferta por diagnóstico — 02/08)
+        if "cids" not in cols:
+            migrations.append("ALTER TABLE patients ADD COLUMN cids JSON")
 
     # Sala de Espera — timer de atendimento + valor (called_at/attended_at/value_cents)
     if "waiting_room_entries" in existing_tables:

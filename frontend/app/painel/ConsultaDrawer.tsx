@@ -9,7 +9,7 @@ import {
   Pencil, Download, MessageSquare,
 } from "lucide-react";
 import toast from "react-hot-toast";
-import { api, patientsApi, consultationsApi, prescriptionsApi, prescriptionTemplatesApi, examsApi, evolutionApi, clinicApi, chatApi, reportsApi } from "@/lib/api";
+import { api, patientsApi, consultationsApi, prescriptionsApi, prescriptionTemplatesApi, examsApi, evolutionApi, clinicApi, chatApi, reportsApi, leafletsApi } from "@/lib/api";
 import { formatDate } from "@/lib/utils";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -134,6 +134,9 @@ const ORTHO_CIDS = [
   { code: "S52.5", label: "Fratura distal do rádio" },
   { code: "M84.3", label: "Fratura por estresse" },
   { code: "M19.9", label: "Artrose inespecífica" },
+  { code: "M81.0", label: "Osteoporose pós-menopáusica" },
+  { code: "M81.9", label: "Osteoporose não especificada" },
+  { code: "M80.9", label: "Osteoporose com fratura patológica" },
   { code: "M41.9", label: "Escoliose inespecífica" },
   { code: "M48.0", label: "Estenose espinhal" },
   { code: "M47.8", label: "Espondilose com outras mielopatias" },
@@ -416,6 +419,239 @@ function CidSearch({ value, onChange }: { value: string; onChange: (v: string) =
             </li>
           ))}
         </ul>
+      )}
+    </div>
+  );
+}
+
+// ── Diagnósticos fixos (CIDs) + lembrete de ofertas de alto valor ──────────────
+// Pedido do Valth 02/08: campo FIXO de CIDs na anamnese — sem ele o lembrete de
+// "não esquecer de oferecer" nunca dispara. Mapeamentos ditados por ele:
+// dor no ombro → infiltração de corticoide; osteoporose → ácido zoledrônico.
+const CID_OFERTAS: { prefix: string; nome: string; opcoes: string[] }[] = [
+  { prefix: "M17", nome: "Gonartrose", opcoes: ["Viscossuplementação", "Infiltração", "Programa de dor"] },
+  { prefix: "M16", nome: "Coxartrose", opcoes: ["Infiltração guiada", "Programa de dor"] },
+  { prefix: "M19", nome: "Artrose", opcoes: ["Viscossuplementação", "Infiltração", "Programa de dor"] },
+  { prefix: "M75", nome: "Ombro doloroso", opcoes: ["Infiltração de corticoide", "Ondas de choque"] },
+  { prefix: "M80", nome: "Osteoporose c/ fratura", opcoes: ["Ácido zoledrônico (aplicação)", "Acompanhamento semestral"] },
+  { prefix: "M81", nome: "Osteoporose", opcoes: ["Ácido zoledrônico (aplicação)", "Acompanhamento semestral"] },
+  { prefix: "M72.2", nome: "Fascite plantar / esporão", opcoes: ["Ondas de choque", "Palmilha sob medida"] },
+  { prefix: "M77", nome: "Epicondilite", opcoes: ["Ondas de choque", "Infiltração"] },
+  { prefix: "M54", nome: "Lombalgia", opcoes: ["Programa de dor crônica", "Medicina integrativa"] },
+  { prefix: "M65", nome: "Tenossinovite", opcoes: ["Infiltração"] },
+];
+
+function ofertasParaCids(cids: string[]): { prefix: string; nome: string; opcoes: string[] }[] {
+  const found: Record<string, { prefix: string; nome: string; opcoes: string[] }> = {};
+  for (const raw of cids) {
+    const code = (raw.split("—")[0] || raw).trim().toUpperCase();
+    // prefixos mais específicos primeiro (M72.2 antes de M72)
+    const match = [...CID_OFERTAS]
+      .sort((a, b) => b.prefix.length - a.prefix.length)
+      .find(o => code.startsWith(o.prefix));
+    if (match) found[match.prefix] = match;
+  }
+  return Object.keys(found).map(k => found[k]);
+}
+
+function DiagnosticosCids({ patientId, patient }: { patientId: number; patient: any }) {
+  const [cids, setCids] = useState<string[]>(Array.isArray(patient?.cids) ? patient.cids : []);
+  const [query, setQuery] = useState("");
+  const [openList, setOpenList] = useState(false);
+  const [pickerFor, setPickerFor] = useState<{ prefix: string; nome: string; opcoes: string[] } | null>(null);
+  const [leaflets, setLeaflets] = useState<any[]>([]);
+  const [sending, setSending] = useState(false);
+  const boxRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setCids(Array.isArray(patient?.cids) ? patient.cids : []);
+  }, [patientId, patient?.cids]);
+
+  useEffect(() => {
+    function handle(e: MouseEvent) {
+      if (boxRef.current && !boxRef.current.contains(e.target as Node)) setOpenList(false);
+    }
+    document.addEventListener("mousedown", handle);
+    return () => document.removeEventListener("mousedown", handle);
+  }, []);
+
+  // Dispensados por paciente (localStorage, escopo do usuário): não insistir
+  const dKey = `${userScope()}_ofertas_dispensadas_${patientId}`;
+  const [dismissed, setDismissed] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem(dKey) || "[]"); } catch { return []; }
+  });
+  const dispensar = (prefix: string) => {
+    const next = [...dismissed, prefix];
+    setDismissed(next);
+    try { localStorage.setItem(dKey, JSON.stringify(next)); } catch {}
+  };
+
+  const persist = async (next: string[]) => {
+    setCids(next);
+    try {
+      await patientsApi.update(patientId, { cids: next });
+    } catch {
+      toast.error("Erro ao salvar os CIDs");
+    }
+  };
+
+  const addCid = (val: string) => {
+    const v = val.trim();
+    if (!v || cids.includes(v)) return;
+    persist([...cids, v]);
+    setQuery("");
+    setOpenList(false);
+  };
+
+  const filtered = query.length >= 2
+    ? ORTHO_CIDS.filter(
+        c => !cids.some(x => x.startsWith(c.code)) &&
+          (c.code.toLowerCase().includes(query.toLowerCase()) || c.label.toLowerCase().includes(query.toLowerCase()))
+      ).slice(0, 6)
+    : [];
+
+  const ofertas = ofertasParaCids(cids).filter(o => !dismissed.includes(o.prefix));
+
+  const abrirPicker = async (o: { prefix: string; nome: string; opcoes: string[] }) => {
+    setPickerFor(o);
+    if (leaflets.length === 0) {
+      try { setLeaflets(await leafletsApi.list()); } catch {}
+    }
+  };
+
+  const enviarFolheto = async (leaflet: any | null) => {
+    if (!pickerFor) return;
+    if (!patient?.phone) { toast.error("Paciente sem telefone cadastrado"); return; }
+    setSending(true);
+    try {
+      const treat = pickerFor.opcoes.join(" / ");
+      const link = leaflet ? `${window.location.origin}/folheto-publico/${leaflet.id}` : "";
+      const text = leaflet
+        ? `Olá, {nome}! Aqui é do consultório do {doctor}. Na sua consulta conversamos sobre opções de tratamento (${treat}). O doutor separou este material informativo para você ler com calma:\n${link}\n\nQualquer dúvida, é só responder por aqui.`
+        : `Olá, {nome}! Aqui é do consultório do {doctor}. Na sua consulta conversamos sobre opções de tratamento (${treat}). Se quiser conversar melhor ou agendar uma avaliação, é só responder por aqui.`;
+      await api.post("/whatsapp/send", { patient_id: patientId, message_type: "folheto", custom_text: text });
+      toast.success("Enviado no WhatsApp do paciente ✓");
+      setPickerFor(null);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.detail ?? "Erro ao enviar");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div className="mb-4 space-y-2">
+      {/* Campo fixo de CIDs */}
+      <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5">
+        <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5">
+          Diagnósticos (CID)
+        </p>
+        <div className="flex flex-wrap items-center gap-1.5">
+          {cids.map((c, i) => (
+            <span key={c} className="inline-flex items-center gap-1 bg-blue-50 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 rounded-full px-2.5 py-0.5 text-xs font-semibold">
+              {c}
+              <button
+                onClick={() => persist(cids.filter((_, j) => j !== i))}
+                className="text-blue-400 hover:text-red-500 font-bold"
+                title="Remover"
+              >
+                ×
+              </button>
+            </span>
+          ))}
+          <div ref={boxRef} className="relative min-w-[180px] flex-1">
+            <input
+              className="w-full px-2 py-1 text-sm bg-transparent border-0 border-b border-dashed border-slate-300 dark:border-slate-600 focus:outline-none focus:border-blue-500 text-slate-800 dark:text-slate-100 placeholder-slate-400"
+              placeholder="+ adicionar CID (ex.: M17, ombro, osteoporose…)"
+              value={query}
+              onChange={e => { setQuery(e.target.value); setOpenList(true); }}
+              onFocus={() => setOpenList(true)}
+              onKeyDown={e => { if (e.key === "Enter" && query.trim()) addCid(query); }}
+            />
+            {openList && filtered.length > 0 && (
+              <ul className="absolute z-50 w-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                {filtered.map(c => (
+                  <li key={c.code}>
+                    <button
+                      type="button"
+                      className="w-full text-left px-3 py-2 hover:bg-blue-50 dark:hover:bg-blue-900/20 flex items-center gap-2"
+                      onClick={() => addCid(`${c.code} — ${c.label}`)}
+                    >
+                      <span className="text-xs font-bold text-blue-600 w-12 flex-shrink-0">{c.code}</span>
+                      <span className="text-xs text-slate-700 dark:text-slate-300">{c.label}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Lembretes de oferta de alto valor por CID */}
+      {ofertas.map(o => (
+        <div key={o.prefix} className="bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700 border-l-4 border-l-amber-500 rounded-xl px-3 py-2.5">
+          <p className="text-sm font-bold text-amber-900 dark:text-amber-200">
+            💡 {o.nome} — opções de alto valor pra discutir:
+          </p>
+          <p className="text-sm text-amber-800 dark:text-amber-300 mt-0.5">{o.opcoes.join(" · ")}</p>
+          <div className="flex flex-wrap gap-1.5 mt-2">
+            <button
+              onClick={() => abrirPicker(o)}
+              className="px-3 py-1 rounded-full bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold"
+            >
+              📄 Enviar material ao paciente
+            </button>
+            <button
+              onClick={() => dispensar(o.prefix)}
+              className="px-3 py-1 rounded-full border border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300 text-xs font-semibold hover:bg-amber-100 dark:hover:bg-amber-900/40"
+            >
+              Já discutido / não indicado
+            </button>
+          </div>
+        </div>
+      ))}
+
+      {/* Picker de folheto */}
+      {pickerFor && (
+        <div className="fixed inset-0 z-[300] flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.6)" }}>
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-md flex flex-col overflow-hidden max-h-[80vh]">
+            <div className="px-5 pt-4 pb-3 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+              <div>
+                <p className="font-bold text-slate-900 dark:text-slate-50 text-sm">Enviar material — {pickerFor.nome}</p>
+                <p className="text-xs text-slate-400 mt-0.5">Vai no WhatsApp do paciente, individual</p>
+              </div>
+              <button onClick={() => setPickerFor(null)} className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-1.5">
+              {leaflets.length === 0 && (
+                <p className="text-xs text-slate-400 text-center py-4">Nenhum folheto cadastrado ainda (Documentos → Folhetos).</p>
+              )}
+              {leaflets.map(l => (
+                <button
+                  key={l.id}
+                  disabled={sending}
+                  onClick={() => enviarFolheto(l)}
+                  className="w-full text-left px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 disabled:opacity-50"
+                >
+                  <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">{l.title}</p>
+                  <p className="text-xs text-slate-400">{l.category}</p>
+                </button>
+              ))}
+            </div>
+            <div className="px-4 pb-4 pt-2 border-t border-slate-100 dark:border-slate-800">
+              <button
+                disabled={sending}
+                onClick={() => enviarFolheto(null)}
+                className="w-full px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-semibold hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-50"
+              >
+                Enviar só a mensagem, sem folheto
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -1068,7 +1304,7 @@ function insertAtCursor(el: HTMLTextAreaElement, text: string): string {
   return before + text + after;
 }
 
-function TabProntuario({ patientId }: { patientId: number }) {
+function TabProntuario({ patientId, patient }: { patientId: number; patient?: any }) {
   const [evolutions, setEvolutions] = useState<Evolution[]>([]);
   const [loading, setLoading] = useState(true);
   const [newText, setNewText] = useState("");
@@ -1230,6 +1466,11 @@ function TabProntuario({ patientId }: { patientId: number }) {
 
   return (
     <div className="flex flex-col h-full">
+      {/* ── Diagnósticos fixos (CID) + lembretes de oferta (Valth 02/08) ── */}
+      <div className="px-5 flex-shrink-0">
+        <DiagnosticosCids patientId={patientId} patient={patient} />
+      </div>
+
       {/* ── Adendo modal ── */}
       {adendoId !== null && (() => {
         const ev = evolutions.find(e => e.id === adendoId);
@@ -4899,7 +5140,7 @@ export default function ConsultaDrawer({ entry, onClose, onStatusChange }: Consu
           </div>
         ) : (
           <div className={`pt-4 ${entry.status !== "attending" ? "pointer-events-none select-none opacity-50" : ""}`}>
-            {activeTab === "anamnese"        && <TabProntuario patientId={entry.patient_id} />}
+            {activeTab === "anamnese"        && <TabProntuario patientId={entry.patient_id} patient={patient} />}
             {activeTab === "exames"          && <TabExames patientId={entry.patient_id} patient={patient} clinic={clinic} />}
             {activeTab === "receitas"        && <TabReceita patientId={entry.patient_id} patient={patient} clinic={clinic} />}
             {activeTab === "encaminhamentos" && <TabEncaminhamentos patient={patient} clinic={clinic} patientId={entry.patient_id} />}

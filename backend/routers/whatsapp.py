@@ -77,7 +77,9 @@ def _render_template(
     extra: dict | None = None,
     custom_text: str | None = None,
 ) -> str:
-    if msg_type == "custom" and custom_text:
+    # custom_text vale pra QUALQUER tipo — permite tipos rastreáveis com texto
+    # próprio (ex.: "folheto" = oferta de tratamento enviada na consulta, 02/08)
+    if custom_text:
         return custom_text.replace("{nome}", patient_name).replace("{doctor}", DOCTOR_NAME)
     tpl = TEMPLATES.get(msg_type, TEMPLATES["post_consultation"])
     ctx = {"nome": patient_name.split()[0], "doctor": DOCTOR_NAME}
