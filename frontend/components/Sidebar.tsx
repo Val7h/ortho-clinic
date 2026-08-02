@@ -30,6 +30,8 @@ export function Sidebar() {
     { label: 'Financeiro',    href: '/financeiro', icon: '💰', group: 'admin', roles: ['admin', 'superadmin', 'doctor'] },
     // Trilha LGPD (02/08): quem acessou qual prontuário — secretária não vê.
     { label: 'Auditoria',     href: '/auditoria',  icon: '🛡️', group: 'admin', roles: ['admin', 'superadmin', 'doctor'] },
+    // Status do bot de agendamento (02/08): "pra mim" — sem secretária.
+    { label: 'WhatsApp',      href: '/whatsapp',   icon: '💬', group: 'admin', roles: ['admin', 'superadmin', 'doctor'] },
     { label: 'Equipe',        href: '/usuarios',   icon: '👤', group: 'admin', roles: ['admin', 'superadmin'] },
     { label: 'Configurações', href: '/clinicas',   icon: '⚙️', group: 'admin', roles: ['admin', 'superadmin'] },
   ];
