@@ -9,21 +9,39 @@ import { patientsApi } from "@/lib/api";
 const BLOOD_TYPES = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"];
 const GENDERS = [{ v: "M", l: "Masculino" }, { v: "F", l: "Feminino" }, { v: "O", l: "Outro" }];
 const CIVIL = ["Solteiro(a)", "Casado(a)", "Divorciado(a)", "Viúvo(a)", "União Estável"];
+const UFS = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
 export default function NewPatientPage() {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<Record<string, string>>({});
+  // Particular × Convênio (obrigatório — decisão Valth 02/08)
+  const [pagamento, setPagamento] = useState<"" | "particular" | "convenio">("");
 
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
     setForm((f) => ({ ...f, [k]: e.target.value }));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.name?.trim()) { toast.error("Nome é obrigatório"); return; }
+    // Obrigatórios do cadastro manual (decisão Valth 02/08). O cadastro
+    // automático do bot continua parcial (badge "Incompleto") — a exigência
+    // vale pra quem cadastra AQUI, no balcão.
+    const obrigatorios: Array<[string, string]> = [
+      ["name", "Nome completo"], ["cpf", "CPF"], ["phone", "Telefone"],
+      ["address_street", "Endereço"], ["address_city", "Cidade"], ["address_state", "Estado"],
+    ];
+    for (const [k, label] of obrigatorios) {
+      if (!form[k]?.trim()) { toast.error(`${label} é obrigatório`); return; }
+    }
+    if (!pagamento) { toast.error("Informe se o atendimento é Particular ou Convênio"); return; }
+    if (pagamento === "convenio" && !form.insurance?.trim()) { toast.error("Informe o nome do convênio"); return; }
     setSaving(true);
     try {
-      const patient = await patientsApi.create(form);
+      const patient = await patientsApi.create({
+        ...form,
+        name: form.name.trim().toUpperCase(), // nome sempre em CAIXA ALTA
+        insurance: pagamento === "particular" ? "Particular" : form.insurance,
+      });
       toast.success("Paciente cadastrado com sucesso!");
       router.push(`/pacientes/${patient.id}`);
     } catch (err: any) {
@@ -46,7 +64,8 @@ export default function NewPatientPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="sm:col-span-2">
               <label className="label">Nome completo *</label>
-              <input className="input" placeholder="Nome do paciente" onChange={set("name")} required />
+              {/* uppercase: nome aparece SEMPRE em caixa alta (e é salvo assim) */}
+              <input className="input uppercase" placeholder="NOME COMPLETO DO PACIENTE" onChange={set("name")} required />
             </div>
             <div>
               <label className="label">Data de nascimento</label>
@@ -60,8 +79,8 @@ export default function NewPatientPage() {
               </select>
             </div>
             <div>
-              <label className="label">CPF</label>
-              <input className="input" placeholder="000.000.000-00" onChange={set("cpf")} />
+              <label className="label">CPF *</label>
+              <input className="input" placeholder="000.000.000-00" onChange={set("cpf")} required />
             </div>
             <div>
               <label className="label">RG</label>
@@ -86,8 +105,8 @@ export default function NewPatientPage() {
           <h2 className="section-title">Contato</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="label">Telefone / WhatsApp</label>
-              <input className="input" placeholder="(11) 99999-9999" onChange={set("phone")} />
+              <label className="label">Telefone / WhatsApp *</label>
+              <input className="input" placeholder="(83) 99999-9999" onChange={set("phone")} required />
             </div>
             <div>
               <label className="label">Telefone 2</label>
@@ -98,12 +117,19 @@ export default function NewPatientPage() {
               <input type="email" className="input" placeholder="email@exemplo.com" onChange={set("email")} />
             </div>
             <div className="sm:col-span-2">
-              <label className="label">Endereço</label>
-              <input className="input" placeholder="Rua, número, bairro" onChange={set("address_street")} />
+              <label className="label">Endereço *</label>
+              <input className="input" placeholder="Rua, número, bairro" onChange={set("address_street")} required />
             </div>
             <div>
-              <label className="label">Cidade</label>
-              <input className="input" placeholder="Cidade" onChange={set("address_city")} />
+              <label className="label">Cidade *</label>
+              <input className="input" placeholder="Cidade" onChange={set("address_city")} required />
+            </div>
+            <div>
+              <label className="label">Estado (UF) *</label>
+              <select className="input" onChange={set("address_state")} required>
+                <option value="">Selecionar</option>
+                {UFS.map((uf) => <option key={uf} value={uf}>{uf}</option>)}
+              </select>
             </div>
             <div>
               <label className="label">CEP</label>
@@ -123,18 +149,45 @@ export default function NewPatientPage() {
                 {BLOOD_TYPES.map((b) => <option key={b}>{b}</option>)}
               </select>
             </div>
-            <div>
-              <label className="label">Convênio</label>
-              <input className="input" placeholder="Unimed, Bradesco..." onChange={set("insurance")} />
+            <div className="sm:col-span-2">
+              <label className="label">Atendimento *</label>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setPagamento("particular")}
+                  className={`flex-1 rounded-lg border-2 px-4 py-2.5 text-sm font-semibold transition-all ${
+                    pagamento === "particular" ? "border-brand-600 bg-brand-50 text-brand-700" : "border-slate-200 text-slate-600 hover:border-brand-300"
+                  }`}
+                >
+                  Particular
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPagamento("convenio")}
+                  className={`flex-1 rounded-lg border-2 px-4 py-2.5 text-sm font-semibold transition-all ${
+                    pagamento === "convenio" ? "border-brand-600 bg-brand-50 text-brand-700" : "border-slate-200 text-slate-600 hover:border-brand-300"
+                  }`}
+                >
+                  Convênio
+                </button>
+              </div>
             </div>
-            <div>
-              <label className="label">Número do convênio</label>
-              <input className="input" placeholder="Número da carteirinha" onChange={set("insurance_number")} />
-            </div>
-            <div>
-              <label className="label">Plano</label>
-              <input className="input" placeholder="Plano / categoria" onChange={set("insurance_plan")} />
-            </div>
+            {pagamento === "convenio" && (
+              <>
+                <div>
+                  <label className="label">Convênio *</label>
+                  <input className="input" placeholder="Unimed, Bradesco..." onChange={set("insurance")} />
+                </div>
+                <div>
+                  <label className="label">Número do convênio</label>
+                  <input className="input" placeholder="Número da carteirinha" onChange={set("insurance_number")} />
+                </div>
+                <div>
+                  <label className="label">Plano</label>
+                  <input className="input" placeholder="Plano / categoria" onChange={set("insurance_plan")} />
+                </div>
+              </>
+            )}
             <div className="sm:col-span-2">
               <label className="label">Alergias</label>
               <textarea className="input min-h-[80px] resize-none" placeholder="Medicamentos, alimentos..." onChange={set("allergies")} />
