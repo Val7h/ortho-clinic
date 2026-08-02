@@ -85,10 +85,17 @@ export default function PatientsPage() {
     }
   }, [isOnline, cacheSearch, putMany, signal]);
 
-  useEffect(() => { load(); }, [load]);
-
+  // BUSCA-PRIMEIRO (decisão Valth 02/08): a tela abre VAZIA e instantânea —
+  // nada de carregar 50 pacientes de cara (não escala pra 1000+). Digitou
+  // 2+ letras (nome/CPF/telefone), o servidor devolve só o que casa.
   useEffect(() => {
-    load(search || undefined);
+    const q = (search || '').trim();
+    if (q.length >= 2) {
+      load(q);
+    } else {
+      setPatients([]);
+      setLoading(false);
+    }
   }, [search]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Client-side filter + sort (applied on top of server search) ───────
@@ -296,12 +303,14 @@ export default function PatientsPage() {
               </div>
             </div>
             <h3 className="mt-4 text-lg font-semibold text-slate-900">
-              {rawSearch || activeFilterCount > 0 ? 'Nenhum paciente encontrado' : 'Nenhum paciente cadastrado'}
+              {rawSearch.trim().length >= 2 || activeFilterCount > 0
+                ? 'Nenhum paciente encontrado'
+                : 'Busque um paciente'}
             </h3>
             <p className="mt-1 text-sm text-slate-600">
-              {rawSearch || activeFilterCount > 0
+              {rawSearch.trim().length >= 2 || activeFilterCount > 0
                 ? 'Tente ajustar a busca ou os filtros'
-                : 'Comece cadastrando seu primeiro paciente'}
+                : 'Digite o nome, CPF ou telefone no campo acima — ou cadastre um novo'}
             </p>
             {!rawSearch && activeFilterCount === 0 && (
               <Button
@@ -318,7 +327,7 @@ export default function PatientsPage() {
             {/* Count header */}
             <div className="flex items-center justify-between px-1">
               <p className="text-sm font-medium text-slate-600">
-                {filteredPatients.length} paciente{filteredPatients.length !== 1 ? 's' : ''}
+                {filteredPatients.length} resultado{filteredPatients.length !== 1 ? 's' : ''}
                 {activeFilterCount > 0 && <span className="ml-1 text-slate-400">(filtrado)</span>}
               </p>
               {!isOnline && (
