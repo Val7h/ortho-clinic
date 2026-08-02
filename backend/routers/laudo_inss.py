@@ -60,6 +60,9 @@ FIDELIDADE AO DITADO (regra de ouro)
 - CID-10: só cite se o médico DITOU o código. Se não ditou, não escreva CID nenhum.
 - Se o ditado citar exames (RX, RM, USG...), transcreva os achados como ditados, sem acrescentar interpretação nova.
 - Não corrigir nem questionar o conteúdo clínico ditado; apenas organizá-lo em prosa.
+- CONFLITO ditado × cadastro: o DITADO SEMPRE PREVALECE. Se o médico ditar a profissão
+  (ex.: "agricultor"), use a ditada e IGNORE a do cadastro; idem para idade ou qualquer
+  outro dado. O cadastro só completa o que o ditado não mencionou.
 
 NORMALIZAÇÃO DO DITADO POR VOZ (obrigatória — não é invenção, é correção de transcrição)
 O ditado vem de reconhecimento de voz e chega com erros de transcrição. Você DEVE normalizar
