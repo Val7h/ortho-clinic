@@ -375,11 +375,10 @@ def recall_list(
         .filter(last_consult.c.ult < corte)
         .filter(~Patient.id.in_(future_ids))
         .filter((Patient.cids.isnot(None)) | (Patient.chronic_conditions.isnot(None)))
-        .order_by(last_consult.c.ult.asc())
-        .limit(200)
     )
     if not is_super:
         q = q.filter(Patient.organization_id == org)
+    q = q.order_by(last_consult.c.ult.asc()).limit(200)
     return [
         {
             "id": p.id,
