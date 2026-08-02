@@ -10,7 +10,9 @@ logger = logging.getLogger(__name__)
 EVOLUTION_URL = os.getenv("EVOLUTION_API_URL", "").rstrip("/")
 EVOLUTION_KEY = os.getenv("EVOLUTION_API_KEY", "")
 EVOLUTION_DEFAULT_INSTANCE = os.getenv("EVOLUTION_INSTANCE", "cto-geral")
-DOCTOR_NAME = os.getenv("DOCTOR_NAME", "Dr. Ortopedista")
+# Nome real como padrão (pedido Valth 02/08 — a prévia saía "Dr. Ortopedista");
+# env var DOCTOR_NAME continua podendo sobrescrever num futuro multi-médico.
+DOCTOR_NAME = os.getenv("DOCTOR_NAME", "Dr. Valth Guimarães")
 FRONTEND_URL = os.getenv("FRONTEND_URL", "https://ortho-frontend.onrender.com")
 
 

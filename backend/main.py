@@ -216,6 +216,14 @@ def startup():
         pass
 
 
+@app.on_event("startup")
+async def start_background_tasks():
+    # Parabéns de aniversário automáticos (pedido Valth 02/08) — 09-19h BRT
+    import asyncio as _asyncio
+    from services.birthday_task import birthday_loop
+    _asyncio.create_task(birthday_loop())
+
+
 def _backfill_clinic_org():
     """Garante que nenhuma clínica fique com organization_id NULL antes de o isolamento
     multi-cliente por conta entrar em vigor (senão usuário não-superadmin da única conta

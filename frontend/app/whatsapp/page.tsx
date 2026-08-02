@@ -365,6 +365,12 @@ export default function WhatsAppPage() {
 
         {dash && (
           <>
+            {/* Envio automático de parabéns (02/08): loop no backend, 09-19h BRT */}
+            <p className="text-xs text-slate-500 dark:text-slate-400 -mb-2">
+              🤖 Os parabéns de aniversário são enviados <b>automaticamente</b> a partir
+              das 9h (1 por paciente/ano). O botão abaixo serve pra reenvio manual.
+            </p>
+
             {/* ── Birthdays today ───────────────────────────────────────── */}
             <Section
               title="🎂 Aniversariantes Hoje"
