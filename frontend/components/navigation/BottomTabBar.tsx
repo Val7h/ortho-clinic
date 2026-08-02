@@ -56,13 +56,12 @@ export default function BottomTabBar() {
       icon: Users,
       matchPrefix: "/pacientes",
     },
-    // "Documentos" global removido (02/08): documentos vivem no prontuário
-    // do paciente (ficha → Documentos), não numa aba solta.
     {
-      href: "/painel",
-      label: "Sala de Espera",
+      href: "/documentos",
+      label: "Documentos",
       icon: FileText,
-      matchPrefix: "/painel",
+      badge: documentosBadge,
+      matchPrefix: "/documentos",
     },
     {
       href: "/perfil",

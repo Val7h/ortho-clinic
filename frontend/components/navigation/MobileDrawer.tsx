@@ -54,7 +54,7 @@ const PRIMARY_LINKS: NavLink[] = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/agenda", label: "Agenda", icon: Calendar },
   { href: "/pacientes", label: "Pacientes", icon: Users },
-  // "Documentos" global removido (02/08): vive no prontuário do paciente.
+  { href: "/documentos", label: "Documentos", icon: FileText },
   { href: "/painel", label: "Painel Atendimento", icon: Stethoscope },
 ];
 
