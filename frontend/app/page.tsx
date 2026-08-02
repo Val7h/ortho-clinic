@@ -45,6 +45,27 @@ export default function Dashboard() {
     }
   }, [user]);
 
+  // HOME DA SECRETÁRIA (decisão Valth 02/08): só atalhos operacionais — sem
+  // analytics, sem número de faturamento, sem módulos clínicos.
+  if (user?.role === 'secretary') {
+    return (
+      <ProtectedPageLayout title="OrthoClinic" subtitle="Bom trabalho!">
+        <div className="mx-auto max-w-4xl space-y-8">
+          <div className="grid gap-4 sm:grid-cols-2">
+            {[
+              { label: 'Agenda', icon: Calendar, description: 'Marcações e horários do dia', href: '/agenda', color: 'bg-green-500' },
+              { label: 'Sala de Espera', icon: Clock, description: 'Check-in e fila de atendimento', href: '/painel', color: 'bg-orange-500' },
+              { label: 'Pacientes', icon: Users, description: 'Cadastro e contatos', href: '/pacientes', color: 'bg-blue-500' },
+              { label: 'Caixa do Dia', icon: DollarSign, description: 'Registrar pagamentos de hoje', href: '/financeiro', color: 'bg-yellow-500' },
+            ].map((module) => (
+              <ModuleCard key={module.href} {...module} />
+            ))}
+          </div>
+        </div>
+      </ProtectedPageLayout>
+    );
+  }
+
   return (
     <ProtectedPageLayout title="OrthoClinic" subtitle="Gestão de Consultório Premium">
       <div className="mx-auto max-w-7xl space-y-8">
@@ -75,20 +96,9 @@ export default function Dashboard() {
                 href: '/agenda',
                 color: 'bg-green-500',
               },
-              {
-                label: 'Anamnese',
-                icon: BookOpen,
-                description: 'Registros de saúde dos pacientes',
-                href: '/anamnese',
-                color: 'bg-purple-500',
-              },
-              {
-                label: 'Receitas',
-                icon: FileText,
-                description: 'Prescrições médicas',
-                href: '/receitas',
-                color: 'bg-red-500',
-              },
+              // Anamnese e Receitas saíram da home (decisão Valth 02/08):
+              // acontecem DENTRO do atendimento (gaveta do paciente), não como
+              // módulos soltos.
               {
                 label: 'Financeiro',
                 icon: DollarSign,

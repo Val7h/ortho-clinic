@@ -149,7 +149,11 @@ def delete_physio(patient_id: int, doc_id: int, db: Session = Depends(get_db), c
 
 # ── LAUDOS ────────────────────────────────────────────────────────────────────
 
-report_router = APIRouter(prefix="/patients/{patient_id}/reports", dependencies=[Depends(require_doctor)])
+# LEITURA liberada p/ qualquer usuário autenticado da organização (decisão do
+# Valth 02/08: secretária PODE reimprimir laudo/atestado já gerado pra entregar
+# no balcão). Criação/exclusão continuam exclusivas do médico (require_doctor
+# por endpoint).
+report_router = APIRouter(prefix="/patients/{patient_id}/reports", dependencies=[Depends(get_current_user)])
 
 @report_router.get("", response_model=List[MedicalReportOut])
 def list_reports(patient_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -157,7 +161,7 @@ def list_reports(patient_id: int, db: Session = Depends(get_db), current_user: U
     return db.query(MedicalReport).filter(MedicalReport.patient_id == patient_id).order_by(MedicalReport.date.desc()).all()
 
 @report_router.post("", response_model=MedicalReportOut, status_code=201)
-def create_report(patient_id: int, data: MedicalReportCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def create_report(patient_id: int, data: MedicalReportCreate, db: Session = Depends(get_db), current_user: User = Depends(require_doctor)):
     _get_patient_or_404(db, patient_id, current_user)
     obj = MedicalReport(patient_id=patient_id, **data.model_dump())
     db.add(obj)
@@ -174,7 +178,7 @@ def get_report(patient_id: int, doc_id: int, db: Session = Depends(get_db), curr
     return obj
 
 @report_router.delete("/{doc_id}", status_code=204)
-def delete_report(patient_id: int, doc_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def delete_report(patient_id: int, doc_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_doctor)):
     _get_patient_or_404(db, patient_id, current_user)
     obj = db.query(MedicalReport).filter(MedicalReport.id == doc_id, MedicalReport.patient_id == patient_id).first()
     if not obj:

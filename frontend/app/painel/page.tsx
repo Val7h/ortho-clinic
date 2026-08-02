@@ -495,15 +495,8 @@ export default function SalaDeEsperaPage() {
                   ))}
                 </select>
               )}
-              <Button
-                variant="secondary"
-                size="sm"
-                icon={<RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />}
-                onClick={() => fetchQueue(true)}
-                disabled={refreshing}
-              >
-                Atualizar
-              </Button>
+              {/* Botão "Atualizar" removido (decisão Valth 02/08): a fila já se
+                  auto-atualiza a cada 30s — o botão era ruído. */}
               <Button
                 size="md"
                 icon={<Plus className="w-5 h-5" />}

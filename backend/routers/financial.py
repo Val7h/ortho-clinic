@@ -116,6 +116,12 @@ def list_records(
         q = q.join(Patient, FinancialRecord.patient_id == Patient.id).filter(
             Patient.organization_id == current_user.organization_id
         )
+    # CAIXA DO DIA (decisão do Valth 02/08): secretária enxerga SÓ os lançamentos
+    # de HOJE (hora BR) — histórico/mês/ano são do médico/admin. Ignora os
+    # filtros de mês/ano vindos do front pra não ter como contornar.
+    if current_user.role == "secretary":
+        q = q.filter(FinancialRecord.date == _br_today())
+        return [_serialize(r) for r in q.order_by(FinancialRecord.created_at.desc()).all()]
     if patient_id:
         q = q.filter(FinancialRecord.patient_id == patient_id)
     if year:
@@ -132,6 +138,11 @@ def get_summary(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    # Totais agregados (mês/ano/pendentes) são visão do dono — secretária tem
+    # só o Caixa do Dia (lista de hoje via GET /financial).
+    if current_user.role == "secretary":
+        raise HTTPException(403, "Resumo financeiro disponível apenas para o médico/administração")
+
     today = date.today()
     m = month or today.month
     y = year or today.year

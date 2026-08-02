@@ -41,6 +41,10 @@ function formatDate(iso: string) {
 
 export default function FinanceiroPage() {
   const { user } = useProtectedPage();
+  // Secretária = CAIXA DO DIA (decisão Valth 02/08): registra pagamentos e vê
+  // só o total de HOJE. Mês/ano/pendentes/gráficos são do médico/admin (o
+  // backend também bloqueia: list dela devolve só hoje; summary dá 403).
+  const isSecretary = user?.role === 'secretary';
   const { open: showForm, onOpenChange: setShowForm } = useModal();
   const firstInputRef = useRef<HTMLSelectElement>(null);
   const today = new Date();
@@ -72,8 +76,8 @@ export default function FinanceiroPage() {
   }, [showForm]);
 
   const load = () => {
-    financialApi.summary({ month, year }).then(setSummary).catch(() => {});
-    financialApi.list({ month, year }).then(setRecords).catch(() => {});
+    if (!isSecretary) financialApi.summary({ month, year }).then(setSummary).catch(() => {});
+    financialApi.list(isSecretary ? undefined : { month, year }).then(setRecords).catch(() => {});
   };
 
   useEffect(() => { load(); }, [month, year]);
@@ -168,8 +172,8 @@ export default function FinanceiroPage() {
     <PageWithSidebar>
     <div className="min-h-screen bg-slate-50">
       <NavBar
-        title="Financeiro"
-        subtitle="Controle de pagamentos"
+        title={isSecretary ? "Caixa do Dia" : "Financeiro"}
+        subtitle={isSecretary ? "Pagamentos de hoje" : "Controle de pagamentos"}
         back="/"
         actions={
           <Button size="md" icon={<Plus className="h-5 w-5" />} onClick={openNew}>
@@ -179,7 +183,36 @@ export default function FinanceiroPage() {
       />
 
       <main className="mx-auto max-w-3xl space-y-6 px-4 py-8">
+        {/* CAIXA DO DIA (secretária): total de hoje calculado da própria lista */}
+        {isSecretary && (
+          <div className="grid grid-cols-2 gap-4">
+            <Card shadow="sm">
+              <div className="border-l-4 border-success-400 p-4">
+                <p className="mb-1 text-xs font-bold uppercase tracking-wider text-slate-600">Recebido hoje</p>
+                <p className="leading-tight text-2xl font-bold text-success-600">
+                  {formatBRL(records.filter((r) => r.status === 'paid').reduce((s, r) => s + (r.amount || 0), 0))}
+                </p>
+                <p className="mt-1 text-xs text-slate-600">
+                  {records.filter((r) => r.status === 'paid').length} pagamento(s)
+                </p>
+              </div>
+            </Card>
+            <Card shadow="sm">
+              <div className="border-l-4 border-warning-400 p-4">
+                <p className="mb-1 text-xs font-bold uppercase tracking-wider text-slate-600">Pendente hoje</p>
+                <p className="leading-tight text-2xl font-bold text-warning-600">
+                  {formatBRL(records.filter((r) => r.status === 'pending').reduce((s, r) => s + (r.amount || 0), 0))}
+                </p>
+                <p className="mt-1 text-xs text-slate-600">
+                  {records.filter((r) => r.status === 'pending').length} a receber
+                </p>
+              </div>
+            </Card>
+          </div>
+        )}
+
         {/* Month navigator */}
+        {!isSecretary && (
         <Card shadow="sm">
           <div className="flex items-center justify-between p-4">
             <button
@@ -201,6 +234,7 @@ export default function FinanceiroPage() {
             </button>
           </div>
         </Card>
+        )}
 
         {/* Summary cards */}
         {summary && (
@@ -309,7 +343,7 @@ export default function FinanceiroPage() {
         {/* Records list */}
         <div>
           <h3 className="mb-4 text-sm font-bold uppercase tracking-wider text-slate-600">
-            Registros — {MONTHS_PT[month - 1]} {year}
+            Registros — {isSecretary ? 'Hoje' : `${MONTHS_PT[month - 1]} ${year}`}
           </h3>
           {records.length === 0 ? (
             <Card shadow="sm">

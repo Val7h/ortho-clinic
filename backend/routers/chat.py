@@ -380,6 +380,9 @@ def send_whatsapp_message(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    # Acompanha o bloqueio do Chat IA (o card de envio nasce dele).
+    if current_user.role == "secretary":
+        raise HTTPException(status_code=403, detail="Envio via assistente disponível apenas para o médico")
     message = request.message.strip()
     if not message:
         raise HTTPException(status_code=422, detail="Mensagem vazia")
@@ -443,6 +446,10 @@ async def chat(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    # Decisão do Valth (02/08): Chat IA é só do médico/admin — controle de CUSTO
+    # de API. Secretária usa o WhatsApp normal da clínica, fora do app.
+    if current_user.role == "secretary":
+        raise HTTPException(status_code=403, detail="Chat IA disponível apenas para o médico")
     # .strip() é essencial: um espaço/quebra de linha extra colado no valor da
     # env var no Render vira um header HTTP inválido (httpx recusa a requisição
     # inteira com "Illegal header value" antes mesmo de sair para a rede).

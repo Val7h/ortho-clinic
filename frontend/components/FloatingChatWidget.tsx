@@ -162,6 +162,9 @@ export function FloatingChatWidget() {
   };
 
   if (!user) return null;
+  // Chat IA é só do médico/admin (decisão Valth 02/08 — custo de API); a
+  // secretária usa o WhatsApp normal da clínica. Backend também bloqueia (403).
+  if (user.role === "secretary") return null;
 
   return (
     <>
