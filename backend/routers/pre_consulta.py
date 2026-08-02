@@ -96,6 +96,7 @@ class PreConsultaPayload(BaseModel):
     exames_urls: Optional[list] = None
     forma_pagamento: Optional[str] = None
     plano_saude: Optional[str] = None
+    sexo: Optional[str] = None  # "M" | "F" (novo campo do form — analytics por sexo)
 
     # gerado pelo servidor após gerar o PDF
     pdf_url: Optional[str] = None
@@ -206,8 +207,11 @@ def _atualizar_paciente(patient: Patient, data: PreConsultaPayload) -> None:
         patient.chronic_conditions = ", ".join(data.doencas_cronicas)
     if data.forma_pagamento == "convenio" and data.plano_saude:
         patient.insurance = data.plano_saude
-    if data.forma_pagamento:
-        pass  # insurance já tratado acima
+    elif data.forma_pagamento == "particular":
+        # Particular também alimenta o analytics Convênio×Particular
+        patient.insurance = "Particular"
+    if data.sexo and data.sexo.upper() in ("M", "F"):
+        patient.gender = data.sexo.upper()
 
 
 # Mapeia a unidade (texto livre vindo do bot do WhatsApp, ex: "CTO", "Instituto Pernambuco",

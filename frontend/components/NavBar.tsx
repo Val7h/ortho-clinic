@@ -84,7 +84,7 @@ function UserMenu() {
           <User className="w-3.5 h-3.5 text-white" />
         </div>
         <span className="hidden sm:block text-xs font-semibold text-white max-w-[100px] truncate">
-          {user.name.split(" ")[0]}
+          {user.name}
         </span>
         <ChevronDown className={`w-3 h-3 text-white/70 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>

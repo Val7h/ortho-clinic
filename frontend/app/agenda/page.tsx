@@ -330,7 +330,9 @@ export default function AgendaPage() {
     });
   };
 
-  const goToday = () => setCursor(new Date());
+  // "Hoje" abre o CALENDÁRIO DO MÊS pra escolher o dia (decisão Valth 02/08);
+  // clicar num dia do mês abre a visão Dia daquele dia.
+  const goToday = () => { setCursor(new Date()); setView('mes'); };
 
   // ── Calendar helpers ───────────────────────────────────────────────────────
 
@@ -365,7 +367,10 @@ export default function AgendaPage() {
   let title = '';
   if (view === 'mes') title = `${MONTHS_PT[cursor.getMonth()]} ${cursor.getFullYear()}`;
   else if (view === 'semana') title = `${fmtDate(weekDays[0])} – ${fmtDate(weekDays[6])} · ${cursor.getFullYear()}`;
-  else title = `${cursor.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })}`;
+  else {
+    const nDia = eventsForDate(toISO(cursor)).length;
+    title = `${cursor.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })} · ${nDia} paciente${nDia !== 1 ? 's' : ''}`;
+  }
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -476,7 +481,7 @@ export default function AgendaPage() {
                     className={`min-h-[90px] border-b border-r border-slate-100 dark:border-slate-800/50 p-1 cursor-pointer transition-colors
                       ${isToday ? 'bg-brand-50 dark:bg-brand-950/30' : 'hover:bg-slate-50 dark:hover:bg-slate-900/50'}
                       ${!isCurrentMonth ? 'opacity-40' : ''}`}
-                    onClick={() => openCreate(iso)}
+                    onClick={() => { setCursor(day); setView('dia'); }}
                   >
                     {/* Day number */}
                     <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold mb-1 ${
@@ -490,21 +495,33 @@ export default function AgendaPage() {
                       <div className={`w-1.5 h-1.5 rounded-full mb-1 ${avail.available ? 'bg-emerald-400' : 'bg-slate-300'}`} />
                     )}
 
-                    {/* Events — TODOS os pacientes aparecem (decisão Valth 02/08);
-                        dia lotado rola dentro da própria célula */}
-                    <div className="max-h-40 overflow-y-auto">
-                      {dayEvts.map(e => (
-                        <div
-                          key={e.id}
-                          className="rounded px-1 py-0.5 mb-0.5 text-[10px] font-semibold truncate text-white cursor-pointer hover:opacity-80"
-                          style={{ backgroundColor: e.clinic_color ?? '#0F2D5E' }}
-                          onClick={ev => { ev.stopPropagation(); openEdit(e); }}
-                          title={`${e.patient_name} · ${e.start_time}`}
-                        >
-                          {e._isOffline && '⚠ '}{e.patient_name}
+                    {/* Mês = resumo (decisão Valth 02/08): NÚMERO de pacientes +
+                        NOME da unidade; clicar na célula abre o Dia. */}
+                    {dayEvts.length > 0 && (() => {
+                      const porClinica: Record<string, { n: number; color: string }> = {};
+                      dayEvts.forEach(e => {
+                        const nome = (e.clinic_name || 'Clínica').replace(/^Clínica\s+/i, '');
+                        if (!porClinica[nome]) porClinica[nome] = { n: 0, color: e.clinic_color ?? '#0F2D5E' };
+                        porClinica[nome].n += 1;
+                      });
+                      return (
+                        <div className="space-y-0.5">
+                          <p className="text-[13px] font-extrabold text-slate-800 dark:text-slate-100 leading-none">
+                            {dayEvts.length} <span className="text-[9px] font-semibold text-slate-400">pac.</span>
+                          </p>
+                          {Object.entries(porClinica).map(([nome, info]) => (
+                            <div
+                              key={nome}
+                              className="rounded px-1 py-0.5 text-[10px] font-semibold truncate"
+                              style={{ backgroundColor: `${info.color}1A`, color: info.color }}
+                              title={`${info.n} paciente(s) · ${nome}`}
+                            >
+                              {info.n} · {nome}
+                            </div>
+                          ))}
                         </div>
-                      ))}
-                    </div>
+                      );
+                    })()}
                   </div>
                 );
               })}
@@ -595,98 +612,74 @@ export default function AgendaPage() {
           </div>
         )}
 
-        {/* ── DAY VIEW ──────────────────────────────────────────────────────── */}
-        {view === 'dia' && (
-          <div className="rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden bg-white dark:bg-slate-950">
-            <div className="relative" style={{ height: `${(DAY_END - DAY_START) / 60 * ROW_H}px` }}>
-              {/* Hour rows */}
-              {Array.from({ length: (DAY_END - DAY_START) / 60 }, (_, i) => {
-                const h = Math.floor((DAY_START + i * 60) / 60);
-                return (
-                  <div
-                    key={h}
-                    className="absolute left-0 right-0 border-b border-slate-100 dark:border-slate-800 flex"
-                    style={{ top: `${i * ROW_H}px`, height: `${ROW_H}px` }}
-                  >
-                    <div className="w-12 flex-shrink-0 text-[10px] text-slate-400 px-2 pt-1 font-mono">
-                      {String(h).padStart(2, '0')}:00
-                    </div>
-                    <div
-                      className="flex-1 cursor-pointer hover:bg-brand-50/40 dark:hover:bg-brand-950/20 transition-colors"
-                      onClick={() => {
-                        const hStr = `${String(h).padStart(2, '0')}:00`;
-                        setCreateDate(toISO(cursor));
-                        // pre-fill start time via state (handled in form)
-                        setFormOpen(true);
-                      }}
-                    />
+        {/* ── DAY VIEW ──────────────────────────────────────────────────────────
+            Redesenho (Valth 02/08): sem blocões escuros do tamanho do turno.
+            Lista clara agrupada por horário de INÍCIO, 2-3 pacientes por linha,
+            nome legível, cor da clínica só como detalhe; ATENDIDO fica verde ✓. */}
+        {view === 'dia' && (() => {
+          const grupos: Record<string, typeof dayEvents> = {};
+          dayEvents.forEach(e => {
+            const k = e.start_time || 'chegada';
+            (grupos[k] = grupos[k] || []).push(e);
+          });
+          const horarios = Object.keys(grupos).sort();
+          const atendidos = dayEvents.filter(e => e.status === 'completed').length;
+          return (
+            <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 p-4 space-y-1">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800 mb-2">
+                <p className="text-sm font-bold text-slate-700 dark:text-slate-200">
+                  {dayEvents.length} paciente{dayEvents.length !== 1 ? 's' : ''} no dia
+                </p>
+                {atendidos > 0 && (
+                  <p className="text-xs font-semibold text-emerald-600">
+                    ✓ {atendidos} atendido{atendidos !== 1 ? 's' : ''} · faltam {dayEvents.length - atendidos}
+                  </p>
+                )}
+              </div>
+              {horarios.length === 0 && (
+                <p className="py-10 text-center text-sm text-slate-400">Nenhum paciente neste dia.</p>
+              )}
+              {horarios.map(h => (
+                <div key={h} className="flex gap-3 py-2 border-b border-slate-50 dark:border-slate-900 last:border-0">
+                  <div className="w-14 flex-shrink-0 pt-1.5 text-xs font-mono font-bold text-slate-500">{h}</div>
+                  <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
+                    {grupos[h].map(e => {
+                      const done = e.status === 'completed';
+                      const cancel = e.status === 'cancelled';
+                      const color = e.clinic_color ?? '#0F2D5E';
+                      return (
+                        <div
+                          key={e.id}
+                          onClick={() => openEdit(e)}
+                          className={`cursor-pointer rounded-xl px-3 py-2 shadow-sm hover:shadow-md transition-all border border-l-4 ${
+                            done
+                              ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800'
+                              : cancel
+                              ? 'bg-slate-50 dark:bg-slate-900 border-slate-200 opacity-60'
+                              : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800'
+                          }`}
+                          style={{ borderLeftColor: done ? '#10b981' : cancel ? '#94a3b8' : color }}
+                          title={`${e.patient_name} · ${e.clinic_name ?? ''}`}
+                        >
+                          <p className={`text-sm font-bold truncate ${cancel ? 'line-through text-slate-400' : 'text-slate-800 dark:text-slate-100'}`}>
+                            {done && <span className="text-emerald-600">✓ </span>}
+                            {e._isOffline && '⚠ '}
+                            {e.patient_name}
+                          </p>
+                          <p className="text-[11px] text-slate-500 truncate">
+                            {(e.clinic_name || '').replace(/^Clínica\s+/i, '')}
+                            {' · '}
+                            {STATUS_LABEL[e.status] ?? e.status}
+                          </p>
+                        </div>
+                      );
+                    })}
                   </div>
-                );
-              })}
-
-              {/* M16: blocos de funcionamento como faixa de fundo (encaixes X/Y) */}
-              {blocksForDate(toISO(cursor)).map((b, bi) => {
-                const bStart = isoToMinutes(b.start_time);
-                const bEnd = isoToMinutes(b.end_time);
-                if (bEnd <= DAY_START || bStart >= DAY_END) return null;
-                const top = Math.max((bStart - DAY_START) / 60 * ROW_H, 0);
-                const bottom = Math.min((bEnd - DAY_START) / 60 * ROW_H, (DAY_END - DAY_START) / 60 * ROW_H);
-                const color = b.clinic_color ?? '#0F2D5E';
-                return (
-                  <div
-                    key={`blk-${bi}`}
-                    className="absolute left-12 right-3 rounded-lg border pointer-events-none flex items-start justify-end px-2 py-1"
-                    style={{
-                      top: `${top}px`,
-                      height: `${Math.max(bottom - top, 24)}px`,
-                      backgroundColor: `${color}12`,
-                      borderColor: `${color}44`,
-                      zIndex: 1,
-                    }}
-                    title={`${b.clinic_name ?? ''} · ${b.start_time}–${b.end_time}`}
-                  >
-                    {b.schedule_type === 'walk_in' && (
-                      <span className="text-[9px] font-bold" style={{ color }}>
-                        encaixes {b.walk_in_count}/{b.walk_in_max}
-                      </span>
-                    )}
-                  </div>
-                );
-              })}
-
-              {/* Events */}
-              {dayEvents.map((e, idx) => {
-                const startMin = isoToMinutes(e.start_time || '08:00');
-                const endMin   = e.end_time ? isoToMinutes(e.end_time) : startMin + 30;
-                const top    = (startMin - DAY_START) / 60 * ROW_H;
-                const height = Math.max((endMin - startMin) / 60 * ROW_H, 28);
-
-                return (
-                  <div
-                    key={e.id}
-                    className="absolute left-12 right-3 rounded-xl px-2 py-1.5 text-white cursor-pointer hover:opacity-90 hover:shadow-md transition-all shadow-sm"
-                    style={{
-                      top: `${top}px`,
-                      height: `${height}px`,
-                      backgroundColor: e._isOffline ? '#F59E0B' : (e.clinic_color ?? '#0F2D5E'),
-                      marginLeft: `${(idx % 3) * 6}px`, // stagger overlapping
-                      zIndex: 10 + idx,
-                    }}
-                    onClick={() => openEdit(e)}
-                    title={`${e.patient_name} · ${e.start_time}–${e.end_time}`}
-                  >
-                    <p className="text-[11px] font-bold truncate leading-tight">{e.patient_name}</p>
-                    <p className="text-[9px] opacity-80 truncate">{e.start_time}{e.end_time ? `–${e.end_time}` : ''}</p>
-                    {e.appointment_type && (
-                      <p className="text-[9px] opacity-70 truncate">{e.appointment_type}</p>
-                    )}
-                    {e._isOffline && <p className="text-[8px] opacity-80">⚠ pendente sync</p>}
-                  </div>
-                );
-              })}
+                </div>
+              ))}
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* "Detalhes do período" removido (decisão Valth 02/08): duplicava o
             calendário — agora TODOS os pacientes aparecem nas próprias células

@@ -375,7 +375,20 @@ export default function SalaDeEsperaPage() {
         attended: 'atendimento concluído',
         absent: 'marcado como ausente',
       };
-      toast.success(`Paciente ${labels[newStatus]}`);
+      if (newStatus === 'attended') {
+        // Ao concluir, dizer quantos FALTAM (decisão Valth 02/08)
+        const faltam = entries.filter(
+          (e) => e.id !== id && (e.status === 'waiting' || e.status === 'attending')
+        ).length;
+        toast.success(
+          faltam > 0
+            ? `Atendimento concluído — faltam ${faltam} paciente${faltam !== 1 ? 's' : ''}`
+            : 'Atendimento concluído — fila zerada! 🎉',
+          { duration: 5000 }
+        );
+      } else {
+        toast.success(`Paciente ${labels[newStatus]}`);
+      }
     } catch {
       toast.error('Erro ao atualizar status');
     } finally {

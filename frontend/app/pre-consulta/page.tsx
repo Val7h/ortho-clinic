@@ -378,6 +378,14 @@ const HTML_CONTENT = `<!DOCTYPE html>
       </div>
 
       <div class="campo">
+        <label>Sexo</label>
+        <div class="radio-group" id="grupo-sexo">
+          <label><input type="radio" name="sexo" value="F" /> Feminino</label>
+          <label><input type="radio" name="sexo" value="M" /> Masculino</label>
+        </div>
+      </div>
+
+      <div class="campo">
         <label>Alergias a medicamentos <span class="opt">(especialmente dipirona / anti-inflamatórios)</span></label>
         <input type="text" id="alergias" placeholder="Ex: Dipirona — ou 'nenhuma conhecida'" />
       </div>
@@ -591,6 +599,7 @@ async function enviar() {
     telefone:       TEL,
     data_consulta:  DATA,
     nascimento:     document.getElementById('nascimento').value,
+    sexo:           (document.querySelector('input[name="sexo"]:checked') || {}).value || null,
     cpf:            '',
     cidade:         '',
     unidade:        UNIDADE,
