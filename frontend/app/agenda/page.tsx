@@ -671,8 +671,11 @@ export default function AgendaPage() {
                               }`}
                               style={{
                                 backgroundColor: pend ? pastel(color, '0D') : pastel(color),
-                                borderLeft: `4px ${pend ? 'dashed' : 'solid'} ${color}`,
-                                border: pend ? undefined : undefined,
+                                // longhands: misturar shorthand borderLeft com a
+                                // chave border no mesmo objeto faz o React descartar
+                                borderLeftWidth: 4,
+                                borderLeftStyle: pend ? 'dashed' : 'solid',
+                                borderLeftColor: color,
                                 outline: pend ? `1.5px dashed ${color}66` : undefined,
                                 outlineOffset: pend ? '-1.5px' : undefined,
                               }}
