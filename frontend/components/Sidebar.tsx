@@ -22,9 +22,9 @@ export function Sidebar() {
     // Caixa do Dia (decisão Valth 02/08): secretária registra pagamentos e vê
     // só o total de HOJE — a página /financeiro se adapta pelo papel.
     { label: 'Caixa do Dia',  href: '/financeiro', icon: '💰', group: 'clinic', roles: ['secretary'] },
-    // Com a grade de "Módulos" extinta da home (02/08), o menu lateral é o
-    // único acesso — Documentos entra aqui e Financeiro ganha o médico.
-    { label: 'Documentos',    href: '/documentos', icon: '📄', group: 'clinic', roles: ['admin', 'superadmin', 'doctor'] },
+    // "Documentos" global REMOVIDO do menu (decisão Valth 02/08): documento
+    // não existe solto — vive no PRONTUÁRIO do paciente (ficha → aba
+    // Documentos/Histórico). Idem /receitas global.
     { label: 'Dashboard',     href: '/',           icon: '📊', group: 'clinic', roles: ['admin', 'superadmin', 'doctor'] },
     // --- Administrativo ---
     { label: 'Financeiro',    href: '/financeiro', icon: '💰', group: 'admin', roles: ['admin', 'superadmin', 'doctor'] },
