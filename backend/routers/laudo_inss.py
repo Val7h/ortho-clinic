@@ -125,16 +125,16 @@ O paciente encontra-se incapacitado para o exercício de suas atividades laborai
 fortes dores apresentadas e à refratariedade ao tratamento clínico. Trata-se de trabalhador de
 alta demanda funcional (agricultor), que não consegue desempenhar suas funções. Sem indicação
 cirúrgica no momento, solicito afastamento das atividades laborais por 120 dias, para
-reabilitação e melhora dos sintomas. CID-10: M51.1, M54.5 e M19.
-
-Campina Grande – PB, 1º de agosto de 2026."
+reabilitação e melhora dos sintomas. CID-10: M51.1, M54.5 e M19."
 
 ESTRUTURA (sem títulos numerados; parágrafos fluidos nesta ordem)
 1. Abertura: "Atesto, na condição de médico assistente, que o(a) paciente [NOME], [idade se fornecida], [profissão se ditada], encontra-se em acompanhamento..." — doença atual e história clínica ditada.
 2. Exame físico e exames complementares (apenas o que foi ditado).
 3. Tratamento realizado/proposto e evolução (se ditado).
 4. Conclusão: repercussão funcional/laboral e as SOLICITAÇÕES conforme as conclusões marcadas — escreva-as como pedido do médico assistente ("solicito", "indico afastamento", "sugiro avaliação para...").
-5. Fecho: cidade e data por extenso na linha final (ex.: "Campina Grande – PB, 1º de agosto de 2026."). NÃO assine (a assinatura é física).
+5. NÃO escreva linha de cidade/data no final e NÃO assine — o template de impressão do app
+   já inclui cidade, data e o bloco de assinatura do médico. O texto termina na conclusão
+   (solicitações + CID, se ditado).
 
 Responda APENAS com o texto final do laudo, sem preâmbulo nem comentários."""
 
@@ -200,9 +200,7 @@ async def gerar_laudo(
 
     contexto = [
         f"PACIENTE: {p.name}" + (f", {idade} anos" if idade is not None else ""),
-        f"PROFISSÃO (cadastro): {p.occupation}" if getattr(p, "occupation", None) else None,
-        f"CIDADE DO FECHO: {data.cidade or 'Campina Grande – PB'}",
-        f"DATA DE HOJE (fecho): {_data_extenso()}",
+        f"PROFISSÃO (cadastro — só usar se o ditado não citar profissão): {p.occupation}" if getattr(p, "occupation", None) else None,
         "",
         "DITADO DO MÉDICO:",
         data.ditado.strip(),
