@@ -9,7 +9,7 @@ import {
   Pencil, Download, MessageSquare,
 } from "lucide-react";
 import toast from "react-hot-toast";
-import { patientsApi, consultationsApi, prescriptionsApi, prescriptionTemplatesApi, examsApi, evolutionApi, clinicApi, chatApi, reportsApi } from "@/lib/api";
+import { api, patientsApi, consultationsApi, prescriptionsApi, prescriptionTemplatesApi, examsApi, evolutionApi, clinicApi, chatApi, reportsApi } from "@/lib/api";
 import { formatDate } from "@/lib/utils";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -3756,6 +3756,38 @@ function TabLaudos({ patient, clinic }: { patient: any; clinic?: any }) {
   const [draftSaved, setDraftSaved] = useState(false);
   const [incapPercent, setIncapPercent] = useState("");
 
+  // ── Laudo INSS por ditado (IA) ──────────────────────────────────────────
+  const [ditado, setDitado] = useState("");
+  const [inssConcl, setInssConcl] = useState<string[]>([]);
+  const [diasAfast, setDiasAfast] = useState("120");
+  const [gerandoIA, setGerandoIA] = useState(false);
+
+  const toggleConcl = (chave: string) =>
+    setInssConcl(prev => prev.includes(chave) ? prev.filter(c => c !== chave) : [...prev, chave]);
+
+  const gerarLaudoIA = async () => {
+    if (!ditado.trim() || ditado.trim().length < 20) { toast.error("Dite o caso primeiro (história, exame, exames de imagem…)"); return; }
+    if (!patient?.id) { toast.error("Paciente inválido"); return; }
+    if (text.trim() && !window.confirm("Substituir o texto atual do laudo pelo gerado pela IA?")) return;
+    setGerandoIA(true);
+    try {
+      const res = await api.post("/api/laudo-inss/gerar", {
+        patient_id: patient.id,
+        ditado: ditado.trim(),
+        conclusoes: inssConcl,
+        dias_afastamento: inssConcl.includes("afastamento_dias") ? (parseInt(diasAfast) || 0) : null,
+        cidade: clinic ? `${clinic.city} – ${clinic.state}` : null,
+      }).then(r => r.data);
+      setText(res.texto);
+      setTimeout(autoResizeLaudo, 50);
+      toast.success("Laudo gerado — revise antes de imprimir");
+    } catch (e: any) {
+      toast.error(e?.response?.data?.detail || "Erro ao gerar laudo com IA");
+    } finally {
+      setGerandoIA(false);
+    }
+  };
+
   // Draft autosave — S1 (LGPD): chave escopada por usuário + paciente
   const draftKey = `orthoclinic_laudo_draft_${userScope()}_${patient?.id || "0"}`;
   useEffect(() => {
@@ -3961,6 +3993,68 @@ function TabLaudos({ patient, clinic }: { patient: any; clinic?: any }) {
         >
           <Plus className="w-3.5 h-3.5" /> Adicionar CID secundário
         </button>
+      </div>
+
+      {/* ── Laudo INSS por ditado (IA) ── */}
+      <div className="rounded-xl border-2 border-indigo-200 dark:border-indigo-800 bg-indigo-50/60 dark:bg-indigo-900/10 p-3 space-y-2.5">
+        <p className="text-xs font-bold text-indigo-700 dark:text-indigo-300 flex items-center gap-1.5">
+          🎙️ Laudo INSS por ditado (IA)
+          <span className="font-normal text-[10px] text-indigo-400">médico assistente · Sonnet 5</span>
+        </p>
+        <textarea
+          className={`${inp} resize-none`}
+          rows={4}
+          placeholder={"Dite o caso (pode usar o microfone do teclado): história clínica, exame físico, exames de imagem, CID se quiser…\nEx: Paciente com lombalgia crônica há 2 anos, RM mostra hérnia L4-L5 com compressão radicular, Lasègue positivo à direita, em uso de pregabalina, sem melhora com fisioterapia…"}
+          value={ditado}
+          onChange={e => setDitado(e.target.value)}
+        />
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-1.5 text-xs">
+          <label className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
+            <input type="checkbox" checked={inssConcl.includes("afastamento_dias")} onChange={() => toggleConcl("afastamento_dias")} />
+            Afastamento por
+            <input
+              type="number" min="1" max="720"
+              className="w-16 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-1.5 py-0.5 text-xs"
+              value={diasAfast}
+              onChange={e => setDiasAfast(e.target.value)}
+              onClick={() => { if (!inssConcl.includes("afastamento_dias")) toggleConcl("afastamento_dias"); }}
+            />
+            dias
+          </label>
+          <label className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
+            <input type="checkbox" checked={inssConcl.includes("auxilio_doenca")} onChange={() => toggleConcl("auxilio_doenca")} />
+            Auxílio-doença (incapacidade temporária)
+          </label>
+          <label className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
+            <input type="checkbox" checked={inssConcl.includes("auxilio_acidente")} onChange={() => toggleConcl("auxilio_acidente")} />
+            Auxílio-acidente (sequela definitiva)
+          </label>
+          <label className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
+            <input type="checkbox" checked={inssConcl.includes("tempo_indeterminado")} onChange={() => toggleConcl("tempo_indeterminado")} />
+            Por tempo indeterminado
+          </label>
+          <label className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
+            <input type="checkbox" checked={inssConcl.includes("aposentadoria")} onChange={() => toggleConcl("aposentadoria")} />
+            Aposentadoria por incapacidade permanente
+          </label>
+          <label className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
+            <input type="checkbox" checked={inssConcl.includes("isencao_ir")} onChange={() => toggleConcl("isencao_ir")} />
+            Isenção de IR
+          </label>
+          <label className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
+            <input type="checkbox" checked={inssConcl.includes("bpc_loas")} onChange={() => toggleConcl("bpc_loas")} />
+            BPC / LOAS
+          </label>
+        </div>
+        <button
+          type="button"
+          onClick={gerarLaudoIA}
+          disabled={gerandoIA}
+          className="w-full flex items-center justify-center gap-1.5 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-semibold text-xs disabled:opacity-60"
+        >
+          {gerandoIA ? "Gerando laudo…" : "✨ Gerar laudo com IA"}
+        </button>
+        <p className="text-[10px] text-slate-400 dark:text-slate-500">O texto gerado cai na caixa abaixo pra você revisar/editar antes de imprimir. A IA só usa o que você ditou (nunca inventa achado nem CID).</p>
       </div>
 
       {/* Texto */}
