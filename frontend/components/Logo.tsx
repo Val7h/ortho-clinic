@@ -1,5 +1,11 @@
 'use client';
 
+/**
+ * Logomarca OrthoClinic "Articulação" (Opção 2 — aprovada pelo Dr. Valth):
+ * o "O" de Ortho desenhado como articulação bola-e-soquete (quadril),
+ * gradiente navy→azul com esfera ciano. Marca do PRODUTO (a marca da
+ * clínica usuária — OrthoMedic — vive na sidebar e nos documentos).
+ */
 export function Logo({ width = 40, height = 40 }: { width?: number; height?: number }) {
   return (
     <svg
@@ -9,44 +15,16 @@ export function Logo({ width = 40, height = 40 }: { width?: number; height?: num
       xmlns="http://www.w3.org/2000/svg"
       className="drop-shadow-lg"
     >
-      {/* Fundo com gradiente */}
       <defs>
-        <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#06b6d4" />
-          <stop offset="100%" stopColor="#0369a1" />
+        <linearGradient id="ocg-logo" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#0F2D5E" />
+          <stop offset="100%" stopColor="#2563eb" />
         </linearGradient>
       </defs>
-      
-      {/* Fundo arredondado */}
-      <rect width="100" height="100" rx="20" fill="url(#grad1)" />
-      
-      {/* Vértebra 1 */}
-      <circle cx="50" cy="20" r="5" fill="white" />
-      
-      {/* Conexão 1 */}
-      <line x1="50" y1="25" x2="50" y2="30" stroke="white" strokeWidth="2" />
-      
-      {/* Vértebra 2 */}
-      <circle cx="50" cy="36" r="6" fill="white" />
-      
-      {/* Conexão 2 */}
-      <line x1="50" y1="42" x2="50" y2="48" stroke="white" strokeWidth="2" />
-      
-      {/* Vértebra Central (maior) */}
-      <circle cx="50" cy="57" r="7" fill="white" />
-      <circle cx="50" cy="57" r="3" fill="#0369a1" />
-      
-      {/* Conexão 3 */}
-      <line x1="50" y1="64" x2="50" y2="70" stroke="white" strokeWidth="2" />
-      
-      {/* Vértebra 4 */}
-      <circle cx="50" cy="78" r="6" fill="white" />
-      
-      {/* Conexão 4 */}
-      <line x1="50" y1="84" x2="50" y2="89" stroke="white" strokeWidth="2" />
-      
-      {/* Vértebra 5 */}
-      <circle cx="50" cy="95" r="5" fill="white" />
+      <rect x="2" y="2" width="96" height="96" rx="24" fill="url(#ocg-logo)" />
+      <path d="M50 18 a32 32 0 1 0 32 32" fill="none" stroke="#fff" strokeWidth="11" strokeLinecap="round" />
+      <circle cx="63" cy="37" r="14" fill="#22d3ee" />
+      <circle cx="58" cy="32" r="4" fill="#fff" opacity="0.85" />
     </svg>
   );
 }
