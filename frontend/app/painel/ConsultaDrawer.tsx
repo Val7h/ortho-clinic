@@ -575,15 +575,17 @@ function DiagnosticosCids({ patientId, patient }: { patientId: number; patient: 
     }
   };
 
+  const linkFolheto = (leaflet: any) =>
+    `${window.location.origin}/folheto-publico/${leaflet.id}?nome=${encodeURIComponent(patient?.name ?? "")}`;
+
   const enviarFolheto = async (leaflet: any | null) => {
     if (!pickerFor) return;
     if (!patient?.phone) { toast.error("Paciente sem telefone cadastrado"); return; }
     setSending(true);
     try {
       const treat = pickerFor.opcoes.join(" / ");
-      const link = leaflet ? `${window.location.origin}/folheto-publico/${leaflet.id}` : "";
       const text = leaflet
-        ? `Olá, {nome}! Aqui é do consultório do {doctor}. Na sua consulta conversamos sobre opções de tratamento (${treat}). O doutor separou este material informativo para você ler com calma:\n${link}\n\nQualquer dúvida, é só responder por aqui.`
+        ? `Olá, {nome}! Aqui é do consultório do {doctor}. Na sua consulta conversamos sobre opções de tratamento (${treat}). O doutor separou este material informativo para você ler com calma:\n${linkFolheto(leaflet)}\n\nQualquer dúvida, é só responder por aqui.`
         : `Olá, {nome}! Aqui é do consultório do {doctor}. Na sua consulta conversamos sobre opções de tratamento (${treat}). Se quiser conversar melhor ou agendar uma avaliação, é só responder por aqui.`;
       await api.post("/whatsapp/send", { patient_id: patientId, message_type: "folheto", custom_text: text });
       toast.success("Enviado no WhatsApp do paciente ✓");
@@ -593,6 +595,15 @@ function DiagnosticosCids({ patientId, patient }: { patientId: number; patient: 
     } finally {
       setSending(false);
     }
+  };
+
+  // Imprimir na hora e entregar em mãos — abre o folheto público (já com o
+  // nome do paciente no cabeçalho) e chama a impressão (pedido Valth 02/08)
+  const imprimirFolheto = (leaflet: any) => {
+    const w = window.open(linkFolheto(leaflet), "_blank");
+    if (!w) { toast.error("Pop-up bloqueado — libere pra imprimir"); return; }
+    w.addEventListener("load", () => { try { w.print(); } catch {} });
+    setPickerFor(null);
   };
 
   return (
@@ -686,15 +697,31 @@ function DiagnosticosCids({ patientId, patient }: { patientId: number; patient: 
                 <p className="text-xs text-slate-400 text-center py-4">Nenhum folheto cadastrado ainda (Documentos → Folhetos).</p>
               )}
               {leaflets.map(l => (
-                <button
+                <div
                   key={l.id}
-                  disabled={sending}
-                  onClick={() => enviarFolheto(l)}
-                  className="w-full text-left px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 disabled:opacity-50"
+                  className="flex items-center gap-2 px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700"
                 >
-                  <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">{l.title}</p>
-                  <p className="text-xs text-slate-400">{l.category}</p>
-                </button>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate">{l.title}</p>
+                    <p className="text-xs text-slate-400">{l.category}</p>
+                  </div>
+                  <button
+                    disabled={sending}
+                    onClick={() => enviarFolheto(l)}
+                    className="flex-shrink-0 px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold disabled:opacity-50"
+                    title="Enviar no WhatsApp do paciente"
+                  >
+                    📱 WhatsApp
+                  </button>
+                  <button
+                    disabled={sending}
+                    onClick={() => imprimirFolheto(l)}
+                    className="flex-shrink-0 px-2.5 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-800 text-white text-xs font-bold disabled:opacity-50"
+                    title="Imprimir com o nome do paciente e entregar em mãos"
+                  >
+                    🖨️ Imprimir
+                  </button>
+                </div>
               ))}
             </div>
             <div className="px-4 pb-4 pt-2 border-t border-slate-100 dark:border-slate-800">

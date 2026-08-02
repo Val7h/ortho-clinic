@@ -240,12 +240,19 @@ public_leaflet_router = APIRouter()
 
 
 @public_leaflet_router.get("/folheto-publico/{leaflet_id}", response_class=HTMLResponse)
-def view_leaflet_public(leaflet_id: int, db: Session = Depends(get_db)):
+def view_leaflet_public(leaflet_id: int, nome: str = "", db: Session = Depends(get_db)):
+    """`?nome=Maria` personaliza o folheto com o nome do paciente (02/08)."""
+    import html as _html
+
     obj = db.query(TreatmentLeaflet).filter(
         TreatmentLeaflet.id == leaflet_id, TreatmentLeaflet.active == True
     ).first()
     if not obj:
         raise HTTPException(404, "Folheto não encontrado")
+    nome_seguro = _html.escape(nome.strip())[:80]
+    linha_nome = (
+        f'<p class="paciente">Preparado para <b>{nome_seguro}</b></p>' if nome_seguro else ""
+    )
     return HTMLResponse(f"""<!doctype html>
 <html lang="pt-BR"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -256,11 +263,14 @@ def view_leaflet_public(leaflet_id: int, db: Session = Depends(get_db)):
   header {{ border-bottom: 3px double #142A4D; padding-bottom: 12px; margin-bottom: 20px; }}
   header h1 {{ font-size: 22px; margin: 0; color: #142A4D; }}
   header p {{ margin: 4px 0 0; font-size: 13px; color: #64748b; }}
+  header p.paciente {{ font-size: 14px; color: #1e293b; margin-top: 8px; }}
   .content img, .content embed {{ max-width: 100%; }}
   footer {{ margin-top: 32px; font-size: 12px; color: #94a3b8; text-align: center; }}
+  @media print {{ body {{ background: #fff; }} .wrap {{ padding: 0; max-width: none; }} }}
 </style></head><body><div class="wrap">
 <header><h1>{obj.title}</h1>
-<p>Material informativo — Dr. Valth Menezes Guimarães · Ortopedia e Traumatologia · CRM-PB 6326</p></header>
+<p>Material informativo — Dr. Valth Menezes Guimarães · Ortopedia e Traumatologia · CRM-PB 6326</p>
+{linha_nome}</header>
 <div class="content">{obj.content_html}</div>
 <footer>Este material é educativo e não substitui a avaliação médica individual.</footer>
 </div></body></html>""")
