@@ -20,6 +20,10 @@ class FinancialRecord(Base):
     # Clínica onde o pagamento aconteceu (dashboard v2, 02/08) — preenchida a
     # partir de agora; histórico antigo fica NULL (proxy = sala de espera)
     clinic_id = Column(Integer, ForeignKey("clinics.id"), nullable=True, index=True)
+    # O QUE foi vendido (06/08): sem isso uma consulta de R$ 400 e uma
+    # infiltracao de R$ 400 sao a mesma linha. Nulo = historico antigo,
+    # que na faixa 3 conta como consulta e NUNCA como procedimento.
+    procedure_type = Column(String(40), nullable=True, index=True)
     date = Column(Date, nullable=False)
     notes = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

@@ -661,6 +661,20 @@ async def delete_anamnesis_template(
 
 # ==================== SALA DE ESPERA ====================
 
+# Fichas de toque unico no registro da chegada (06/08). Lista fixa no codigo:
+# lista editavel vira tela de cadastro, e tela de cadastro vira manutencao.
+PROCEDIMENTOS = (
+    "Consulta",
+    "Retorno",
+    "Infiltração",
+    "Zoledrônico",
+    "Tirzepatida",
+    "Proloterapia",
+    "Bloqueio geniculares",
+    "Outro",
+)
+
+
 class CheckinRequest(BaseModel):
     patient_id: int
     clinic_id: Optional[int] = None
@@ -669,6 +683,8 @@ class CheckinRequest(BaseModel):
     value_cents: Optional[int] = None
     # Forma de pagamento do valor recebido na chegada (E3, 05/08)
     payment_method: Optional[str] = None
+    # O que foi vendido (06/08) — default "Consulta" quando nao vier nada
+    procedure_type: Optional[str] = None
 
 
 class WaitingRoomEntryOut(BaseModel):
@@ -834,7 +850,7 @@ def _ensure_appointment_for_entry(db: Session, patient: Patient, clinic_id: Opti
 
 def _lancar_no_caixa(db: Session, patient: Patient, clinic_id: Optional[int],
                      value_cents: int, payment_method: Optional[str],
-                     descricao: str) -> None:
+                     descricao: str, procedure_type: Optional[str] = None) -> None:
     """Joga o valor recebido na chegada direto no Caixa do Dia (erro E3).
 
     Antes, o valor ficava preso no registro da fila e o financeiro do dia
@@ -842,6 +858,7 @@ def _lancar_no_caixa(db: Session, patient: Patient, clinic_id: Optional[int],
     """
     if not value_cents or value_cents <= 0:
         return
+    proc = procedure_type if procedure_type in PROCEDIMENTOS else "Consulta"
     db.add(FinancialRecord(
         organization_id=patient.organization_id,
         patient_id=patient.id,
@@ -851,6 +868,7 @@ def _lancar_no_caixa(db: Session, patient: Patient, clinic_id: Optional[int],
         status="paid",
         description=descricao,
         date=today_br(),
+        procedure_type=proc,
     ))
 
 
@@ -1054,6 +1072,7 @@ async def checkin_patient(
     _lancar_no_caixa(
         db, patient, clinic_id, request.value_cents or 0, request.payment_method,
         descricao=(request.reason or "Consulta"),
+        procedure_type=request.procedure_type,
     )
 
     db.commit()

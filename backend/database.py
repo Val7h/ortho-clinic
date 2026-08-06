@@ -99,6 +99,8 @@ def migrate_db():
         fin_cols = [c["name"] for c in inspector.get_columns("financial_records")]
         if "clinic_id" not in fin_cols:
             migrations.append("ALTER TABLE financial_records ADD COLUMN clinic_id INTEGER")
+        if "procedure_type" not in fin_cols:
+            migrations.append("ALTER TABLE financial_records ADD COLUMN procedure_type VARCHAR(40)")
 
     # E8 (05/08): auto-suspender consulta esquecida aberta
     if "waiting_room_entries" in existing_tables:
