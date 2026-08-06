@@ -356,6 +356,7 @@ export const financialApi = {
   update: (id: number, data: any) => api.put(`/financial/${id}`, data).then((r) => r.data),
   delete: (id: number) => api.delete(`/financial/${id}`),
   analytics: () => api.get("/financial/analytics").then((r) => r.data),
+  painel: () => api.get("/financial/painel").then((r) => r.data),
 };
 
 // ── Mídia de Consulta ─────────────────────────────────────────────────────
