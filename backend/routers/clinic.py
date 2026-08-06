@@ -4,6 +4,7 @@ from sqlalchemy import or_
 from typing import List, Optional
 from datetime import date, datetime, timedelta
 from pydantic import BaseModel
+import logging
 import secrets
 from database import get_db
 from tzutil import today_br
@@ -103,6 +104,53 @@ class StatusUpdate(BaseModel):
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
+logger = logging.getLogger("orthoclinic.clinic")
+
+DIAS_PT = ["segunda", "terça", "quarta", "quinta", "sexta", "sábado", "domingo"]
+
+
+def assert_clinica_atende(db: Session, clinic: Clinic, quando: date, start_time: Optional[str] = None) -> None:
+    """TRAVA (05/08): recusa agendamento em dia/hora que a clínica NÃO atende.
+
+    Caso real: o bot marcou a Rayanne na Clínica IP numa QUINTA (o IP só abre
+    quarta de manhã) — resquício do bug de dia-da-semana corrigido em 30/07.
+    O app aceitou porque nunca houve validação. Esta função é o portão único:
+    vale para o bot (agendamento público), para a secretária e para o médico.
+
+    Se a clínica não tiver grade cadastrada, não bloqueia (não dá pra afirmar
+    que ela não atende) — mas registra no log.
+    """
+    dow = quando.weekday()  # 0=Seg
+    grade = [s for s in (clinic.schedules or []) if s.active]
+    if not grade:
+        logger.warning("Clínica %s sem grade cadastrada — trava de dia não aplicada", clinic.id)
+        return
+
+    do_dia = [s for s in grade if s.day_of_week == dow]
+    if not do_dia:
+        dias_ok = sorted({s.day_of_week for s in grade})
+        nomes = ", ".join(DIAS_PT[d] for d in dias_ok) or "nenhum dia cadastrado"
+        raise HTTPException(
+            409,
+            f"{clinic.name} não atende {DIAS_PT[dow]}-feira. "
+            f"Dias de atendimento: {nomes}. Escolha outro dia ou outra unidade.",
+        )
+
+    # Hora fora de qualquer turno do dia (tolerância: bloqueia só se claramente fora)
+    if start_time:
+        dentro = any(
+            (s.start_time or "00:00") <= start_time <= (s.end_time or "23:59")
+            for s in do_dia
+        )
+        if not dentro:
+            turnos = " · ".join(f"{s.start_time}–{s.end_time}" for s in do_dia)
+            raise HTTPException(
+                409,
+                f"{clinic.name} não atende às {start_time} na {DIAS_PT[dow]}-feira. "
+                f"Horário de atendimento: {turnos}.",
+            )
+
 
 def _add_minutes(time_str: str, minutes: int) -> str:
     h, m = map(int, time_str.split(":"))
@@ -602,6 +650,10 @@ def book_slot(slug: str, data: BookIn, db: Session = Depends(get_db)):
     if not clinic:
         raise HTTPException(404, "Clínica não encontrada")
 
+    # TRAVA 2/3 (05/08): mesma regra vale para o BOT — foi por aqui que entrou o
+    # agendamento da Rayanne no IP numa quinta.
+    assert_clinica_atende(db, clinic, data.date, data.start_time)
+
     dow = data.date.weekday()
     sched = next((s for s in clinic.schedules if s.active and s.day_of_week == dow), None)
     if not sched:
@@ -609,6 +661,25 @@ def book_slot(slug: str, data: BookIn, db: Session = Depends(get_db)):
 
     if data.date < today_br():
         raise HTTPException(400, "Data no passado")
+
+    # TRAVA extra: o mesmo paciente não pode ficar com 2 marcações no mesmo dia
+    # (caso Vyctor: IP de manhã + Unimagem à tarde, marcado pelo bot).
+    if data.patient_name:
+        dupl = (
+            db.query(Appointment)
+            .filter(
+                Appointment.date == data.date,
+                Appointment.patient_name.ilike(data.patient_name.strip()),
+                Appointment.status.notin_(["cancelled", "blocked", "no_show"]),
+            )
+            .first()
+        )
+        if dupl:
+            raise HTTPException(
+                409,
+                f"{data.patient_name} já tem agendamento neste dia às {dupl.start_time}. "
+                "Cancele o anterior antes de marcar outro.",
+            )
 
     token = secrets.token_urlsafe(32)
 
@@ -957,6 +1028,9 @@ def create_appointment_internal(
     if not clinic:
         raise HTTPException(404, "Clínica não encontrada")
 
+    # TRAVA 1/3 (05/08): clínica precisa atender neste dia/hora (caso Rayanne)
+    assert_clinica_atende(db, clinic, data.date, data.start_time)
+
     dow = data.date.weekday()
     sched = next((s for s in clinic.schedules if s.active and s.day_of_week == dow), None)
 
@@ -1062,6 +1136,14 @@ def edit_appointment(
     # Conflict check if changing time
     new_date = data.date or a.date
     new_time = data.start_time or a.start_time
+
+    # TRAVA 3/3 (05/08): REMARCAR também não pode cair em dia/hora que a clínica
+    # não atende — senão o erro entra pela porta dos fundos.
+    if data.date or data.start_time:
+        cl = db.query(Clinic).filter(Clinic.id == a.clinic_id).first()
+        if cl:
+            assert_clinica_atende(db, cl, new_date, new_time)
+
     if (data.date or data.start_time) and new_time:
         conflict = db.query(Appointment).filter(
             Appointment.clinic_id == a.clinic_id,

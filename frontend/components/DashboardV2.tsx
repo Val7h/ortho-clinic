@@ -57,6 +57,25 @@ export function DashboardV2() {
 
   return (
     <div className="space-y-6">
+      {/* ══ SENTINELA: agendamento em dia que a clínica não abre (05/08) ══ */}
+      {(d.alertas_agenda?.length ?? 0) > 0 && (
+        <div className="rounded-2xl border-2 border-red-400 bg-red-50 dark:bg-red-950/30 p-4">
+          <p className="text-sm font-extrabold text-red-700 dark:text-red-300 flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4" /> Agendamento em dia que a clínica não atende
+          </p>
+          {d.alertas_agenda.map((a: any) => (
+            <p key={a.appointment_id} className="text-sm text-red-800 dark:text-red-200 mt-1.5">
+              <b>{a.paciente}</b> — {a.clinica}, {a.data.split('-').reverse().join('/')} às {a.hora}
+              <span className="text-red-600 dark:text-red-400"> · {a.motivo}</span>
+              {a.telefone ? <span className="text-red-500"> · {a.telefone}</span> : null}
+            </p>
+          ))}
+          <p className="text-xs text-red-600 dark:text-red-400 mt-2">
+            Remarque na Agenda — o paciente iria à unidade errada.
+          </p>
+        </div>
+      )}
+
       {/* ══ FAIXA 1 · HOJE ══ */}
       <div>
         <div className="flex items-center justify-between mb-2">

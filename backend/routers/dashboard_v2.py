@@ -312,7 +312,37 @@ def dashboard_v2(
         .scalar()
     ) or 0
 
+    # ── SENTINELA (05/08): agendamento futuro em dia que a clínica NÃO abre ──
+    # Cinto e suspensório: as travas impedem novos, mas se algo entrar por outro
+    # caminho (importação, bug futuro), aparece aqui no topo do painel.
+    alertas_agenda = []
+    try:
+        futuros = (
+            db.query(Appointment, Clinic)
+            .join(Clinic, Clinic.id == Appointment.clinic_id)
+            .filter(
+                Appointment.date >= today,
+                Appointment.status.notin_(["cancelled", "blocked", "no_show"]),
+            )
+            .all()
+        )
+        for a, c in futuros:
+            dias_ativos = {s.day_of_week for s in (c.schedules or []) if s.active}
+            if dias_ativos and a.date.weekday() not in dias_ativos:
+                alertas_agenda.append({
+                    "appointment_id": a.id,
+                    "paciente": a.patient_name,
+                    "telefone": a.patient_phone,
+                    "clinica": c.name.replace("Clínica ", ""),
+                    "data": str(a.date),
+                    "hora": a.start_time,
+                    "motivo": f"{c.name} não atende neste dia da semana",
+                })
+    except Exception:
+        pass
+
     return {
+        "alertas_agenda": alertas_agenda,
         "hoje": {
             "caixa_dia": float(caixa_dia),
             "pagamentos_dia": pagamentos_dia,
