@@ -359,6 +359,7 @@ export default function SalaDeEsperaPage() {
   const [checkinReason, setCheckinReason] = useState('');
   const [checkinValue, setCheckinValue] = useState(''); // texto livre (ex: "400" ou "400,00"), convertido no envio
   const [checkinPayment, setCheckinPayment] = useState('pix'); // E3: forma de pagamento do valor recebido
+  const [checkinProcedure, setCheckinProcedure] = useState('Consulta'); // 06/08: o que foi vendido
   const [submitting, setSubmitting] = useState(false);
 
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -521,6 +522,7 @@ export default function SalaDeEsperaPage() {
     setCheckinReason('');
     setCheckinValue('');
     setCheckinPayment('pix');
+    setCheckinProcedure('Consulta');
   };
 
   // Fechar/cancelar o modal SEMPRE limpa o formulário (paciente/valor/motivo),
@@ -543,6 +545,7 @@ export default function SalaDeEsperaPage() {
         reason: checkinReason || undefined,
         value_cents: parseReaisToCents(checkinValue),
         payment_method: parseReaisToCents(checkinValue) ? checkinPayment : undefined,
+        procedure_type: parseReaisToCents(checkinValue) ? checkinProcedure : undefined,
       });
       setEntries((prev) => [...prev, entry]);
       const name = selectedPatient.name;
@@ -942,8 +945,28 @@ export default function SalaDeEsperaPage() {
               {/* E3 (05/08): valor na chegada = pagamento à vista → precisa da
                   forma de pagamento pra cair certo no Caixa do Dia. */}
               {checkinValue.trim() !== '' && (
-                <div className="mt-2">
-                  <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Forma de pagamento</p>
+                <div className="mt-2 space-y-3">
+                  <div>
+                    <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">O que foi</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {['Consulta', 'Retorno', 'Infiltração', 'Zoledrônico', 'Tirzepatida', 'Proloterapia', 'Bloqueio geniculares', 'Outro'].map((op) => (
+                        <button
+                          key={op}
+                          type="button"
+                          onClick={() => setCheckinProcedure(op)}
+                          className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
+                            checkinProcedure === op
+                              ? 'bg-blue-600 border-blue-600 text-white'
+                              : 'bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'
+                          }`}
+                        >
+                          {op}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Forma de pagamento</p>
                   <div className="flex flex-wrap gap-1.5">
                     {[
                       { v: 'pix', l: 'Pix' },
@@ -969,6 +992,7 @@ export default function SalaDeEsperaPage() {
                   <p className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-1.5">
                     ✓ Este valor entra automaticamente no Caixa do Dia
                   </p>
+                  </div>
                 </div>
               )}
             </div>

@@ -447,7 +447,7 @@ export const patientDocsApi = {
 
 // ── Sala de Espera ────────────────────────────────────────────────────────
 export const waitingRoomApi = {
-  checkin: (data: { patient_id: number; clinic_id?: number; reason?: string; notes?: string; value_cents?: number; payment_method?: string }) =>
+  checkin: (data: { patient_id: number; clinic_id?: number; reason?: string; notes?: string; value_cents?: number; payment_method?: string; procedure_type?: string }) =>
     api.post("/api/clinic/waiting-room/checkin", data).then((r) => r.data),
 
   // E3 (05/08): acrescenta valor à conta do paciente no dia (procedimento
