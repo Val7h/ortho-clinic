@@ -226,18 +226,21 @@ def dashboard_v2(
             elif status_ == "completed":
                 comp_map[cid] = comp_map.get(cid, 0) + n
 
+        # Receita por clínica sai do MESMO lugar que a receita do mês (o
+        # financeiro). Antes vinha da sala de espera, e por isso o mês fechava
+        # em R$ 5.685 com todas as clínicas zeradas: pagamento lançado direto
+        # no Caixa não passa pela fila. (05/08)
         for cid, soma, n in (
-            db.query(WaitingRoomEntry.clinic_id,
-                     func.coalesce(func.sum(WaitingRoomEntry.value_cents), 0),
-                     func.count(WaitingRoomEntry.id))
-            .filter(WaitingRoomEntry.clinic_id.in_(ids),
-                    WaitingRoomEntry.entry_date >= month_start,
-                    WaitingRoomEntry.entry_date <= month_end,
-                    WaitingRoomEntry.status == "attended",
-                    WaitingRoomEntry.value_cents.isnot(None), WaitingRoomEntry.value_cents > 0)
-            .group_by(WaitingRoomEntry.clinic_id).all()
+            db.query(FinancialRecord.clinic_id,
+                     func.coalesce(func.sum(FinancialRecord.amount), 0),
+                     func.count(FinancialRecord.id))
+            .filter(FinancialRecord.clinic_id.in_(ids),
+                    FinancialRecord.date >= month_start,
+                    FinancialRecord.date <= month_end,
+                    FinancialRecord.status == "paid")
+            .group_by(FinancialRecord.clinic_id).all()
         ):
-            receita_map[cid] = (float(soma or 0) / 100.0, int(n or 0))
+            receita_map[cid] = (float(soma or 0), int(n or 0))
 
         for cid, media in (
             db.query(WaitingRoomEntry.clinic_id, func.avg(WaitingRoomEntry.active_seconds))
