@@ -848,6 +848,16 @@ def _ensure_appointment_for_entry(db: Session, patient: Patient, clinic_id: Opti
     return novo.id
 
 
+def _coagir_procedure_type(procedure_type: Optional[str]) -> Optional[str]:
+    """Achado 2: None explícito significa "não sabemos ainda" e deve ficar
+    None — não pode virar "Consulta" por omissão. Já uma string não
+    reconhecida (typo/lixo) continua virando "Consulta", como sempre foi no
+    check-in."""
+    if procedure_type is None:
+        return None
+    return procedure_type if procedure_type in PROCEDIMENTOS else "Consulta"
+
+
 def _lancar_no_caixa(db: Session, patient: Patient, clinic_id: Optional[int],
                      value_cents: int, payment_method: Optional[str],
                      descricao: str, procedure_type: Optional[str] = None) -> None:
@@ -858,7 +868,7 @@ def _lancar_no_caixa(db: Session, patient: Patient, clinic_id: Optional[int],
     """
     if not value_cents or value_cents <= 0:
         return
-    proc = procedure_type if procedure_type in PROCEDIMENTOS else "Consulta"
+    proc = _coagir_procedure_type(procedure_type)
     db.add(FinancialRecord(
         organization_id=patient.organization_id,
         patient_id=patient.id,
@@ -992,9 +1002,13 @@ async def adicionar_valor(
     if not patient or not _same_org(current_user, patient.organization_id):
         raise HTTPException(status_code=404, detail="Entrada não encontrada")
 
+    # Achado 2: o procedimento decidido no meio da consulta não é conhecido
+    # aqui — grava procedure_type=None (honesto) em vez de "Consulta" por
+    # omissão, que mascarava infiltração/etc como consulta na faixa 3.
     _lancar_no_caixa(
         db, patient, entry.clinic_id, data.value_cents, data.payment_method,
         descricao=(data.description or "Procedimento"),
+        procedure_type=None,
     )
     entry.value_cents = (entry.value_cents or 0) + data.value_cents
     db.commit()
@@ -1069,10 +1083,13 @@ async def checkin_patient(
     _ensure_appointment_for_entry(db, patient, clinic_id, request.reason)
 
     # E3: valor da chegada = pagamento à vista → cai no Caixa do Dia
+    # Check-in: a ficha é conhecida no momento da chegada (front manda
+    # "Consulta" por default); se vier omitida mesmo assim, mantém o
+    # comportamento antigo — nunca vira None aqui (achado 2 é só p/ valor extra).
     _lancar_no_caixa(
         db, patient, clinic_id, request.value_cents or 0, request.payment_method,
         descricao=(request.reason or "Consulta"),
-        procedure_type=request.procedure_type,
+        procedure_type=request.procedure_type or "Consulta",
     )
 
     db.commit()

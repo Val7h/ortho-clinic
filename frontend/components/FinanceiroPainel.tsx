@@ -47,13 +47,19 @@ export function FinanceiroPainel() {
         <p className="mt-1 text-3xl font-semibold text-slate-900 dark:text-slate-50">
           {brl(mes.realizado)} até agora
         </p>
-        <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
-          No ritmo atual, fecha em <strong>{brl(mes.projecao)}</strong>
-          {mes.variacao_vs_anterior != null && (
-            <> — {Math.abs(Math.round(mes.variacao_vs_anterior * 100))}% {mes.variacao_vs_anterior >= 0 ? 'acima' : 'abaixo'} do mês anterior</>
-          )}
-        </p>
-        {mes.variacao_vs_anterior == null && (
+        {mes.projecao != null ? (
+          <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+            No ritmo atual, fecha em <strong>{brl(mes.projecao)}</strong>
+            {mes.variacao_vs_anterior != null && (
+              <> — {Math.abs(Math.round(mes.variacao_vs_anterior * 100))}% {mes.variacao_vs_anterior >= 0 ? 'acima' : 'abaixo'} do mês anterior</>
+            )}
+          </p>
+        ) : (
+          <p className="mt-2 text-xs text-slate-500">
+            Projeção a partir do 5º dia útil do mês — com poucos dias, o número exagera.
+          </p>
+        )}
+        {mes.projecao != null && mes.variacao_vs_anterior == null && (
           <p className="mt-2 text-xs text-slate-500">
             Ainda não há mês anterior fechado para comparar. Esta faixa fica útil em cerca de 60 dias.
           </p>
@@ -76,6 +82,11 @@ export function FinanceiroPainel() {
         <p className="mt-0.5 text-sm text-slate-500">
           Faturamento por hora de consultório — a mesma hora sua, em cada turno
         </p>
+        {(turnos || []).length === 0 && (
+          <p className="mt-3 rounded-lg bg-slate-50 p-3 text-sm text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+            Nenhum turno com horário cadastrado. Cadastre os horários da clínica em Configurações para ver o retorno por hora.
+          </p>
+        )}
         <div className="mt-4 space-y-0">
           {(turnos || []).map((t: any) => (
             <div
