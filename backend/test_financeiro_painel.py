@@ -116,6 +116,25 @@ def test_horas_do_turno_com_horario_invalido_devolve_zero():
     assert _horas_do_turno(FakeSched(), date(2026, 8, 1), date(2026, 8, 31)) == 0.0
 
 
+def test_registro_sem_etiqueta_nunca_conta_como_procedimento():
+    from routers.financial import _classificar_mix
+
+    linhas = [
+        ("Consulta", 400.0, 2),
+        (None, 400.0, 5),
+        ("Infiltração", 650.0, 1),
+        ("Outro", 300.0, 1),
+    ]
+    mix = _classificar_mix(linhas)
+
+    assert mix["consulta"]["qtd"] == 7          # 2 etiquetados + 5 sem etiqueta
+    assert mix["procedimento"]["qtd"] == 2      # Infiltração + Outro
+    assert [l["tipo"] for l in mix["linhas"]] == ["Infiltração", "Outro"]
+    # `soma` chega da query já agregada (func.sum por grupo) — não é preço
+    # unitário, então não se multiplica por qtd. (950/2) / (800/7) = 4.16.
+    assert mix["razao_ticket"] == 4.16
+
+
 def test_secretaria_nao_ve_o_painel():
     from fastapi.testclient import TestClient
     from database import get_db

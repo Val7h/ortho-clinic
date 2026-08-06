@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import func, extract
 from typing import List, Optional
+from calendar import monthrange
 from datetime import date, datetime, timezone, timedelta
 from pydantic import BaseModel
 from database import get_db
@@ -438,6 +439,46 @@ def _horas_do_turno(sched, inicio: date, fim: date) -> float:
     return round(ocorrencias * minutos / 60.0, 2)
 
 
+# Etiquetas que NAO sao procedimento. Registro sem etiqueta (historico antigo)
+# entra como consulta e nunca como procedimento: melhor a faixa 3 nascer
+# modesta do que mostrar uma infiltracao que ninguem sabe se aconteceu.
+NAO_PROCEDIMENTO = ("Consulta", "Retorno", None)
+
+
+def _classificar_mix(linhas) -> dict:
+    """Divide o faturamento entre consulta e procedimento.
+
+    `linhas` = lista de (procedure_type, soma, quantidade).
+    """
+    c_valor, c_qtd = 0.0, 0
+    p_valor, p_qtd = 0.0, 0
+    detalhe = []
+    for tipo, soma, qtd in linhas:
+        soma = float(soma or 0)
+        qtd = int(qtd or 0)
+        if tipo in NAO_PROCEDIMENTO:
+            c_valor += soma
+            c_qtd += qtd
+        else:
+            p_valor += soma
+            p_qtd += qtd
+            detalhe.append({
+                "tipo": tipo,
+                "qtd": qtd,
+                "valor": round(soma, 2),
+                "ticket": round(soma / qtd, 2) if qtd else None,
+            })
+    detalhe.sort(key=lambda l: l["valor"], reverse=True)
+    ticket_c = (c_valor / c_qtd) if c_qtd else 0.0
+    ticket_p = (p_valor / p_qtd) if p_qtd else 0.0
+    return {
+        "consulta": {"valor": round(c_valor, 2), "qtd": c_qtd},
+        "procedimento": {"valor": round(p_valor, 2), "qtd": p_qtd},
+        "razao_ticket": round(ticket_p / ticket_c, 2) if ticket_c and ticket_p else None,
+        "linhas": detalhe,
+    }
+
+
 @router.get("/painel")
 def get_painel(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Financeiro em tres faixas (06/08). Regua = R$ por hora de grade.
@@ -538,7 +579,86 @@ def get_painel(db: Session = Depends(get_db), current_user: User = Depends(get_c
         if (pior["ocupacao"] or 0) >= 0.6:
             pior["atencao"] = True
 
-    return {"turnos": turnos}
+    # ── FAIXA 1: o mes ──────────────────────────────────────────────────────
+    def _org_q(q):
+        if current_user.role != "superadmin":
+            q = q.join(Patient, FinancialRecord.patient_id == Patient.id).filter(
+                Patient.organization_id == current_user.organization_id
+            )
+        return q
+
+    doze_meses_atras = (mes_inicio - timedelta(days=340)).replace(day=1)
+    serie_bruta = (
+        _org_q(db.query(
+            func.extract("year", FinancialRecord.date),
+            func.extract("month", FinancialRecord.date),
+            func.coalesce(func.sum(FinancialRecord.amount), 0),
+        ))
+        .filter(FinancialRecord.date >= doze_meses_atras,
+                FinancialRecord.date <= hoje,
+                FinancialRecord.status == "paid")
+        .group_by(func.extract("year", FinancialRecord.date),
+                  func.extract("month", FinancialRecord.date))
+        .all()
+    )
+    por_mes = {(int(a), int(m)): float(v or 0) for a, m, v in serie_bruta}
+
+    serie_12m = []
+    ref = doze_meses_atras
+    while ref <= mes_inicio:
+        serie_12m.append({
+            "label": f"{ref.month:02d}/{ref.year}",
+            "valor": round(por_mes.get((ref.year, ref.month), 0.0), 2),
+        })
+        ref = (ref.replace(day=28) + timedelta(days=7)).replace(day=1)
+
+    realizado = round(por_mes.get((hoje.year, hoje.month), 0.0), 2)
+
+    def _uteis(inicio: date, fim: date) -> int:
+        n, d = 0, inicio
+        while d <= fim:
+            if d.weekday() < 5:
+                n += 1
+            d += timedelta(days=1)
+        return n
+
+    ultimo_dia = hoje.replace(day=monthrange(hoje.year, hoje.month)[1])
+    uteis_ate_hoje = _uteis(mes_inicio, hoje)
+    uteis_total = _uteis(mes_inicio, ultimo_dia)
+    projecao = round(realizado / uteis_ate_hoje * uteis_total, 2) if uteis_ate_hoje else realizado
+
+    anterior_ref = (mes_inicio - timedelta(days=1))
+    anterior = por_mes.get((anterior_ref.year, anterior_ref.month), 0.0)
+    variacao = round((projecao - anterior) / anterior, 3) if anterior else None
+
+    # ── FAIXA 3: consulta x procedimento ────────────────────────────────────
+    linhas_mix = (
+        _org_q(db.query(
+            FinancialRecord.procedure_type,
+            func.coalesce(func.sum(FinancialRecord.amount), 0),
+            func.count(FinancialRecord.id),
+        ))
+        .filter(FinancialRecord.date >= mes_inicio,
+                FinancialRecord.date <= hoje,
+                FinancialRecord.status == "paid")
+        .group_by(FinancialRecord.procedure_type)
+        .all()
+    )
+    mix = _classificar_mix(linhas_mix)
+
+    return {
+        "mes": {
+            "label": f"{hoje.month:02d}/{hoje.year}",
+            "realizado": realizado,
+            "projecao": projecao,
+            "dias_uteis_decorridos": uteis_ate_hoje,
+            "dias_uteis_total": uteis_total,
+            "variacao_vs_anterior": variacao,
+            "serie_12m": serie_12m,
+        },
+        "turnos": turnos,
+        "mix": mix,
+    }
 
 
 @router.delete("/{record_id}", status_code=204)
