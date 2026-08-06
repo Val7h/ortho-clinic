@@ -1020,18 +1020,25 @@ function PrintModal({ rx, patient, clinic, onClose, collectorId }: {
         )}
       </div>
 
-      {/* Data / local + assinatura do prescritor */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: "10px" }}>
-        <p style={{ fontSize: "9.5px", color: "#666", margin: 0 }}>
-          Validade: 30 dias a partir da emissão · Uso restrito conforme Portaria 344/98
-        </p>
-        <div style={{ textAlign: "center", width: "230px" }}>
-          <p style={{ fontSize: "10.5px", color: "#333", margin: "0 0 18px 0" }}>
+      {/* Data / local + assinatura do prescritor.
+          06/08: a linha "Cidade – UF, data" ficava CENTRADA logo acima da
+          linha de assinatura, roubando o espaço do carimbo. Foi para a
+          esquerda; a coluna da direita agora é só carimbo e assinatura. */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: "10px", gap: "16px" }}>
+        <div style={{ textAlign: "left" }}>
+          <p style={{ fontSize: "11px", color: "#333", margin: "0 0 4px 0" }}>
             {clinic?.city ? `${clinic.city} – ${clinic.state}` : "______________"}, {dateStr}
           </p>
+          <p style={{ fontSize: "9.5px", color: "#666", margin: 0 }}>
+            Validade: 30 dias a partir da emissão · Uso restrito conforme Portaria 344/98
+          </p>
+        </div>
+        <div style={{ textAlign: "center", width: "230px", flexShrink: 0 }}>
+          <div style={{ height: "34px" }} />
           <div style={{ borderTop: "1px solid #333", paddingTop: "3px" }}>
             <p style={{ fontSize: "11px", fontWeight: 700, margin: 0 }}>Dr. Valth Menezes Guimarães</p>
             <p style={{ fontSize: "9.5px", color: "#555", margin: 0 }}>CRM-PB 6326 | CRM-PE 16551</p>
+            <p style={{ fontSize: "8.5px", color: "#999", margin: "1px 0 0 0", textTransform: "uppercase", letterSpacing: "0.3px" }}>Assinatura e carimbo</p>
           </div>
         </div>
       </div>
