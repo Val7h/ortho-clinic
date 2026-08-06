@@ -6,6 +6,68 @@ import { useState, useEffect } from 'react';
 import { useAuth } from './AuthProvider';
 import { Logo } from './Logo';
 import { Monitor } from 'lucide-react';
+import { clinicApi } from '@/lib/api';
+
+// Onde o médico está AGORA, pela grade fixa da semana (pedido Valth 05/08):
+// seg CTO · ter Mário Bento · qua manhã IP / tarde Unimagem · qui manhã CTO /
+// tarde Artro. Mesma regra que o app usa pra carimbar cidade nos documentos.
+function useClinicaDoMomento() {
+  const [clinica, setClinica] = useState<{ name: string; city?: string; state?: string; color?: string } | null>(null);
+
+  useEffect(() => {
+    let vivo = true;
+    const calcular = (lista: any[]) => {
+      const agora = new Date();
+      const dow = (agora.getDay() + 6) % 7; // 0=Seg
+      const hhmm = `${String(agora.getHours()).padStart(2, '0')}:${String(agora.getMinutes()).padStart(2, '0')}`;
+      const doDia: { c: any; s: any }[] = [];
+      for (const c of lista || []) {
+        for (const s of c.schedules || []) {
+          if (s.active !== false && s.day_of_week === dow) doDia.push({ c, s });
+        }
+      }
+      if (doDia.length === 0) return null;
+      const dentro = doDia.find(({ s }) => (s.start_time || '00:00') <= hhmm && hhmm <= (s.end_time || '23:59'));
+      if (dentro) return dentro.c;
+      // fora do horário: mostra o turno mais próximo do dia (manhã antes do meio-dia)
+      const min = (t: string) => { const [h, m] = (t || '00:00').split(':').map(Number); return h * 60 + m; };
+      doDia.sort((a, b) => Math.abs(min(a.s.start_time) - min(hhmm)) - Math.abs(min(b.s.start_time) - min(hhmm)));
+      return doDia[0].c;
+    };
+
+    // cache leve: evita chamar a API a cada troca de página
+    try {
+      const cache = sessionStorage.getItem('ortho_clinics_cache');
+      if (cache) {
+        const c = calcular(JSON.parse(cache));
+        if (c) setClinica(c);
+      }
+    } catch {}
+
+    clinicApi.list()
+      .then((lista: any) => {
+        if (!vivo) return;
+        try { sessionStorage.setItem('ortho_clinics_cache', JSON.stringify(lista)); } catch {}
+        const c = calcular(lista);
+        if (c) setClinica(c);
+      })
+      .catch(() => {});
+
+    // reavalia a cada 5 min (vira a tarde sem precisar recarregar a página)
+    const t = setInterval(() => {
+      try {
+        const cache = sessionStorage.getItem('ortho_clinics_cache');
+        if (cache) {
+          const c = calcular(JSON.parse(cache));
+          if (c && vivo) setClinica(c);
+        }
+      } catch {}
+    }, 5 * 60 * 1000);
+    return () => { vivo = false; clearInterval(t); };
+  }, []);
+
+  return clinica;
+}
 
 export function Sidebar() {
   const router = useRouter();
@@ -13,6 +75,7 @@ export function Sidebar() {
   const { user, logout } = useAuth();
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
+  const clinicaAgora = useClinicaDoMomento();
 
   const menuItems = [
     // --- Fluxo clínico diário ---
@@ -65,7 +128,23 @@ export function Sidebar() {
 
         {/* Menu Principal */}
         <nav className="p-4 flex-1">
-          <p className="text-xs font-semibold text-blue-300 mb-3 uppercase tracking-wider">Clínica</p>
+          {/* Onde você está HOJE (Valth 05/08): o rótulo fixo "Clínica" virou o
+              nome da unidade do turno atual, deduzido pela grade da semana. */}
+          {clinicaAgora ? (
+            <div className="mb-3" suppressHydrationWarning>
+              <p className="text-[10px] font-semibold text-blue-400 uppercase tracking-wider">Você está em</p>
+              <p className="text-sm font-bold text-white leading-tight">
+                {clinicaAgora.name}
+              </p>
+              {clinicaAgora.city && (
+                <p className="text-[11px] text-blue-200">
+                  {clinicaAgora.city}{clinicaAgora.state ? ` – ${clinicaAgora.state}` : ''}
+                </p>
+              )}
+            </div>
+          ) : (
+            <p className="text-xs font-semibold text-blue-300 mb-3 uppercase tracking-wider">Clínica</p>
+          )}
 
           <div className="space-y-1">
             {filteredMenuItems.map((item, idx) => {
