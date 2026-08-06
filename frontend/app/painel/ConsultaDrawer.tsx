@@ -1253,8 +1253,13 @@ function PrintModal({ rx, patient, clinic, onClose, collectorId }: {
           html, body { height: auto !important; overflow: visible !important; background: #fff !important; }
           body * { visibility: hidden !important; }
           #print-rx-root, #print-rx-root * { visibility: visible !important; overflow: visible !important; max-height: none !important; box-shadow: none !important; }
-          #print-rx-root .no-print, #print-rx-root .no-print * { visibility: hidden !important; }
-          #print-rx-root { position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; background: #fff !important; padding: 0 !important; }
+          /* display:none, não visibility (06/08): escondido por visibility o
+             cabeçalho continuava OCUPANDO ~64px no alto da folha. Somados ao
+             p-5 do corpo, empurravam a via de 252mm para além dos 277mm úteis
+             da A4 — a sobra caía na página seguinte e sujava a impressão. */
+          #print-rx-root .no-print { display: none !important; }
+          #print-rx-root .rx-scroll { padding: 0 !important; overflow: visible !important; }
+          #print-rx-root { position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; background: #fff !important; padding: 0 !important; box-shadow: none !important; border-radius: 0 !important; }
           /* E1 (05/08): A4 retrato com margens de receituário; cada via numa
              folha própria (1ª Farmácia, 2ª Paciente) — nunca as duas juntas. */
           @page { size: A4 portrait; margin: 10mm 12mm; }
@@ -1278,7 +1283,7 @@ function PrintModal({ rx, patient, clinic, onClose, collectorId }: {
             </button>
           </div>
         </div>
-        <div className="flex-1 overflow-y-auto p-5 bg-white">
+        <div className="rx-scroll flex-1 overflow-y-auto p-5 bg-white">
           {sheetsBody}
         </div>
       </div>
@@ -2639,8 +2644,10 @@ function PrintExamModal({ text, patientName, clinic, onClose, fontSize = 14, lin
           html, body { height: auto !important; overflow: visible !important; background: #fff !important; }
           body * { visibility: hidden !important; }
           #print-exam-root, #print-exam-root * { visibility: visible !important; overflow: visible !important; max-height: none !important; box-shadow: none !important; }
-          #print-exam-root .no-print, #print-exam-root .no-print * { visibility: hidden !important; }
-          #print-exam-root { position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; background: #fff !important; padding: 20px !important; }
+          /* display:none, não visibility (06/08): escondido por visibility o
+             cabeçalho continuava ocupando espaço em branco no alto da folha. */
+          #print-exam-root .no-print { display: none !important; }
+          #print-exam-root { position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; background: #fff !important; padding: 0 !important; box-shadow: none !important; border-radius: 0 !important; }
         }
       `}</style>
       <div id="print-exam-root" className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-lg flex flex-col overflow-hidden">
@@ -3200,7 +3207,8 @@ function PrintDocModal({ title, content, onClose }: { title: string; content: Re
           html, body { height: auto !important; overflow: visible !important; background: #fff !important; }
           body * { visibility: hidden !important; }
           #print-doc-root, #print-doc-root * { visibility: visible !important; overflow: visible !important; max-height: none !important; box-shadow: none !important; }
-          #print-doc-root .no-print, #print-doc-root .no-print * { visibility: hidden !important; }
+          /* display:none, não visibility (06/08): ver comentário na receita. */
+          #print-doc-root .no-print { display: none !important; }
           #print-doc-root { position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; max-width: none !important; background: #fff !important; padding: 0 !important; border-radius: 0 !important; }
         }
       `}</style>
@@ -3329,8 +3337,11 @@ function ConsultaPrintCenter({ docs, onRemove, onClose }: {
           html, body { height: auto !important; overflow: visible !important; background: #fff !important; }
           body * { visibility: hidden !important; }
           #print-center-root, #print-center-root * { visibility: visible !important; overflow: visible !important; max-height: none !important; box-shadow: none !important; }
-          #print-center-root .no-print, #print-center-root .no-print * { visibility: hidden !important; }
-          #print-center-root { position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; background: #fff !important; padding: 12px !important; }
+          /* display:none, não visibility (06/08): a lista de documentos ficava
+             invisível mas RESERVAVA a altura dela no alto da impressão — uma
+             faixa em branco enorme antes do primeiro papel. */
+          #print-center-root .no-print { display: none !important; }
+          #print-center-root { position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; background: #fff !important; padding: 0 !important; box-shadow: none !important; border-radius: 0 !important; }
           .pc-doc { page-break-after: always; }
           .pc-doc:last-child { page-break-after: auto; }
           /* 2 vias de RCE/ATB quebram de página tambem na impressão em lote (M9) */
