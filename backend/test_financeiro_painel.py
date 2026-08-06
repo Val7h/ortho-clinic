@@ -1,7 +1,7 @@
 """Testes do Financeiro em tres faixas.
 Executar com: pytest backend/test_financeiro_painel.py -v
 """
-from datetime import date
+from datetime import date, timedelta
 
 import pytest
 from sqlalchemy import create_engine
@@ -79,3 +79,59 @@ def test_ficha_invalida_ou_ausente_vira_consulta():
     assert resolver(None) == "Consulta"
     assert resolver("qualquer coisa") == "Consulta"
     assert resolver("Zoledrônico") == "Zoledrônico"
+
+
+def test_periodo_pela_hora_de_inicio():
+    from routers.financial import _periodo
+
+    assert _periodo("08:00") == "manhã"
+    assert _periodo("12:59") == "manhã"
+    assert _periodo("13:00") == "tarde"
+    assert _periodo("14:30") == "tarde"
+
+
+def test_horas_do_turno_conta_ocorrencias_do_dia_da_semana():
+    from routers.financial import _horas_do_turno
+
+    class FakeSched:
+        day_of_week = 3      # quinta
+        start_time = "14:00"
+        end_time = "18:00"   # 4 horas
+
+    # 01/08/2026 a 06/08/2026: quintas em 06/08 apenas -> 4h
+    assert _horas_do_turno(FakeSched(), date(2026, 8, 1), date(2026, 8, 6)) == 4.0
+
+    # 01/08/2026 a 31/08/2026: quintas em 06, 13, 20, 27 -> 16h
+    assert _horas_do_turno(FakeSched(), date(2026, 8, 1), date(2026, 8, 31)) == 16.0
+
+
+def test_horas_do_turno_com_horario_invalido_devolve_zero():
+    from routers.financial import _horas_do_turno
+
+    class FakeSched:
+        day_of_week = 0
+        start_time = None
+        end_time = "12:00"
+
+    assert _horas_do_turno(FakeSched(), date(2026, 8, 1), date(2026, 8, 31)) == 0.0
+
+
+def test_secretaria_nao_ve_o_painel():
+    from fastapi.testclient import TestClient
+    from database import get_db
+    from deps import get_current_user
+    from main import app
+    from models.organization import User
+
+    class FakeSecretaria:
+        id = 99
+        role = "secretary"
+        organization_id = 1
+
+    app.dependency_overrides[get_current_user] = lambda: FakeSecretaria()
+    app.dependency_overrides[get_db] = lambda: TestingSessionLocal()
+    try:
+        resposta = TestClient(app).get("/financial/painel")
+        assert resposta.status_code == 403
+    finally:
+        app.dependency_overrides.clear()

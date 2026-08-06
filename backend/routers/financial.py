@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from database import get_db
 from models.patient import Patient
 from models.financial import FinancialRecord
+from models.clinic import Clinic, ClinicSchedule, Appointment
 from deps import get_current_user
 from models.organization import User
 from services.audit_service import AuditLogService
@@ -401,6 +402,143 @@ def get_analytics(db: Session = Depends(get_db), current_user: User = Depends(ge
         "por_sexo": por_sexo,
         "total_pacientes": total_pac,
     }
+
+
+def _periodo(start_time: Optional[str]) -> str:
+    """Turno da manha ou da tarde, pela hora de inicio da grade."""
+    try:
+        hora = int((start_time or "08:00").split(":")[0])
+    except (ValueError, AttributeError):
+        hora = 8
+    return "manhã" if hora < 13 else "tarde"
+
+
+def _horas_do_turno(sched, inicio: date, fim: date) -> float:
+    """Horas de consultorio que o turno reservou no periodo.
+
+    Regua do painel (06/08): a hora e a que o medico bloqueou na vida dele,
+    esteja ela preenchida ou nao — turno vazio DEVE pesar contra o turno.
+    Feriado nao e descontado: o app nao tem calendario de feriados e inventar
+    um seria manutencao.
+    """
+    try:
+        h1, m1 = map(int, (sched.start_time or "").split(":"))
+        h2, m2 = map(int, (sched.end_time or "").split(":"))
+    except (ValueError, AttributeError):
+        return 0.0
+    minutos = (h2 * 60 + m2) - (h1 * 60 + m1)
+    if minutos <= 0:
+        return 0.0
+    ocorrencias = 0
+    d = inicio
+    while d <= fim:
+        if d.weekday() == sched.day_of_week:
+            ocorrencias += 1
+        d += timedelta(days=1)
+    return round(ocorrencias * minutos / 60.0, 2)
+
+
+@router.get("/painel")
+def get_painel(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Financeiro em tres faixas (06/08). Regua = R$ por hora de grade.
+
+    Faturamento absoluto engana: a clinica onde o medico passa mais horas
+    sempre lidera, o que mede presenca e nao rentabilidade.
+    """
+    if current_user.role == "secretary":
+        raise HTTPException(403, "Painel financeiro disponível apenas para o médico/administração")
+
+    hoje = _br_today()
+    mes_inicio = hoje.replace(day=1)
+
+    clinics_q = db.query(Clinic).filter(Clinic.active == True)
+    if current_user.role != "superadmin":
+        clinics_q = clinics_q.filter(Clinic.organization_id == current_user.organization_id)
+    clinicas = {c.id: c for c in clinics_q.all()}
+    ids = list(clinicas)
+
+    receita_por_clinica: dict[int, float] = {}
+    qtd_por_clinica: dict[int, int] = {}
+    if ids:
+        for cid, soma, n in (
+            db.query(FinancialRecord.clinic_id,
+                     func.coalesce(func.sum(FinancialRecord.amount), 0),
+                     func.count(FinancialRecord.id))
+            .filter(FinancialRecord.clinic_id.in_(ids),
+                    FinancialRecord.date >= mes_inicio,
+                    FinancialRecord.date <= hoje,
+                    FinancialRecord.status == "paid")
+            .group_by(FinancialRecord.clinic_id).all()
+        ):
+            receita_por_clinica[cid] = float(soma or 0)
+            qtd_por_clinica[cid] = int(n or 0)
+
+    marcados: dict[int, int] = {}
+    if ids:
+        for cid, n in (
+            db.query(Appointment.clinic_id, func.count(Appointment.id))
+            .filter(Appointment.clinic_id.in_(ids),
+                    Appointment.date >= mes_inicio, Appointment.date <= hoje,
+                    Appointment.status.in_(("pending", "confirmed", "completed")))
+            .group_by(Appointment.clinic_id).all()
+        ):
+            marcados[cid] = n
+
+    scheds = (
+        db.query(ClinicSchedule)
+        .filter(ClinicSchedule.clinic_id.in_(ids), ClinicSchedule.active == True)
+        .all()
+    ) if ids else []
+
+    DIAS = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]
+    turnos = []
+    horas_por_clinica: dict[int, float] = {}
+    for s in scheds:
+        horas_por_clinica[s.clinic_id] = horas_por_clinica.get(s.clinic_id, 0.0) + _horas_do_turno(s, mes_inicio, hoje)
+
+    vistos: set[int] = set()
+    for s in scheds:
+        c = clinicas.get(s.clinic_id)
+        if c is None:
+            continue
+        horas = _horas_do_turno(s, mes_inicio, hoje)
+        if horas <= 0:
+            continue
+        horas_totais = horas_por_clinica.get(s.clinic_id, 0.0) or horas
+        fatia = horas / horas_totais
+        receita = round(receita_por_clinica.get(s.clinic_id, 0.0) * fatia, 2)
+        qtd = qtd_por_clinica.get(s.clinic_id, 0)
+        slot = s.slot_duration or 12
+        capacidade = int(horas * 60 // slot) if slot else 0
+        booked = round(marcados.get(s.clinic_id, 0) * fatia)
+        nome = c.name.replace("Clínica ", "")
+        periodo = _periodo(s.start_time)
+        turnos.append({
+            "clinic_id": c.id,
+            "clinica": nome,
+            "dia_semana": s.day_of_week,
+            "periodo": periodo,
+            "label": f"{DIAS[s.day_of_week]} {periodo} · {nome}",
+            "horas_mes": horas,
+            "receita_mes": receita,
+            "receita_por_hora": round(receita / horas, 2) if horas else 0.0,
+            "ocupacao": round(booked / capacidade, 3) if capacidade else None,
+            "ticket": round(receita / qtd, 2) if qtd else None,
+            "atencao": False,
+        })
+        vistos.add(s.clinic_id)
+
+    turnos.sort(key=lambda t: t["receita_por_hora"], reverse=True)
+
+    # Destaque em ambar: no maximo UM turno — o de pior R$/hora, e so se
+    # estiver com ocupacao >= 60%. Se o pior turno estiver vazio, o problema
+    # e agenda e nao preco, e a coluna de ocupacao ja conta essa historia.
+    if turnos:
+        pior = turnos[-1]
+        if (pior["ocupacao"] or 0) >= 0.6:
+            pior["atencao"] = True
+
+    return {"turnos": turnos}
 
 
 @router.delete("/{record_id}", status_code=204)
