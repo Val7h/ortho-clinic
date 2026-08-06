@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import NavBar from '@/components/NavBar';
 import { PageWithSidebar } from '@/components/PageWithSidebar';
+import { FinanceiroPainel } from '@/components/FinanceiroPainel';
 import { financialApi, patientsApi } from '@/lib/api';
 import {
   ResponsiveContainer, LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
@@ -427,6 +428,16 @@ export default function FinanceiroPage() {
             </Card>
           )}
         </div>
+
+        {/* ── PAINEL DE TRÊS FAIXAS (médico/admin) ────────────────────────
+            Guard próprio, independente de `analytics`: o painel busca seus
+            próprios dados (/financial/painel) e não pode desaparecer se o
+            endpoint antigo (/financial/analytics) estiver lento ou falhar. */}
+        {!isSecretary && (
+          <div className="pt-4">
+            <FinanceiroPainel />
+          </div>
+        )}
 
         {/* ── ANÁLISES (médico/admin) — decisão Valth 02/08 ─────────────── */}
         {!isSecretary && analytics && (
