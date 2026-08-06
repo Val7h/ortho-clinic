@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from typing import List, Optional
 from datetime import date, datetime, timedelta
+from datetime import date as _date  # alias p/ anotações em classes com campo "date"
 from pydantic import BaseModel
 import logging
 import secrets
@@ -849,7 +850,13 @@ class AppointmentCreateIn(BaseModel):
 
 
 class AppointmentUpdateIn(BaseModel):
-    date: Optional[date] = None
+    # BUG ANTIGO (descoberto 05/08 pelo teste da trava): estava
+    # `date: Optional[date] = None`. Como o campo se chama `date`, o Pydantic
+    # resolvia a anotação DEPOIS, quando `date` no namespace da classe já valia
+    # None -> o tipo virava None e QUALQUER data enviada dava 422
+    # ("Input should be None"). Ou seja: REMARCAR A DATA nunca funcionou.
+    # `_date` é o mesmo datetime.date, só que sem ser sombreado pelo campo.
+    date: Optional[_date] = None
     start_time: Optional[str] = None
     patient_name: Optional[str] = None
     patient_phone: Optional[str] = None
