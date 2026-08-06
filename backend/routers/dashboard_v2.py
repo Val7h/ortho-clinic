@@ -145,17 +145,32 @@ def dashboard_v2(
     ) or 0
     ticket_geral = (receita_mes / n_pagos_mes) if n_pagos_mes else 0.0
 
-    # Faltas x comparecimentos do mês: UMA query agrupada por status (PERF 05/08)
+    # Quem PASSOU pela sala de espera compareceu — mesmo que o agendamento
+    # tenha ficado "confirmado" (o médico não fecha status na correria).
+    # Sem isso a taxa de falta dava 96% num mês de agenda cheia. (06/08)
+    atendidos_pares = {
+        (pid, dia)
+        for pid, dia in db.query(WaitingRoomEntry.patient_id, WaitingRoomEntry.entry_date)
+        .filter(WaitingRoomEntry.entry_date >= min(month_start, d28),
+                WaitingRoomEntry.entry_date <= month_end,
+                WaitingRoomEntry.status == "attended").all()
+    }
+
+    # Faltas x comparecimentos do mês (UMA query; a mesma alimenta "por clínica")
+    ap_mes = (
+        db.query(Appointment.status, Appointment.patient_id, Appointment.date, Appointment.clinic_id)
+        .filter(Appointment.date >= month_start, Appointment.date < today).all()
+    )
+
+    def _compareceu(st, pid, dia) -> bool:
+        return st == "completed" or (pid is not None and (pid, dia) in atendidos_pares)
+
     faltas_mes, compareceram_mes = 0, 0
-    for status_, n in (
-        db.query(Appointment.status, func.count(Appointment.id))
-        .filter(Appointment.date >= month_start, Appointment.date < today)
-        .group_by(Appointment.status).all()
-    ):
-        if status_ in NOSHOW_STATUSES:
-            faltas_mes += n
-        elif status_ == "completed":
-            compareceram_mes += n
+    for st, pid, dia, _cid in ap_mes:
+        if _compareceu(st, pid, dia):
+            compareceram_mes += 1
+        elif st in NOSHOW_STATUSES:
+            faltas_mes += 1
     taxa_falta = (faltas_mes / (faltas_mes + compareceram_mes)) if (faltas_mes + compareceram_mes) else 0.0
     receita_perdida = round(faltas_mes * ticket_geral, 2)
 
@@ -215,16 +230,15 @@ def dashboard_v2(
         ):
             booked_map[cid] = n
 
-        for cid, status_, n in (
-            db.query(Appointment.clinic_id, Appointment.status, func.count(Appointment.id))
-            .filter(Appointment.clinic_id.in_(ids), Appointment.date >= month_start,
-                    Appointment.date < today)
-            .group_by(Appointment.clinic_id, Appointment.status).all()
-        ):
-            if status_ in NOSHOW_STATUSES:
-                faltas_map[cid] = faltas_map.get(cid, 0) + n
-            elif status_ == "completed":
-                comp_map[cid] = comp_map.get(cid, 0) + n
+        # Reaproveita ap_mes (já veio do banco) e aplica a MESMA regra do mês:
+        # passou pela sala de espera = compareceu.
+        for st, pid, dia, cid in ap_mes:
+            if cid is None:
+                continue
+            if _compareceu(st, pid, dia):
+                comp_map[cid] = comp_map.get(cid, 0) + 1
+            elif st in NOSHOW_STATUSES:
+                faltas_map[cid] = faltas_map.get(cid, 0) + 1
 
         # Receita por clínica sai do MESMO lugar que a receita do mês (o
         # financeiro). Antes vinha da sala de espera, e por isso o mês fechava
@@ -291,11 +305,13 @@ def dashboard_v2(
         .filter(Appointment.date >= d28, Appointment.date <= today, Appointment.status.in_(("confirmed", "completed")))
         .scalar()
     ) or 0
-    compareceram_28 = (
-        db.query(func.count(Appointment.id))
-        .filter(Appointment.date >= d28, Appointment.date <= today, Appointment.status == "completed")
-        .scalar()
-    ) or 0
+    # Mesma regra do mês: quem passou pela sala de espera compareceu (06/08)
+    compareceram_28 = sum(
+        1
+        for st, pid, dia in db.query(Appointment.status, Appointment.patient_id, Appointment.date)
+        .filter(Appointment.date >= d28, Appointment.date <= today).all()
+        if _compareceu(st, pid, dia)
+    )
 
     novos_mes = (
         org_p(db.query(func.count(Patient.id)))
