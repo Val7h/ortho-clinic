@@ -444,6 +444,12 @@ def _horas_do_turno(sched, inicio: date, fim: date) -> float:
 # modesta do que mostrar uma infiltracao que ninguem sabe se aconteceu.
 NAO_PROCEDIMENTO = ("Consulta", "Retorno", None)
 
+# "Outro" e o cesto genérico (taxa de laudo, algo atípico): o médico precisa
+# VER o valor na lista, mas ele nao e um procedimento de verdade — contá-lo
+# no headline/razao_ticket distorceria "cada procedimento vale N consultas"
+# com algo que nem é procedimento.
+_EXCLUI_DO_HEADLINE = {"Outro"}
+
 
 def _classificar_mix(linhas) -> dict:
     """Divide o faturamento entre consulta e procedimento.
@@ -460,8 +466,11 @@ def _classificar_mix(linhas) -> dict:
             c_valor += soma
             c_qtd += qtd
         else:
-            p_valor += soma
-            p_qtd += qtd
+            # "Outro" fica visível na lista, mas não entra no total de
+            # procedimento nem no razao_ticket (ver _EXCLUI_DO_HEADLINE acima).
+            if tipo not in _EXCLUI_DO_HEADLINE:
+                p_valor += soma
+                p_qtd += qtd
             detalhe.append({
                 "tipo": tipo,
                 "qtd": qtd,
@@ -477,6 +486,88 @@ def _classificar_mix(linhas) -> dict:
         "razao_ticket": round(ticket_p / ticket_c, 2) if ticket_c and ticket_p else None,
         "linhas": detalhe,
     }
+
+
+_DIAS = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]
+
+
+def _montar_turnos(scheds, clinicas, receita_por_clinica_dia, qtd_por_clinica_dia,
+                    marcados_por_clinica_dia, mes_inicio: date, hoje: date) -> list[dict]:
+    """Monta a faixa 2 (um turno por linha), pura e testável sem banco.
+
+    Cada turno casa com sua PRÓPRIA receita por (clinic_id, dia da semana) —
+    nunca um rateio proporcional às horas da clínica inteira, que cancela
+    matematicamente e faz todo turno da clínica empatar no mesmo R$/hora.
+    """
+    turnos = []
+    for s in scheds:
+        c = clinicas.get(s.clinic_id)
+        if c is None:
+            continue
+        horas = _horas_do_turno(s, mes_inicio, hoje)
+        if horas <= 0:
+            continue
+        chave = (s.clinic_id, s.day_of_week)
+        receita = round(receita_por_clinica_dia.get(chave, 0.0), 2)
+        qtd = qtd_por_clinica_dia.get(chave, 0)
+        booked = marcados_por_clinica_dia.get(chave, 0)
+        slot = s.slot_duration or 12
+        capacidade = int(horas * 60 // slot) if slot else 0
+        nome = c.name.replace("Clínica ", "")
+        periodo = _periodo(s.start_time)
+        turnos.append({
+            "clinic_id": c.id,
+            "clinica": nome,
+            "dia_semana": s.day_of_week,
+            "periodo": periodo,
+            "label": f"{_DIAS[s.day_of_week]} {periodo} · {nome}",
+            "horas_mes": horas,
+            "receita_mes": receita,
+            "receita_por_hora": round(receita / horas, 2) if horas else 0.0,
+            "ocupacao": round(booked / capacidade, 3) if capacidade else None,
+            "ticket": round(receita / qtd, 2) if qtd else None,
+            "atencao": False,
+        })
+
+    turnos.sort(key=lambda t: t["receita_por_hora"], reverse=True)
+    return turnos
+
+
+# Achado 4: com poucos dias uteis decorridos, extrapolar linearmente o mes
+# produz um numero fantasioso (caso real: 4 dias -> projecao de R$29.846) e
+# a variacao vs. mes anterior compara essa fantasia com um mes ja fechado.
+# Melhor nao mostrar do que mostrar um numero que engana.
+_MIN_DIAS_UTEIS_PARA_PROJETAR = 5
+
+
+def _projecao_mes(realizado: float, uteis_decorridos: int, uteis_total: int,
+                   anterior: float) -> tuple[Optional[float], Optional[float]]:
+    """Projeta o fechamento do mes e a variacao vs. mes anterior.
+
+    Devolve (None, None) nos primeiros dias do mes (ver
+    _MIN_DIAS_UTEIS_PARA_PROJETAR acima) — a faixa 1 mostra so o realizado.
+    """
+    if uteis_decorridos < _MIN_DIAS_UTEIS_PARA_PROJETAR:
+        return None, None
+    projecao = round(realizado / uteis_decorridos * uteis_total, 2)
+    variacao = round((projecao - anterior) / anterior, 3) if anterior else None
+    return projecao, variacao
+
+
+# Achado 4: com poucos dias uteis decorridos, extrapolar linear explode (4
+# dias -> R$29.846 de projecao a partir de um real pequeno). Abaixo disso e
+# fantasia, entao a projecao/variacao vem nula e o front mostra so o
+# realizado ate agora.
+_MIN_DIAS_UTEIS_PARA_PROJETAR = 5
+
+
+def _projecao_mes(realizado: float, uteis_decorridos: int, uteis_total: int,
+                   anterior: float) -> tuple[Optional[float], Optional[float]]:
+    if uteis_decorridos < _MIN_DIAS_UTEIS_PARA_PROJETAR:
+        return None, None
+    projecao = round(realizado / uteis_decorridos * uteis_total, 2)
+    variacao = round((projecao - anterior) / anterior, 3) if anterior else None
+    return projecao, variacao
 
 
 @router.get("/painel")
@@ -498,32 +589,42 @@ def get_painel(db: Session = Depends(get_db), current_user: User = Depends(get_c
     clinicas = {c.id: c for c in clinics_q.all()}
     ids = list(clinicas)
 
-    receita_por_clinica: dict[int, float] = {}
-    qtd_por_clinica: dict[int, int] = {}
+    # Linhas cruas por (clinic_id, date) — igual em Postgres e SQLite. O fold
+    # pra (clinic_id, weekday) acontece em Python com date.weekday() (0=Seg),
+    # que É a convenção de clinic_schedules.day_of_week — nunca EXTRACT(DOW)
+    # (0=Dom no Postgres) nem strftime (só existe no SQLite).
+    receita_por_clinica_dia: dict[tuple[int, int], float] = {}
+    qtd_por_clinica_dia: dict[tuple[int, int], int] = {}
     if ids:
-        for cid, soma, n in (
-            db.query(FinancialRecord.clinic_id,
+        linhas_receita = (
+            db.query(FinancialRecord.clinic_id, FinancialRecord.date,
                      func.coalesce(func.sum(FinancialRecord.amount), 0),
                      func.count(FinancialRecord.id))
             .filter(FinancialRecord.clinic_id.in_(ids),
                     FinancialRecord.date >= mes_inicio,
                     FinancialRecord.date <= hoje,
                     FinancialRecord.status == "paid")
-            .group_by(FinancialRecord.clinic_id).all()
-        ):
-            receita_por_clinica[cid] = float(soma or 0)
-            qtd_por_clinica[cid] = int(n or 0)
+            .group_by(FinancialRecord.clinic_id, FinancialRecord.date)
+            .all()
+        )
+        for cid, dt, soma, n in linhas_receita:
+            chave = (cid, dt.weekday())
+            receita_por_clinica_dia[chave] = receita_por_clinica_dia.get(chave, 0.0) + float(soma or 0)
+            qtd_por_clinica_dia[chave] = qtd_por_clinica_dia.get(chave, 0) + int(n or 0)
 
-    marcados: dict[int, int] = {}
+    marcados_por_clinica_dia: dict[tuple[int, int], int] = {}
     if ids:
-        for cid, n in (
-            db.query(Appointment.clinic_id, func.count(Appointment.id))
+        linhas_marcados = (
+            db.query(Appointment.clinic_id, Appointment.date, func.count(Appointment.id))
             .filter(Appointment.clinic_id.in_(ids),
                     Appointment.date >= mes_inicio, Appointment.date <= hoje,
                     Appointment.status.in_(("pending", "confirmed", "completed")))
-            .group_by(Appointment.clinic_id).all()
-        ):
-            marcados[cid] = n
+            .group_by(Appointment.clinic_id, Appointment.date)
+            .all()
+        )
+        for cid, dt, n in linhas_marcados:
+            chave = (cid, dt.weekday())
+            marcados_por_clinica_dia[chave] = marcados_por_clinica_dia.get(chave, 0) + int(n or 0)
 
     scheds = (
         db.query(ClinicSchedule)
@@ -531,45 +632,11 @@ def get_painel(db: Session = Depends(get_db), current_user: User = Depends(get_c
         .all()
     ) if ids else []
 
-    DIAS = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]
-    turnos = []
-    horas_por_clinica: dict[int, float] = {}
-    for s in scheds:
-        horas_por_clinica[s.clinic_id] = horas_por_clinica.get(s.clinic_id, 0.0) + _horas_do_turno(s, mes_inicio, hoje)
-
-    vistos: set[int] = set()
-    for s in scheds:
-        c = clinicas.get(s.clinic_id)
-        if c is None:
-            continue
-        horas = _horas_do_turno(s, mes_inicio, hoje)
-        if horas <= 0:
-            continue
-        horas_totais = horas_por_clinica.get(s.clinic_id, 0.0) or horas
-        fatia = horas / horas_totais
-        receita = round(receita_por_clinica.get(s.clinic_id, 0.0) * fatia, 2)
-        qtd = qtd_por_clinica.get(s.clinic_id, 0)
-        slot = s.slot_duration or 12
-        capacidade = int(horas * 60 // slot) if slot else 0
-        booked = round(marcados.get(s.clinic_id, 0) * fatia)
-        nome = c.name.replace("Clínica ", "")
-        periodo = _periodo(s.start_time)
-        turnos.append({
-            "clinic_id": c.id,
-            "clinica": nome,
-            "dia_semana": s.day_of_week,
-            "periodo": periodo,
-            "label": f"{DIAS[s.day_of_week]} {periodo} · {nome}",
-            "horas_mes": horas,
-            "receita_mes": receita,
-            "receita_por_hora": round(receita / horas, 2) if horas else 0.0,
-            "ocupacao": round(booked / capacidade, 3) if capacidade else None,
-            "ticket": round(receita / qtd, 2) if qtd else None,
-            "atencao": False,
-        })
-        vistos.add(s.clinic_id)
-
-    turnos.sort(key=lambda t: t["receita_por_hora"], reverse=True)
+    turnos = _montar_turnos(
+        scheds, clinicas,
+        receita_por_clinica_dia, qtd_por_clinica_dia, marcados_por_clinica_dia,
+        mes_inicio, hoje,
+    )
 
     # Destaque em ambar: no maximo UM turno — o de pior R$/hora, e so se
     # estiver com ocupacao >= 60%. Se o pior turno estiver vazio, o problema
@@ -587,7 +654,16 @@ def get_painel(db: Session = Depends(get_db), current_user: User = Depends(get_c
             )
         return q
 
-    doze_meses_atras = (mes_inicio - timedelta(days=340)).replace(day=1)
+    # 12 meses exatos = mes atual + 11 anteriores. Usar aritmetica de
+    # mes/ano (nao timedelta de dias fixos) porque meses tem tamanhos
+    # diferentes: um offset em dias erra o ponto de partida (achado 6 —
+    # "mes_inicio - 340 dias" caia ~11 meses e 5 dias atras e produzia 13
+    # barras, duas delas com o mesmo rotulo de 2 letras).
+    def _mes_menos(d: date, n: int) -> date:
+        total = d.year * 12 + (d.month - 1) - n
+        return date(total // 12, total % 12 + 1, 1)
+
+    doze_meses_atras = _mes_menos(mes_inicio, 11)
     serie_bruta = (
         _org_q(db.query(
             func.extract("year", FinancialRecord.date),
@@ -604,13 +680,12 @@ def get_painel(db: Session = Depends(get_db), current_user: User = Depends(get_c
     por_mes = {(int(a), int(m)): float(v or 0) for a, m, v in serie_bruta}
 
     serie_12m = []
-    ref = doze_meses_atras
-    while ref <= mes_inicio:
+    for i in range(12):
+        ref = _mes_menos(mes_inicio, 11 - i)
         serie_12m.append({
             "label": f"{ref.month:02d}/{ref.year}",
             "valor": round(por_mes.get((ref.year, ref.month), 0.0), 2),
         })
-        ref = (ref.replace(day=28) + timedelta(days=7)).replace(day=1)
 
     realizado = round(por_mes.get((hoje.year, hoje.month), 0.0), 2)
 
@@ -625,11 +700,10 @@ def get_painel(db: Session = Depends(get_db), current_user: User = Depends(get_c
     ultimo_dia = hoje.replace(day=monthrange(hoje.year, hoje.month)[1])
     uteis_ate_hoje = _uteis(mes_inicio, hoje)
     uteis_total = _uteis(mes_inicio, ultimo_dia)
-    projecao = round(realizado / uteis_ate_hoje * uteis_total, 2) if uteis_ate_hoje else realizado
 
     anterior_ref = (mes_inicio - timedelta(days=1))
     anterior = por_mes.get((anterior_ref.year, anterior_ref.month), 0.0)
-    variacao = round((projecao - anterior) / anterior, 3) if anterior else None
+    projecao, variacao = _projecao_mes(realizado, uteis_ate_hoje, uteis_total, anterior)
 
     # ── FAIXA 3: consulta x procedimento ────────────────────────────────────
     linhas_mix = (
