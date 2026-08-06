@@ -45,12 +45,16 @@ def require_viewer(current_user: User = Depends(get_current_user)) -> User:
     return current_user
 
 
-def _capacity_month(db: Session, clinic: Clinic, start: date, end: date) -> tuple[int, int]:
-    """(marcados, capacidade) da clínica no intervalo, respeitando os dias de
-    funcionamento (clinic_schedules ativos) e o slot_duration."""
+def _capacity_only(clinic: Clinic, start: date, end: date) -> int:
+    """Capacidade teórica da clínica no intervalo (sem tocar o banco).
+
+    PERF 05/08: antes esta função também consultava os agendamentos, 1 query por
+    clínica. Agora só faz a conta com os schedules já carregados; a contagem de
+    marcados vem de UMA query agregada para todas as clínicas.
+    """
     schedules = [s for s in clinic.schedules if s.active]
     if not schedules:
-        return 0, 0
+        return 0
     by_dow: dict[int, int] = {}
     for s in schedules:
         try:
@@ -65,17 +69,7 @@ def _capacity_month(db: Session, clinic: Clinic, start: date, end: date) -> tupl
     while d <= end:
         capacity += by_dow.get(d.weekday(), 0)
         d += timedelta(days=1)
-    booked = (
-        db.query(func.count(Appointment.id))
-        .filter(
-            Appointment.clinic_id == clinic.id,
-            Appointment.date >= start,
-            Appointment.date <= end,
-            Appointment.status.in_(ACTIVE_STATUSES),
-        )
-        .scalar()
-    ) or 0
-    return booked, capacity
+    return capacity
 
 
 @router.get("")
@@ -102,21 +96,21 @@ def dashboard_v2(
         .filter(FinancialRecord.date == today, FinancialRecord.status == "paid")
         .scalar()
     ) or 0
+    # PERF 05/08: contagens do dia numa query so, agrupada por status
     pagamentos_dia = (
         db.query(func.count(FinancialRecord.id))
         .filter(FinancialRecord.date == today, FinancialRecord.status == "paid")
         .scalar()
     ) or 0
-    pacientes_hoje = (
-        db.query(func.count(Appointment.id))
-        .filter(Appointment.date == today, Appointment.status.in_(ACTIVE_STATUSES))
-        .scalar()
-    ) or 0
-    cancelados_hoje = (
-        db.query(func.count(Appointment.id))
-        .filter(Appointment.date == today, Appointment.status == "cancelled")
-        .scalar()
-    ) or 0
+    pacientes_hoje, cancelados_hoje = 0, 0
+    for status_, n in (
+        db.query(Appointment.status, func.count(Appointment.id))
+        .filter(Appointment.date == today).group_by(Appointment.status).all()
+    ):
+        if status_ in ACTIVE_STATUSES:
+            pacientes_hoje += n
+        elif status_ == "cancelled":
+            cancelados_hoje += n
     nao_conf = (
         db.query(Appointment, Clinic.name)
         .join(Clinic, Clinic.id == Appointment.clinic_id)
@@ -151,17 +145,17 @@ def dashboard_v2(
     ) or 0
     ticket_geral = (receita_mes / n_pagos_mes) if n_pagos_mes else 0.0
 
-    # Faltas do mês (derivadas): passado que morreu em pending/confirmed
-    faltas_mes = (
-        db.query(func.count(Appointment.id))
-        .filter(Appointment.date >= month_start, Appointment.date < today, Appointment.status.in_(NOSHOW_STATUSES))
-        .scalar()
-    ) or 0
-    compareceram_mes = (
-        db.query(func.count(Appointment.id))
-        .filter(Appointment.date >= month_start, Appointment.date < today, Appointment.status == "completed")
-        .scalar()
-    ) or 0
+    # Faltas x comparecimentos do mês: UMA query agrupada por status (PERF 05/08)
+    faltas_mes, compareceram_mes = 0, 0
+    for status_, n in (
+        db.query(Appointment.status, func.count(Appointment.id))
+        .filter(Appointment.date >= month_start, Appointment.date < today)
+        .group_by(Appointment.status).all()
+    ):
+        if status_ in NOSHOW_STATUSES:
+            faltas_mes += n
+        elif status_ == "completed":
+            compareceram_mes += n
     taxa_falta = (faltas_mes / (faltas_mes + compareceram_mes)) if (faltas_mes + compareceram_mes) else 0.0
     receita_perdida = round(faltas_mes * ticket_geral, 2)
 
@@ -198,46 +192,75 @@ def dashboard_v2(
     projecao_mes = round(receita_mes + futuros_mes * ticket_geral * taxa_comparecimento, 2)
 
     # ── POR CLÍNICA ─────────────────────────────────────────────────────────
+    # PERF 05/08: eram ~4 queries POR clínica (20+ idas ao banco, ~4,5s de
+    # carregamento). Agora são 4 queries agregadas com GROUP BY, para todas.
     clinics_q = db.query(Clinic).filter(Clinic.active == True)
     if not is_super:
         clinics_q = clinics_q.filter(Clinic.organization_id == org)
+    clinicas = clinics_q.all()
+    ids = [c.id for c in clinicas]
+
+    booked_map: dict[int, int] = {}
+    faltas_map: dict[int, int] = {}
+    comp_map: dict[int, int] = {}
+    receita_map: dict[int, tuple[float, int]] = {}
+    tempo_map: dict[int, float] = {}
+
+    if ids:
+        for cid, n in (
+            db.query(Appointment.clinic_id, func.count(Appointment.id))
+            .filter(Appointment.clinic_id.in_(ids), Appointment.date >= d28,
+                    Appointment.date <= today, Appointment.status.in_(ACTIVE_STATUSES))
+            .group_by(Appointment.clinic_id).all()
+        ):
+            booked_map[cid] = n
+
+        for cid, status_, n in (
+            db.query(Appointment.clinic_id, Appointment.status, func.count(Appointment.id))
+            .filter(Appointment.clinic_id.in_(ids), Appointment.date >= month_start,
+                    Appointment.date < today)
+            .group_by(Appointment.clinic_id, Appointment.status).all()
+        ):
+            if status_ in NOSHOW_STATUSES:
+                faltas_map[cid] = faltas_map.get(cid, 0) + n
+            elif status_ == "completed":
+                comp_map[cid] = comp_map.get(cid, 0) + n
+
+        for cid, soma, n in (
+            db.query(WaitingRoomEntry.clinic_id,
+                     func.coalesce(func.sum(WaitingRoomEntry.value_cents), 0),
+                     func.count(WaitingRoomEntry.id))
+            .filter(WaitingRoomEntry.clinic_id.in_(ids),
+                    WaitingRoomEntry.entry_date >= month_start,
+                    WaitingRoomEntry.entry_date <= month_end,
+                    WaitingRoomEntry.status == "attended",
+                    WaitingRoomEntry.value_cents.isnot(None), WaitingRoomEntry.value_cents > 0)
+            .group_by(WaitingRoomEntry.clinic_id).all()
+        ):
+            receita_map[cid] = (float(soma or 0) / 100.0, int(n or 0))
+
+        for cid, media in (
+            db.query(WaitingRoomEntry.clinic_id, func.avg(WaitingRoomEntry.active_seconds))
+            .filter(WaitingRoomEntry.clinic_id.in_(ids), WaitingRoomEntry.status == "attended",
+                    WaitingRoomEntry.entry_date >= d28, WaitingRoomEntry.active_seconds > 0)
+            .group_by(WaitingRoomEntry.clinic_id).all()
+        ):
+            if media:
+                tempo_map[cid] = float(media)
+
     clinicas_out = []
     ocupacao_pond_num, ocupacao_pond_den = 0, 0
-    for c in clinics_q.all():
-        booked, capacity = _capacity_month(db, c, d28, today)
+    for c in clinicas:
+        capacity = _capacity_only(c, d28, today)
+        booked = booked_map.get(c.id, 0)
         ocupacao = (booked / capacity) if capacity else None
         if capacity:
             ocupacao_pond_num += booked
             ocupacao_pond_den += capacity
-        faltas_c = (
-            db.query(func.count(Appointment.id))
-            .filter(Appointment.clinic_id == c.id, Appointment.date >= month_start, Appointment.date < today,
-                    Appointment.status.in_(NOSHOW_STATUSES))
-            .scalar()
-        ) or 0
-        comp_c = (
-            db.query(func.count(Appointment.id))
-            .filter(Appointment.clinic_id == c.id, Appointment.date >= month_start, Appointment.date < today,
-                    Appointment.status == "completed")
-            .scalar()
-        ) or 0
-        # receita/ticket via sala de espera (value_cents) — proxy por clínica
-        rec_row = (
-            db.query(func.coalesce(func.sum(WaitingRoomEntry.value_cents), 0), func.count(WaitingRoomEntry.id))
-            .filter(WaitingRoomEntry.clinic_id == c.id, WaitingRoomEntry.entry_date >= month_start,
-                    WaitingRoomEntry.entry_date <= month_end, WaitingRoomEntry.status == "attended",
-                    WaitingRoomEntry.value_cents.isnot(None), WaitingRoomEntry.value_cents > 0)
-            .first()
-        )
-        receita_c = float(rec_row[0] or 0) / 100.0
-        n_val = int(rec_row[1] or 0)
-        # tempo médio REAL (active_seconds — desconta pausas; fix do bug antigo)
-        tempo_medio_s = (
-            db.query(func.avg(WaitingRoomEntry.active_seconds))
-            .filter(WaitingRoomEntry.clinic_id == c.id, WaitingRoomEntry.status == "attended",
-                    WaitingRoomEntry.entry_date >= d28, WaitingRoomEntry.active_seconds > 0)
-            .scalar()
-        )
+        faltas_c = faltas_map.get(c.id, 0)
+        comp_c = comp_map.get(c.id, 0)
+        receita_c, n_val = receita_map.get(c.id, (0.0, 0))
+        tempo_medio_s = tempo_map.get(c.id)
         sched = next((s for s in c.schedules if s.active), None)
         clinicas_out.append({
             "id": c.id,
@@ -249,7 +272,7 @@ def dashboard_v2(
             "atendidos_mes": comp_c,
             "ticket": round(receita_c / n_val, 2) if n_val else None,
             "receita_mes": round(receita_c, 2),
-            "tempo_medio_min": round(float(tempo_medio_s) / 60.0, 1) if tempo_medio_s else None,
+            "tempo_medio_min": round(tempo_medio_s / 60.0, 1) if tempo_medio_s else None,
             "slot_min": sched.slot_duration if sched else None,
         })
     ocupacao_media = round(ocupacao_pond_num / ocupacao_pond_den, 3) if ocupacao_pond_den else None
@@ -317,17 +340,21 @@ def dashboard_v2(
     # caminho (importação, bug futuro), aparece aqui no topo do painel.
     alertas_agenda = []
     try:
-        futuros = (
-            db.query(Appointment, Clinic)
-            .join(Clinic, Clinic.id == Appointment.clinic_id)
+        # PERF: janela de 60 dias (o que importa operacionalmente) em vez de todo
+        # o futuro, e reaproveita as clinicas ja carregadas acima.
+        mapa_dias = {c.id: {s.day_of_week for s in (c.schedules or []) if s.active} for c in clinicas}
+        futuros = [
+            (a, next((c for c in clinicas if c.id == a.clinic_id), None))
+            for a in db.query(Appointment)
             .filter(
                 Appointment.date >= today,
+                Appointment.date <= today + timedelta(days=60),
                 Appointment.status.notin_(["cancelled", "blocked", "no_show"]),
-            )
-            .all()
-        )
+            ).all()
+        ]
+        futuros = [(a, c) for a, c in futuros if c is not None]
         for a, c in futuros:
-            dias_ativos = {s.day_of_week for s in (c.schedules or []) if s.active}
+            dias_ativos = mapa_dias.get(c.id) or set()
             if dias_ativos and a.date.weekday() not in dias_ativos:
                 alertas_agenda.append({
                     "appointment_id": a.id,

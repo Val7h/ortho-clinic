@@ -46,8 +46,30 @@ export function DashboardV2() {
     }
   };
 
+  // Enquanto carrega, mostra o ESQUELETO do painel (faixas e cards) em vez de
+  // um bloco cinza — o Valth achou que a tela estava "em branco" (05/08).
   if (loading && !d) {
-    return <div className="h-64 rounded-2xl bg-slate-100 dark:bg-slate-800 animate-pulse" />;
+    return (
+      <div className="space-y-6 animate-pulse">
+        <div>
+          <p className={`${bandCls} mb-2`}>Hoje · ação imediata</p>
+          <div className="grid gap-3 sm:grid-cols-3">
+            {[0, 1, 2].map(i => <div key={i} className={`${kpiCls} h-20 bg-slate-50 dark:bg-slate-800/60`} />)}
+          </div>
+        </div>
+        <div>
+          <p className={`${bandCls} mb-2`}>O mês em 4 números</p>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {[0, 1, 2, 3].map(i => <div key={i} className={`${kpiCls} h-24 bg-slate-50 dark:bg-slate-800/60`} />)}
+          </div>
+        </div>
+        <div>
+          <p className={`${bandCls} mb-2`}>Por clínica</p>
+          <div className="rounded-2xl border border-slate-200 dark:border-slate-800 h-44 bg-slate-50 dark:bg-slate-800/60" />
+        </div>
+        <p className="text-center text-xs text-slate-400">Carregando os números…</p>
+      </div>
+    );
   }
   if (!d) return null;
 
