@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef, useCallback, useMemo, createContext, useContext } from "react";
+import { createPortal } from "react-dom";
 import {
   X, Play, CheckCircle, UserX, AlertTriangle, Activity, Pill,
   ClipboardList, Stethoscope, FileText, FlaskConical,
@@ -1254,27 +1255,33 @@ function PrintModal({ rx, patient, clinic, onClose, collectorId }: {
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.6)" }}>
       <style>{`
         @media print {
-          /* Estratégia por visibility (não display): esconder o root via
-             "body > *:not(root)" apagava o documento, porque o modal é
-             renderizado DENTRO do drawer, não como filho direto do body. */
+          /* 06/08 — POR QUE MUDOU DE NOVO: imprimia só a 1ª via, e o rodapé
+             da folha mostrava o começo da 2ª, que nunca saía. Causa: o papel
+             ficava dentro do modal, que é "position: absolute" e "display:
+             flex". Navegador não pagina caixa absoluta, e quebra de página é
+             ignorada dentro de flex — então saía uma página só, cortada.
+             Agora o papel vai para um portal FILHO DIRETO DO BODY, em fluxo
+             normal: a quebra de página funciona e cada via sai inteira. */
           html, body { height: auto !important; overflow: visible !important; background: #fff !important; }
-          body * { visibility: hidden !important; }
-          #print-rx-root, #print-rx-root * { visibility: visible !important; overflow: visible !important; max-height: none !important; box-shadow: none !important; }
-          /* display:none, não visibility (06/08): escondido por visibility o
-             cabeçalho continuava OCUPANDO ~64px no alto da folha. Somados ao
-             p-5 do corpo, empurravam a via de 252mm para além dos 277mm úteis
-             da A4 — a sobra caía na página seguinte e sujava a impressão. */
-          #print-rx-root .no-print { display: none !important; }
-          #print-rx-root .rx-scroll { padding: 0 !important; overflow: visible !important; }
-          #print-rx-root { position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; background: #fff !important; padding: 0 !important; box-shadow: none !important; border-radius: 0 !important; }
-          /* E1 (05/08): A4 retrato com margens de receituário; cada via numa
-             folha própria (1ª Farmácia, 2ª Paciente) — nunca as duas juntas. */
+          /* Esconde tudo que NÃO é portal de impressão; depois só o portal
+             desta janela volta a aparecer. Se o Centro de Impressão também
+             estiver aberto, o portal dele continua com o display:none do
+             inline — o pior caso vira papel a mais, nunca folha em branco. */
+          body > *:not([data-print-portal]) { display: none !important; }
+          #rx-print-portal { display: block !important; position: static !important; width: 100% !important; background: #fff !important; }
           @page { size: A4 portrait; margin: 10mm 12mm; }
           .rx-via-break { page-break-after: always; break-after: page; margin-bottom: 0 !important; }
           .rx-cut-line { display: none !important; }
         }
         .rx-cut-line { display: none; }
       `}</style>
+      {/* O papel de verdade — fora do modal, direto no body, para o navegador
+          conseguir paginar. Invisível na tela; só existe para a impressora. */}
+      {typeof document !== "undefined" && createPortal(
+        <div id="rx-print-portal" data-print-portal style={{ display: "none" }}>{sheetsBody}</div>,
+        document.body,
+      )}
+
       <div id="print-rx-root" className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
         <div className="no-print px-5 pt-4 pb-3 border-b border-gray-200 dark:border-slate-700 flex items-center justify-between flex-shrink-0">
           <div>
@@ -3341,14 +3348,12 @@ function ConsultaPrintCenter({ docs, onRemove, onClose }: {
     <div className="fixed inset-0 z-[210] flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.6)" }}>
       <style>{`
         @media print {
+          /* 06/08 — mesmo conserto da receita: o papel sai por um portal
+             filho direto do body. Dentro do modal (absolute + flex) o
+             navegador não paginava: imprimia a primeira folha e cortava. */
           html, body { height: auto !important; overflow: visible !important; background: #fff !important; }
-          body * { visibility: hidden !important; }
-          #print-center-root, #print-center-root * { visibility: visible !important; overflow: visible !important; max-height: none !important; box-shadow: none !important; }
-          /* display:none, não visibility (06/08): a lista de documentos ficava
-             invisível mas RESERVAVA a altura dela no alto da impressão — uma
-             faixa em branco enorme antes do primeiro papel. */
-          #print-center-root .no-print { display: none !important; }
-          #print-center-root { position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; background: #fff !important; padding: 0 !important; box-shadow: none !important; border-radius: 0 !important; }
+          body > *:not([data-print-portal]) { display: none !important; }
+          #pc-print-portal { display: block !important; position: static !important; width: 100% !important; background: #fff !important; }
           .pc-doc { page-break-after: always; }
           .pc-doc:last-child { page-break-after: auto; }
           /* 2 vias de RCE/ATB quebram de página tambem na impressão em lote (M9) */
@@ -3411,12 +3416,16 @@ function ConsultaPrintCenter({ docs, onRemove, onClose }: {
           </div>
         )}
 
-        {/* Área imprimível (oculta na tela; aparece só na impressão) */}
-        <div className="hidden print:block">
-          {chosen.map((d) => (
-            <div key={d.id} className="pc-doc">{d.content}</div>
-          ))}
-        </div>
+        {/* Área imprimível: portal filho direto do body, para o navegador
+            conseguir paginar (dentro do modal ele cortava na 1ª folha). */}
+        {typeof document !== "undefined" && createPortal(
+          <div id="pc-print-portal" data-print-portal style={{ display: "none" }}>
+            {chosen.map((d) => (
+              <div key={d.id} className="pc-doc">{d.content}</div>
+            ))}
+          </div>,
+          document.body,
+        )}
       </div>
     </div>
   );
