@@ -116,6 +116,7 @@ function isTestName(name?: string): boolean {
 }
 
 const STATUS_LABEL: Record<string, string> = {
+  no_show: 'Faltou',
   pending: 'Pendente', confirmed: 'Confirmado',
   cancelled: 'Cancelado', completed: 'Realizado',
   blocked: 'Bloqueado', pending_offline: 'Offline',
@@ -133,13 +134,15 @@ interface DayAgg {
   conf: number;
   done: number;
   cancelled: number;
+  faltas: number;
   blocked: ApptEvent[];   // faixas de bloqueio (férias/almoço) do dia
   clinics: { name: string; color: string; n: number; pend: number }[];
 }
 
 function aggregateDay(evts: ApptEvent[]): DayAgg {
   const blocked = evts.filter(e => e.status === 'blocked');
-  const active = evts.filter(e => e.status !== 'cancelled' && e.status !== 'blocked');
+  const faltas = evts.filter(e => e.status === 'no_show');
+  const active = evts.filter(e => !['cancelled', 'blocked', 'no_show'].includes(e.status));
   const byClinic: Record<string, { name: string; color: string; n: number; pend: number }> = {};
   for (const e of active) {
     const name = shortClinic(e.clinic_name);
@@ -153,6 +156,7 @@ function aggregateDay(evts: ApptEvent[]): DayAgg {
     conf: active.filter(e => e.status === 'confirmed').length,
     done: active.filter(e => e.status === 'completed').length,
     cancelled: evts.filter(e => e.status === 'cancelled').length,
+    faltas: faltas.length,
     blocked,
     clinics: Object.keys(byClinic).map(k => byClinic[k]),
   };
@@ -212,6 +216,31 @@ export default function AgendaPage() {
       toast.error(err?.response?.data?.detail ?? 'Erro ao bloquear');
     } finally {
       setBlkSaving(false);
+    }
+  };
+
+  // E4 (05/08): "Chegou" manda o agendado direto pra Sala de Espera, sem
+  // precisar buscá-lo de novo lá e redigitar tudo.
+  const marcarChegada = async (e: ApptEvent) => {
+    try {
+      await clinicApi.checkinAppointment(e.id);
+      toast.success(`${e.patient_name} está na Sala de Espera`);
+      fetchData();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.detail ?? 'Erro ao registrar chegada');
+    }
+  };
+
+  // E7b (05/08): registrar quem não veio (sem isso a agenda fica eternamente
+  // "pendente" e os números de falta do painel saem chutados).
+  const marcarFalta = async (e: ApptEvent) => {
+    if (!window.confirm(`Registrar que ${e.patient_name} FALTOU?`)) return;
+    try {
+      await clinicApi.updateAppointment(e.id, 'no_show');
+      toast.success('Falta registrada');
+      fetchData();
+    } catch {
+      toast.error('Erro ao registrar falta');
     }
   };
 
@@ -607,6 +636,7 @@ export default function AgendaPage() {
         {/* ── VISÃO DIA (padrão) ────────────────────────────────────────────── */}
         {view === 'dia' && (() => {
           const iso = toISO(cursor);
+          const isHoje = iso === today;
           const all = allForDate(iso);
           const active = all.filter(e => e.status !== 'cancelled' && e.status !== 'blocked');
           const cancelledEvts = all.filter(e => e.status === 'cancelled');
@@ -742,6 +772,7 @@ export default function AgendaPage() {
                         {grupos[h].map(e => {
                           const color = e.clinic_color || FALLBACK_COLOR;
                           const done = e.status === 'completed';
+                          const faltou = e.status === 'no_show';
                           const pend = e.status === 'pending' || e.status === 'pending_offline';
                           return (
                             <div
@@ -764,12 +795,32 @@ export default function AgendaPage() {
                             >
                               <p className="flex-1 min-w-0 text-sm font-semibold text-slate-800 dark:text-slate-100 truncate">
                                 {done && <span className="text-emerald-600 font-extrabold">✓ </span>}
+                                {faltou && <span className="text-red-500 font-extrabold">✗ </span>}
                                 {pend && <span>⏱ </span>}
                                 {e._isOffline && '⚠ '}
                                 {e.patient_name}
                               </p>
+                              {/* E4/E7b (05/08): chegou → sala de espera; faltou → registra a falta */}
+                              {isHoje && !done && !faltou && (
+                                <button
+                                  onClick={ev => { ev.stopPropagation(); marcarChegada(e); }}
+                                  className="flex-shrink-0 px-2 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold"
+                                  title="Paciente chegou — manda direto pra Sala de Espera"
+                                >
+                                  Chegou
+                                </button>
+                              )}
+                              {!done && !faltou && (
+                                <button
+                                  onClick={ev => { ev.stopPropagation(); marcarFalta(e); }}
+                                  className="flex-shrink-0 px-2 py-1 rounded-lg border border-slate-300 dark:border-slate-600 text-slate-500 text-[11px] font-bold hover:bg-red-50 hover:text-red-600 hover:border-red-300"
+                                  title="Paciente não compareceu"
+                                >
+                                  Faltou
+                                </button>
+                              )}
                               <span className="text-xs text-slate-500 flex-shrink-0">
-                                {e.appointment_type || (pend ? 'pendente' : '')}
+                                {faltou ? 'faltou' : (e.appointment_type || (pend ? 'pendente' : ''))}
                               </span>
                             </div>
                           );

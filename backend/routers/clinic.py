@@ -364,6 +364,62 @@ def update_appointment(appointment_id: int, data: StatusUpdate, db: Session = De
     return a
 
 
+@router.post("/appointments/{appointment_id}/checkin", status_code=201)
+def checkin_from_appointment(
+    appointment_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """E4 (05/08): "Chegou" — joga o paciente agendado direto na sala de espera,
+    sem precisar buscá-lo de novo e redigitar tudo."""
+    from models.queue import WaitingRoomEntry
+    from models.patient import Patient as P
+    from sqlalchemy import func as _f
+
+    a = db.query(Appointment).filter(Appointment.id == appointment_id).first()
+    if not a:
+        raise HTTPException(404, "Agendamento não encontrado")
+    if not a.patient_id:
+        raise HTTPException(422, "Agendamento sem paciente cadastrado — cadastre o paciente antes")
+
+    paciente = db.query(P).filter(P.id == a.patient_id).first()
+    if not paciente:
+        raise HTTPException(404, "Paciente não encontrado")
+
+    hoje = today_br()
+    ja = (
+        db.query(WaitingRoomEntry)
+        .filter(
+            WaitingRoomEntry.patient_id == a.patient_id,
+            WaitingRoomEntry.entry_date == hoje,
+            WaitingRoomEntry.status.in_(["waiting", "attending", "suspended"]),
+        )
+        .first()
+    )
+    if ja:
+        raise HTTPException(409, "Paciente já está na fila")
+
+    max_pos = (
+        db.query(_f.max(WaitingRoomEntry.position))
+        .filter(WaitingRoomEntry.entry_date == hoje)
+        .scalar()
+    ) or 0
+    entry = WaitingRoomEntry(
+        patient_id=a.patient_id,
+        clinic_id=a.clinic_id,
+        reason=a.reason,
+        position=max_pos + 1,
+        entry_date=hoje,
+        arrived_at=datetime.utcnow(),
+        status="waiting",
+    )
+    db.add(entry)
+    a.status = "confirmed"  # chegou
+    db.commit()
+    db.refresh(entry)
+    return {"ok": True, "entry_id": entry.id, "patient_name": paciente.name}
+
+
 @router.delete("/appointments/{appointment_id}", status_code=204)
 def delete_appointment(appointment_id: int, db: Session = Depends(get_db)):
     a = db.query(Appointment).filter(Appointment.id == appointment_id).first()
@@ -903,6 +959,28 @@ def create_appointment_internal(
 
     dow = data.date.weekday()
     sched = next((s for s in clinic.schedules if s.active and s.day_of_week == dow), None)
+
+    # E7a (05/08): o MESMO paciente não pode ter duas marcações no mesmo dia —
+    # caso real: Vyctor ficou marcado no IP de manhã e na Unimagem à tarde.
+    if data.patient_id:
+        dupl = (
+            db.query(Appointment)
+            .join(Clinic, Clinic.id == Appointment.clinic_id)
+            .filter(
+                Appointment.patient_id == data.patient_id,
+                Appointment.date == data.date,
+                Appointment.status.notin_(["cancelled", "blocked", "no_show"]),
+            )
+            .first()
+        )
+        if dupl:
+            outra = db.query(Clinic).filter(Clinic.id == dupl.clinic_id).first()
+            raise HTTPException(
+                409,
+                f"{dupl.patient_name} já tem agendamento neste dia"
+                + (f" na {outra.name}" if outra else "")
+                + f" às {dupl.start_time}. Cancele o outro antes de remarcar.",
+            )
 
     # Conflict check for timed appointments
     if data.start_time and sched and sched.schedule_type == "appointment":

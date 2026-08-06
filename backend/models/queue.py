@@ -73,6 +73,9 @@ class WaitingRoomEntry(Base):
     # o início do trecho atual (null = cronômetro parado).
     active_seconds = Column(Integer, nullable=False, default=0)
     segment_started_at = Column(DateTime(timezone=True), nullable=True)
+    # E8 (05/08): última vez que o médico mexeu no prontuário. Passados 15 min
+    # sem atividade, a consulta é suspensa sozinha e o tempo conta só até aqui.
+    last_activity_at = Column(DateTime(timezone=True), nullable=True)
 
     # Status: waiting | attending | suspended | attended | absent
     status = Column(String(20), default="waiting", index=True, nullable=False)

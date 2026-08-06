@@ -33,8 +33,10 @@ router = APIRouter(prefix="/dashboard/v2", tags=["Dashboard v2"])
 
 BRT = timezone(timedelta(hours=-3))
 
-NOSHOW_STATUSES = ("pending", "confirmed")  # passado sem completed = faltou
-ACTIVE_STATUSES = ("pending", "confirmed", "completed")  # sem cancelled/blocked
+# "no_show" = falta MARCADA (pelo médico ou pela fila). pending/confirmed no
+# passado = falta presumida (paciente que não passou pela sala de espera).
+NOSHOW_STATUSES = ("pending", "confirmed", "no_show")
+ACTIVE_STATUSES = ("pending", "confirmed", "completed")  # sem cancelled/blocked/no_show
 
 
 def require_viewer(current_user: User = Depends(get_current_user)) -> User:

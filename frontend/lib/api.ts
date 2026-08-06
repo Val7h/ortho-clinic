@@ -272,6 +272,9 @@ export const clinicApi = {
     clinicId: number,
     data: { start_date: string; end_date?: string; start_time?: string; end_time?: string; reason?: string },
   ) => api.post(`/clinics/${clinicId}/block-period`, data).then((r) => r.data),
+  // E4 (05/08): "Chegou" — manda o agendado direto pra sala de espera
+  checkinAppointment: (appointmentId: number) =>
+    api.post(`/appointments/${appointmentId}/checkin`).then((r) => r.data),
   // Edit clinic
   get: (clinicId: number) => api.get(`/clinics/${clinicId}`).then((r) => r.data),
   updateClinic: (clinicId: number, data: { name: string; slug: string; city?: string; state?: string; address?: string; color?: string; phone?: string }) =>
@@ -444,8 +447,17 @@ export const patientDocsApi = {
 
 // ── Sala de Espera ────────────────────────────────────────────────────────
 export const waitingRoomApi = {
-  checkin: (data: { patient_id: number; clinic_id?: number; reason?: string; notes?: string; value_cents?: number }) =>
+  checkin: (data: { patient_id: number; clinic_id?: number; reason?: string; notes?: string; value_cents?: number; payment_method?: string }) =>
     api.post("/api/clinic/waiting-room/checkin", data).then((r) => r.data),
+
+  // E3 (05/08): acrescenta valor à conta do paciente no dia (procedimento
+  // indicado durante a consulta) — vai direto pro Caixa do Dia.
+  addValue: (entry_id: number, data: { value_cents: number; description?: string; payment_method?: string }) =>
+    api.post(`/api/clinic/waiting-room/${entry_id}/valor`, data).then((r) => r.data),
+
+  // E8: avisa o servidor que o médico está mexendo no prontuário (anti-inatividade)
+  ping: (entry_id: number) =>
+    api.post(`/api/clinic/waiting-room/${entry_id}/activity`).then((r) => r.data).catch(() => null),
 
   today: (clinic_id?: number) =>
     api.get("/api/clinic/waiting-room/today", { params: clinic_id ? { clinic_id } : {} }).then((r) => r.data),
@@ -459,7 +471,8 @@ export const waitingRoomApi = {
 
 // ── Memed ─────────────────────────────────────────────────────────────────
 export const memedApi = {
-  getConfig: () => api.get<{ api_key: string; doctor_id: number }>("/memed/config").then((r) => r.data),
+  // /memed/token é a rota real do backend (o antigo /memed/config não existe)
+  getToken: () => api.get("/memed/token").then((r) => r.data),
 };
 
 // ── Chat IA ───────────────────────────────────────────────────────────────

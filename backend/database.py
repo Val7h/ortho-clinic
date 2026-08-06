@@ -100,6 +100,12 @@ def migrate_db():
         if "clinic_id" not in fin_cols:
             migrations.append("ALTER TABLE financial_records ADD COLUMN clinic_id INTEGER")
 
+    # E8 (05/08): auto-suspender consulta esquecida aberta
+    if "waiting_room_entries" in existing_tables:
+        wre2 = [c["name"] for c in inspector.get_columns("waiting_room_entries")]
+        if "last_activity_at" not in wre2:
+            migrations.append("ALTER TABLE waiting_room_entries ADD COLUMN last_activity_at TIMESTAMP")
+
     # Sala de Espera — timer de atendimento + valor (called_at/attended_at/value_cents)
     if "waiting_room_entries" in existing_tables:
         wre_cols = [c["name"] for c in inspector.get_columns("waiting_room_entries")]

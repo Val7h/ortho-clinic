@@ -9,7 +9,7 @@ import {
   Pencil, Download, MessageSquare,
 } from "lucide-react";
 import toast from "react-hot-toast";
-import { api, patientsApi, consultationsApi, prescriptionsApi, prescriptionTemplatesApi, examsApi, evolutionApi, clinicApi, chatApi, reportsApi, leafletsApi } from "@/lib/api";
+import { api, patientsApi, consultationsApi, prescriptionsApi, prescriptionTemplatesApi, examsApi, evolutionApi, clinicApi, chatApi, reportsApi, leafletsApi, waitingRoomApi } from "@/lib/api";
 import { formatDate } from "@/lib/utils";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -357,6 +357,25 @@ const REFERRAL_TEXT_TEMPLATES = [
 ];
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
+
+// E10: avisa quando o aniversário do paciente cai nesta semana (±3 dias), pra
+// o médico parabenizar na consulta.
+function aniversarioProximo(birthDate: string | null | undefined): string | null {
+  if (!birthDate) return null;
+  try {
+    const b = new Date(birthDate.length <= 10 ? `${birthDate}T12:00:00` : birthDate);
+    if (isNaN(b.getTime())) return null;
+    const hoje = new Date();
+    const esteAno = new Date(hoje.getFullYear(), b.getMonth(), b.getDate(), 12);
+    const dias = Math.round((esteAno.getTime() - new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate(), 12).getTime()) / 86400000);
+    if (dias === 0) return "Aniversário HOJE!";
+    if (dias > 0 && dias <= 3) return `Aniversário em ${dias} dia${dias > 1 ? "s" : ""}`;
+    if (dias < 0 && dias >= -3) return `Fez aniversário ${-dias} dia${dias < -1 ? "s" : ""} atrás`;
+    return null;
+  } catch {
+    return null;
+  }
+}
 
 function calcAge(birthDate: string | null): string {
   if (!birthDate) return "";
@@ -912,75 +931,132 @@ function PrintModal({ rx, patient, clinic, onClose, collectorId }: {
     return `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()}`;
   })();
 
-  // Folha para RCE (Controle Especial — Portaria 344/98)
+  // Folha para RCE (Controle Especial — Portaria SVS/MS 344/98, Anexo XVII).
+  // REFEITA 05/08 (erro E1 do Valth): faltavam os quadros obrigatórios de
+  // IDENTIFICAÇÃO DO COMPRADOR e IDENTIFICAÇÃO DO FORNECEDOR (onde o
+  // farmacêutico registra e assina), e a folha ocupava só um cantinho da A4.
+  // Agora cada via ocupa uma página inteira: 1ª via Farmácia · 2ª via Paciente.
+  const linhaVazia = (label: string, largura = "100%") => (
+    <div style={{ width: largura, marginBottom: "9px" }}>
+      <div style={{ borderBottom: "1px solid #555", height: "15px" }} />
+      <p style={{ fontSize: "8px", color: "#555", textTransform: "uppercase", letterSpacing: "0.3px", margin: "2px 0 0 0" }}>{label}</p>
+    </div>
+  );
+
   const RCESheet = ({ viaLabel, viaIndex }: { viaLabel: string; viaIndex: number }) => (
     <div style={{
       background: "white",
       border: `2px solid ${headerColor}`,
-      borderRadius: "8px",
-      padding: "18px",
-      marginBottom: viaIndex < vias - 1 ? "0" : "0",
+      padding: "16px 18px",
       fontSize: "12px",
       color: "#111",
+      minHeight: "252mm",            // ocupa a A4 inteira (E1)
+      display: "flex",
+      flexDirection: "column",
+      boxSizing: "border-box",
     }}>
-      {/* Cabeçalho */}
-      <div style={{ borderBottom: `2px solid ${headerColor}`, paddingBottom: "10px", marginBottom: "12px" }}>
+      {/* Faixa da via — exigência: dizeres em DESTAQUE em cada via */}
+      <div style={{
+        background: headerColor, color: "white", textAlign: "center",
+        padding: "5px", fontWeight: 700, fontSize: "12px", letterSpacing: "1px",
+        textTransform: "uppercase", marginBottom: "10px",
+      }}>
+        {viaLabel}
+      </div>
+
+      {/* 1 · IDENTIFICAÇÃO DO EMITENTE */}
+      <div style={{ border: "1px solid #999", padding: "8px 10px", marginBottom: "8px" }}>
+        <p style={{ fontWeight: 700, fontSize: "8.5px", color: "#555", textTransform: "uppercase", letterSpacing: "0.5px", margin: "0 0 4px 0" }}>Identificação do Emitente</p>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <div>
-            <p style={{ fontWeight: 700, fontSize: "15px", margin: "0 0 1px 0", color: headerColor }}>Dr. Valth Guimarães</p>
-            <p style={{ fontSize: "11px", color: "#555", margin: "0" }}>Ortopedia e Traumatologia</p>
-            <p style={{ fontSize: "11px", color: "#555", margin: "0" }}>CRM/PB 6326 | CRM/PE 16551</p>
-            {clinic?.phone && <p style={{ fontSize: "11px", color: "#555", margin: "0" }}>Tel: {clinic.phone}</p>}
+            <p style={{ fontWeight: 700, fontSize: "14px", margin: "0 0 1px 0", color: headerColor }}>Dr. Valth Menezes Guimarães</p>
+            <p style={{ fontSize: "10.5px", color: "#333", margin: "0" }}>Ortopedia e Traumatologia · CRM-PB 6326 | CRM-PE 16551 · TEOT 15090</p>
+            <p style={{ fontSize: "10.5px", color: "#333", margin: "1px 0 0 0" }}>
+              {clinic?.name ? `${clinic.name} — ` : ""}{clinic?.address || ""}{clinic?.city ? ` · ${clinic.city}/${clinic.state}` : ""}
+            </p>
+            {clinic?.phone && <p style={{ fontSize: "10.5px", color: "#333", margin: "1px 0 0 0" }}>Telefone: {clinic.phone}</p>}
           </div>
-          <div style={{ textAlign: "right" }}>
-            <p style={{ fontWeight: 700, fontSize: "10px", color: headerColor, textTransform: "uppercase", letterSpacing: "0.5px", margin: "0 0 4px 0" }}>Receita de Controle Especial</p>
-            <p style={{ fontWeight: 700, fontSize: "11px", color: headerColor, margin: "0" }}>{viaLabel}</p>
+          <div style={{ textAlign: "right", minWidth: "120px" }}>
+            <p style={{ fontWeight: 700, fontSize: "9px", color: headerColor, textTransform: "uppercase", margin: "0" }}>Receituário de</p>
+            <p style={{ fontWeight: 700, fontSize: "11px", color: headerColor, textTransform: "uppercase", margin: "0" }}>Controle Especial</p>
+            <p style={{ fontSize: "9px", color: "#666", margin: "3px 0 0 0" }}>Portaria SVS/MS 344/98</p>
           </div>
         </div>
       </div>
 
-      {/* Paciente */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px", marginBottom: "12px", fontSize: "11px" }}>
-        <div><span style={{ fontWeight: 700, color: "#666", textTransform: "uppercase", fontSize: "9px" }}>Paciente: </span><span style={{ fontWeight: 600 }}>{patient?.name}</span></div>
-        <div><span style={{ fontWeight: 700, color: "#666", textTransform: "uppercase", fontSize: "9px" }}>Data: </span><span>{dateStr}</span></div>
-        {patient?.cpf && <div><span style={{ fontWeight: 700, color: "#666", textTransform: "uppercase", fontSize: "9px" }}>CPF: </span><span style={{ fontFamily: "monospace" }}>{patient.cpf}</span></div>}
-        {patient?.birth_date && <div><span style={{ fontWeight: 700, color: "#666", textTransform: "uppercase", fontSize: "9px" }}>Nasc.: </span><span>{new Date(patient.birth_date + "T12:00:00").toLocaleDateString("pt-BR")}</span></div>}
-        {/* A11: endereço do paciente é obrigatório na RCE (Portaria SVS/MS 344/98) */}
-        {rx.patientAddress && <div style={{ gridColumn: "1 / -1" }}><span style={{ fontWeight: 700, color: "#666", textTransform: "uppercase", fontSize: "9px" }}>Endereço: </span><span>{rx.patientAddress}</span></div>}
-        {rx.patientPhone && <div><span style={{ fontWeight: 700, color: "#666", textTransform: "uppercase", fontSize: "9px" }}>Telefone: </span><span>{rx.patientPhone}</span></div>}
+      {/* 2 · IDENTIFICAÇÃO DO PACIENTE */}
+      <div style={{ border: "1px solid #999", padding: "8px 10px", marginBottom: "8px" }}>
+        <p style={{ fontWeight: 700, fontSize: "8.5px", color: "#555", textTransform: "uppercase", letterSpacing: "0.5px", margin: "0 0 4px 0" }}>Identificação do Paciente</p>
+        <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "4px 12px", fontSize: "11px" }}>
+          <div><span style={{ color: "#666" }}>Nome: </span><span style={{ fontWeight: 600 }}>{patient?.name || "________________________"}</span></div>
+          <div><span style={{ color: "#666" }}>Nasc.: </span><span>{patient?.birth_date ? new Date(patient.birth_date + "T12:00:00").toLocaleDateString("pt-BR") : "____/____/______"}</span></div>
+          <div style={{ gridColumn: "1 / -1" }}>
+            <span style={{ color: "#666" }}>Endereço: </span>
+            <span>{rx.patientAddress || patient?.address_street || "____________________________________________________"}</span>
+          </div>
+          <div><span style={{ color: "#666" }}>Telefone: </span><span>{rx.patientPhone || patient?.phone || "________________"}</span></div>
+          <div><span style={{ color: "#666" }}>CPF: </span><span style={{ fontFamily: "monospace" }}>{patient?.cpf || "________________"}</span></div>
+        </div>
       </div>
 
-      {/* Medicamentos */}
-      <div style={{ marginBottom: "12px", borderBottom: "1px solid #ddd", paddingBottom: "10px" }}>
+      {/* 3 · PRESCRIÇÃO — área grande, ocupa o corpo da folha */}
+      <div style={{ border: "1px solid #999", padding: "10px", marginBottom: "8px", flex: 1, minHeight: "90mm" }}>
+        <p style={{ fontWeight: 700, fontSize: "8.5px", color: "#555", textTransform: "uppercase", letterSpacing: "0.5px", margin: "0 0 8px 0" }}>Prescrição</p>
         {rx.medications.length > 0 ? (
           <>
             {rx.medications.map((m, i) => (
-              <div key={i} style={{ marginBottom: "8px" }}>
-                <p style={{ fontWeight: 600, margin: "0 0 1px 0" }}>{i + 1}. {m.name}{m.dose ? ` — ${m.dose}` : ""}</p>
-                <p style={{ color: "#555", fontSize: "10px", margin: "0 0 1px 0" }}>{[m.route && `Via ${m.route}`, m.frequency, m.duration].filter(Boolean).join(" · ")}</p>
-                {m.instructions && <p style={{ color: "#777", fontSize: "10px", fontStyle: "italic", margin: "0" }}>Obs: {m.instructions}</p>}
+              <div key={i} style={{ marginBottom: "12px" }}>
+                <p style={{ fontWeight: 700, margin: "0 0 2px 0", fontSize: "12.5px" }}>{i + 1}. {m.name}{m.dose ? ` — ${m.dose}` : ""}</p>
+                <p style={{ color: "#333", fontSize: "11px", margin: "0 0 1px 14px" }}>{[m.route && `Via ${m.route}`, m.frequency, m.duration].filter(Boolean).join(" · ")}</p>
+                {m.instructions && <p style={{ color: "#555", fontSize: "10.5px", fontStyle: "italic", margin: "0 0 0 14px" }}>{m.instructions}</p>}
               </div>
             ))}
             {rx.instructions && (
-              <p style={{ color: "#555", fontSize: "10px", marginTop: "6px", fontStyle: "italic" }}>Orientações: {rx.instructions}</p>
+              <p style={{ color: "#333", fontSize: "11px", marginTop: "8px", fontStyle: "italic" }}>Orientações: {rx.instructions}</p>
             )}
           </>
         ) : (
-          <p style={{ whiteSpace: "pre-wrap", fontSize: "12px", margin: "0", lineHeight: 1.6 }}>{rx.instructions}</p>
+          <p style={{ whiteSpace: "pre-wrap", fontSize: "12.5px", margin: "0", lineHeight: 1.7 }}>{rx.instructions}</p>
         )}
       </div>
 
-      {/* Assinatura e validade */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginTop: "10px" }}>
-        <div style={{ fontSize: "10px", color: "#888" }}>
-          <p style={{ margin: "0 0 3px 0" }}>Portaria SVS/MS 344/98</p>
-          <p style={{ margin: "0" }}>Validade: 30 dias a partir de {dateStr}</p>
+      {/* Data / local + assinatura do prescritor */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: "10px" }}>
+        <p style={{ fontSize: "9.5px", color: "#666", margin: 0 }}>
+          Validade: 30 dias a partir da emissão · Uso restrito conforme Portaria 344/98
+        </p>
+        <div style={{ textAlign: "center", width: "230px" }}>
+          <p style={{ fontSize: "10.5px", color: "#333", margin: "0 0 18px 0" }}>
+            {clinic?.city ? `${clinic.city} – ${clinic.state}` : "______________"}, {dateStr}
+          </p>
+          <div style={{ borderTop: "1px solid #333", paddingTop: "3px" }}>
+            <p style={{ fontSize: "11px", fontWeight: 700, margin: 0 }}>Dr. Valth Menezes Guimarães</p>
+            <p style={{ fontSize: "9.5px", color: "#555", margin: 0 }}>CRM-PB 6326 | CRM-PE 16551</p>
+          </div>
         </div>
-        <div style={{ textAlign: "center", width: "180px" }}>
-          <p style={{ fontSize: "10px", color: "#555", margin: "0 0 4px 0" }}>{clinic ? `${clinic.city}/${clinic.state}` : "_____________"} , {dateStr}</p>
-          <div style={{ borderTop: `1px solid ${headerColor}`, paddingTop: "4px" }}>
-            <p style={{ fontSize: "11px", fontWeight: 700, margin: "0" }}>Dr. Valth Guimarães</p>
-            <p style={{ fontSize: "10px", color: "#666", margin: "0" }}>CRM/PB 6326 | CRM/PE 16551</p>
+      </div>
+
+      {/* 4 e 5 · COMPRADOR e FORNECEDOR — quadros obrigatórios, lado a lado */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+        <div style={{ border: "1px solid #999", padding: "8px 10px" }}>
+          <p style={{ fontWeight: 700, fontSize: "8.5px", color: "#555", textTransform: "uppercase", letterSpacing: "0.5px", margin: "0 0 8px 0" }}>
+            Identificação do Comprador
+          </p>
+          {linhaVazia("Nome completo")}
+          {linhaVazia("Documento de identidade (nº / órgão emissor)")}
+          {linhaVazia("Endereço completo")}
+          {linhaVazia("Telefone")}
+        </div>
+        <div style={{ border: "1px solid #999", padding: "8px 10px" }}>
+          <p style={{ fontWeight: 700, fontSize: "8.5px", color: "#555", textTransform: "uppercase", letterSpacing: "0.5px", margin: "0 0 8px 0" }}>
+            Identificação do Fornecedor
+          </p>
+          {linhaVazia("Farmácia / Drogaria (nome e endereço)")}
+          {linhaVazia("Responsável pela dispensação — nome e CRF")}
+          {linhaVazia("Assinatura do farmacêutico")}
+          <div style={{ display: "flex", gap: "8px" }}>
+            <div style={{ flex: 1 }}>{linhaVazia("Data")}</div>
+            <div style={{ flex: 1 }}>{linhaVazia("Nº do registro")}</div>
           </div>
         </div>
       </div>
@@ -1178,9 +1254,12 @@ function PrintModal({ rx, patient, clinic, onClose, collectorId }: {
           body * { visibility: hidden !important; }
           #print-rx-root, #print-rx-root * { visibility: visible !important; overflow: visible !important; max-height: none !important; box-shadow: none !important; }
           #print-rx-root .no-print, #print-rx-root .no-print * { visibility: hidden !important; }
-          #print-rx-root { position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; background: #fff !important; padding: 10px !important; }
-          .rx-via-break { page-break-after: always; margin-bottom: 0 !important; }
-          .rx-cut-line { display: block !important; }
+          #print-rx-root { position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; background: #fff !important; padding: 0 !important; }
+          /* E1 (05/08): A4 retrato com margens de receituário; cada via numa
+             folha própria (1ª Farmácia, 2ª Paciente) — nunca as duas juntas. */
+          @page { size: A4 portrait; margin: 10mm 12mm; }
+          .rx-via-break { page-break-after: always; break-after: page; margin-bottom: 0 !important; }
+          .rx-cut-line { display: none !important; }
         }
         .rx-cut-line { display: none; }
       `}</style>
@@ -4982,12 +5061,37 @@ export default function ConsultaDrawer({ entry, onClose, onStatusChange }: Consu
     setCollectedDocs((prev) => prev.filter((d) => d.id !== id));
   }, []);
 
+  // E8 (05/08): avisa o servidor que o médico ESTÁ mexendo no prontuário.
+  // Sem isso, a consulta esquecida aberta rodava o cronômetro a noite toda
+  // (413 min p/ 6 pacientes em 05/08). Passados 15 min sem sinal, o servidor
+  // suspende sozinho — contando só até a última interação real.
+  const lastPingRef = useRef<number>(0);
+  useEffect(() => {
+    if (entry.status !== "attending") return;
+    const marcar = () => {
+      const agora = Date.now();
+      if (agora - lastPingRef.current < 60_000) return; // no máximo 1 ping/min
+      lastPingRef.current = agora;
+      waitingRoomApi.ping(entry.id);
+    };
+    marcar(); // ao abrir/retomar já conta como atividade
+    const eventos: (keyof DocumentEventMap)[] = ["keydown", "mousedown", "touchstart"];
+    eventos.forEach(ev => document.addEventListener(ev, marcar));
+    return () => eventos.forEach(ev => document.removeEventListener(ev, marcar));
+  }, [entry.id, entry.status]);
+
   useEffect(() => {
     setLoadingPatient(true);
     setPatient(null);
     setCollectedDocs([]); // nova consulta = coletor zerado
     patientsApi.get(entry.patient_id)
-      .then(setPatient)
+      // BUG 05/08: o banco chama o campo de `birthdate`, mas o app inteiro lia
+      // `birth_date` — a data de nascimento NUNCA saía em atestado, laudo,
+      // declaração nem no cabeçalho. Normaliza aqui, num ponto só.
+      .then((p: any) => setPatient({
+        ...p,
+        birth_date: p?.birth_date || p?.birthdate || p?.date_of_birth || null,
+      }))
       .catch(() => toast.error("Erro ao carregar dados do paciente"))
       .finally(() => setLoadingPatient(false));
   }, [entry.patient_id]);
@@ -5015,6 +5119,30 @@ export default function ConsultaDrawer({ entry, onClose, onStatusChange }: Consu
           (a.patient_id === entry.patient_id ||
            (a.patient_phone && entry.patient_name && a.patient_name === entry.patient_name)));
         if (appt?.clinic_id) { aplicar(await clinicApi.get(appt.clinic_id)); return; }
+      } catch {}
+      // E11 (05/08): em Palmares os documentos saíram SEM "Palmares – PE" —
+      // o paciente chegou de balcão, então não havia clínica no check-in nem
+      // marcação. A GRADE FIXA da semana sabe onde ele está: seg=CTO,
+      // ter=Mário Bento, qua manhã=IP / tarde=Unimagem, qui=CTO/Artro.
+      try {
+        const agora = new Date();
+        const dow = (agora.getDay() + 6) % 7; // 0=Seg
+        const hhmm = `${String(agora.getHours()).padStart(2, "0")}:${String(agora.getMinutes()).padStart(2, "0")}`;
+        const lista = await clinicApi.list();
+        const candidatos: { c: any; s: any }[] = [];
+        for (const c of lista || []) {
+          for (const s of c.schedules || []) {
+            if (s.active !== false && s.day_of_week === dow) candidatos.push({ c, s });
+          }
+        }
+        const dentro = candidatos.find(({ s }) => (s.start_time || "00:00") <= hhmm && hhmm <= (s.end_time || "23:59"));
+        if (dentro) { aplicar(dentro.c); return; }
+        if (candidatos.length > 0) {
+          const min = (t: string) => { const [h, m] = (t || "00:00").split(":").map(Number); return h * 60 + m; };
+          candidatos.sort((a, b) => Math.abs(min(a.s.start_time) - min(hhmm)) - Math.abs(min(b.s.start_time) - min(hhmm)));
+          aplicar(candidatos[0].c);
+          return;
+        }
       } catch {}
       try {
         const last = localStorage.getItem("ortho_last_clinic_id");
@@ -5063,17 +5191,63 @@ export default function ConsultaDrawer({ entry, onClose, onStatusChange }: Consu
             <h2 className="text-lg font-bold text-slate-900 dark:text-slate-50 truncate">
               {entry.patient_name}
             </h2>
-            <div className="flex items-center gap-2 flex-wrap mt-0.5">
+            {/* E10 (05/08): o espaço ao lado do nome estava vazio. Agora traz o
+                que o médico precisa bater o olho: idade/nascimento (🎂 na semana
+                do aniversário), particular×plano, cidade, profissão, 1ª vez ou
+                retorno, telefone e os CIDs já fixados. */}
+            <div className="flex items-center gap-x-2 gap-y-1 flex-wrap mt-1">
               {patient?.birth_date && (
-                <span className="text-xs text-slate-500 dark:text-slate-400">{calcAge(patient.birth_date)}</span>
+                <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
+                  {calcAge(patient.birth_date)}
+                  <span className="text-slate-400 font-normal">
+                    {" "}({new Date(patient.birth_date + "T12:00:00").toLocaleDateString("pt-BR")})
+                  </span>
+                </span>
               )}
-              {entry.patient_insurance && (
-                <span className="text-xs bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 px-2 py-0.5 rounded-full font-medium">
-                  {entry.patient_insurance}
+              {aniversarioProximo(patient?.birth_date) && (
+                <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-pink-100 text-pink-700 dark:bg-pink-900/40 dark:text-pink-300">
+                  🎂 {aniversarioProximo(patient?.birth_date)}
+                </span>
+              )}
+              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                (entry.patient_insurance ?? "Particular").toLowerCase() === "particular"
+                  ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300"
+                  : "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
+              }`}>
+                {entry.patient_insurance || "Particular"}
+              </span>
+              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                (patient?.consultation_count ?? 0) > 0
+                  ? "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+                  : "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
+              }`}>
+                {(patient?.consultation_count ?? 0) > 0 ? `Retorno · ${patient.consultation_count}ª vez` : "1ª consulta"}
+              </span>
+              {patient?.address_city && (
+                <span className="text-xs text-slate-500 dark:text-slate-400">📍 {patient.address_city}{patient.address_state ? `-${patient.address_state}` : ""}</span>
+              )}
+              {patient?.occupation && (
+                <span className="text-xs text-slate-500 dark:text-slate-400">💼 {patient.occupation}</span>
+              )}
+              {patient?.phone && (
+                <a
+                  href={`https://wa.me/55${String(patient.phone).replace(/\D/g, "")}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={e => e.stopPropagation()}
+                  className="text-xs text-emerald-600 hover:underline"
+                  title="Abrir conversa no WhatsApp"
+                >
+                  📱 {patient.phone}
+                </a>
+              )}
+              {Array.isArray(patient?.cids) && patient.cids.length > 0 && (
+                <span className="text-xs text-slate-500 dark:text-slate-400 truncate max-w-[240px]" title={patient.cids.join(" · ")}>
+                  🏷 {patient.cids.map((c: string) => c.split("—")[0].trim()).join(", ")}
                 </span>
               )}
               {entry.reason && (
-                <span className="text-xs text-slate-500 dark:text-slate-400 truncate">· {entry.reason}</span>
+                <span className="text-xs text-slate-400 truncate">· {entry.reason}</span>
               )}
             </div>
           </div>
@@ -5235,7 +5409,9 @@ export default function ConsultaDrawer({ entry, onClose, onStatusChange }: Consu
             <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
           </div>
         ) : (
-          <div className={`pt-4 ${entry.status !== "attending" ? "pointer-events-none select-none opacity-50" : ""}`}>
+          // E9 (05/08): pb-32 garante espaço abaixo do último botão (Salvar),
+          // que ficava embaixo dos botões flutuantes do chat/IA.
+          <div className={`pt-4 pb-32 ${entry.status !== "attending" ? "pointer-events-none select-none opacity-50" : ""}`}>
             {activeTab === "anamnese"        && <TabProntuario patientId={entry.patient_id} patient={patient} />}
             {activeTab === "exames"          && <TabExames patientId={entry.patient_id} patient={patient} clinic={clinic} />}
             {activeTab === "receitas"        && <TabReceita patientId={entry.patient_id} patient={patient} clinic={clinic} />}

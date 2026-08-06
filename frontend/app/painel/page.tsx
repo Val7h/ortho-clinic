@@ -133,12 +133,13 @@ interface PatientCardProps {
   entry: WaitingRoomEntry;
   onStatusChange: (id: number, status: QueueStatus) => Promise<void>;
   onRemove: (id: number) => void;
+  onAddValue: (entry: WaitingRoomEntry) => void;
   onSelect: (entry: WaitingRoomEntry) => void;
   busy: boolean;
   selected: boolean;
 }
 
-function PatientCard({ entry, onStatusChange, onRemove, onSelect, busy, selected }: PatientCardProps) {
+function PatientCard({ entry, onStatusChange, onRemove, onAddValue, onSelect, busy, selected }: PatientCardProps) {
   const isAttended = entry.status === 'attended';
   const isAbsent = entry.status === 'absent';
   const isDimmed = isAttended || isAbsent;
@@ -301,6 +302,16 @@ function PatientCard({ entry, onStatusChange, onRemove, onSelect, busy, selected
                 <Play className="w-3 h-3" /> Recolocar
               </button>
             )}
+            {/* E3 (05/08): procedimento indicado na consulta — a secretária
+                acrescenta o valor na conta do paciente, e vai pro Caixa do Dia */}
+            <button
+              onClick={() => onAddValue(entry)}
+              disabled={busy}
+              className="p-1 rounded text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950 transition-colors disabled:opacity-40"
+              title="Acrescentar valor (procedimento) na conta deste paciente"
+            >
+              <Plus className="w-3 h-3" />
+            </button>
             <button
               onClick={() => {
                 navigator.clipboard.writeText(entry.patient_name)
@@ -347,6 +358,7 @@ export default function SalaDeEsperaPage() {
   const [selectedPatient, setSelectedPatient] = useState<any>(null);
   const [checkinReason, setCheckinReason] = useState('');
   const [checkinValue, setCheckinValue] = useState(''); // texto livre (ex: "400" ou "400,00"), convertido no envio
+  const [checkinPayment, setCheckinPayment] = useState('pix'); // E3: forma de pagamento do valor recebido
   const [submitting, setSubmitting] = useState(false);
 
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -508,6 +520,7 @@ export default function SalaDeEsperaPage() {
     setPatientSearch('');
     setCheckinReason('');
     setCheckinValue('');
+    setCheckinPayment('pix');
   };
 
   // Fechar/cancelar o modal SEMPRE limpa o formulário (paciente/valor/motivo),
@@ -529,6 +542,7 @@ export default function SalaDeEsperaPage() {
         clinic_id: selectedClinicId,
         reason: checkinReason || undefined,
         value_cents: parseReaisToCents(checkinValue),
+        payment_method: parseReaisToCents(checkinValue) ? checkinPayment : undefined,
       });
       setEntries((prev) => [...prev, entry]);
       const name = selectedPatient.name;
@@ -543,6 +557,35 @@ export default function SalaDeEsperaPage() {
       }
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  // E3 (05/08): procedimento indicado durante a consulta — acrescenta o valor
+  // na conta do paciente do dia e lança no Caixa do Dia na hora.
+  const handleAddValue = async (entry: WaitingRoomEntry) => {
+    const txt = window.prompt(
+      `Acrescentar valor na conta de ${entry.patient_name}\n\n` +
+      `Ex.: 250 (infiltração), 1200 (viscossuplementação)\n` +
+      `Já lançado hoje: ${formatCentsToReais(entry.value_cents) || 'R$ 0,00'}`,
+      ''
+    );
+    if (!txt) return;
+    const cents = parseReaisToCents(txt);
+    if (!cents) { toast.error('Valor inválido'); return; }
+    const desc = window.prompt('Descrição (ex.: Infiltração de corticoide)', 'Procedimento') || 'Procedimento';
+    setBusyIds((prev) => new Set(prev).add(entry.id));
+    try {
+      const r = await waitingRoomApi.addValue(entry.id, { value_cents: cents, description: desc });
+      setEntries((prev) => prev.map((e) => (e.id === entry.id ? { ...e, value_cents: r.total_cents } : e)));
+      toast.success(`${formatCentsToReais(cents)} lançado no Caixa do Dia`);
+    } catch {
+      toast.error('Erro ao lançar o valor');
+    } finally {
+      setBusyIds((prev) => {
+        const next = new Set(prev);
+        next.delete(entry.id);
+        return next;
+      });
     }
   };
 
@@ -720,6 +763,7 @@ export default function SalaDeEsperaPage() {
                       entry={entry}
                       onStatusChange={handleStatusChange}
                       onRemove={handleRemove}
+                      onAddValue={handleAddValue}
                       onSelect={handleSelectEntry}
                       busy={busyIds.has(entry.id)}
                       selected={selectedEntry?.id === entry.id}
@@ -895,6 +939,38 @@ export default function SalaDeEsperaPage() {
                 onChange={(e) => setCheckinValue(e.target.value)}
                 className="w-full px-3 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-50 text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
+              {/* E3 (05/08): valor na chegada = pagamento à vista → precisa da
+                  forma de pagamento pra cair certo no Caixa do Dia. */}
+              {checkinValue.trim() !== '' && (
+                <div className="mt-2">
+                  <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Forma de pagamento</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[
+                      { v: 'pix', l: 'Pix' },
+                      { v: 'dinheiro', l: 'Dinheiro' },
+                      { v: 'cartao_credito', l: 'Crédito' },
+                      { v: 'cartao_debito', l: 'Débito' },
+                      { v: 'convenio', l: 'Convênio' },
+                    ].map((op) => (
+                      <button
+                        key={op.v}
+                        type="button"
+                        onClick={() => setCheckinPayment(op.v)}
+                        className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
+                          checkinPayment === op.v
+                            ? 'bg-emerald-600 border-emerald-600 text-white'
+                            : 'bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'
+                        }`}
+                      >
+                        {op.l}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-1.5">
+                    ✓ Este valor entra automaticamente no Caixa do Dia
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         </Modal>

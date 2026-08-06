@@ -59,6 +59,14 @@ export const Modal: React.FC<ModalProps> = ({
 
   const close = useCallback(() => onOpenChange(false), [onOpenChange]);
 
+  // BUG 05/08 (Valth): o efeito de foco dependia de `close`, que muda de
+  // referência a cada render do componente PAI. Digitar no campo Valor do
+  // "Registrar Chegada" re-renderizava a página → novo `close` → o efeito
+  // rodava de novo → foco voltava pro PRIMEIRO campo (Buscar paciente) a cada
+  // tecla. Mantemos o callback numa ref para o listener não recriar o efeito.
+  const closeRef = useRef(close);
+  closeRef.current = close;
+
   // Capture the trigger element when the modal opens
   useEffect(() => {
     if (open) {
@@ -71,6 +79,20 @@ export const Modal: React.FC<ModalProps> = ({
     }
   }, [open]);
 
+  // Foco inicial: roda SÓ na abertura (depende apenas de `open`), nunca a cada
+  // digitação — senão o cursor volta pro primeiro campo a cada tecla.
+  useEffect(() => {
+    if (!open) return;
+    const panel = panelRef.current;
+    if (!panel) return;
+    const focusable = panel.querySelectorAll<HTMLElement>(FOCUSABLE);
+    if (focusable.length > 0) {
+      focusable[0].focus();
+    } else {
+      panel.focus();
+    }
+  }, [open]);
+
   // Scroll-lock + ESC + focus trap
   useEffect(() => {
     if (!open) return;
@@ -79,24 +101,14 @@ export const Modal: React.FC<ModalProps> = ({
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
 
-    // Move focus into the dialog on open
-    const panel = panelRef.current;
-    if (panel) {
-      const focusable = panel.querySelectorAll<HTMLElement>(FOCUSABLE);
-      if (focusable.length > 0) {
-        focusable[0].focus();
-      } else {
-        panel.focus();
-      }
-    }
-
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.stopPropagation();
-        close();
+        closeRef.current();
         return;
       }
 
+      const panel = panelRef.current;   // lê a ref na hora (o efeito não depende dela)
       if (e.key === 'Tab' && panel) {
         const focusable = Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE));
         if (focusable.length === 0) { e.preventDefault(); return; }
@@ -119,7 +131,9 @@ export const Modal: React.FC<ModalProps> = ({
       document.removeEventListener('keydown', handleKeyDown);
       document.body.style.overflow = previousOverflow;
     };
-  }, [open, close]);
+    // NÃO incluir `close` aqui: ele muda de referência a cada render do pai e
+    // faria o efeito (e o foco) reiniciar a cada tecla digitada.
+  }, [open]);
 
   if (!open) return null;
   if (typeof document === 'undefined') return null;

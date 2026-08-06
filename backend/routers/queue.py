@@ -15,10 +15,11 @@ import logging
 
 from database import get_db
 from deps import get_current_user
-from tzutil import today_br
+from tzutil import today_br, now_br
 from models.queue import ClinicQueue, PrescriptionSignature, AnamnesisTemplate, WaitingRoomEntry
-from models.clinic import Appointment, Clinic
+from models.clinic import Appointment, Clinic, ClinicSchedule
 from models.patient import Patient
+from models.financial import FinancialRecord
 from models.organization import User
 from schemas.queue import (
     QueueCallRequest, QueueCallResponse, QueueStatus, QueueHistoryItem,
@@ -666,6 +667,8 @@ class CheckinRequest(BaseModel):
     reason: Optional[str] = None
     notes: Optional[str] = None
     value_cents: Optional[int] = None
+    # Forma de pagamento do valor recebido na chegada (E3, 05/08)
+    payment_method: Optional[str] = None
 
 
 class WaitingRoomEntryOut(BaseModel):
@@ -739,6 +742,248 @@ def _build_entry_out(entry: WaitingRoomEntry, patient: Patient, now: datetime) -
     )
 
 
+# ── Fila ↔ Agenda ↔ Caixa (correções 05/08, erros E3/E5/E11 do Valth) ─────────
+
+def _infer_clinic_id(db: Session, current_user: User) -> Optional[int]:
+    """Descobre EM QUAL CLÍNICA o médico está agora, pela grade fixa da semana.
+
+    Erro E11: em Palmares os documentos saíam sem "Palmares – PE" porque nada
+    dizia ao app onde ele estava. A grade (clinic_schedules) sabe: seg=CTO,
+    ter=Mário Bento, qua manhã=IP / qua tarde=Unimagem, qui=CTO/Artro.
+    Regra: turno que contém a hora atual; se nenhum, o turno mais próximo do dia.
+    """
+    agora = now_br()
+    dow = agora.weekday()  # 0=Seg
+    hhmm = agora.strftime("%H:%M")
+
+    q = (
+        db.query(ClinicSchedule, Clinic)
+        .join(Clinic, Clinic.id == ClinicSchedule.clinic_id)
+        .filter(ClinicSchedule.active == True, ClinicSchedule.day_of_week == dow, Clinic.active == True)
+    )
+    if current_user.role != "superadmin":
+        q = q.filter(Clinic.organization_id == current_user.organization_id)
+    turnos = q.all()
+    if not turnos:
+        return None
+    # 1) turno que contém a hora atual
+    for sched, _clinic in turnos:
+        if (sched.start_time or "00:00") <= hhmm <= (sched.end_time or "23:59"):
+            return sched.clinic_id
+    # 2) senão, o turno cujo início é o mais próximo da hora atual
+    def dist(s):
+        try:
+            h1, m1 = map(int, (s.start_time or "00:00").split(":"))
+            h2, m2 = map(int, hhmm.split(":"))
+            return abs((h1 * 60 + m1) - (h2 * 60 + m2))
+        except Exception:
+            return 9999
+    turnos.sort(key=lambda t: dist(t[0]))
+    return turnos[0][0].clinic_id
+
+
+def _ensure_appointment_for_entry(db: Session, patient: Patient, clinic_id: Optional[int],
+                                  reason: Optional[str]) -> Optional[int]:
+    """Garante que o paciente que chegou APAREÇA NA AGENDA DO DIA (erro E5).
+
+    Se já existe agendamento hoje (marcado pelo bot/secretária), reaproveita e
+    marca como confirmado (ele chegou). Se não existe — o caso de Palmares, em
+    que o paciente chega sem marcar —, cria o agendamento retroativo do dia.
+    """
+    hoje = today_br()
+    existente = (
+        db.query(Appointment)
+        .filter(
+            Appointment.patient_id == patient.id,
+            Appointment.date == hoje,
+            Appointment.status.notin_(["cancelled", "blocked"]),
+        )
+        .order_by(Appointment.start_time)
+        .first()
+    )
+    if existente:
+        if existente.status == "pending":
+            existente.status = "confirmed"  # chegou = confirmado
+        if clinic_id and not existente.clinic_id:
+            existente.clinic_id = clinic_id
+        db.flush()
+        return existente.id
+
+    if not clinic_id:
+        return None  # sem clínica não dá pra pôr na agenda de forma coerente
+
+    agora = now_br()
+    start = agora.strftime("%H:%M")
+    fim = (agora + timedelta(minutes=15)).strftime("%H:%M")
+    novo = Appointment(
+        clinic_id=clinic_id,
+        patient_id=patient.id,
+        patient_name=patient.name,
+        patient_phone=patient.phone,
+        date=hoje,
+        start_time=start,
+        end_time=fim,
+        status="confirmed",
+        reason=reason or "Chegada sem agendamento",
+        notes="Registrado automaticamente na chegada (paciente de balcão)",
+    )
+    db.add(novo)
+    db.flush()
+    return novo.id
+
+
+def _lancar_no_caixa(db: Session, patient: Patient, clinic_id: Optional[int],
+                     value_cents: int, payment_method: Optional[str],
+                     descricao: str) -> None:
+    """Joga o valor recebido na chegada direto no Caixa do Dia (erro E3).
+
+    Antes, o valor ficava preso no registro da fila e o financeiro do dia
+    ficava zerado (terça: 17 atendimentos, R$ 0 no caixa).
+    """
+    if not value_cents or value_cents <= 0:
+        return
+    db.add(FinancialRecord(
+        organization_id=patient.organization_id,
+        patient_id=patient.id,
+        clinic_id=clinic_id,
+        amount=round(value_cents / 100.0, 2),
+        payment_method=(payment_method or "dinheiro"),
+        status="paid",
+        description=descricao,
+        date=today_br(),
+    ))
+
+
+def _sync_appointment_status(db: Session, entry: WaitingRoomEntry, novo_status: str) -> None:
+    """Espelha o status da fila no agendamento do dia (E7b).
+
+    atendido → realizado (completed) · ausente → faltou (no_show) ·
+    em atendimento/aguardando → confirmado (o paciente está aqui).
+    """
+    mapa = {
+        "attended": "completed",
+        "absent": "no_show",
+        "attending": "confirmed",
+        "waiting": "confirmed",
+        "suspended": "confirmed",
+    }
+    alvo = mapa.get(novo_status)
+    if not alvo:
+        return
+    appt = (
+        db.query(Appointment)
+        .filter(
+            Appointment.patient_id == entry.patient_id,
+            Appointment.date == entry.entry_date,
+            Appointment.status.notin_(["cancelled", "blocked"]),
+        )
+        .order_by(Appointment.start_time)
+        .first()
+    )
+    if appt:
+        appt.status = alvo
+
+
+# E8: consulta esquecida aberta inflava o tempo médio (413 min p/ 6 pacientes em
+# 05/08). Passados 15 min sem interação, suspende sozinho — e desconta o tempo
+# parado, contando só até a ÚLTIMA interação real.
+INATIVIDADE_LIMITE_MIN = 15
+
+
+def _auto_suspend_stale(db: Session, current_user: User) -> int:
+    hoje = today_br()
+    q = (
+        db.query(WaitingRoomEntry)
+        .join(Patient, Patient.id == WaitingRoomEntry.patient_id)
+        .filter(WaitingRoomEntry.status == "attending", WaitingRoomEntry.entry_date <= hoje)
+    )
+    if current_user.role != "superadmin":
+        q = q.filter(Patient.organization_id == current_user.organization_id)
+
+    agora = datetime.now(timezone.utc)
+    limite = timedelta(minutes=INATIVIDADE_LIMITE_MIN)
+    suspensos = 0
+    for e in q.all():
+        ref = e.last_activity_at or e.segment_started_at
+        if ref is None:
+            continue
+        if ref.tzinfo is None:
+            ref = ref.replace(tzinfo=timezone.utc)
+        if agora - ref < limite:
+            continue
+        # fecha o trecho contando só até a última interação (não até agora)
+        if e.segment_started_at is not None:
+            seg = e.segment_started_at
+            if seg.tzinfo is None:
+                seg = seg.replace(tzinfo=timezone.utc)
+            e.active_seconds = (e.active_seconds or 0) + max(int((ref - seg).total_seconds()), 0)
+            e.segment_started_at = None
+        e.status = "suspended"
+        suspensos += 1
+    if suspensos:
+        db.commit()
+    return suspensos
+
+
+class ActivityPing(BaseModel):
+    pass
+
+
+@router.post("/waiting-room/{entry_id}/activity", status_code=204)
+async def registrar_atividade(
+    entry_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Front avisa que o médico está mexendo no prontuário (E8, anti-inatividade)."""
+    entry = db.query(WaitingRoomEntry).filter(WaitingRoomEntry.id == entry_id).first()
+    if not entry:
+        raise HTTPException(status_code=404, detail="Entrada não encontrada")
+    p = db.query(Patient).filter(Patient.id == entry.patient_id).first()
+    if not p or not _same_org(current_user, p.organization_id):
+        raise HTTPException(status_code=404, detail="Entrada não encontrada")
+    entry.last_activity_at = datetime.now(timezone.utc)
+    db.commit()
+    return JSONResponse(status_code=204, content=None)
+
+
+class ValorExtraIn(BaseModel):
+    value_cents: int
+    description: Optional[str] = None
+    payment_method: Optional[str] = None
+
+
+@router.post("/waiting-room/{entry_id}/valor", status_code=201)
+async def adicionar_valor(
+    entry_id: int,
+    data: ValorExtraIn,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Acrescenta um valor à conta do paciente no dia (E3).
+
+    Caso real do Valth: durante a consulta ele indica uma infiltração e avisa a
+    secretária pelo chat — ela precisa lançar +R$250 na conta daquele paciente.
+    """
+    if not data.value_cents or data.value_cents <= 0:
+        raise HTTPException(422, "Valor inválido")
+    entry = db.query(WaitingRoomEntry).filter(WaitingRoomEntry.id == entry_id).first()
+    if not entry:
+        raise HTTPException(status_code=404, detail="Entrada não encontrada")
+    patient = db.query(Patient).filter(Patient.id == entry.patient_id).first()
+    if not patient or not _same_org(current_user, patient.organization_id):
+        raise HTTPException(status_code=404, detail="Entrada não encontrada")
+
+    _lancar_no_caixa(
+        db, patient, entry.clinic_id, data.value_cents, data.payment_method,
+        descricao=(data.description or "Procedimento"),
+    )
+    entry.value_cents = (entry.value_cents or 0) + data.value_cents
+    db.commit()
+    db.refresh(entry)
+    return {"ok": True, "total_cents": entry.value_cents}
+
+
 @router.post("/waiting-room/checkin", response_model=WaitingRoomEntryOut, status_code=201)
 async def checkin_patient(
     request: CheckinRequest,
@@ -785,9 +1030,13 @@ async def checkin_patient(
     max_position = pos_query.scalar()
     next_position = (max_position or 0) + 1
 
+    # E11: sem clínica informada, deduz pela grade da semana (seg=CTO, ter=Mário
+    # Bento, qua manhã=IP / tarde=Unimagem, qui=CTO/Artro)
+    clinic_id = request.clinic_id or _infer_clinic_id(db, current_user)
+
     entry = WaitingRoomEntry(
         patient_id=request.patient_id,
-        clinic_id=request.clinic_id,
+        clinic_id=clinic_id,
         reason=request.reason,
         notes=request.notes,
         position=next_position,
@@ -797,6 +1046,16 @@ async def checkin_patient(
         value_cents=request.value_cents,
     )
     db.add(entry)
+
+    # E5: aparecer na agenda do dia (cria o agendamento se veio de balcão)
+    _ensure_appointment_for_entry(db, patient, clinic_id, request.reason)
+
+    # E3: valor da chegada = pagamento à vista → cai no Caixa do Dia
+    _lancar_no_caixa(
+        db, patient, clinic_id, request.value_cents or 0, request.payment_method,
+        descricao=(request.reason or "Consulta"),
+    )
+
     db.commit()
     db.refresh(entry)
 
@@ -811,6 +1070,13 @@ async def get_today_queue(
     current_user: User = Depends(get_current_user),
 ):
     """Lista todos os pacientes da fila do dia, ordenados por hora de chegada."""
+    # E8: antes de listar, suspende o que ficou aberto sem interação (15 min).
+    # Roda aqui porque o painel recarrega sozinho a cada 30s — sem cron.
+    try:
+        _auto_suspend_stale(db, current_user)
+    except Exception:
+        logger.exception("Falha ao auto-suspender consultas inativas")
+
     today = today_br()
     query = db.query(WaitingRoomEntry).filter(WaitingRoomEntry.entry_date == today)
 
@@ -907,6 +1173,7 @@ async def update_waiting_status(
         if entry.segment_started_at is None:
             entry.segment_started_at = now          # inicia/retoma o cronômetro
         entry.attended_at = None                    # reabrir finalizado volta pra ativo
+        entry.last_activity_at = now                # E8: marca atividade ao iniciar
     elif request.status == "suspended":
         _fechar_trecho()                            # congela o cronômetro na hora
     elif request.status == "attended":
@@ -916,6 +1183,11 @@ async def update_waiting_status(
         _fechar_trecho()
 
     entry.status = request.status
+
+    # E7b/E5: o que acontece na fila REFLETE na agenda do dia — atendido vira
+    # "realizado" e ausente vira "faltou", sem o médico ter que marcar duas vezes.
+    _sync_appointment_status(db, entry, request.status)
+
     db.commit()
     db.refresh(entry)
 

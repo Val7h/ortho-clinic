@@ -6,7 +6,7 @@ import {
   FileText, FlaskConical, Dumbbell, ClipboardList,
   Plus, Trash2, ChevronRight,
   MessageSquare, Send, X, AlertCircle, ClipboardCheck,
-  Link as LinkIcon, Clock, CheckCircle, Camera,
+  Link as LinkIcon, Clock, CheckCircle, Camera, Pencil,
 } from "lucide-react";
 import Link from "next/link";
 import toast from "react-hot-toast";
@@ -110,6 +110,37 @@ export default function PatientPage() {
 
   // Photo capture modal
   const [photoModalOpen, setPhotoModalOpen] = useState(false);
+
+  // E6 (05/08): edição da ficha (telefone/endereço errados não tinham conserto)
+  const editModal = useModal(false);
+  const [editForm, setEditForm] = useState<any>({});
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  const handleSaveEdit = async () => {
+    setSavingEdit(true);
+    try {
+      const payload: any = {};
+      [
+        "name", "birthdate", "cpf", "rg", "gender", "civil_status", "occupation",
+        "phone", "phone2", "email", "address_street", "address_city", "address_state",
+        "address_zip", "blood_type", "allergies", "chronic_conditions",
+        "current_medications", "insurance", "insurance_number", "insurance_plan",
+        "emergency_contact", "emergency_phone", "emergency_relation",
+      ].forEach((k) => {
+        if (editForm[k] !== undefined) payload[k] = editForm[k] === "" ? null : editForm[k];
+      });
+      if (payload.name) payload.name = String(payload.name).toUpperCase();
+      const atualizado = await patientsApi.update(pid, payload);
+      setPatient((p: any) => ({ ...p, ...atualizado }));
+      put({ ...patient, ...atualizado });
+      editModal.onOpenChange(false);
+      toast.success("Dados atualizados");
+    } catch (err: any) {
+      toast.error(err?.response?.data?.detail ?? "Erro ao salvar");
+    } finally {
+      setSavingEdit(false);
+    }
+  };
 
   // ── Load patient + timeline ──────────────────────────────────────────
 
@@ -330,7 +361,6 @@ export default function PatientPage() {
         {/* Document quick-links */}
         <div className="grid grid-cols-4 gap-3">
           {[
-            { href: `/pacientes/${pid}/receita`,  icon: FileText,     label: "Receita"  },
             { href: `/pacientes/${pid}/exames`,   icon: FlaskConical, label: "Exames"   },
             { href: `/pacientes/${pid}/fisio`,    icon: Dumbbell,     label: "Fisio"    },
             { href: `/pacientes/${pid}/laudo`,    icon: ClipboardList,label: "Laudo"    },
@@ -529,6 +559,18 @@ export default function PatientPage() {
               </CardContent>
             </Card>
 
+            {/* E6 (05/08): a ficha era só leitura — não dava pra corrigir telefone
+                nem endereço errado. Agora edita direto aqui. */}
+            <div className="flex justify-end">
+              <Button
+                onClick={() => { setEditForm({ ...patient }); editModal.onOpenChange(true); }}
+                size="sm"
+                icon={<Pencil className="w-4 h-4" />}
+              >
+                Editar dados do paciente
+              </Button>
+            </div>
+
             <DataSection title="Dados Pessoais" items={[
               { label: "Nome", value: patient.name },
               { label: "Nascimento", value: patient.birthdate ? `${formatDate(patient.birthdate)} (${calcAge(patient.birthdate)})` : null },
@@ -601,7 +643,6 @@ export default function PatientPage() {
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {[
-                { href: `/pacientes/${pid}/receita`, icon: FileText,     label: "Receitas",      desc: "Prescrições médicas"   },
                 { href: `/pacientes/${pid}/exames`,  icon: FlaskConical, label: "Exames",        desc: "Solicitações de exame" },
                 { href: `/pacientes/${pid}/fisio`,   icon: Dumbbell,     label: "Fisioterapia",  desc: "Encaminhamentos"       },
                 { href: `/pacientes/${pid}/laudo`,   icon: ClipboardList,label: "Laudos",        desc: "Laudos e atestados"    },
@@ -623,6 +664,51 @@ export default function PatientPage() {
           </div>
         )}
       </main>
+
+      {/* E6 (05/08): Editar dados do paciente */}
+      <Modal
+        open={editModal.open}
+        onOpenChange={editModal.onOpenChange}
+        title="Editar dados do paciente"
+        size="lg"
+        footer={
+          <div className="flex gap-3 justify-end">
+            <Button variant="tertiary" onClick={() => editModal.onOpenChange(false)}>Cancelar</Button>
+            <Button onClick={handleSaveEdit} isLoading={savingEdit}>Salvar alterações</Button>
+          </div>
+        }
+      >
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {[
+            { k: "name", l: "Nome completo", full: true },
+            { k: "birthdate", l: "Nascimento", type: "date" },
+            { k: "cpf", l: "CPF" },
+            { k: "phone", l: "Telefone (WhatsApp)" },
+            { k: "phone2", l: "Telefone 2" },
+            { k: "email", l: "E-mail" },
+            { k: "occupation", l: "Profissão" },
+            { k: "civil_status", l: "Estado civil" },
+            { k: "address_street", l: "Endereço", full: true },
+            { k: "address_city", l: "Cidade" },
+            { k: "address_state", l: "UF" },
+            { k: "insurance", l: "Convênio (ou Particular)" },
+            { k: "insurance_number", l: "Nº da carteirinha" },
+            { k: "allergies", l: "Alergias", full: true },
+            { k: "chronic_conditions", l: "Doenças crônicas", full: true },
+            { k: "current_medications", l: "Medicamentos em uso", full: true },
+          ].map(({ k, l, type, full }) => (
+            <div key={k} className={full ? "sm:col-span-2" : ""}>
+              <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">{l}</label>
+              <input
+                type={type || "text"}
+                value={editForm[k] ?? ""}
+                onChange={(e) => setEditForm((f: any) => ({ ...f, [k]: e.target.value }))}
+                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          ))}
+        </div>
+      </Modal>
 
       {/* Photo Capture Modal */}
       {photoModalOpen && (
