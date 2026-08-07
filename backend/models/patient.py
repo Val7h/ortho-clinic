@@ -25,6 +25,12 @@ class Patient(Base):
     address_city = Column(String(100), nullable=True)
     address_state = Column(String(2), nullable=True)
     address_zip = Column(String(10), nullable=True)
+    # 06/08: endereço em colunas separadas para poder filtrar por bairro.
+    # address_street continua guardando a linha completa (é o que os
+    # documentos imprimem) — estas aqui são o dado estruturado.
+    address_number = Column(String(20), nullable=True)
+    address_complement = Column(String(100), nullable=True)
+    address_neighborhood = Column(String(120), nullable=True, index=True)
 
     # Dados médicos
     blood_type = Column(String(5), nullable=True)

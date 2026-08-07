@@ -31,9 +31,17 @@ export default function NewPatientPage() {
   const [end, setEnd] = useState({ logradouro: "", numero: "", complemento: "", bairro: "" });
   const numeroRef = useRef<HTMLInputElement>(null);
 
+  // Guarda em colunas (número, complemento, bairro) E na linha montada, que é
+  // o que os documentos imprimem. As colunas existem para filtrar por bairro.
   const aplicarEndereco = (e: typeof end) => {
     setEnd(e);
-    setForm((f) => ({ ...f, address_street: montarEndereco(e.logradouro, e.numero, e.complemento, e.bairro) }));
+    setForm((f) => ({
+      ...f,
+      address_number: e.numero,
+      address_complement: e.complemento,
+      address_neighborhood: e.bairro,
+      address_street: montarEndereco(e.logradouro, e.numero, e.complemento, e.bairro),
+    }));
   };
 
   const onCepChange = async (valor: string) => {
@@ -55,6 +63,7 @@ export default function NewPatientPage() {
       ...f,
       address_city: achado.cidade,
       address_state: achado.uf,
+      address_neighborhood: achado.bairro,
       address_street: montarEndereco(achado.logradouro, novo.numero, novo.complemento, achado.bairro),
     }));
     numeroRef.current?.focus();
@@ -196,6 +205,15 @@ export default function NewPatientPage() {
                   onChange={(e) => aplicarEndereco({ ...end, complemento: e.target.value })}
                 />
               </div>
+            </div>
+            <div className="sm:col-span-2">
+              <label className="label">Bairro</label>
+              <input
+                className="input"
+                placeholder="Bairro"
+                value={end.bairro}
+                onChange={(e) => aplicarEndereco({ ...end, bairro: e.target.value })}
+              />
             </div>
             <div className="sm:col-span-2">
               <label className="label">Endereço *</label>

@@ -136,6 +136,7 @@ export default function PatientPage() {
     setEditForm((f: any) => ({
       ...f,
       ...(rua ? { address_street: rua } : {}),
+      ...(achado.bairro ? { address_neighborhood: achado.bairro } : {}),
       address_city: achado.cidade,
       address_state: achado.uf,
     }));
@@ -149,7 +150,8 @@ export default function PatientPage() {
       [
         "name", "birthdate", "cpf", "rg", "gender", "civil_status", "occupation",
         "phone", "phone2", "email", "address_street", "address_city", "address_state",
-        "address_zip", "blood_type", "allergies", "chronic_conditions",
+        "address_zip", "address_number", "address_complement", "address_neighborhood",
+        "blood_type", "allergies", "chronic_conditions",
         "current_medications", "insurance", "insurance_number", "insurance_plan",
         "emergency_contact", "emergency_phone", "emergency_relation",
       ].forEach((k) => {
@@ -610,6 +612,7 @@ export default function PatientPage() {
               { label: "Telefone 2", value: patient.phone2 },
               { label: "E-mail", value: patient.email },
               { label: "Endereço", value: patient.address_street },
+              { label: "Bairro", value: patient.address_neighborhood },
               { label: "Cidade", value: patient.address_city },
             ]} />
             <DataSection title="Dados Médicos" items={[
@@ -733,7 +736,10 @@ export default function PatientPage() {
             { k: "email", l: "E-mail" },
             { k: "occupation", l: "Profissão" },
             { k: "civil_status", l: "Estado civil" },
-            { k: "address_street", l: "Endereço", full: true },
+            { k: "address_street", l: "Endereço (linha que sai nos documentos)", full: true },
+            { k: "address_number", l: "Número" },
+            { k: "address_complement", l: "Complemento" },
+            { k: "address_neighborhood", l: "Bairro" },
             { k: "address_city", l: "Cidade" },
             { k: "address_state", l: "UF" },
             { k: "insurance", l: "Convênio (ou Particular)" },

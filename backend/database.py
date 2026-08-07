@@ -102,6 +102,16 @@ def migrate_db():
         if "procedure_type" not in fin_cols:
             migrations.append("ALTER TABLE financial_records ADD COLUMN procedure_type VARCHAR(40)")
 
+    # Endereco em colunas (06/08): filtrar paciente por bairro
+    if "patients" in existing_tables:
+        pcols = [c["name"] for c in inspector.get_columns("patients")]
+        if "address_number" not in pcols:
+            migrations.append("ALTER TABLE patients ADD COLUMN address_number VARCHAR(20)")
+        if "address_complement" not in pcols:
+            migrations.append("ALTER TABLE patients ADD COLUMN address_complement VARCHAR(100)")
+        if "address_neighborhood" not in pcols:
+            migrations.append("ALTER TABLE patients ADD COLUMN address_neighborhood VARCHAR(120)")
+
     # E8 (05/08): auto-suspender consulta esquecida aberta
     if "waiting_room_entries" in existing_tables:
         wre2 = [c["name"] for c in inspector.get_columns("waiting_room_entries")]
