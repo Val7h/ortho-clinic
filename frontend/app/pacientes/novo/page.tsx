@@ -1,10 +1,11 @@
 "use client";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import NavBar from "@/components/NavBar";
 import { PageWithSidebar } from "@/components/PageWithSidebar";
 import { patientsApi } from "@/lib/api";
+import { buscarCep, cepCompleto, formatarCep, montarEndereco } from "@/lib/cep";
 
 const BLOOD_TYPES = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"];
 const GENDERS = [{ v: "M", l: "Masculino" }, { v: "F", l: "Feminino" }, { v: "O", l: "Outro" }];
@@ -20,6 +21,44 @@ export default function NewPatientPage() {
 
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
     setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  // CEP preenche o endereço sozinho (pedido Valth 06/08): a secretária digita
+  // o CEP e só completa número e complemento. O banco guarda tudo em
+  // address_street, então logradouro/nº/compl./bairro são remontados aqui.
+  const [buscandoCep, setBuscandoCep] = useState(false);
+  const [cepNaoEncontrado, setCepNaoEncontrado] = useState(false);
+  const [cepSemRua, setCepSemRua] = useState(false);
+  const [end, setEnd] = useState({ logradouro: "", numero: "", complemento: "", bairro: "" });
+  const numeroRef = useRef<HTMLInputElement>(null);
+
+  const aplicarEndereco = (e: typeof end) => {
+    setEnd(e);
+    setForm((f) => ({ ...f, address_street: montarEndereco(e.logradouro, e.numero, e.complemento, e.bairro) }));
+  };
+
+  const onCepChange = async (valor: string) => {
+    const cep = formatarCep(valor);
+    setForm((f) => ({ ...f, address_zip: cep }));
+    setCepNaoEncontrado(false);
+    setCepSemRua(false);
+    if (!cepCompleto(cep)) return;
+    setBuscandoCep(true);
+    const achado = await buscarCep(cep);
+    setBuscandoCep(false);
+    if (!achado) { setCepNaoEncontrado(true); return; }
+    // CEP único de cidade pequena (ex.: Palmares/PE) vem sem rua nem bairro:
+    // cidade e UF entram, e a rua fica para digitar à mão.
+    setCepSemRua(!achado.logradouro);
+    const novo = { ...end, logradouro: achado.logradouro, bairro: achado.bairro };
+    setEnd(novo);
+    setForm((f) => ({
+      ...f,
+      address_city: achado.cidade,
+      address_state: achado.uf,
+      address_street: montarEndereco(achado.logradouro, novo.numero, novo.complemento, achado.bairro),
+    }));
+    numeroRef.current?.focus();
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -116,24 +155,79 @@ export default function NewPatientPage() {
               <label className="label">E-mail</label>
               <input type="email" className="input" placeholder="email@exemplo.com" onChange={set("email")} />
             </div>
+            {/* CEP vem primeiro: preenche rua, bairro, cidade e UF sozinho e
+                pula o cursor para o número (pedido Valth 06/08). */}
+            <div>
+              <label className="label">CEP</label>
+              <input
+                className="input"
+                placeholder="00000-000"
+                inputMode="numeric"
+                value={form.address_zip || ""}
+                onChange={(e) => onCepChange(e.target.value)}
+              />
+              {buscandoCep && <p className="text-xs text-slate-500 mt-1">Buscando endereço…</p>}
+              {cepNaoEncontrado && (
+                <p className="text-xs text-amber-600 mt-1">CEP não encontrado — preencha o endereço à mão.</p>
+              )}
+              {cepSemRua && (
+                <p className="text-xs text-amber-600 mt-1">
+                  Cidade pequena: o CEP só traz o município. Digite a rua no campo Endereço.
+                </p>
+              )}
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="label">Número</label>
+                <input
+                  ref={numeroRef}
+                  className="input"
+                  placeholder="120"
+                  value={end.numero}
+                  onChange={(e) => aplicarEndereco({ ...end, numero: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="label">Complemento</label>
+                <input
+                  className="input"
+                  placeholder="Apto 302"
+                  value={end.complemento}
+                  onChange={(e) => aplicarEndereco({ ...end, complemento: e.target.value })}
+                />
+              </div>
+            </div>
             <div className="sm:col-span-2">
               <label className="label">Endereço *</label>
-              <input className="input" placeholder="Rua, número, bairro" onChange={set("address_street")} required />
+              <input
+                className="input"
+                placeholder="Rua, número, bairro"
+                value={form.address_street || ""}
+                onChange={set("address_street")}
+                required
+              />
             </div>
             <div>
               <label className="label">Cidade *</label>
-              <input className="input" placeholder="Cidade" onChange={set("address_city")} required />
+              <input
+                className="input"
+                placeholder="Cidade"
+                value={form.address_city || ""}
+                onChange={set("address_city")}
+                required
+              />
             </div>
             <div>
               <label className="label">Estado (UF) *</label>
-              <select className="input" onChange={set("address_state")} required>
+              <select
+                className="input"
+                value={form.address_state || ""}
+                onChange={set("address_state")}
+                required
+              >
                 <option value="">Selecionar</option>
                 {UFS.map((uf) => <option key={uf} value={uf}>{uf}</option>)}
               </select>
-            </div>
-            <div>
-              <label className="label">CEP</label>
-              <input className="input" placeholder="00000-000" onChange={set("address_zip")} />
             </div>
           </div>
         </section>

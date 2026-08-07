@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import toast from "react-hot-toast";
+import { buscarCep, cepCompleto, formatarCep, montarEndereco } from "@/lib/cep";
 import NavBar from "@/components/NavBar";
 import { PageWithSidebar } from "@/components/PageWithSidebar";
 import MedicalHistoryTimeline from "@/components/MedicalHistoryTimeline";
@@ -114,6 +115,31 @@ export default function PatientPage() {
   // E6 (05/08): edição da ficha (telefone/endereço errados não tinham conserto)
   const editModal = useModal(false);
   const [editForm, setEditForm] = useState<any>({});
+  const [buscandoCepEdit, setBuscandoCepEdit] = useState(false);
+  const [cepEditNaoAchado, setCepEditNaoAchado] = useState(false);
+
+  // Preenche endereço/cidade/UF pelo CEP. O número fica com o médico ou a
+  // secretária: mantém o que já estava escrito no campo Endereço se houver.
+  const onCepEdit = async (valor: string) => {
+    const cep = formatarCep(valor);
+    setEditForm((f: any) => ({ ...f, address_zip: cep }));
+    setCepEditNaoAchado(false);
+    if (!cepCompleto(cep)) return;
+    setBuscandoCepEdit(true);
+    const achado = await buscarCep(cep);
+    setBuscandoCepEdit(false);
+    if (!achado) { setCepEditNaoAchado(true); return; }
+    // CEP único de cidade pequena (ex.: Palmares/PE) vem sem rua e sem bairro.
+    // Nesse caso NÃO mexe no endereço já cadastrado — apagá-lo seria pior que
+    // não preencher nada. Cidade e UF entram de qualquer jeito.
+    const rua = montarEndereco(achado.logradouro, "", "", achado.bairro);
+    setEditForm((f: any) => ({
+      ...f,
+      ...(rua ? { address_street: rua } : {}),
+      address_city: achado.cidade,
+      address_state: achado.uf,
+    }));
+  };
   const [savingEdit, setSavingEdit] = useState(false);
 
   const handleSaveEdit = async () => {
@@ -678,6 +704,25 @@ export default function PatientPage() {
           </div>
         }
       >
+        {/* CEP preenche endereço, cidade e UF sozinho (pedido Valth 06/08).
+            Fica acima do resto porque é por ele que se começa. */}
+        <div className="mb-3">
+          <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">CEP</label>
+          <input
+            inputMode="numeric"
+            placeholder="00000-000"
+            value={editForm.address_zip ?? ""}
+            onChange={(e) => onCepEdit(e.target.value)}
+            className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          {buscandoCepEdit && <p className="text-xs text-slate-500 mt-1">Buscando endereço…</p>}
+          {cepEditNaoAchado && (
+            <p className="text-xs text-amber-600 mt-1">CEP não encontrado — preencha o endereço à mão.</p>
+          )}
+          <p className="text-xs text-slate-400 mt-1">
+            Digite o CEP e o endereço vem sozinho — depois complete número e complemento no campo Endereço.
+          </p>
+        </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {[
             { k: "name", l: "Nome completo", full: true },
