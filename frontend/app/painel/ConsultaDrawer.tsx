@@ -3551,33 +3551,42 @@ function TabEncaminhamentos({ patient, clinic, patientId }: { patient: any; clin
   const filteredTemplates = REFERRAL_TEXT_TEMPLATES.filter(t => t.type === refType);
 
   const printContent = printData && (
-    <div style={{ fontFamily: "Arial, sans-serif", color: "#111", fontSize: "13px" }}>
-      <DrHeader clinic={clinic} />
-      <div style={{ textAlign: "center", marginBottom: "16px" }}>
-        <p style={{ fontWeight: 700, fontSize: "14px", textTransform: "uppercase", letterSpacing: "1px", color: "#0F2D5E", margin: 0 }}>Encaminhamento Médico</p>
+    // 10/08: mesmo papel timbrado do laudo e do pedido de exame.
+    <div style={{ fontFamily: "Arial, Helvetica, sans-serif", color: "#1a1a1a", fontSize: "13px" }}>
+      <TimbradoOficial clinic={clinic} />
+
+      <p style={{ textAlign: "center", fontFamily: DOC_SERIF, fontSize: "13px", fontWeight: 700, letterSpacing: "3px", textTransform: "uppercase", color: "#0F2D5E", margin: "0 0 16px" }}>
+        Encaminhamento médico
+      </p>
+
+      <div style={{ border: "1px solid #ddd", borderRadius: "3px", padding: "9px 12px", marginBottom: "16px", fontSize: "12px", lineHeight: 1.7 }}>
+        <div><span style={{ color: "#666" }}>Paciente: </span><strong>{patient?.name}</strong></div>
+        <div>
+          {patient?.birth_date && <><span style={{ color: "#666" }}>Nascimento: </span>{new Date(patient.birth_date + "T12:00:00").toLocaleDateString("pt-BR")}{"  ·  "}</>}
+          {(patient?.patient_insurance || patient?.insurance) && <><span style={{ color: "#666" }}>Convênio: </span>{patient?.patient_insurance || patient?.insurance}</>}
+        </div>
+        {patient?.phone && <div><span style={{ color: "#666" }}>Telefone: </span>{patient.phone}</div>}
       </div>
+
+      <p style={{ margin: "0 0 14px", fontSize: "13px" }}>
+        <span style={{ color: "#666" }}>Encaminho para: </span><strong>{printData.typeLabel}</strong>
+      </p>
+
       {printData.colleagueName && (
-        <p style={{ marginBottom: "12px" }}>Prezado(a) Dr(a). <strong>{printData.colleagueName}</strong>,</p>
+        <p style={{ margin: "0 0 12px" }}>Prezado(a) Dr(a). <strong>{printData.colleagueName}</strong>,</p>
       )}
-      <p style={{ marginBottom: "6px" }}><strong>Paciente:</strong> {patient?.name}</p>
-      {patient?.birth_date && <p style={{ marginBottom: "6px" }}><strong>Data de Nasc.:</strong> {new Date(patient.birth_date + "T12:00:00").toLocaleDateString("pt-BR")}</p>}
-      {patient?.cpf && <p style={{ marginBottom: "6px" }}><strong>CPF:</strong> {patient.cpf}</p>}
-      {patient?.phone && <p style={{ marginBottom: "6px" }}><strong>Telefone:</strong> {patient.phone}</p>}
-      {(patient?.patient_insurance || patient?.insurance) && <p style={{ marginBottom: "6px" }}><strong>Convênio:</strong> {patient?.patient_insurance || patient?.insurance}</p>}
-      {printData.cid && <p style={{ marginBottom: "12px" }}><strong>Diagnóstico/Hipótese (CID-10):</strong> {printData.cid}</p>}
-      <p style={{ marginBottom: "16px" }}><strong>Encaminhar para:</strong> {printData.typeLabel}</p>
-      <div style={{ background: "#f8f8f8", borderLeft: "3px solid #0F2D5E", padding: "12px", marginBottom: "24px", whiteSpace: "pre-wrap", fontSize: "12px" }}>
+
+      <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.7, fontSize: "13px", minHeight: "120px", marginBottom: "8px" }}>
         {printData.text}
       </div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginTop: "32px" }}>
-        <p style={{ fontSize: "11px", color: "#888", margin: 0 }}>{cityState}, {dateStr}</p>
-        <div style={{ textAlign: "center", width: "200px" }}>
-          <div style={{ borderTop: "2px solid #0F2D5E", paddingTop: "6px" }}>
-            <p style={{ fontSize: "12px", fontWeight: 700, margin: "0" }}>Dr. Valth Guimarães</p>
-            <p style={{ fontSize: "11px", color: "#666", margin: "0" }}>{crmDaClinica(clinic)}</p>
-          </div>
-        </div>
-      </div>
+
+      {printData.cid && (
+        <p style={{ fontSize: "11.5px", color: "#444", margin: "14px 0 0" }}>
+          <span style={{ color: "#666" }}>Diagnóstico / hipótese (CID-10): </span>{printData.cid}
+        </p>
+      )}
+
+      <FechoOficial clinic={clinic} />
     </div>
   );
 
