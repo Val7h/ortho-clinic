@@ -206,7 +206,11 @@ function PatientCard({ entry, onStatusChange, onRemove, onAddValue, onSelect, bu
         </div>
 
         {/* Row 2: insurance + status badge + actions */}
-        <div className="flex items-center gap-1.5 mt-1.5" onClick={(e) => e.stopPropagation()}>
+        {/* 10/08: o stopPropagation estava na LINHA INTEIRA — clicar na etiqueta
+            de convênio, no valor ou no espaço vazio não abria o atendimento, e
+            parecia que só "o lado direito do cartão" funcionava. Agora só o
+            grupo de botões segura o clique. */}
+        <div className="flex items-center gap-1.5 mt-1.5">
           <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium flex-shrink-0 ${insuranceColor(entry.patient_insurance)}`}>
             {entry.patient_insurance ?? 'Particular'}
           </span>
@@ -234,11 +238,11 @@ function PatientCard({ entry, onStatusChange, onRemove, onAddValue, onSelect, bu
           {entry.reason && (
             <span className="text-[10px] text-slate-400 truncate min-w-0 flex-1">{entry.reason}</span>
           )}
-          <div className="ml-auto flex items-center gap-1 flex-shrink-0">
+          <div className="ml-auto flex items-center gap-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
             {entry.status === 'waiting' && (
               <>
                 <button
-                  onClick={() => onStatusChange(entry.id, 'attending')}
+                  onClick={() => { onStatusChange(entry.id, 'attending'); onSelect(entry); }}
                   disabled={busy}
                   className="flex items-center gap-1 px-2 py-1 rounded-lg bg-green-600 text-white text-[10px] font-semibold hover:bg-green-700 disabled:opacity-50"
                 >
@@ -275,7 +279,7 @@ function PatientCard({ entry, onStatusChange, onRemove, onAddValue, onSelect, bu
             )}
             {entry.status === 'suspended' && (
               <button
-                onClick={() => onStatusChange(entry.id, 'attending')}
+                onClick={() => { onStatusChange(entry.id, 'attending'); onSelect(entry); }}
                 disabled={busy}
                 className="flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-600 text-white text-[10px] font-semibold hover:bg-emerald-700 disabled:opacity-50"
                 title="Paciente voltou — retoma o cronômetro de onde parou"
@@ -285,7 +289,7 @@ function PatientCard({ entry, onStatusChange, onRemove, onAddValue, onSelect, bu
             )}
             {entry.status === 'attended' && (
               <button
-                onClick={() => onStatusChange(entry.id, 'attending')}
+                onClick={() => { onStatusChange(entry.id, 'attending'); onSelect(entry); }}
                 disabled={busy}
                 className="flex items-center gap-1 px-2 py-1 rounded-lg bg-indigo-600 text-white text-[10px] font-semibold hover:bg-indigo-700 disabled:opacity-50"
                 title="Paciente voltou (esqueceu de pedir algo) — reabre e o cronômetro continua"
