@@ -187,26 +187,37 @@ async def _mark_read_and_notify(db: Session, reader: User, sender_id: int) -> in
 
 # ── REST ─────────────────────────────────────────────────────────────────
 
-# Papéis considerados "conta de plataforma" — não aparecem como colega de chat.
-_PLATFORM_ROLES = ("superadmin",)
-
-
 @router.get("/contacts", response_model=List[ContactOut])
 def list_contacts(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Colegas com quem dá pra conversar (mesma organização, exceto eu mesmo),
-    já com a contagem de não-lidas por contato pra UI nascer com o badge certo."""
-    q = db.query(User).filter(User.id != current_user.id, User.active == True)
-    if current_user.role != "superadmin":
-        q = q.filter(User.organization_id == current_user.organization_id)
-    # Exclui superadmin/contas de plataforma da lista de colegas.
-    q = q.filter(~User.role.in_(_PLATFORM_ROLES))
-    # A secretária só conversa com médicos/admin (mantém médico<->secretária).
-    if current_user.role == "secretary":
-        q = q.filter(User.role.in_(("doctor", "admin")))
-    users = q.order_by(User.name).all()
+    """Colegas da MESMA organização, exceto eu mesmo, já com o total de não-lidas.
+
+    10/08 — a regra passou a ser só "mesma organização", sem filtro de papel.
+    Antes acontecia isto: a conta do Valth é superadmin, e superadmin estava
+    escondido como "conta de plataforma"; a secretária não via a conta dele,
+    escrevia para uma segunda conta de médico que ninguém usava, e as duas
+    pontas achavam que a mensagem não chegava.
+
+    A secretária também deixou de ser limitada a médico/admin — ele pediu que
+    as secretárias conversem entre si.
+
+    O corte por organização é o que garante o isolamento pedido: quando outro
+    médico entrar, ele terá organização própria e não verá — nem será visto
+    por — a equipe daqui. Por isso o superadmin também é cortado pela
+    organização dele aqui: sem isso, ele veria a equipe de todos os médicos.
+    """
+    users = (
+        db.query(User)
+        .filter(
+            User.id != current_user.id,
+            User.active == True,  # noqa: E712
+            User.organization_id == current_user.organization_id,
+        )
+        .order_by(User.name)
+        .all()
+    )
 
     # Não-lidas por remetente: mensagens que me mandaram e ainda não li.
     rows = (
@@ -235,11 +246,13 @@ def list_contacts(
 def get_presence(
     current_user: User = Depends(get_current_user),
 ):
-    """IDs dos colegas online agora (com WebSocket aberto) na mesma organização."""
-    if current_user.role == "superadmin":
-        ids = manager.all_online()
-    else:
-        ids = manager.online_in_org(current_user.organization_id)
+    """IDs dos colegas online agora (WebSocket aberto) na MESMA organização.
+
+    10/08: o superadmin via TODAS as organizações. Com outro médico no sistema,
+    ele veria o status das secretárias do colega — e o colega, o das dele.
+    Presença agora é sempre dentro da própria organização.
+    """
+    ids = manager.online_in_org(current_user.organization_id)
     return {"online_user_ids": [i for i in ids if i != current_user.id]}
 
 
@@ -294,7 +307,8 @@ async def send_message(
     recipient = db.query(User).filter(User.id == payload.recipient_id, User.active == True).first()
     if not recipient:
         raise HTTPException(status_code=404, detail="Destinatário não encontrado")
-    if current_user.role != "superadmin" and recipient.organization_id != current_user.organization_id:
+    # 10/08: sem exceção para superadmin — mesma razão da presença.
+    if recipient.organization_id != current_user.organization_id:
         raise HTTPException(status_code=403, detail="Destinatário fora da sua organização")
 
     msg = DirectMessage(
