@@ -971,7 +971,7 @@ function PrintModal({ rx, patient, clinic, onClose, collectorId }: {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <div>
             <p style={{ fontWeight: 700, fontSize: "14px", margin: "0 0 1px 0", color: headerColor }}>Dr. Valth Menezes Guimarães</p>
-            <p style={{ fontSize: "10.5px", color: "#333", margin: "0" }}>Ortopedia e Traumatologia · CRM-PB 6326 | CRM-PE 16551 · TEOT 15090</p>
+            <p style={{ fontSize: "10.5px", color: "#333", margin: "0" }}>Ortopedia e Traumatologia · {crmComTeot(clinic)}</p>
             <p style={{ fontSize: "10.5px", color: "#333", margin: "1px 0 0 0" }}>
               {clinic?.name ? `${clinic.name} — ` : ""}{clinic?.address || ""}{clinic?.city ? ` · ${clinic.city}/${clinic.state}` : ""}
             </p>
@@ -1038,7 +1038,7 @@ function PrintModal({ rx, patient, clinic, onClose, collectorId }: {
           <div style={{ height: "34px" }} />
           <div style={{ borderTop: "1px solid #333", paddingTop: "3px" }}>
             <p style={{ fontSize: "11px", fontWeight: 700, margin: 0 }}>Dr. Valth Menezes Guimarães</p>
-            <p style={{ fontSize: "9.5px", color: "#555", margin: 0 }}>CRM-PB 6326 | CRM-PE 16551</p>
+            <p style={{ fontSize: "9.5px", color: "#555", margin: 0 }}>{crmDaClinica(clinic)}</p>
             <p style={{ fontSize: "8.5px", color: "#999", margin: "1px 0 0 0", textTransform: "uppercase", letterSpacing: "0.3px" }}>Assinatura e carimbo</p>
           </div>
         </div>
@@ -1091,7 +1091,7 @@ function PrintModal({ rx, patient, clinic, onClose, collectorId }: {
             <p style={{ fontWeight: 700, fontSize: "10px", color: "#555", textTransform: "uppercase", margin: "0 0 2px 0" }}>Prescritor</p>
             <p style={{ fontWeight: 700, fontSize: "14px", margin: "0 0 1px 0", color: headerColor }}>Dr. Valth Guimarães</p>
             <p style={{ fontSize: "10px", color: "#555", margin: "0" }}>Especialidade: Ortopedia e Traumatologia</p>
-            <p style={{ fontSize: "10px", color: "#555", margin: "0" }}>CRM/PB 6326 | CRM/PE 16551</p>
+            <p style={{ fontSize: "10px", color: "#555", margin: "0" }}>{crmDaClinica(clinic)}</p>
             {clinic?.phone && <p style={{ fontSize: "10px", color: "#555", margin: "0" }}>Tel: {clinic.phone}</p>}
           </div>
           <div style={{ textAlign: "right" }}>
@@ -1137,7 +1137,7 @@ function PrintModal({ rx, patient, clinic, onClose, collectorId }: {
         <div style={{ textAlign: "center", width: "180px" }}>
           <div style={{ borderTop: `1px solid ${headerColor}`, paddingTop: "4px" }}>
             <p style={{ fontSize: "11px", fontWeight: 700, margin: "0" }}>Dr. Valth Guimarães</p>
-            <p style={{ fontSize: "10px", color: "#666", margin: "0" }}>CRM/PB 6326 | CRM/PE 16551</p>
+            <p style={{ fontSize: "10px", color: "#666", margin: "0" }}>{crmDaClinica(clinic)}</p>
           </div>
         </div>
       </div>
@@ -1148,19 +1148,16 @@ function PrintModal({ rx, patient, clinic, onClose, collectorId }: {
   const SimplesSheet = () => (
     <div style={{
       background: "white",
-      border: `2px solid ${headerColor}`,
-      borderRadius: "8px",
-      padding: "20px",
+      padding: "0",
       fontSize: "13px",
-      color: "#111",
+      color: "#1a1a1a",
+      fontFamily: "Arial, Helvetica, sans-serif",
     }}>
-      {/* Cabeçalho */}
-      <div style={{ borderBottom: `2px solid ${headerColor}`, paddingBottom: "12px", marginBottom: "14px", textAlign: "center" }}>
-        <h1 style={{ fontSize: "16px", fontWeight: 700, color: headerColor, margin: "0 0 2px 0" }}>Dr. Valth Guimarães</h1>
-        <p style={{ fontSize: "11px", color: "#555", margin: "0" }}>Ortopedia e Traumatologia</p>
-        <p style={{ fontSize: "11px", color: "#555", margin: "0" }}>CRM/PB 6326 | CRM/PE 16551</p>
-        {clinic?.phone && <p style={{ fontSize: "11px", color: "#555", margin: "0" }}>Tel: {clinic.phone}</p>}
-      </div>
+      {/* 10/08: mesmo papel timbrado do laudo, a pedido do Valth. */}
+      <TimbradoOficial clinic={clinic} />
+      <p style={{ textAlign: "center", fontFamily: DOC_SERIF, fontSize: "13px", fontWeight: 700, letterSpacing: "3px", textTransform: "uppercase", color: "#0F2D5E", margin: "0 0 16px" }}>
+        Receita
+      </p>
 
       {/* Dados do paciente */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "14px", fontSize: "12px" }}>
@@ -1195,15 +1192,8 @@ function PrintModal({ rx, patient, clinic, onClose, collectorId }: {
         </div>
       )}
 
-      {/* Assinatura */}
-      <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "20px" }}>
-        <div style={{ textAlign: "center", width: "200px" }}>
-          <div style={{ borderTop: `2px solid ${headerColor}`, paddingTop: "6px", marginBottom: "2px" }}></div>
-          <p style={{ fontSize: "12px", fontWeight: 700, margin: "0" }}>Dr. Valth Guimarães</p>
-          <p style={{ fontSize: "11px", color: "#666", margin: "0" }}>CRM/PB 6326 | CRM/PE 16551</p>
-          <p style={{ fontSize: "10px", color: "#888", margin: "4px 0 0 0" }}>Válido por 30 dias</p>
-        </div>
-      </div>
+      <p style={{ fontSize: "10px", color: "#999", margin: "10px 0 0", textAlign: "right" }}>Válido por 30 dias</p>
+      <FechoOficial clinic={clinic} />
     </div>
   );
 
@@ -2640,30 +2630,73 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
 // ── Tab: Exames ────────────────────────────────────────────────────────────────
 
 // Modal de impressão de pedido de exame
-function PrintExamModal({ text, patientName, clinic, onClose, fontSize = 14, lineHeight = "normal" }: {
+function PrintExamModal({ text, patientName, patient, clinic, onClose, fontSize = 14, lineHeight = "normal" }: {
   text: string;
   patientName: string;
+  patient?: any;
   clinic?: any;
   onClose: () => void;
   fontSize?: 12 | 14 | 16;
   lineHeight?: "normal" | "relaxed";
 }) {
-  const today = new Date();
-  const dateStr = `${String(today.getDate()).padStart(2, "0")}/${String(today.getMonth() + 1).padStart(2, "0")}/${today.getFullYear()}`;
+  const nasc = patient?.birth_date || patient?.birthdate || patient?.date_of_birth || null;
+  const cids: string[] = Array.isArray(patient?.cids) ? patient.cids.filter(Boolean) : [];
+
+  // A folha de verdade — vai por portal no body para o navegador paginar.
+  // Dentro do modal (absolute + flex) a folha herdava a altura do app inteiro
+  // e saía uma SEGUNDA página em branco (reclamação do Valth em 10/08).
+  const folha = (
+    <div style={{ background: "#fff", padding: "0", fontFamily: "Arial, Helvetica, sans-serif", color: "#1a1a1a" }}>
+      <TimbradoOficial clinic={clinic} />
+
+      <p style={{ textAlign: "center", fontFamily: DOC_SERIF, fontSize: "13px", fontWeight: 700, letterSpacing: "3px", textTransform: "uppercase", color: "#0F2D5E", margin: "0 0 16px" }}>
+        Solicitação de exames
+      </p>
+
+      <div style={{ border: "1px solid #ddd", borderRadius: "3px", padding: "9px 12px", marginBottom: "16px", fontSize: "12px", lineHeight: 1.7 }}>
+        <div><span style={{ color: "#666" }}>Paciente: </span><strong>{patientName}</strong></div>
+        <div>
+          {nasc && <><span style={{ color: "#666" }}>Nascimento: </span>{new Date(nasc + "T12:00:00").toLocaleDateString("pt-BR")}{"  ·  "}</>}
+          {patient?.insurance && <><span style={{ color: "#666" }}>Convênio: </span>{patient.insurance}</>}
+        </div>
+      </div>
+
+      <div style={{ minHeight: "150px", whiteSpace: "pre-wrap", lineHeight: lineHeight === "relaxed" ? 1.9 : 1.6, fontSize: `${fontSize}px`, marginBottom: "8px" }}>
+        {text}
+      </div>
+
+      {cids.length > 0 && (
+        <p style={{ fontSize: "11.5px", color: "#444", margin: "14px 0 0" }}>
+          <span style={{ color: "#666" }}>Indicação clínica (CID): </span>{cids.join(" · ")}
+        </p>
+      )}
+
+      <div style={{ borderTop: "1px dashed #ddd", paddingTop: "10px", marginTop: "12px", fontSize: "10.5px", color: "#777" }}>
+        Trazer os exames na consulta de retorno.
+      </div>
+
+      <FechoOficial clinic={clinic} />
+    </div>
+  );
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.6)" }}>
       <style>{`
         @media print {
+          /* 10/08 — saíam DUAS folhas: a interface era escondida por
+             visibility, que apaga mas MANTÉM o espaço, então o papel herdava
+             a altura do app inteiro e sobrava uma página em branco. Agora o
+             papel sai por um portal filho direto do body, em fluxo normal. */
           html, body { height: auto !important; overflow: visible !important; background: #fff !important; }
-          body * { visibility: hidden !important; }
-          #print-exam-root, #print-exam-root * { visibility: visible !important; overflow: visible !important; max-height: none !important; box-shadow: none !important; }
-          /* display:none, não visibility (06/08): escondido por visibility o
-             cabeçalho continuava ocupando espaço em branco no alto da folha. */
-          #print-exam-root .no-print { display: none !important; }
-          #print-exam-root { position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; background: #fff !important; padding: 0 !important; box-shadow: none !important; border-radius: 0 !important; }
+          body > *:not([data-print-portal]) { display: none !important; }
+          #exam-print-portal { display: block !important; position: static !important; width: 100% !important; background: #fff !important; }
+          @page { size: A4 portrait; margin: 14mm 15mm; }
         }
       `}</style>
+      {typeof document !== "undefined" && createPortal(
+        <div id="exam-print-portal" data-print-portal style={{ display: "none" }}>{folha}</div>,
+        document.body,
+      )}
       <div id="print-exam-root" className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-lg flex flex-col overflow-hidden">
         <div className="no-print px-5 pt-4 pb-3 border-b border-gray-200 dark:border-slate-700 flex items-center justify-between flex-shrink-0">
           <h2 className="font-bold text-slate-900 dark:text-slate-50 text-sm">Preview — Pedido de Exame</h2>
@@ -2676,28 +2709,9 @@ function PrintExamModal({ text, patientName, clinic, onClose, fontSize = 14, lin
             </button>
           </div>
         </div>
-        <div className="p-6 bg-white" style={{ fontFamily: "Arial, sans-serif", fontSize: "13px", color: "#111" }}>
-          <div style={{ borderBottom: "2px solid #0F2D5E", paddingBottom: "10px", marginBottom: "12px", textAlign: "center" }}>
-            <p style={{ fontWeight: 700, fontSize: "15px", margin: "0 0 2px 0", color: "#0F2D5E" }}>Dr. Valth Guimarães</p>
-            <p style={{ fontSize: "11px", color: "#555", margin: "0" }}>Ortopedia e Traumatologia · CRM/PB 6326 | CRM/PE 16551</p>
-            {clinic?.phone && <p style={{ fontSize: "11px", color: "#555", margin: "0" }}>Tel: {clinic.phone}</p>}
-          </div>
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "12px", fontSize: "12px" }}>
-            <span><strong>Paciente:</strong> {patientName}</span>
-            <span><strong>Data:</strong> {dateStr}</span>
-          </div>
-          <div style={{ borderTop: "1px solid #ccc", borderBottom: "1px solid #ccc", padding: "12px 0", margin: "0 0 16px 0", whiteSpace: "pre-wrap", lineHeight: lineHeight === "relaxed" ? "1.6" : "1.4", fontSize: `${fontSize}px` }}>
-            {text}
-          </div>
-          <div style={{ textAlign: "right", marginTop: "24px" }}>
-            <div style={{ display: "inline-block", textAlign: "center", width: "220px" }}>
-              <div style={{ borderTop: "1px solid #0F2D5E", paddingTop: "4px" }}>
-                <p style={{ fontSize: "12px", fontWeight: 700, margin: "0" }}>Dr. Valth Guimarães</p>
-                <p style={{ fontSize: "11px", color: "#666", margin: "0" }}>CRM/PB 6326 | CRM/PE 16551</p>
-                <p style={{ fontSize: "10px", color: "#999", margin: "4px 0 0 0" }}>Assinatura e Carimbo</p>
-              </div>
-            </div>
-          </div>
+        {/* A tela mostra exatamente a mesma folha que vai para a impressora. */}
+        <div className="flex-1 overflow-y-auto p-6 bg-white">
+          {folha}
         </div>
       </div>
     </div>
@@ -2853,7 +2867,7 @@ function TabExames({ patientId, patient, clinic }: { patientId: number; patient:
   return (
     <div className="space-y-0 pb-6">
       {printText !== null && (
-        <PrintExamModal text={printText} patientName={patientName} clinic={clinic} onClose={() => setPrintText(null)} fontSize={fontSize} lineHeight={lineHeight} />
+        <PrintExamModal text={printText} patientName={patientName} patient={patient} clinic={clinic} onClose={() => setPrintText(null)} fontSize={fontSize} lineHeight={lineHeight} />
       )}
 
       {/* ── Seção: Modelos ── */}
@@ -3218,14 +3232,19 @@ function PrintDocModal({ title, content, onClose }: { title: string; content: Re
         @media print {
           /* Papel A4 retrato com margens de documento oficial (pedido do Dr. Valth) */
           @page { size: A4 portrait; margin: 16mm 15mm 18mm; }
+          /* 10/08 — mesmo conserto do pedido de exame: escondido por
+             visibility o app some mas MANTÉM o espaço, e sobrava folha em
+             branco. O papel sai por portal filho direto do body. */
           html, body { height: auto !important; overflow: visible !important; background: #fff !important; }
-          body * { visibility: hidden !important; }
-          #print-doc-root, #print-doc-root * { visibility: visible !important; overflow: visible !important; max-height: none !important; box-shadow: none !important; }
-          /* display:none, não visibility (06/08): ver comentário na receita. */
-          #print-doc-root .no-print { display: none !important; }
-          #print-doc-root { position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; max-width: none !important; background: #fff !important; padding: 0 !important; border-radius: 0 !important; }
+          body > *:not([data-print-portal]) { display: none !important; }
+          #doc-print-portal { display: block !important; position: static !important; width: 100% !important; background: #fff !important; }
         }
       `}</style>
+      {typeof document !== "undefined" && createPortal(
+        <div id="doc-print-portal" data-print-portal style={{ display: "none" }}>{content}</div>,
+        document.body,
+      )}
+
       <div id="print-doc-root" className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
         <div className="no-print px-5 pt-4 pb-3 border-b border-gray-200 dark:border-slate-700 flex items-center justify-between flex-shrink-0">
           <h2 className="font-bold text-slate-900 dark:text-slate-50 text-sm">{title}</h2>
@@ -3251,10 +3270,24 @@ function DrHeader({ clinic }: { clinic?: any }) {
     <div style={{ borderBottom: "2px solid #0F2D5E", paddingBottom: "12px", marginBottom: "16px", textAlign: "center" }}>
       <p style={{ fontWeight: 700, fontSize: "16px", color: "#0F2D5E", margin: "0 0 2px 0" }}>Dr. Valth Guimarães</p>
       <p style={{ fontSize: "11px", color: "#555", margin: "0" }}>Ortopedia e Traumatologia</p>
-      <p style={{ fontSize: "11px", color: "#555", margin: "0" }}>CRM/PB 6326 | CRM/PE 16551</p>
+      <p style={{ fontSize: "11px", color: "#555", margin: "0" }}>{crmDaClinica(clinic)}</p>
       {clinic?.phone && <p style={{ fontSize: "11px", color: "#555", margin: "0" }}>Tel: {clinic.phone}</p>}
     </div>
   );
+}
+
+// Registro profissional conforme o ESTADO onde ele está atendendo (10/08):
+// em Palmares e Caruaru vale o CREMEPE; na Paraíba, o CRM-PB. Sai um só —
+// o do conselho local — porque é esse que a clínica e o convênio conferem.
+function crmDaClinica(clinic?: any): string {
+  return (clinic?.state || "").toUpperCase() === "PE"
+    ? "CREMEPE 16.551"
+    : "CRM-PB 6326";
+}
+
+// Versão com o título de especialista, usada nos blocos de assinatura.
+function crmComTeot(clinic?: any): string {
+  return `${crmDaClinica(clinic)} · TEOT 15090`;
 }
 
 // ── Identidade visual dos documentos oficiais (aprovada pelo Dr. Valth) ──────
@@ -3297,7 +3330,7 @@ function TimbradoOficial({ clinic }: { clinic?: any }) {
         </p>
         <p style={{ fontFamily: DOC_SERIF, fontSize: "18px", fontWeight: 700, letterSpacing: "1px", margin: 0, color: "#0F2D5E" }}>Dr. Valth Menezes Guimarães</p>
         <p style={{ fontSize: "10px", textTransform: "uppercase", letterSpacing: "3px", color: "#555", margin: "3px 0 0" }}>Ortopedia e Traumatologia</p>
-        <p style={{ fontSize: "9.5px", color: "#777", margin: "3px 0 0", letterSpacing: "0.5px" }}>CRM-PB 6326 · TEOT 15090</p>
+        <p style={{ fontSize: "9.5px", color: "#777", margin: "3px 0 0", letterSpacing: "0.5px" }}>{crmComTeot(clinic)}</p>
         {clinic && (
           <p style={{ fontSize: "9px", color: "#999", margin: "4px 0 0" }}>
             {clinic.name}{clinic.city ? ` · ${clinic.city} – ${clinic.state}` : ""}{clinic.phone ? ` · ${clinic.phone}` : ""}
@@ -3320,7 +3353,7 @@ function FechoOficial({ clinic }: { clinic?: any }) {
           <div style={{ borderTop: "1px solid #1a1a1a", paddingTop: "9px" }}>
             <p style={{ fontFamily: DOC_SERIF, fontSize: "13.5px", fontWeight: 700, margin: 0, letterSpacing: "0.5px" }}>Dr. Valth Menezes Guimarães</p>
             <p style={{ fontSize: "10.5px", color: "#444", margin: "2px 0 0", textTransform: "uppercase", letterSpacing: "1.5px" }}>Ortopedista e Traumatologista</p>
-            <p style={{ fontSize: "10.5px", color: "#444", margin: "2px 0 0", letterSpacing: "0.5px" }}>CRM-PB 6326 · TEOT 15090</p>
+            <p style={{ fontSize: "10.5px", color: "#444", margin: "2px 0 0", letterSpacing: "0.5px" }}>{crmComTeot(clinic)}</p>
           </div>
         </div>
       </div>
@@ -3541,7 +3574,7 @@ function TabEncaminhamentos({ patient, clinic, patientId }: { patient: any; clin
         <div style={{ textAlign: "center", width: "200px" }}>
           <div style={{ borderTop: "2px solid #0F2D5E", paddingTop: "6px" }}>
             <p style={{ fontSize: "12px", fontWeight: 700, margin: "0" }}>Dr. Valth Guimarães</p>
-            <p style={{ fontSize: "11px", color: "#666", margin: "0" }}>CRM/PB 6326 | CRM/PE 16551</p>
+            <p style={{ fontSize: "11px", color: "#666", margin: "0" }}>{crmDaClinica(clinic)}</p>
           </div>
         </div>
       </div>
@@ -3771,7 +3804,7 @@ function TabProcedimentos({ patientId, patient, clinic }: { patientId: number; p
         <div style={{ textAlign: "center", width: "200px" }}>
           <div style={{ borderTop: "2px solid #0F2D5E", paddingTop: "6px" }}>
             <p style={{ fontSize: "12px", fontWeight: 700, margin: "0" }}>Dr. Valth Guimarães</p>
-            <p style={{ fontSize: "11px", color: "#666", margin: "0" }}>CRM/PB 6326 | CRM/PE 16551</p>
+            <p style={{ fontSize: "11px", color: "#666", margin: "0" }}>{crmDaClinica(clinic)}</p>
           </div>
           <div style={{ borderTop: "1px solid #ccc", marginTop: "24px", paddingTop: "4px" }}>
             <p style={{ fontSize: "11px", color: "#888", margin: "0" }}>Paciente (Ciente e de acordo): _____________________</p>
@@ -5073,6 +5106,22 @@ function DrawerCrono({ entry }: { entry: WaitingRoomEntry }) {
 
 export default function ConsultaDrawer({ entry, onClose, onStatusChange }: ConsultaDrawerProps) {
   const [activeTab, setActiveTab] = useState<DrawerTab>("anamnese");
+  // Abas já abertas nesta consulta — continuam montadas (ver comentário no render).
+  const [visitadas, setVisitadas] = useState<Set<DrawerTab>>(() => new Set<DrawerTab>(["anamnese"]));
+  useEffect(() => {
+    setVisitadas((v) => (v.has(activeTab) ? v : new Set(v).add(activeTab)));
+  }, [activeTab]);
+
+  const ABAS_DO_ATENDIMENTO: Array<{ key: DrawerTab; render: () => JSX.Element }> = [
+    { key: "anamnese",        render: () => <TabProntuario patientId={entry.patient_id} patient={patient} /> },
+    { key: "exames",          render: () => <TabExames patientId={entry.patient_id} patient={patient} clinic={clinic} /> },
+    { key: "receitas",        render: () => <TabReceita patientId={entry.patient_id} patient={patient} clinic={clinic} /> },
+    { key: "encaminhamentos", render: () => <TabEncaminhamentos patient={patient} clinic={clinic} patientId={entry.patient_id} /> },
+    { key: "procedimentos",   render: () => <TabProcedimentos patientId={entry.patient_id} patient={patient} clinic={clinic} /> },
+    { key: "atestados",       render: () => <TabAtestados patient={patient} clinic={clinic} /> },
+    { key: "laudos",          render: () => <TabLaudos patient={patient} clinic={clinic} /> },
+    { key: "fotos",           render: () => <TabFotos patientId={entry.patient_id} /> },
+  ];
   const [patient, setPatient] = useState<any>(null);
   const [loadingPatient, setLoadingPatient] = useState(true);
   const [busyStatus, setBusyStatus] = useState(false);
@@ -5439,14 +5488,18 @@ export default function ConsultaDrawer({ entry, onClose, onStatusChange }: Consu
           // E9 (05/08): pb-32 garante espaço abaixo do último botão (Salvar),
           // que ficava embaixo dos botões flutuantes do chat/IA.
           <div className={`pt-4 pb-32 ${entry.status !== "attending" ? "pointer-events-none select-none opacity-50" : ""}`}>
-            {activeTab === "anamnese"        && <TabProntuario patientId={entry.patient_id} patient={patient} />}
-            {activeTab === "exames"          && <TabExames patientId={entry.patient_id} patient={patient} clinic={clinic} />}
-            {activeTab === "receitas"        && <TabReceita patientId={entry.patient_id} patient={patient} clinic={clinic} />}
-            {activeTab === "encaminhamentos" && <TabEncaminhamentos patient={patient} clinic={clinic} patientId={entry.patient_id} />}
-            {activeTab === "procedimentos"   && <TabProcedimentos patientId={entry.patient_id} patient={patient} clinic={clinic} />}
-            {activeTab === "atestados"       && <TabAtestados patient={patient} clinic={clinic} />}
-            {activeTab === "laudos"          && <TabLaudos patient={patient} clinic={clinic} />}
-            {activeTab === "fotos"           && <TabFotos patientId={entry.patient_id} />}
+            {/* 10/08 — a aba que sai de cena fica ESCONDIDA, não desmontada.
+                Antes, ir em Exames e voltar apagava a anamnese que ele tinha
+                acabado de escrever: trocar de aba destruía o componente e o
+                texto ia junto. Cada aba é montada só na primeira visita
+                (`visitadas`), pra não disparar as buscas das oito de uma vez. */}
+            {ABAS_DO_ATENDIMENTO.map(({ key, render }) => (
+              visitadas.has(key) ? (
+                <div key={key} style={{ display: activeTab === key ? "block" : "none" }}>
+                  {render()}
+                </div>
+              ) : null
+            ))}
           </div>
         )}
       </div>

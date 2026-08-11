@@ -161,6 +161,10 @@ export const Modal: React.FC<ModalProps> = ({
         tabIndex={-1}
         className={[
           'relative z-10 w-full mx-4',
+          // 10/08: sem altura máxima, formulário grande (editar paciente)
+          // passava da tela e o fim ficava inacessível, sem barra de rolagem.
+          // Cabeçalho e rodapé ficam fixos; só o meio rola.
+          'max-h-[90vh] flex flex-col',
           'animate-slide-in-up',
           'rounded-xl bg-white dark:bg-slate-950',
           'border border-slate-200 dark:border-slate-800',
@@ -171,7 +175,7 @@ export const Modal: React.FC<ModalProps> = ({
       >
         {/* Header */}
         {(title || description) && (
-          <div className="border-b border-slate-200 dark:border-slate-800 px-6 py-4">
+          <div className="flex-shrink-0 border-b border-slate-200 dark:border-slate-800 px-6 py-4">
             {title && (
               <h2
                 id={titleId}
@@ -192,11 +196,11 @@ export const Modal: React.FC<ModalProps> = ({
         )}
 
         {/* Content */}
-        <div className="px-6 py-4">{children}</div>
+        <div className="flex-1 overflow-y-auto px-6 py-4">{children}</div>
 
         {/* Footer */}
         {footer && (
-          <div className="border-t border-slate-200 dark:border-slate-800 px-6 py-4">
+          <div className="flex-shrink-0 border-t border-slate-200 dark:border-slate-800 px-6 py-4">
             {footer}
           </div>
         )}
