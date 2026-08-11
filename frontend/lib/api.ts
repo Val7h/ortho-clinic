@@ -187,6 +187,9 @@ export const examsApi = {
     api.post(`/patients/${patientId}/exams`, data).then((r) => r.data),
   delete: (patientId: number, id: number) =>
     api.delete(`/patients/${patientId}/exams/${id}`),
+  // Justificativa clinica que o convenio exige para autorizar imagem (11/08).
+  justificativa: (patientId: number, pedido: string) =>
+    api.post(`/patients/${patientId}/justificativa-exame`, { pedido }).then((r) => r.data),
 };
 
 // ── Evoluções Clínicas (Prontuário em Folha Corrida) ─────────────────────────

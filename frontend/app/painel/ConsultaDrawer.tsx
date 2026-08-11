@@ -2737,6 +2737,28 @@ function TabExames({ patientId, patient, clinic }: { patientId: number; patient:
   // Impressão
   const [printText, setPrintText] = useState<string | null>(null);
 
+  // Justificativa clínica (11/08): o convênio exige um relatório à parte para
+  // autorizar imagem. A IA escreve a partir da anamnese; sem anamnese, cai num
+  // modelo. Sai em FOLHA SEPARADA, e só quando ele clica.
+  const [gerandoJustif, setGerandoJustif] = useState(false);
+  const [justifTexto, setJustifTexto] = useState<string | null>(null);
+  const [justifOrigem, setJustifOrigem] = useState<string>("");
+
+  const gerarJustificativa = async () => {
+    if (!freeText.trim()) { toast.error("Escreva o pedido de exame antes"); return; }
+    setGerandoJustif(true);
+    try {
+      const r = await examsApi.justificativa(patientId, freeText);
+      setJustifTexto(r.texto);
+      setJustifOrigem(r.origem);
+      if (r.aviso) toast(r.aviso, { icon: "⚠️", duration: 7000 });
+    } catch (err: any) {
+      toast.error(err?.response?.data?.detail || "Não consegui gerar a justificativa");
+    } finally {
+      setGerandoJustif(false);
+    }
+  };
+
   // Inline save template
   const [showSaveExamTemplateInput, setShowSaveExamTemplateInput] = useState(false);
   const [examTemplateNameInput, setExamTemplateNameInput] = useState("");
@@ -2868,6 +2890,48 @@ function TabExames({ patientId, patient, clinic }: { patientId: number; patient:
     <div className="space-y-0 pb-6">
       {printText !== null && (
         <PrintExamModal text={printText} patientName={patientName} patient={patient} clinic={clinic} onClose={() => setPrintText(null)} fontSize={fontSize} lineHeight={lineHeight} />
+      )}
+
+      {/* Justificativa clínica — FOLHA SEPARADA, revisável antes de imprimir. */}
+      {justifTexto !== null && (
+        <PrintDocModal
+          title="Justificativa clínica"
+          onClose={() => setJustifTexto(null)}
+          extraHeader={
+            <div className="no-print px-5 pb-3 border-b border-slate-200 dark:border-slate-700">
+              <p className="text-[11px] text-slate-500 mb-1">
+                {justifOrigem === "ia"
+                  ? "Escrita a partir da anamnese deste paciente — leia e ajuste antes de imprimir."
+                  : "Modelo padrão (sem anamnese registrada) — ajuste antes de imprimir."}
+              </p>
+              <textarea
+                value={justifTexto}
+                onChange={(e) => setJustifTexto(e.target.value)}
+                rows={7}
+                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-50 text-xs"
+              />
+            </div>
+          }
+          content={
+            <div style={{ fontFamily: "Arial, Helvetica, sans-serif", color: "#1a1a1a", fontSize: "13px" }}>
+              <TimbradoOficial clinic={clinic} />
+              <p style={{ textAlign: "center", fontFamily: DOC_SERIF, fontSize: "13px", fontWeight: 700, letterSpacing: "3px", textTransform: "uppercase", color: "#0F2D5E", margin: "0 0 16px" }}>
+                Justificativa clínica
+              </p>
+              <div style={{ border: "1px solid #ddd", borderRadius: "3px", padding: "9px 12px", marginBottom: "16px", fontSize: "12px", lineHeight: 1.7 }}>
+                <div><span style={{ color: "#666" }}>Paciente: </span><strong>{patient?.name}</strong></div>
+                <div>
+                  {patient?.birth_date && <><span style={{ color: "#666" }}>Nascimento: </span>{new Date(patient.birth_date + "T12:00:00").toLocaleDateString("pt-BR")}{"  ·  "}</>}
+                  {patient?.insurance && <><span style={{ color: "#666" }}>Convênio: </span>{patient.insurance}</>}
+                </div>
+              </div>
+              <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.8, fontSize: "13px", minHeight: "150px", textAlign: "justify" }}>
+                {justifTexto}
+              </div>
+              <FechoOficial clinic={clinic} />
+            </div>
+          }
+        />
       )}
 
       {/* ── Seção: Modelos ── */}
@@ -3017,6 +3081,15 @@ function TabExames({ patientId, patient, clinic }: { patientId: number; patient:
               className="flex items-center gap-1.5 px-3 py-2 border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-400 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 text-xs font-semibold"
             >
               <Printer className="w-3.5 h-3.5" /> Imprimir
+            </button>
+            <button
+              type="button"
+              onClick={gerarJustificativa}
+              disabled={gerandoJustif}
+              title="Gera a justificativa clínica que o convênio exige — sai em folha separada"
+              className="flex items-center gap-1.5 px-3 py-2 border border-indigo-400 text-indigo-700 dark:text-indigo-300 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/20 text-xs font-semibold disabled:opacity-50"
+            >
+              <FileText className="w-3.5 h-3.5" /> {gerandoJustif ? "Escrevendo…" : "Justificativa"}
             </button>
             <button
               type="button"
@@ -3223,7 +3296,7 @@ const LAUDO_FINALIDADE_OPTIONS = [
 
 // ── Generic Print Modal ────────────────────────────────────────────────────────
 
-function PrintDocModal({ title, content, onClose }: { title: string; content: React.ReactNode; onClose: () => void }) {
+function PrintDocModal({ title, content, onClose, extraHeader }: { title: string; content: React.ReactNode; onClose: () => void; extraHeader?: React.ReactNode }) {
   // Registra este documento no coletor da consulta (impressão final em lote).
   useRegisterPrintDoc({ id: title, label: title, content });
   return (
@@ -3257,6 +3330,7 @@ function PrintDocModal({ title, content, onClose }: { title: string; content: Re
             </button>
           </div>
         </div>
+        {extraHeader}
         <div className="flex-1 overflow-y-auto p-6 bg-white">
           {content}
         </div>
