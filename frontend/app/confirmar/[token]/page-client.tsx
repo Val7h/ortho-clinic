@@ -6,7 +6,7 @@ import {
   CheckCircle, XCircle, Calendar, Clock, MapPin,
   Loader2, AlertCircle, Hash,
 } from "lucide-react";
-import { confirmApi } from "@/lib/api";
+import { confirmApi, msgErro } from "@/lib/api";
 
 const DOW = ["Seg","Ter","Qua","Qui","Sex","Sáb","Dom"];
 const MONTHS = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
@@ -103,7 +103,7 @@ export default function ConfirmarPage() {
       setActionDone(action);
       setPhase("done");
     } catch (err: any) {
-      setError(err?.response?.data?.detail || "Erro ao processar. Tente novamente.");
+      setError(msgErro(err, "Erro ao processar. Tente novamente."));
       setPhase("error");
     }
   };

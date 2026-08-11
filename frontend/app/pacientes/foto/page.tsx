@@ -11,7 +11,7 @@ import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import NavBar from "@/components/NavBar";
 import { PageWithSidebar } from "@/components/PageWithSidebar";
-import { patientsApi } from "@/lib/api";
+import { patientsApi, msgErro } from "@/lib/api";
 import { buscarCep, cepCompleto, formatarCep } from "@/lib/cep";
 
 const UFS = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
@@ -81,7 +81,7 @@ export default function CadastroPorFotoPage() {
       setCpfValido(r.cpf_valido);
       if ((r.lidos || []).length) toast.success(`${r.lidos.length} campo(s) lido(s) da imagem`);
     } catch (err: any) {
-      toast.error(err?.response?.data?.detail || "Não consegui ler essa imagem.");
+      toast.error(msgErro(err, "Não consegui ler essa imagem."));
     } finally {
       setLendo(false);
     }
@@ -117,7 +117,7 @@ export default function CadastroPorFotoPage() {
       toast.success("Paciente cadastrado");
       router.push(`/pacientes/${p.id}`);
     } catch (err: any) {
-      const msg = err?.response?.data?.detail || "Erro ao salvar";
+      const msg = msgErro(err, "Erro ao salvar");
       if (String(msg).includes("CPF já cadastrado")) {
         // Trava de duplicata: sem isso a tela vira fábrica de paciente repetido.
         const cpf = (campos.cpf || "").replace(/\D/g, "");

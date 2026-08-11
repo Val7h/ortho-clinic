@@ -10,7 +10,7 @@ import {
   Pencil, Download, MessageSquare,
 } from "lucide-react";
 import toast from "react-hot-toast";
-import { api, patientsApi, consultationsApi, prescriptionsApi, prescriptionTemplatesApi, examsApi, evolutionApi, clinicApi, chatApi, reportsApi, leafletsApi, waitingRoomApi } from "@/lib/api";
+import { api, patientsApi, consultationsApi, prescriptionsApi, prescriptionTemplatesApi, examsApi, evolutionApi, clinicApi, chatApi, reportsApi, leafletsApi, waitingRoomApi, msgErro } from "@/lib/api";
 import { formatDate } from "@/lib/utils";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -624,7 +624,7 @@ function DiagnosticosCids({ patientId, patient }: { patientId: number; patient: 
       toast.success("Enviado no WhatsApp do paciente ✓");
       setPickerFor(null);
     } catch (err: any) {
-      toast.error(err?.response?.data?.detail ?? "Erro ao enviar");
+      toast.error(msgErro(err, "Erro ao enviar"));
     } finally {
       setSending(false);
     }
@@ -1560,7 +1560,7 @@ function TabProntuario({ patientId, patient }: { patientId: number; patient?: an
       setTimeout(() => setRecentlySavedId(null), 2500);
       toast.success("Evolução registrada!");
     } catch (err: any) {
-      toast.error(err?.response?.data?.detail || "Erro ao salvar evolução");
+      toast.error(msgErro(err, "Erro ao salvar evolução"));
     } finally {
       setSaving(false);
     }
@@ -2753,7 +2753,7 @@ function TabExames({ patientId, patient, clinic }: { patientId: number; patient:
       setJustifOrigem(r.origem);
       if (r.aviso) toast(r.aviso, { icon: "⚠️", duration: 7000 });
     } catch (err: any) {
-      toast.error(err?.response?.data?.detail || "Não consegui gerar a justificativa");
+      toast.error(msgErro(err, "Não consegui gerar a justificativa"));
     } finally {
       setGerandoJustif(false);
     }
@@ -4408,7 +4408,7 @@ function TabLaudos({ patient, clinic }: { patient: any; clinic?: any }) {
       setTimeout(autoResizeLaudo, 50);
       toast.success("Laudo gerado — revise antes de imprimir");
     } catch (e: any) {
-      toast.error(e?.response?.data?.detail || "Erro ao gerar laudo com IA");
+      toast.error(msgErro(e, "Erro ao gerar laudo com IA"));
     } finally {
       setGerandoIA(false);
     }

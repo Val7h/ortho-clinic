@@ -18,7 +18,7 @@ import { AlertTriangle, Calendar, Check, Clock, Loader2, Phone, Stethoscope, X }
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { PatientAutocomplete } from '@/components/PatientAutocomplete';
-import { appointmentsApi, clinicApi } from '@/lib/api';
+import { appointmentsApi, clinicApi, msgErro } from '@/lib/api';
 import { useOfflineAppointmentQueue } from '@/hooks/useOfflineAppointmentQueue';
 import { useAppointmentReminders } from '@/hooks/useAppointmentReminders';
 
@@ -211,7 +211,7 @@ export function AppointmentFormModal({
       onSaved(saved);
       onOpenChange(false);
     } catch (err: any) {
-      const msg = err?.response?.data?.detail || 'Erro ao salvar agendamento';
+      const msg = msgErro(err, 'Erro ao salvar agendamento');
       setErrors(prev => ({ ...prev, _global: msg }));
     } finally {
       setSaving(false);
@@ -226,7 +226,7 @@ export function AppointmentFormModal({
       onCancelled(editingAppointment.id);
       onOpenChange(false);
     } catch (err: any) {
-      setErrors({ _global: err?.response?.data?.detail || 'Erro ao cancelar' });
+      setErrors({ _global: msgErro(err, 'Erro ao cancelar') });
     }
   }
 

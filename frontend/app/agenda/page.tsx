@@ -34,7 +34,7 @@ import {
 import NavBar from '@/components/NavBar';
 import { PageWithSidebar } from '@/components/PageWithSidebar';
 import { AppointmentFormModal } from '@/components/AppointmentFormModal';
-import { agendaApi, clinicApi, patientsApi } from '@/lib/api';
+import { agendaApi, clinicApi, patientsApi, msgErro } from '@/lib/api';
 import { useProtectedPage } from '@/components/AuthProvider';
 import { useOfflineAppointmentQueue } from '@/hooks/useOfflineAppointmentQueue';
 import toast from 'react-hot-toast';
@@ -213,7 +213,7 @@ export default function AgendaPage() {
       setBlkDe(''); setBlkAte(''); setBlkMotivo('');
       fetchData();
     } catch (err: any) {
-      toast.error(err?.response?.data?.detail ?? 'Erro ao bloquear');
+      toast.error(msgErro(err, 'Erro ao bloquear'));
     } finally {
       setBlkSaving(false);
     }
@@ -227,7 +227,7 @@ export default function AgendaPage() {
       toast.success(`${e.patient_name} está na Sala de Espera`);
       fetchData();
     } catch (err: any) {
-      toast.error(err?.response?.data?.detail ?? 'Erro ao registrar chegada');
+      toast.error(msgErro(err, 'Erro ao registrar chegada'));
     }
   };
 

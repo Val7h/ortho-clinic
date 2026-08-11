@@ -11,7 +11,7 @@ import { User, Mail, Shield, Moon, Sun, LogOut, ChevronRight, KeyRound, Loader2 
 import { useAuth } from "@/components/AuthProvider";
 import { ProtectedPageLayout } from "@/components/ProtectedPageLayout";
 import { ThemeToggle } from "@/components/ui";
-import { authApi } from "@/lib/api";
+import { authApi, msgErro } from "@/lib/api";
 import toast from "react-hot-toast";
 
 const ROLE_LABEL: Record<string, string> = {
@@ -39,7 +39,7 @@ export default function PerfilPage() {
       setAtual(""); setNova(""); setConfirma("");
       toast.success("Senha alterada! Use a nova no próximo login.");
     } catch (err: any) {
-      toast.error(err?.response?.data?.detail ?? "Não foi possível trocar a senha.");
+      toast.error(msgErro(err, "Não foi possível trocar a senha."));
     } finally {
       setSalvando(false);
     }

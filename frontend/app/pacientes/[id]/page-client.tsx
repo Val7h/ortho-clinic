@@ -20,7 +20,7 @@ import { AnamneseForm } from "@/components/AnamneseForm";
 import {
   Card, CardContent, Badge, Button, Modal, useModal, CardSkeleton,
 } from "@/components/ui";
-import { patientsApi, whatsappApi, anamnesisApi } from "@/lib/api";
+import { patientsApi, whatsappApi, anamnesisApi, msgErro } from "@/lib/api";
 import { calcAge, formatDate, resolveDynamicParam } from "@/lib/utils";
 import { usePatientCache } from "@/hooks/usePatientCache";
 
@@ -164,7 +164,7 @@ export default function PatientPage() {
       editModal.onOpenChange(false);
       toast.success("Dados atualizados");
     } catch (err: any) {
-      toast.error(err?.response?.data?.detail ?? "Erro ao salvar");
+      toast.error(msgErro(err, "Erro ao salvar"));
     } finally {
       setSavingEdit(false);
     }

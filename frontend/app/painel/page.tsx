@@ -9,7 +9,7 @@ import Link from 'next/link';
 import NavBar from '@/components/NavBar';
 import { PageWithSidebar } from '@/components/PageWithSidebar';
 import { Card, CardContent, Badge, Button, Modal, useModal } from '@/components/ui';
-import { patientsApi, waitingRoomApi, clinicApi } from '@/lib/api';
+import { patientsApi, waitingRoomApi, clinicApi, msgErro } from '@/lib/api';
 import toast from 'react-hot-toast';
 import ConsultaDrawer, { WaitingRoomEntry } from './ConsultaDrawer';
 
@@ -491,7 +491,7 @@ export default function SalaDeEsperaPage() {
       }
     } catch (err: any) {
       // 409 = já existe consulta em andamento (regra: uma por vez)
-      toast.error(err?.response?.data?.detail || 'Erro ao atualizar status', { duration: 5000 });
+      toast.error(msgErro(err, 'Erro ao atualizar status'), { duration: 5000 });
     } finally {
       setBusyIds((prev) => {
         const next = new Set(prev);

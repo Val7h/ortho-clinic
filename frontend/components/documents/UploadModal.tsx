@@ -15,7 +15,7 @@ import {
   Upload, Camera, FileText, Image as ImageIcon,
   X, Loader2, Check,
 } from "lucide-react";
-import { patientDocsApi } from "@/lib/api";
+import { patientDocsApi, msgErro } from "@/lib/api";
 
 const ACCEPTED_FILE = ".pdf,.jpg,.jpeg,.png,.webp,.heic,.heif,.doc,.docx";
 const MAX_MB = 25;
@@ -100,7 +100,7 @@ export function UploadModal({
       setDone(true);
       setTimeout(onSuccess, 800);
     } catch (e: any) {
-      const msg = e?.response?.data?.detail || "Erro ao fazer upload. Tente novamente.";
+      const msg = msgErro(e, "Erro ao fazer upload. Tente novamente.");
       setError(typeof msg === "string" ? msg : JSON.stringify(msg));
     } finally {
       setLoading(false);

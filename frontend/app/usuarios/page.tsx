@@ -7,7 +7,7 @@ import {
 import NavBar from "@/components/NavBar";
 import { PageWithSidebar } from "@/components/PageWithSidebar";
 import { Card, CardHeader, Badge, Button, Input, Modal, useModal } from "@/components/ui";
-import { authApi } from "@/lib/api";
+import { authApi, msgErro } from "@/lib/api";
 import { useProtectedPage } from "@/components/AuthProvider";
 import toast from "react-hot-toast";
 
@@ -136,7 +136,7 @@ export default function UsuariosPage() {
       await loadUsers();
       closeModal();
     } catch (err: any) {
-      toast.error(err?.response?.data?.detail || "Erro ao salvar");
+      toast.error(msgErro(err, "Erro ao salvar"));
     } finally {
       setSaving(false);
     }
@@ -149,7 +149,7 @@ export default function UsuariosPage() {
       toast.success("Usuário desativado");
       await loadUsers();
     } catch (err: any) {
-      toast.error(err?.response?.data?.detail || "Erro");
+      toast.error(msgErro(err, "Erro"));
     }
   };
 

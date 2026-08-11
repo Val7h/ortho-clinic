@@ -8,7 +8,7 @@ import {
 import toast from "react-hot-toast";
 import NavBar from "@/components/NavBar";
 import { PageWithSidebar } from "@/components/PageWithSidebar";
-import { consultationsApi, patientsApi, mediaApi } from "@/lib/api";
+import { consultationsApi, patientsApi, mediaApi, msgErro } from "@/lib/api";
 import { resolveDynamicParam } from "@/lib/utils";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -362,7 +362,7 @@ export default function ConsultationPage() {
       if (result.teleconsult_url) setTeleconsultUrl(result.teleconsult_url);
       toast.success("Consulta salva! Adicione imagens se desejar.");
     } catch (err: any) {
-      toast.error(err?.response?.data?.detail || "Erro ao salvar consulta");
+      toast.error(msgErro(err, "Erro ao salvar consulta"));
       setSaving(false);
     }
   };

@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import NavBar from "@/components/NavBar";
 import { PageWithSidebar } from "@/components/PageWithSidebar";
-import { patientsApi } from "@/lib/api";
+import { patientsApi, msgErro } from "@/lib/api";
 import { buscarCep, cepCompleto, formatarCep, montarEndereco } from "@/lib/cep";
 
 const BLOOD_TYPES = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"];
@@ -93,7 +93,7 @@ export default function NewPatientPage() {
       toast.success("Paciente cadastrado com sucesso!");
       router.push(`/pacientes/${patient.id}`);
     } catch (err: any) {
-      toast.error(err?.response?.data?.detail || "Erro ao salvar");
+      toast.error(msgErro(err, "Erro ao salvar"));
     } finally {
       setSaving(false);
     }

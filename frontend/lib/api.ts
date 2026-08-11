@@ -20,6 +20,24 @@ export const API_URL = (() => {
   return process.env.NEXT_PUBLIC_API_URL || "https://ortho-clinic-ldcd.onrender.com";
 })();
 
+
+// ── Mensagem de erro segura para a tela ──────────────────────────────────────
+// 11/08: quando o servidor recusa por validação (422), o FastAPI devolve
+// `detail` como uma LISTA DE OBJETOS. Jogar isso direto num toast faz o React
+// tentar renderizar um objeto e DERRUBA a tela inteira ("Application error").
+// Foi o que aconteceu no cadastro por foto. Aqui sempre sai string.
+export function msgErro(err: any, padrao = "Não foi possível concluir"): string {
+  const d = err?.response?.data?.detail ?? err?.response?.data?.message;
+  if (typeof d === "string" && d.trim()) return d;
+  if (Array.isArray(d)) {
+    const primeiro = d[0];
+    if (typeof primeiro === "string") return primeiro;
+    if (primeiro?.msg) return String(primeiro.msg);
+  }
+  if (typeof err?.message === "string" && err.message.trim()) return err.message;
+  return padrao;
+}
+
 export const api = axios.create({
   baseURL: API_URL,
   headers: { "Content-Type": "application/json" },
@@ -32,6 +50,13 @@ api.interceptors.request.use((config) => {
   if (typeof window !== 'undefined') {
     const token = localStorage.getItem('ortho_token');
     if (token) config.headers.Authorization = `Bearer ${token}`;
+  }
+  // Envio de arquivo (11/08): com o Content-Type json fixo do cliente, o
+  // navegador não escreve o boundary do multipart e o servidor recusa a
+  // imagem com 422. Removendo o cabeçalho, o próprio navegador põe o certo.
+  if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
+    delete (config.headers as any)['Content-Type'];
+    delete (config.headers as any)['content-type'];
   }
   return config;
 });
