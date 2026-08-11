@@ -212,6 +212,12 @@ export const examsApi = {
     api.post(`/patients/${patientId}/exams`, data).then((r) => r.data),
   delete: (patientId: number, id: number) =>
     api.delete(`/patients/${patientId}/exams/${id}`),
+  // Modelos de solicitacao de exame — no BANCO desde 11/08 (antes so no
+  // navegador, presos a uma maquina e sujeitos a sumir na limpeza de cache).
+  templatesList: () => api.get("/exam-templates").then((r) => r.data),
+  templateCreate: (name: string, content: string) =>
+    api.post("/exam-templates", { name, content }).then((r) => r.data),
+  templateDelete: (id: number) => api.delete(`/exam-templates/${id}`),
   // Justificativa clinica que o convenio exige para autorizar imagem (11/08).
   justificativa: (patientId: number, pedido: string) =>
     api.post(`/patients/${patientId}/justificativa-exame`, { pedido }).then((r) => r.data),

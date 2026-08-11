@@ -2788,18 +2788,57 @@ function TabExames({ patientId, patient, clinic }: { patientId: number; patient:
     ta.style.height = `${Math.max(ta.scrollHeight, 160)}px`;
   };
 
-  // Modelos
-  const handleSaveTemplate = () => {
+  // ── Modelos de exame — agora no BANCO (11/08) ─────────────────────────────
+  // Antes viviam só no localStorage: presos ao computador onde foram criados e
+  // sujeitos a sumir numa limpeza de cache. Ao abrir, sobem sozinhos os que
+  // ainda estiverem guardados neste navegador — migração única, sem o Valth
+  // precisar fazer nada além de abrir a aba.
+  useEffect(() => {
+    let vivo = true;
+    (async () => {
+      try {
+        const doServidor: any[] = await examsApi.templatesList();
+        const locais = loadExamTemplates();
+        if (locais.length) {
+          const nomesLa = new Set(doServidor.map((t: any) => t.name));
+          const subir = locais.filter((t) => !nomesLa.has(t.name));
+          for (const t of subir) {
+            try { await examsApi.templateCreate(t.name, t.content); } catch { /* segue */ }
+          }
+          if (subir.length) {
+            toast.success(`${subir.length} modelo(s) deste computador foram salvos na sua conta`);
+          }
+          // Só limpa o local DEPOIS de subir — se falhar, nada se perde.
+          saveExamTemplates([]);
+          const atualizado = await examsApi.templatesList();
+          if (vivo) setExamTemplates(atualizado.map((t: any) => ({ id: String(t.id), name: t.name, content: t.content })));
+          return;
+        }
+        if (vivo) setExamTemplates(doServidor.map((t: any) => ({ id: String(t.id), name: t.name, content: t.content })));
+      } catch {
+        // Sem rede: fica com o que houver neste navegador.
+        if (vivo) setExamTemplates(loadExamTemplates());
+      }
+    })();
+    return () => { vivo = false; };
+  }, []);
+
+  const handleSaveTemplate = async () => {
     if (!freeText.trim()) return;
     if (!showSaveExamTemplateInput) { setShowSaveExamTemplateInput(true); setExamTemplateNameInput(""); return; }
     if (!examTemplateNameInput.trim()) { toast.error("Informe um nome para o modelo"); return; }
-    const newTemplate: ExamTemplate = { id: String(Date.now()), name: examTemplateNameInput.trim(), content: freeText };
-    const updated = [...examTemplates, newTemplate];
-    setExamTemplates(updated);
-    saveExamTemplates(updated);
-    toast.success("Modelo salvo");
-    setShowSaveExamTemplateInput(false);
-    setExamTemplateNameInput("");
+    try {
+      const salvo = await examsApi.templateCreate(examTemplateNameInput.trim(), freeText);
+      setExamTemplates((lista) => {
+        const semDuplicata = lista.filter((t) => t.name !== salvo.name);
+        return [...semDuplicata, { id: String(salvo.id), name: salvo.name, content: salvo.content }];
+      });
+      toast.success("Modelo salvo na sua conta");
+      setShowSaveExamTemplateInput(false);
+      setExamTemplateNameInput("");
+    } catch (err: any) {
+      toast.error(msgErro(err, "Não consegui salvar o modelo"));
+    }
   };
 
   const handleLoadTemplate = (id: string) => {
@@ -2813,12 +2852,15 @@ function TabExames({ patientId, patient, clinic }: { patientId: number; patient:
     textareaRef.current?.focus();
   };
 
-  const handleDeleteTemplate = (id: string) => {
+  const handleDeleteTemplate = async (id: string) => {
     setConfirmDeleteExamTemplateId(null);
-    const updated = examTemplates.filter((t) => t.id !== id);
-    setExamTemplates(updated);
-    saveExamTemplates(updated);
-    toast.success("Modelo removido");
+    try {
+      await examsApi.templateDelete(Number(id));
+      setExamTemplates((lista) => lista.filter((t) => t.id !== id));
+      toast.success("Modelo removido");
+    } catch (err: any) {
+      toast.error(msgErro(err, "Não consegui remover o modelo"));
+    }
   };
 
   // Fonte
