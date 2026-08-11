@@ -3,7 +3,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError
 from typing import List, Optional
-import os, uuid, re, unicodedata
+import os, uuid, re, unicodedata, base64, json, logging
+import httpx
 from services.storage import upload_file
 from database import get_db
 from models.patient import Patient
@@ -11,6 +12,8 @@ from models.consultation import Consultation
 from models.organization import User
 from schemas.patient import PatientCreate, PatientUpdate, PatientOut, PatientSummary
 from deps import get_current_user
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/patients", tags=["patients"])
 
@@ -124,6 +127,162 @@ def create_patient(
     result = PatientOut.model_validate(patient)
     result.warning = warning
     return result
+
+
+# ── Cadastro por foto (06/08) ────────────────────────────────────────────────
+# As secretárias cadastravam o mesmo paciente duas vezes: no sistema antigo e
+# aqui. Elas colam o print da ficha do outro sistema e a IA lê os campos.
+#
+# SIGILO: a imagem vive só na memória durante a chamada. Não é gravada em
+# banco, em disco nem em log — decisão explícita do Valth em 06/08.
+
+LER_FOTO_MAX_BYTES = 6 * 1024 * 1024
+LER_FOTO_TIPOS = {"image/png", "image/jpeg", "image/webp"}
+
+# Campos que a IA pode devolver. Qualquer chave fora desta lista é descartada:
+# o modelo não escolhe o que grava no cadastro.
+LER_FOTO_CAMPOS = (
+    "name", "cpf", "birthdate", "phone", "address_street",
+    "address_neighborhood", "address_city", "address_state", "address_zip",
+    "insurance", "insurance_number",
+)
+
+LER_FOTO_PROMPT = """Você recebe a imagem da ficha de cadastro de um paciente, tirada de outro sistema médico.
+
+Extraia os dados e responda SOMENTE com um objeto JSON, sem nenhum texto antes ou depois, com estas chaves:
+name, cpf, birthdate, phone, address_street, address_neighborhood, address_city, address_state, address_zip, insurance, insurance_number
+
+Regras obrigatórias:
+- Use null em todo campo que NÃO estiver claramente visível na imagem.
+- NUNCA invente, deduza ou complete um dado que não esteja escrito. Campo vazio é melhor que campo errado.
+- name: nome completo em CAIXA ALTA.
+- cpf: somente os 11 dígitos, sem pontos nem traço.
+- birthdate: no formato AAAA-MM-DD.
+- phone: somente dígitos, com DDD.
+- address_street: logradouro e número, sem bairro.
+- address_state: a sigla da UF com 2 letras.
+- address_zip: somente os 8 dígitos.
+- insurance: nome do convênio; use "Particular" se a ficha indicar particular.
+"""
+
+
+def _cpf_valido(cpf: str) -> bool:
+    """Confere os dígitos verificadores do CPF.
+
+    É o campo que a leitura mais erra (um dígito trocado num print), e um CPF
+    errado no cadastro é pior que um CPF ausente.
+    """
+    d = re.sub(r"\D", "", cpf or "")
+    if len(d) != 11 or d == d[0] * 11:
+        return False
+    for tamanho in (9, 10):
+        soma = sum(int(d[i]) * (tamanho + 1 - i) for i in range(tamanho))
+        resto = (soma * 10) % 11 % 10
+        if resto != int(d[tamanho]):
+            return False
+    return True
+
+
+@router.post("/ler-foto")
+async def ler_foto(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+):
+    """Lê a ficha de um paciente a partir de uma imagem. NÃO grava nada."""
+    if file.content_type not in LER_FOTO_TIPOS:
+        raise HTTPException(422, "Formato não aceito. Envie uma imagem PNG, JPG ou WEBP.")
+
+    conteudo = await file.read()
+    if not conteudo:
+        raise HTTPException(422, "A imagem chegou vazia. Tente colar novamente.")
+    if len(conteudo) > LER_FOTO_MAX_BYTES:
+        raise HTTPException(422, "Imagem muito grande (máximo 6 MB). Tire um print menor.")
+
+    api_key = (os.getenv("ANTHROPIC_API_KEY") or "").strip()
+    if not api_key:
+        raise HTTPException(503, "Leitura por foto não configurada (ANTHROPIC_API_KEY ausente)")
+
+    payload = {
+        "model": "claude-opus-4-8",
+        "max_tokens": 1000,
+        "messages": [{
+            "role": "user",
+            "content": [
+                {"type": "image", "source": {
+                    "type": "base64",
+                    "media_type": file.content_type,
+                    "data": base64.b64encode(conteudo).decode(),
+                }},
+                {"type": "text", "text": LER_FOTO_PROMPT},
+            ],
+        }],
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            resp = await client.post(
+                "https://api.anthropic.com/v1/messages",
+                headers={
+                    "x-api-key": api_key,
+                    "anthropic-version": "2023-06-01",
+                    "content-type": "application/json",
+                },
+                json=payload,
+            )
+    except httpx.RequestError as exc:
+        # Nunca logar str(exc): em erro de header inválido o httpx embute o
+        # valor do header — incluindo a API key — na mensagem.
+        logger.error("Erro de rede ao ler foto: %s", type(exc).__name__)
+        raise HTTPException(502, "Não consegui falar com o serviço de leitura. Tente de novo.")
+    finally:
+        conteudo = b""  # a imagem sai da memória assim que a chamada termina
+
+    if resp.status_code != 200:
+        logger.error("Anthropic retornou %s na leitura de foto", resp.status_code)
+        raise HTTPException(502, "Serviço de leitura indisponível no momento.")
+
+    texto = "".join(
+        bloco.get("text", "")
+        for bloco in resp.json().get("content", [])
+        if bloco.get("type") == "text"
+    ).strip()
+
+    # O modelo às vezes embrulha o JSON em ```json ... ```
+    achado = re.search(r"\{.*\}", texto, re.S)
+    if not achado:
+        return {"campos": {}, "cpf_valido": None, "lidos": [],
+                "aviso": "Não consegui ler a ficha nessa imagem. Tente um print mais nítido."}
+    try:
+        bruto = json.loads(achado.group(0))
+    except json.JSONDecodeError:
+        return {"campos": {}, "cpf_valido": None, "lidos": [],
+                "aviso": "Não consegui ler a ficha nessa imagem. Tente um print mais nítido."}
+
+    campos: dict = {}
+    for k in LER_FOTO_CAMPOS:
+        v = bruto.get(k)
+        if isinstance(v, str):
+            v = v.strip()
+        campos[k] = v or None
+
+    if campos.get("cpf"):
+        campos["cpf"] = re.sub(r"\D", "", campos["cpf"])
+    if campos.get("phone"):
+        campos["phone"] = re.sub(r"\D", "", campos["phone"])
+    if campos.get("address_zip"):
+        campos["address_zip"] = re.sub(r"\D", "", campos["address_zip"])
+    if campos.get("address_state"):
+        campos["address_state"] = campos["address_state"].upper()[:2]
+    if campos.get("name"):
+        campos["name"] = campos["name"].upper()
+
+    lidos = [k for k, v in campos.items() if v]
+    return {
+        "campos": campos,
+        "cpf_valido": _cpf_valido(campos["cpf"]) if campos.get("cpf") else None,
+        "lidos": lidos,
+        "aviso": None if lidos else "Não achei nenhum dado nessa imagem. Tente um print mais nítido.",
+    }
 
 
 @router.get("/{patient_id}", response_model=PatientOut)

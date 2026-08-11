@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Plus, Search, Users, WifiOff, Filter, X,
-  ChevronDown, QrCode,
+  ChevronDown, QrCode, Camera,
 } from 'lucide-react';
 import Link from 'next/link';
 import { ProtectedPageLayout } from '@/components/ProtectedPageLayout';
@@ -161,6 +161,16 @@ export default function PatientsPage() {
             aria-label="Scanner QR/Código de barras"
             onClick={() => router.push('/pacientes/scanner')}
           />
+          {/* Cadastro por foto (06/08): a secretaria cola o print da ficha do
+              outro sistema em vez de digitar tudo de novo. */}
+          <Button
+            size="sm"
+            variant="secondary"
+            icon={<Camera className="h-4 w-4" />}
+            onClick={() => router.push('/pacientes/foto')}
+          >
+            Por foto
+          </Button>
           <Button size="sm" icon={<Plus className="h-4 w-4" />} onClick={() => router.push('/pacientes/novo')}>
             Novo
           </Button>

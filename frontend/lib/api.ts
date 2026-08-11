@@ -127,6 +127,12 @@ export const patientsApi = {
     api.get("/patients", { params: search ? { search } : {} }).then((r) => r.data),
   get: (id: number) => api.get(`/patients/${id}`).then((r) => r.data),
   create: (data: any) => api.post("/patients", data).then((r) => r.data),
+  // Cadastro por foto (06/08): a imagem vai, e le lida e nao e guardada.
+  lerFoto: (arquivo: File) => {
+    const fd = new FormData();
+    fd.append("file", arquivo);
+    return api.post("/patients/ler-foto", fd).then((r) => r.data);
+  },
   update: (id: number, data: any) => api.put(`/patients/${id}`, data).then((r) => r.data),
   delete: (id: number) => api.delete(`/patients/${id}`),
   timeline: (id: number) => api.get(`/patients/${id}/timeline`).then((r) => r.data),
