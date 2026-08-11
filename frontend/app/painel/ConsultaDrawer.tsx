@@ -309,15 +309,15 @@ function checkDrugAllergyAlert(medName: string, allergiesStr: string): { allerge
 
 // ── Ortho autocomplete medications ─────────────────────────────────────────────
 interface OrthoMedPreset {
-  name: string; dose: string; route: string; frequency: string; duration: string; instructions: string; prescriptionType: "simples" | "controle_especial" | "antimicrobiano" | "notificacao_ab";
+  name: string; dose: string; route: string; frequency: string; duration: string; instructions: string; prescriptionType: "simples" | "controle_especial" | "antimicrobiano";
 }
 const ORTHO_MEDICATIONS: OrthoMedPreset[] = [
   { name: "Nimesulida 100mg", dose: "1 comprimido", route: "oral", frequency: "12/12h", duration: "5 dias", instructions: "Tomar após refeições", prescriptionType: "simples" },
   { name: "Diclofenaco Potássico 50mg", dose: "1 comprimido", route: "oral", frequency: "8/8h", duration: "5 dias", instructions: "Tomar após refeições", prescriptionType: "simples" },
   { name: "Meloxicam 15mg", dose: "1 comprimido", route: "oral", frequency: "1x/dia", duration: "7 dias", instructions: "Tomar após refeição principal", prescriptionType: "simples" },
   { name: "Cetoprofeno 100mg", dose: "1 comprimido", route: "oral", frequency: "12/12h", duration: "5 dias", instructions: "Tomar após refeições", prescriptionType: "simples" },
-  { name: "Tramadol 50mg", dose: "1 cápsula", route: "oral", frequency: "8/8h", duration: "5 dias", instructions: "Pode causar sonolência — Notificação B (receita amarela SESA)", prescriptionType: "notificacao_ab" },
-  { name: "Codeína 30mg", dose: "1 comprimido", route: "oral", frequency: "6/6h", duration: "3 dias", instructions: "Conforme necessidade — Notificação B (receita amarela SESA)", prescriptionType: "notificacao_ab" },
+  { name: "Tramadol 50mg", dose: "1 cápsula", route: "oral", frequency: "8/8h", duration: "5 dias", instructions: "Pode causar sonolência — Notificação B (receita amarela SESA)", prescriptionType: "controle_especial" },
+  { name: "Codeína 30mg", dose: "1 comprimido", route: "oral", frequency: "6/6h", duration: "3 dias", instructions: "Conforme necessidade — Notificação B (receita amarela SESA)", prescriptionType: "controle_especial" },
   { name: "Ciclobenzaprina 5mg", dose: "1 comprimido", route: "oral", frequency: "8/8h", duration: "7 dias", instructions: "Pode causar sonolência — evitar dirigir", prescriptionType: "simples" },
   { name: "Omeprazol 20mg", dose: "1 cápsula", route: "oral", frequency: "1x/dia", duration: "30 dias", instructions: "Tomar 30 min antes do café", prescriptionType: "simples" },
   { name: "Prednisolona 20mg", dose: "1 comprimido", route: "oral", frequency: "1x/dia", duration: "5 dias", instructions: "Tomar pela manhã após refeição", prescriptionType: "simples" },
@@ -885,13 +885,13 @@ function MedRowInline({ med, index, total, onChange, onRemove, allergyWarning, s
 
 // ── Tipos de Receita ──────────────────────────────────────────────────────────
 
-type PrescriptionType = "simples" | "controle_especial" | "antimicrobiano" | "notificacao_ab";
+type PrescriptionType = "simples" | "controle_especial" | "antimicrobiano";
 
 // Alias de compatibilidade com valores antigos do banco
 function normalizePrescriptionType(t: string): PrescriptionType {
   if (t === "especial_azul") return "controle_especial";
   if (t === "especial_amarelo") return "controle_especial";
-  if (t === "simples" || t === "controle_especial" || t === "antimicrobiano" || t === "notificacao_ab") return t as PrescriptionType;
+  if (t === "simples" || t === "controle_especial" || t === "antimicrobiano") return t as PrescriptionType;
   return "simples";
 }
 
@@ -899,7 +899,6 @@ const PRESCRIPTION_TYPE_LABELS: Record<PrescriptionType, string> = {
   simples: "Simples (Branca)",
   controle_especial: "Controle Especial (RCE)",
   antimicrobiano: "Antimicrobiano (ATB)",
-  notificacao_ab: "Notificação A/B (SESA)",
 };
 
 // Print prescription modal — 3 tipos que o médico pode imprimir + aviso para A/B
@@ -1201,7 +1200,6 @@ function PrintModal({ rx, patient, clinic, onClose, collectorId }: {
     simples: "Receita Simples — 1 via",
     controle_especial: "Controle Especial (RCE) — 2 vias",
     antimicrobiano: "Antimicrobiano (ATB) — 2 vias",
-    notificacao_ab: "Notificação A/B",
   };
 
   // Corpo das folhas (reutilizado no modal E no coletor de impressão final).
@@ -1220,10 +1218,13 @@ function PrintModal({ rx, patient, clinic, onClose, collectorId }: {
           )}
         </div>
       ))}
+      {/* 11/08: o antimicrobiano passou a usar a MESMA folha de 2 vias da
+          controle especial — os quadros de comprador e fornecedor servem aos
+          dois, e uma folha só é uma folha só pra conferir e manter. */}
       {type === "antimicrobiano" && viaLabels.map((label, idx) => (
         <div key={idx}>
           <div className={idx < vias - 1 ? "rx-via-break" : ""}>
-            <ATBSheet viaLabel={label} viaIndex={idx} />
+            <RCESheet viaLabel={label} viaIndex={idx} />
           </div>
           {idx < vias - 1 && (
             <div className="rx-cut-line" style={{ textAlign: "center", color: "#aaa", fontSize: "10px", margin: "4px 0", letterSpacing: "2px", borderTop: "1px dashed #ccc", paddingTop: "4px" }}>
@@ -1889,7 +1890,6 @@ const PRESCRIPTION_TYPE_BADGE: Record<string, { label: string; cls: string }> = 
   simples:           { label: "Simples",   cls: "bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300" },
   controle_especial: { label: "RCE 2 vias", cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300" },
   antimicrobiano:    { label: "ATB 2 vias", cls: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300" },
-  notificacao_ab:    { label: "Notif. A/B", cls: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300" },
   // aliases legados
   especial_azul:     { label: "RCE 2 vias", cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300" },
   especial_amarelo:  { label: "RCE 2 vias", cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300" },
@@ -1899,7 +1899,6 @@ const RX_TYPE_OPTIONS: { value: PrescriptionType; label: string; activeClass: st
   { value: "simples",           label: "Simples (Branca)",          activeClass: "border-slate-600 bg-slate-600 text-white" },
   { value: "controle_especial", label: "Controle Especial (RCE)",   activeClass: "border-amber-600 bg-amber-600 text-white" },
   { value: "antimicrobiano",    label: "Antimicrobiano (ATB)",       activeClass: "border-blue-600 bg-blue-600 text-white" },
-  { value: "notificacao_ab",    label: "Notificação A/B (SESA)",    activeClass: "border-red-600 bg-red-600 text-white" },
 ];
 
 function TabReceita({ patientId, patient, clinic }: { patientId: number; patient: any; clinic?: any }) {
@@ -2035,20 +2034,18 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
       frequency: preset.frequency, duration: preset.duration, instructions: preset.instructions,
     } : m));
     // Auto-select prescription type from preset
-    if (preset.prescriptionType === "notificacao_ab" || preset.prescriptionType === "controle_especial" || preset.prescriptionType === "antimicrobiano") {
+    if (preset.prescriptionType === "controle_especial" || preset.prescriptionType === "antimicrobiano") {
       setRxType(preset.prescriptionType);
     }
     setMedSuggestions(prev => { const n = { ...prev }; delete n[medId]; return n; });
   };
 
-  const isNotificacaoAB = rxType === "notificacao_ab";
   const isATB = rxType === "antimicrobiano";
   const isRCE = rxType === "controle_especial";
   // A16: endereço e telefone são obrigatórios na receita de antimicrobiano (RDC 20/2011)
   const atbFieldsMissing = () => isATB && (!patientAddress.trim() || !patientPhone.trim());
 
   const handleSave = async () => {
-    if (isNotificacaoAB) { toast.error("Notificação A/B não pode ser impressa pelo médico — use formulários SESA"); return; }
     // A16: bloqueia salvar ATB sem endereço/telefone obrigatórios (RDC 20/2011)
     if (atbFieldsMissing()) { toast.error("Antimicrobiano exige endereço e telefone do paciente (RDC 20/2011)"); return; }
     let validMeds: Medication[] = [];
@@ -2091,7 +2088,6 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
   };
 
   const handlePrint = () => {
-    if (isNotificacaoAB) return;
     // A16: bloqueia imprimir ATB sem endereço/telefone obrigatórios (RDC 20/2011)
     if (atbFieldsMissing()) { toast.error("Antimicrobiano exige endereço e telefone do paciente (RDC 20/2011)"); return; }
     let validMeds: Medication[] = [];
@@ -2185,7 +2181,6 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
   };
 
   const handleSendWhatsApp = async () => {
-    if (isNotificacaoAB) { toast.error("Notificação A/B não pode ser enviada por aqui"); return; }
     // A12: receita controlada (RCE / ATB) NÃO pode ir por WhatsApp — não tem
     // validade legal sem 2 vias físicas assinadas e expõe substância controlada.
     if (isRCE || isATB) {
@@ -2254,7 +2249,7 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
         </div>
 
         {/* Toggle texto livre — vale pra Branca, Especial e ATB */}
-        {!isNotificacaoAB && (
+        {(
           <label className="mt-2 flex items-center gap-2 text-xs font-semibold text-slate-600 dark:text-slate-300 cursor-pointer select-none w-fit">
             <input
               type="checkbox"
@@ -2282,31 +2277,10 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
       </div>
 
       {/* ── Box informativo Notificação A/B ── */}
-      {isNotificacaoAB && (
-        <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-4 space-y-2">
-          <div className="flex items-center gap-2">
-            <span className="text-lg">ℹ️</span>
-            <p className="text-sm font-bold text-slate-800 dark:text-slate-100">Notificação de Receita A e B</p>
-          </div>
-          <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-            Formulários <strong>pré-numerados emitidos pela SESA estadual</strong> (Secretaria Estadual de Saúde).
-            O médico <strong>NÃO pode imprimir</strong> esses formulários — eles têm numeração controlada pelo governo.
-          </p>
-          <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-            Solicite os talonários na <strong>Secretaria Estadual de Saúde da Paraíba (SES-PB)</strong> ou
-            da <strong>Secretaria Estadual de Saúde de Pernambuco (SES-PE)</strong>.
-          </p>
-          <p className="text-xs text-slate-500 dark:text-slate-400 italic">
-            Exemplos: morfina, codeína, tramadol em altas doses, metilfenidato, anfetaminas.
-          </p>
-        </div>
-      )}
-
       {/* ── Banner de Alergias — sempre visível independente do tipo de receita ── */}
       <AllergyBanner patient={patient} />
 
-      {/* ── Conteúdo do formulário (oculto para Notificação A/B) ── */}
-      {!isNotificacaoAB && (
+      {(
         <>
           {/* ── Modelos + Memed ── */}
           <div className="flex gap-2">

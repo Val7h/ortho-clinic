@@ -388,6 +388,10 @@ export const appointmentsApi = {
 
 // ── Financeiro ────────────────────────────────────────────────────────────
 export const financialApi = {
+  // Fechamento do dia (11/08): quem foi atendido e ainda nao tem valor.
+  fechamentoDoDia: () => api.get("/financial/fechamento-do-dia").then((r) => r.data),
+  semCobranca: (entryId: number) =>
+    api.post("/financial/sem-cobranca", { entry_id: entryId }).then((r) => r.data),
   list: (params?: { month?: number; year?: number; patient_id?: number }) =>
     api.get("/financial", { params }).then((r) => r.data),
   summary: (params?: { month?: number; year?: number }) =>

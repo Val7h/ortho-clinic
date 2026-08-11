@@ -9,6 +9,7 @@ from database import get_db
 from models.patient import Patient
 from models.financial import FinancialRecord
 from models.clinic import Clinic, ClinicSchedule, Appointment
+from models.queue import WaitingRoomEntry
 from deps import get_current_user
 from models.organization import User
 from services.audit_service import AuditLogService
@@ -756,4 +757,108 @@ def delete_record(
             metadata={"locked_delete": True},
         )
     db.delete(r)
+    db.commit()
+
+
+# ── Fechamento do dia (11/08) ────────────────────────────────────────────────
+# O buraco que motivou isto: terça e quarta passaram com R$ 0 no caixa e foi
+# preciso recuperar R$ 5.685 na mão. Como o painel mede R$ por hora, taxa de
+# falta e ticket, TODO número encolhe quando um atendimento não é lançado.
+#
+# A ideia não é cobrar disciplina, é o app perguntar no fim do dia: destes
+# atendidos, quais ainda não têm valor?
+#
+# value_cents = NULL  → ninguém informou (entra na lista de pendências)
+# value_cents = 0     → conferido e SEM cobrança (convênio/cortesia) — some da lista
+
+@router.get("/fechamento-do-dia")
+def fechamento_do_dia(
+    dia: Optional[date] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Atendidos de hoje x quem já tem valor lançado. A secretária também vê:
+    é ela quem fecha o caixa, então NÃO repete o bloqueio de role aqui."""
+    alvo = dia or _br_today()
+
+    entradas = (
+        db.query(WaitingRoomEntry, Patient)
+        .join(Patient, Patient.id == WaitingRoomEntry.patient_id)
+        .filter(
+            WaitingRoomEntry.entry_date == alvo,
+            WaitingRoomEntry.status.in_(("attended", "attending")),
+        )
+        .order_by(WaitingRoomEntry.position)
+        .all()
+    )
+    if current_user.role != "superadmin":
+        entradas = [
+            (e, p) for e, p in entradas
+            if p.organization_id == current_user.organization_id
+        ]
+
+    # Pagamentos do dia, por paciente — pega também o que foi lançado direto
+    # no Caixa, fora da sala de espera.
+    pagos = {
+        pid for (pid,) in db.query(FinancialRecord.patient_id)
+        .filter(FinancialRecord.date == alvo, FinancialRecord.status == "paid")
+        .distinct().all()
+    }
+
+    pendentes, resolvidos = [], 0
+    for e, p in entradas:
+        tem_valor = (e.value_cents is not None) or (p.id in pagos)
+        if tem_valor:
+            resolvidos += 1
+            continue
+        pendentes.append({
+            "entry_id": e.id,
+            "patient_id": p.id,
+            "nome": p.name,
+            "convenio": p.insurance or "Particular",
+            "chegou": e.arrived_at.isoformat() if e.arrived_at else None,
+            "motivo": e.reason,
+        })
+
+    total = len(entradas)
+    return {
+        "dia": alvo.isoformat(),
+        "atendidos": total,
+        "com_valor": resolvidos,
+        "sem_valor": len(pendentes),
+        "pendentes": pendentes,
+        "total_do_dia": float(
+            db.query(func.coalesce(func.sum(FinancialRecord.amount), 0))
+            .filter(FinancialRecord.date == alvo, FinancialRecord.status == "paid")
+            .scalar() or 0
+        ),
+    }
+
+
+class SemCobrancaIn(BaseModel):
+    entry_id: int
+
+
+@router.post("/sem-cobranca", status_code=204)
+def marcar_sem_cobranca(
+    data: SemCobrancaIn,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Marca o atendimento como conferido e SEM valor a cobrar.
+
+    Sem isso, todo paciente de convênio ficaria para sempre na lista de
+    pendências e a secretária aprenderia a ignorar o aviso — que é a pior
+    coisa que pode acontecer com um alerta.
+    """
+    entry = db.query(WaitingRoomEntry).filter(WaitingRoomEntry.id == data.entry_id).first()
+    if not entry:
+        raise HTTPException(404, "Atendimento não encontrado")
+    paciente = db.query(Patient).filter(Patient.id == entry.patient_id).first()
+    if not paciente or (
+        current_user.role != "superadmin"
+        and paciente.organization_id != current_user.organization_id
+    ):
+        raise HTTPException(404, "Atendimento não encontrado")
+    entry.value_cents = 0
     db.commit()

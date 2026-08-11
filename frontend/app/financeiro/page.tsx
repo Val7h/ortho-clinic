@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import {
   DollarSign,
   Plus,
@@ -16,7 +16,7 @@ import {
 import NavBar from '@/components/NavBar';
 import { PageWithSidebar } from '@/components/PageWithSidebar';
 import { FinanceiroPainel } from '@/components/FinanceiroPainel';
-import { financialApi, patientsApi } from '@/lib/api';
+import { financialApi, patientsApi, msgErro } from '@/lib/api';
 import {
   ResponsiveContainer, LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip,
@@ -50,6 +50,25 @@ export default function FinanceiroPage() {
   // só o total de HOJE. Mês/ano/pendentes/gráficos são do médico/admin (o
   // backend também bloqueia: list dela devolve só hoje; summary dá 403).
   const isSecretary = user?.role === 'secretary';
+
+  // Fechamento do dia (11/08). O buraco real: terça e quarta passaram com R$ 0
+  // no caixa e foi preciso recuperar R$ 5.685 na mão. Como o painel mede R$ por
+  // hora e ticket, todo atendimento não lançado encolhe TODOS os números.
+  const [fechamento, setFechamento] = useState<any>(null);
+  const carregarFechamento = useCallback(() => {
+    financialApi.fechamentoDoDia().then(setFechamento).catch(() => {});
+  }, []);
+  useEffect(() => { if (user) carregarFechamento(); }, [user, carregarFechamento]);
+
+  const marcarSemCobranca = async (entryId: number, nome: string) => {
+    try {
+      await financialApi.semCobranca(entryId);
+      toast.success(`${nome.split(' ')[0]}: marcado como sem cobrança`);
+      carregarFechamento();
+    } catch (err: any) {
+      toast.error(msgErro(err, 'Não consegui marcar'));
+    }
+  };
   const { open: showForm, onOpenChange: setShowForm } = useModal();
   const firstInputRef = useRef<HTMLSelectElement>(null);
   const today = new Date();
@@ -194,6 +213,61 @@ export default function FinanceiroPage() {
       />
 
       <main className="mx-auto max-w-3xl space-y-6 px-4 py-8">
+        {/* FECHAMENTO DO DIA (11/08) — o alerta que impede o caixa de furar.
+            Só aparece quando há pendência: alerta que vive na tela vira
+            paisagem e deixa de ser lido. */}
+        {fechamento && fechamento.sem_valor > 0 && (
+          <Card shadow="sm">
+            <div className="border-l-4 border-amber-400 p-4">
+              <div className="flex items-baseline justify-between gap-3 flex-wrap">
+                <p className="text-sm font-bold text-amber-700 dark:text-amber-400">
+                  {fechamento.sem_valor} atendimento(s) de hoje sem valor lançado
+                </p>
+                <p className="text-xs text-slate-500">
+                  {fechamento.atendidos} atendidos · {fechamento.com_valor} já lançados
+                </p>
+              </div>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                Sem isso, o faturamento do dia e o retorno por hora da clínica saem menores do que foram.
+              </p>
+
+              <div className="mt-3 space-y-1.5">
+                {fechamento.pendentes.map((p: any) => (
+                  <div
+                    key={p.entry_id}
+                    className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-slate-800 dark:text-slate-100">{p.nome}</p>
+                      <p className="text-[11px] text-slate-500">{p.convenio}{p.motivo ? ` · ${p.motivo}` : ''}</p>
+                    </div>
+                    <button
+                      onClick={() => marcarSemCobranca(p.entry_id, p.nome)}
+                      className="shrink-0 rounded-lg border border-slate-300 dark:border-slate-600 px-2.5 py-1 text-[11px] font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700"
+                      title="Convênio ou cortesia — sai da lista e não conta como esquecimento"
+                    >
+                      Sem cobrança
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <p className="mt-2 text-[11px] text-slate-400">
+                Para lançar um valor, use o botão de valor na Sala de Espera ou registre o pagamento abaixo.
+              </p>
+            </div>
+          </Card>
+        )}
+
+        {fechamento && fechamento.atendidos > 0 && fechamento.sem_valor === 0 && (
+          <Card shadow="sm">
+            <div className="border-l-4 border-success-400 p-4">
+              <p className="text-sm font-bold text-success-700 dark:text-success-400">
+                Caixa do dia fechado — {fechamento.atendidos} atendimento(s), nenhum sem valor
+              </p>
+            </div>
+          </Card>
+        )}
+
         {/* CAIXA DO DIA (secretária): total de hoje calculado da própria lista */}
         {isSecretary && (
           <div className="grid grid-cols-2 gap-4">
