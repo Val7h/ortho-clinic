@@ -72,15 +72,21 @@ const API_PROBE_URL =
 async function probeConnectivity(): Promise<boolean> {
   try {
     const res = await fetch(API_PROBE_URL, {
-      method: 'HEAD',
+      method: 'GET',
       cache: 'no-store',
-      signal: AbortSignal.timeout(5000),
+      signal: AbortSignal.timeout(8000),
     });
     return res.ok || res.status < 500;
   } catch {
     return false;
   }
 }
+
+// Reconferência enquanto estivermos "offline" (Valth 13/08): o navegador
+// dispara 'offline' em qualquer piscada de wi-fi e nem sempre dispara
+// 'online' de volta — a tarja amarela ficava presa com a internet boa.
+// Agora o estado offline se cura sozinho.
+const RECHECK_OFFLINE_MS = 10_000;
 
 // ── Provider ──────────────────────────────────────────────────────────────────
 
@@ -144,7 +150,11 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
         setTimeout(triggerSync, 1500); // small delay to let connection stabilise
       }
     };
-    const onOffline = () => setIsOnline(false);
+    // Não acreditamos no evento 'offline' de cara: confirmamos com o servidor.
+    const onOffline = async () => {
+      const reachable = await probeConnectivity();
+      setIsOnline(reachable);
+    };
 
     window.addEventListener('online', onOnline);
     window.addEventListener('offline', onOffline);
@@ -157,6 +167,18 @@ export function SyncProvider({ children }: { children: React.ReactNode }) {
       window.removeEventListener('offline', onOffline);
     };
   }, [triggerSync]);
+
+  // Enquanto estivermos offline, reconfere a cada 10 s e volta sozinho.
+  useEffect(() => {
+    if (isOnline) return;
+    const t = setInterval(async () => {
+      if (await probeConnectivity()) {
+        setIsOnline(true);
+        setTimeout(triggerSync, 1000);
+      }
+    }, RECHECK_OFFLINE_MS);
+    return () => clearInterval(t);
+  }, [isOnline, triggerSync]);
 
   // ── Background sync ──────────────────────────────────────────────────────
   // Uses runSyncPassIdle so the 30s background sync never steals a frame
