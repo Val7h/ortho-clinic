@@ -454,8 +454,12 @@ function AllergyBanner({ patient }: { patient: any }) {
 }
 
 // CID autocomplete inline
-function CidSearch({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+function CidSearch({ value, onChange, autoFocus }: { value: string; onChange: (v: string) => void; autoFocus?: boolean }) {
   const [query, setQuery] = useState(value || "");
+  const inputRef = useRef<HTMLInputElement>(null);
+  // 11/08: no CID secundário ele tinha que CLICAR antes de digitar. Campo
+  // recém-adicionado já nasce com o cursor dentro.
+  useEffect(() => { if (autoFocus) inputRef.current?.focus(); }, [autoFocus]);
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -474,6 +478,7 @@ function CidSearch({ value, onChange }: { value: string; onChange: (v: string) =
   return (
     <div ref={ref} className="relative">
       <input
+        ref={inputRef}
         className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-50 text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
         placeholder="Ex: M17.1 ou gonartrose..."
         value={query}
@@ -1772,16 +1777,6 @@ function TabProntuario({ patientId, patient }: { patientId: number; patient?: an
             <FileText className="w-8 h-8 text-slate-300" />
             <p className="text-sm font-semibold text-slate-500">Sem evoluções registradas neste sistema</p>
             <p className="text-xs text-slate-400 text-center max-w-52">Se houver histórico anterior, registre um resumo como primeira entrada.</p>
-            <button
-              type="button"
-              onClick={() => {
-                setNewText("[RESUMO DE PRONTUÁRIO ANTERIOR]\nHistórico relevante: __\nCirurgias prévias: __\nExames anteriores: __\n");
-                textareaRef.current?.focus();
-              }}
-              className="text-xs text-blue-600 hover:underline mt-1"
-            >
-              Importar resumo de prontuário anterior
-            </button>
           </div>
         ) : filteredEvolutions.length === 0 ? (
           <p className="text-xs text-slate-400 italic py-4 text-center">Nenhuma evolução encontrada para "{searchQuery}"</p>
@@ -1903,6 +1898,9 @@ const RX_TYPE_OPTIONS: { value: PrescriptionType; label: string; activeClass: st
 
 function TabReceita({ patientId, patient, clinic }: { patientId: number; patient: any; clinic?: any }) {
   const [rxType, setRxType] = useState<PrescriptionType>("simples");
+  // 11/08: a lista de modelos cresceu e achar o certo virou rolagem. Busca por
+  // nome e pelo conteúdo (medicamento), que é como ele lembra do modelo.
+  const [buscaModelo, setBuscaModelo] = useState("");
   const [freeTextMode, setFreeTextMode] = useState(false);
   const [freeText, setFreeText] = useState("");
   const [medications, setMedications] = useState<Medication[]>([emptyMed()]);
@@ -2110,8 +2108,31 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
     });
   };
 
+  const normTexto = (t: string) =>
+    (t || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+
+  const modelosFiltrados = (() => {
+    const q = normTexto(buscaModelo).trim();
+    if (!q) return templates;
+    return templates.filter((t: any) => {
+      const meds = (t.medications || []).map((m: any) => m.name).join(" ");
+      return normTexto(`${t.name} ${meds} ${t.instructions || ""}`).includes(q);
+    });
+  })();
+
   const handleLoadTemplate = (tmpl: any) => {
-    setRxType(normalizePrescriptionType(tmpl.prescription_type || "simples"));
+    // 11/08 — ELE IMPRIMIU RECEITA SIMPLES ACHANDO QUE ERA A DE 2 VIAS.
+    // Causa: o `|| "simples"` aqui. Modelo salvo sem tipo derrubava a escolha
+    // dele para simples, em silêncio. Agora: modelo SEM tipo não mexe no que
+    // ele escolheu; modelo COM tipo diferente troca, mas AVISA na tela.
+    const tipoDoModelo = tmpl.prescription_type
+      ? normalizePrescriptionType(tmpl.prescription_type)
+      : null;
+    if (tipoDoModelo && tipoDoModelo !== rxType) {
+      setRxType(tipoDoModelo);
+      toast(`Tipo alterado para ${RX_TYPE_OPTIONS.find((o) => o.value === tipoDoModelo)?.label ?? tipoDoModelo} — o modelo foi salvo assim`,
+        { icon: "⚠️", duration: 6000 });
+    }
     const meds = tmpl.medications || [];
     // Modelo de TEXTO LIVRE = sem medicamentos estruturados, texto em instructions.
     if (meds.length === 0 && (tmpl.instructions || "").trim()) {
@@ -2298,13 +2319,26 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
               </button>
               {showTemplateDropdown && (
                 <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg overflow-hidden">
+                  {templates.length > 6 && (
+                    <div className="p-2 border-b border-slate-200 dark:border-slate-700">
+                      <input
+                        autoFocus
+                        value={buscaModelo}
+                        onChange={(e) => setBuscaModelo(e.target.value)}
+                        placeholder="Buscar modelo ou medicamento..."
+                        className="w-full px-2.5 py-1.5 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-50 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  )}
                   {loadingTemplates ? (
                     <p className="text-xs text-slate-400 p-3 text-center">Carregando...</p>
                   ) : templates.length === 0 ? (
                     <p className="text-xs text-slate-400 p-3 text-center">Nenhum modelo salvo</p>
+                  ) : modelosFiltrados.length === 0 ? (
+                    <p className="text-xs text-slate-400 p-3 text-center">Nenhum modelo para "{buscaModelo}"</p>
                   ) : (
                     <ul className="max-h-48 overflow-y-auto">
-                      {templates.map((tmpl) => (
+                      {modelosFiltrados.map((tmpl) => (
                         <li key={tmpl.id} className="hover:bg-slate-50 dark:hover:bg-slate-700">
                           {confirmDeleteTemplateId === tmpl.id ? (
                             <div className="flex items-center gap-2 px-3 py-2">
@@ -4624,7 +4658,7 @@ function TabLaudos({ patient, clinic }: { patient: any; clinic?: any }) {
           {cidsSecundarios.map((c, i) => (
             <div key={i} className="flex items-center gap-2">
               <div className="flex-1">
-                <CidSearch value={c} onChange={(v) => setCidsSecundarios(prev => prev.map((x, idx) => idx === i ? v : x))} />
+                <CidSearch value={c} autoFocus={c === "" && i === cidsSecundarios.length - 1} onChange={(v) => setCidsSecundarios(prev => prev.map((x, idx) => idx === i ? v : x))} />
               </div>
               <button
                 type="button"

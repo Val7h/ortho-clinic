@@ -14,15 +14,55 @@ const TOKEN_KEY = "ortho_token";
 
 // Widget separado do assistente de IA (FloatingChatWidget) — mensagem direta
 // entre colegas (médico <-> secretária), lado a lado com o botão da IA.
+// Quem abrir primeiro quando ele entra no chat: online com mensagem não lida >
+// online > com não lida > o primeiro. Sem isso ele caía sempre no primeiro nome
+// em ordem alfabética, quase sempre alguém offline.
+function escolherMelhorContato(lista: any[], online: Set<number>): number | null {
+  if (!lista.length) return null;
+  const naoLida = (c: any) => (c.unread_count ?? 0) > 0;
+  return (
+    lista.find((c) => online.has(c.id) && naoLida(c))?.id ??
+    lista.find((c) => online.has(c.id))?.id ??
+    lista.find(naoLida)?.id ??
+    lista[0].id
+  );
+}
+
+// Bipe curto gerado na hora (sem arquivo de áudio para baixar). Silencioso se
+// o navegador ainda não liberou som — nunca quebra a tela por causa disso.
+function tocarAviso() {
+  try {
+    const Ctx = (window as any).AudioContext || (window as any).webkitAudioContext;
+    if (!Ctx) return;
+    const ctx = new Ctx();
+    const osc = ctx.createOscillator();
+    const vol = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.value = 880;
+    vol.gain.setValueAtTime(0.0001, ctx.currentTime);
+    vol.gain.exponentialRampToValueAtTime(0.25, ctx.currentTime + 0.02);
+    vol.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.35);
+    osc.connect(vol); vol.connect(ctx.destination);
+    osc.start(); osc.stop(ctx.currentTime + 0.36);
+    setTimeout(() => ctx.close().catch(() => {}), 700);
+  } catch { /* sem som, segue a vida */ }
+}
+
 export function TeamChatWidget() {
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<number | null>(null);
+  // Depois que ELE escolhe uma conversa, o app nunca mais troca sozinho.
+  const escolhaManualRef = useRef(false);
+  // Destaque do botão quando chega mensagem e o chat está fechado.
+  const [chamando, setChamando] = useState(false);
 
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [dmByContact, setDmByContact] = useState<Record<number, DirectMessageOut[]>>({});
   const [unreadByContact, setUnreadByContact] = useState<Record<number, number>>({});
   const [onlineIds, setOnlineIds] = useState<Set<number>>(new Set());
+  const onlineIdsRef = useRef<Set<number>>(new Set());
+  useEffect(() => { onlineIdsRef.current = onlineIds; }, [onlineIds]);
   const [dmSending, setDmSending] = useState(false);
   const [dmError, setDmError] = useState<string | null>(null);
   const loadedContactIds = useRef<Set<number>>(new Set());
@@ -49,7 +89,10 @@ export function TeamChatWidget() {
     if (!user) return;
     messagesApi.contacts().then((list) => {
       setContacts(list);
-      setTab((prev) => prev ?? list[0]?.id ?? null);
+      // 11/08: antes caía sempre no PRIMEIRO da lista alfabética — ele voltava
+      // ao chat e estava numa pessoa offline, tendo que procurar a ativa. Agora
+      // a escolha inicial prioriza quem está online (e com mensagem não lida).
+      setTab((prev) => (prev ?? escolherMelhorContato(list, onlineIdsRef.current)));
       // A21: badge nasce com as não-lidas anteriores ao login (o backend
       // manda unread_count por contato). Não sobrescreve contagens que já
       // subiram via WS enquanto a lista carregava.
@@ -199,6 +242,12 @@ export function TeamChatWidget() {
             messagesApi.markRead(otherId).catch(() => {});
           } else {
             setUnreadByContact((prev) => ({ ...prev, [otherId]: (prev[otherId] || 0) + 1 }));
+            // 11/08 (pedido dele): aviso sonoro + destaque no botão. Sem isso a
+            // mensagem da secretária ficava só num numerozinho, e ele não via
+            // no meio do atendimento.
+            tocarAviso();
+            setChamando(true);
+            setTimeout(() => setChamando(false), 8000);
           }
         }
       };
@@ -276,9 +325,13 @@ export function TeamChatWidget() {
     <>
       {!open && (
         <button
-          onClick={() => setOpen(true)}
+          onClick={() => { setOpen(true); setChamando(false); }}
           aria-label="Abrir conversa com a equipe"
-          className="fixed bottom-4 z-50 w-14 h-14 rounded-full bg-slate-700 hover:bg-slate-800 shadow-lg flex items-center justify-center transition-transform hover:scale-105 active:scale-95"
+          className={`fixed bottom-4 z-50 w-14 h-14 rounded-full shadow-lg flex items-center justify-center transition-transform hover:scale-105 active:scale-95 ${
+            chamando
+              ? "bg-emerald-500 hover:bg-emerald-600 animate-pulse ring-4 ring-emerald-300/60"
+              : "bg-slate-700 hover:bg-slate-800"
+          }`}
           style={{ right: "80px" }}
         >
           <Users className="w-6 h-6 text-white" />
@@ -336,7 +389,7 @@ export function TeamChatWidget() {
               {contacts.map((c) => (
                 <button
                   key={c.id}
-                  onClick={() => setTab(c.id)}
+                  onClick={() => { escolhaManualRef.current = true; setTab(c.id); }}
                   className={`relative px-3 py-1.5 rounded-t-lg text-xs font-medium whitespace-nowrap inline-flex items-center gap-1.5 ${
                     tab === c.id
                       ? "bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-200 border-x border-t border-slate-200 dark:border-slate-800"
