@@ -1494,6 +1494,126 @@ function insertAtCursor(el: HTMLTextAreaElement, text: string): string {
   return before + text + after;
 }
 
+// Lembrete de repetição, direto da Anamnese (Valth 13/08): ele registra o
+// procedimento no texto da evolução, não na aba Procedimentos. Então o gatilho
+// mora aqui — discreto, ao lado do contador de caracteres, e só abre quando
+// clicado. Um clique no procedimento, um no prazo, e pronto.
+const PROCEDIMENTOS_LEMBRETE = [
+  "Viscossuplementação",
+  "Ácido zoledrônico",
+  "Infiltração",
+  "Bloqueio",
+  "Denosumabe",
+];
+const PRAZOS_LEMBRETE = [3, 6, 11, 12, 18, 24];
+
+function BotaoLembrete({ patientId }: { patientId: number }) {
+  const [aberto, setAberto] = useState(false);
+  const [procedimento, setProcedimento] = useState("");
+  const [salvando, setSalvando] = useState(false);
+
+  const criar = async (meses: number) => {
+    const nome = procedimento.trim();
+    if (!nome) {
+      toast.error("Escolha ou escreva o procedimento");
+      return;
+    }
+    setSalvando(true);
+    try {
+      const r: any = await remindersApi.create({
+        patient_id: patientId,
+        procedure: nome,
+        interval_months: meses,
+      });
+      const vence = new Date(r.vence_em + "T12:00:00").toLocaleDateString("pt-BR");
+      toast.success(`Lembrete criado — ${nome} em ${vence}`);
+      setAberto(false);
+      setProcedimento("");
+    } catch (e: any) {
+      toast.error(msgErro(e, "Não consegui criar o lembrete"));
+    } finally {
+      setSalvando(false);
+    }
+  };
+
+  // O painel abre FLUTUANDO acima do botão: assim ele não empurra o editor nem
+  // aperta o botão Salvar, que dividem a mesma linha.
+  return (
+    <div className="relative flex-shrink-0">
+      <button
+        type="button"
+        onClick={() => setAberto(v => !v)}
+        title="Criar lembrete para repetir um procedimento"
+        className={`text-[11px] underline decoration-dotted underline-offset-2 whitespace-nowrap ${
+          aberto ? "text-blue-600 dark:text-blue-400" : "text-slate-400 hover:text-blue-600 dark:hover:text-blue-400"
+        }`}
+      >
+        🔁 lembrar retorno
+      </button>
+
+      {aberto && (
+    <div className="absolute bottom-full left-0 mb-2 z-30 w-[300px] rounded-lg border border-blue-200 dark:border-blue-800 bg-white dark:bg-slate-900 shadow-xl px-2.5 py-2">
+      <div className="flex items-center justify-between gap-2 mb-1.5">
+        <span className="text-[11px] font-semibold text-blue-800 dark:text-blue-300">
+          Lembrar de repetir qual procedimento?
+        </span>
+        <button
+          type="button"
+          onClick={() => { setAberto(false); setProcedimento(""); }}
+          className="text-slate-400 hover:text-slate-600"
+        >
+          <X className="w-3.5 h-3.5" />
+        </button>
+      </div>
+
+      <div className="flex flex-wrap gap-1 mb-1.5">
+        {PROCEDIMENTOS_LEMBRETE.map(p => (
+          <button
+            key={p}
+            type="button"
+            onClick={() => setProcedimento(p)}
+            className={`text-[11px] px-2 py-0.5 rounded border transition-colors ${
+              procedimento === p
+                ? "bg-blue-600 text-white border-blue-600"
+                : "border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/40"
+            }`}
+          >
+            {p}
+          </button>
+        ))}
+      </div>
+
+      <input
+        type="text"
+        value={procedimento}
+        onChange={e => setProcedimento(e.target.value)}
+        placeholder="ou escreva outro..."
+        className="w-full text-[11px] px-2 py-1 mb-1.5 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-400"
+      />
+
+      <div className="flex items-center gap-1 flex-wrap">
+        <span className="text-[11px] text-slate-500 mr-0.5">repetir em:</span>
+        {PRAZOS_LEMBRETE.map(m => (
+          <button
+            key={m}
+            type="button"
+            disabled={salvando}
+            onClick={() => criar(m)}
+            className="text-[11px] px-2 py-0.5 rounded border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 hover:bg-blue-600 hover:text-white hover:border-blue-600 disabled:opacity-40 transition-colors"
+          >
+            {m}m
+          </button>
+        ))}
+      </div>
+      <p className="text-[10px] text-slate-400 mt-1">
+        A secretária é avisada 1 mês antes e de novo faltando 1 semana.
+      </p>
+    </div>
+      )}
+    </div>
+  );
+}
+
 function TabProntuario({ patientId, patient }: { patientId: number; patient?: any }) {
   const [evolutions, setEvolutions] = useState<Evolution[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1859,8 +1979,11 @@ function TabProntuario({ patientId, patient }: { patientId: number; patient?: an
           onKeyDown={handleKeyDown}
         />
 
-        <div className="flex items-center justify-between mt-2">
-          <span className="text-[11px] text-slate-400">Ctrl+Enter para salvar · {newText.length} caracteres</span>
+        <div className="flex items-center justify-between mt-2 gap-3">
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            <span className="text-[11px] text-slate-400 truncate">Ctrl+Enter para salvar · {newText.length} caracteres</span>
+            <BotaoLembrete patientId={patientId} />
+          </div>
           <button
             type="button"
             onClick={handleSave}
