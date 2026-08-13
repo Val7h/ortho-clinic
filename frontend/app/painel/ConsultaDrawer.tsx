@@ -1893,11 +1893,10 @@ function TabProntuario({ patientId, patient }: { patientId: number; patient?: an
             <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
           </div>
         ) : evolutions.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-8 gap-2">
-            <FileText className="w-8 h-8 text-slate-300" />
-            <p className="text-sm font-semibold text-slate-500">Sem evoluções registradas neste sistema</p>
-            <p className="text-xs text-slate-400 text-center max-w-52">Se houver histórico anterior, registre um resumo como primeira entrada.</p>
-          </div>
+          // Paciente sem histórico: nada na tela. O Valth pediu (13/08) que o
+          // app pare de sugerir resumo de prontuário anterior — mesmo motivo
+          // pelo qual o "importar resumo" saiu. Ele começa a escrever e pronto.
+          null
         ) : filteredEvolutions.length === 0 ? (
           <p className="text-xs text-slate-400 italic py-4 text-center">Nenhuma evolução encontrada para "{searchQuery}"</p>
         ) : (
