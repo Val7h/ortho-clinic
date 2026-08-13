@@ -66,8 +66,13 @@ export function useSyncContext(): SyncContextValue {
 
 // ── Connectivity probe ─────────────────────────────────────────────────────
 
-const API_PROBE_URL =
-  (process.env.NEXT_PUBLIC_API_URL ?? 'https://ortho-clinic-ldcd.onrender.com') + '/health';
+// Caminho RELATIVO de propósito (Valth 13/08): o backend serve o próprio
+// frontend, então /health é sempre a mesma origem. Antes isto usava
+// NEXT_PUBLIC_API_URL e um build feito com .env.local publicou
+// "http://localhost:8003/health" — que nunca responde na máquina do
+// consultório, deixando a tarja "sem conexão" acesa o dia inteiro.
+// Mesma blindagem que lib/api.ts já usa.
+const API_PROBE_URL = '/health';
 
 async function probeConnectivity(): Promise<boolean> {
   try {
