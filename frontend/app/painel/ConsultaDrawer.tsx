@@ -10,7 +10,7 @@ import {
   Pencil, Download, MessageSquare,
 } from "lucide-react";
 import toast from "react-hot-toast";
-import { api, patientsApi, consultationsApi, prescriptionsApi, prescriptionTemplatesApi, examsApi, evolutionApi, clinicApi, chatApi, reportsApi, leafletsApi, waitingRoomApi, msgErro } from "@/lib/api";
+import { api, patientsApi, consultationsApi, prescriptionsApi, prescriptionTemplatesApi, examsApi, evolutionApi, clinicApi, chatApi, reportsApi, leafletsApi, waitingRoomApi, remindersApi, msgErro } from "@/lib/api";
 import { formatDate } from "@/lib/utils";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -3849,11 +3849,19 @@ function TabEncaminhamentos({ patient, clinic, patientId }: { patient: any; clin
 
 // ── Tab: Procedimentos ────────────────────────────────────────────────────────
 
+// Nome curto do procedimento para o lembrete: a primeira linha do que ele
+// escreveu, que é onde ele põe "Viscossuplementação joelho direito".
+function primeiraLinha(texto: string): string {
+  return (texto || "").trim().split(/\r?\n/)[0].slice(0, 110);
+}
+
 function TabProcedimentos({ patientId, patient, clinic }: { patientId: number; patient: any; clinic?: any }) {
   const [text, setText] = useState("");
   const [cid, setCid] = useState("");
   const [duration, setDuration] = useState("");
   const [saving, setSaving] = useState(false);
+  // Repetição do procedimento (11/08). 0 = não repete.
+  const [repetirMeses, setRepetirMeses] = useState(0);
   const [procedureTime, setProcedureTime] = useState(() => {
     const now = new Date();
     return `${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`;
@@ -3899,11 +3907,27 @@ function TabProcedimentos({ patientId, patient, clinic }: { patientId: number; p
         entry_date: new Date().toISOString().split("T")[0],
         content: `[PROCEDIMENTO]${cid ? ` — CID: ${cid}` : ""}${duration ? ` — Duração: ${duration}` : ""}\n${text.trim()}`,
       });
+      // 11/08 — o lembrete de repetição. Visco e zoledrônico têm data certa
+      // para repetir; quem não é chamado não volta, e some o paciente e o
+      // procedimento junto. Guarda o INTERVALO; o app calcula quando avisar.
+      if (repetirMeses > 0) {
+        try {
+          await remindersApi.create({
+            patient_id: patientId,
+            procedure: primeiraLinha(text) || "Procedimento",
+            interval_months: repetirMeses,
+          });
+          toast.success(`Lembrete criado — repetir em ${repetirMeses} meses`);
+        } catch {
+          toast.error("Procedimento salvo, mas não consegui criar o lembrete");
+        }
+      }
       toast.success("Procedimento registrado!");
       setText("");
       setCid("");
       setDuration("");
       setActiveTemplateName(null);
+      setRepetirMeses(0);
       if (textRef.current) textRef.current.style.height = "auto";
     } catch {
       toast.error("Erro ao salvar procedimento");
@@ -4043,6 +4067,39 @@ function TabProcedimentos({ patientId, patient, clinic }: { patientId: number; p
           onKeyDown={e => { if (e.key === "Enter" && e.ctrlKey) { e.preventDefault(); handleSaveProc(); } }}
         />
         <p className="text-[11px] text-slate-400 mt-1">Ctrl+Enter para salvar · {text.length} caracteres</p>
+      </div>
+
+      {/* Repetição — visco e zoledrônico têm data certa para voltar. A
+          secretária recebe a lista de quem chamar (decisão dele, 11/08). */}
+      <div>
+        <label className={lbl}>Repetir este procedimento</label>
+        <div className="flex flex-wrap gap-1.5">
+          {[
+            { v: 0,  l: "Não repete" },
+            { v: 6,  l: "6 meses" },
+            { v: 12, l: "1 ano" },
+            { v: 18, l: "18 meses" },
+            { v: 24, l: "2 anos" },
+          ].map((op) => (
+            <button
+              key={op.v}
+              type="button"
+              onClick={() => setRepetirMeses(op.v)}
+              className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
+                repetirMeses === op.v
+                  ? "bg-indigo-600 border-indigo-600 text-white"
+                  : "bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700"
+              }`}
+            >
+              {op.l}
+            </button>
+          ))}
+        </div>
+        {repetirMeses > 0 && (
+          <p className="text-[11px] text-indigo-600 dark:text-indigo-400 mt-1.5">
+            A secretária será avisada 1 mês antes de vencer, e de novo faltando 1 semana.
+          </p>
+        )}
       </div>
 
       <div className="flex gap-2 pt-1">

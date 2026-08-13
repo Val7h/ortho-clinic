@@ -82,6 +82,9 @@ export function Sidebar() {
     { label: 'Agenda',        href: '/agenda',     icon: '📅', group: 'clinic', roles: ['admin', 'superadmin', 'doctor', 'secretary'] },
     { label: 'Pacientes',     href: '/pacientes',  icon: '👥', group: 'clinic', roles: ['admin', 'superadmin', 'doctor', 'secretary'] },
     { label: 'Sala de Espera',href: '/painel',     icon: null,  group: 'clinic', roles: ['admin', 'superadmin', 'doctor', 'secretary'] },
+    // Retornos de procedimento (11/08): quem liga é a secretária, mas ele
+    // também acompanha. Visco/zoledrônico têm data certa para repetir.
+    { label: 'Retornos',      href: '/retornos',   icon: '🔁', group: 'clinic', roles: ['admin', 'superadmin', 'doctor', 'secretary'] },
     // Caixa do Dia (decisão Valth 02/08): secretária registra pagamentos e vê
     // só o total de HOJE — a página /financeiro se adapta pelo papel.
     { label: 'Caixa do Dia',  href: '/financeiro', icon: '💰', group: 'clinic', roles: ['secretary'] },

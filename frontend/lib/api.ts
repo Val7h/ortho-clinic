@@ -387,6 +387,16 @@ export const appointmentsApi = {
 };
 
 // ── Financeiro ────────────────────────────────────────────────────────────
+// Lembretes de repeticao de procedimento (11/08): visco, zoledronico etc.
+export const remindersApi = {
+  list: (todos = false) =>
+    api.get("/procedure-reminders", { params: todos ? { todos: true } : {} }).then((r) => r.data),
+  create: (data: { patient_id: number; procedure: string; interval_months: number; applied_on?: string }) =>
+    api.post("/procedure-reminders", data).then((r) => r.data),
+  resolve: (id: number, status: "done" | "cancelled") =>
+    api.patch(`/procedure-reminders/${id}`, { status }).then((r) => r.data),
+};
+
 export const financialApi = {
   // Fechamento do dia (11/08): quem foi atendido e ainda nao tem valor.
   fechamentoDoDia: () => api.get("/financial/fechamento-do-dia").then((r) => r.data),

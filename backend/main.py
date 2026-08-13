@@ -29,6 +29,7 @@ from routers.clinical_evolutions import router as clinical_evolutions_router, fl
 from routers.laudo_inss import router as laudo_inss_router
 from routers.prescription_templates import router as prescription_templates_router
 from routers.exam_templates import router as exam_templates_router
+from routers.procedure_reminders import router as procedure_reminders_router
 from routers.chat import router as chat_router
 from routers.messages import router as messages_router
 
@@ -167,6 +168,7 @@ app.include_router(evolutions_flat_router)
 app.include_router(laudo_inss_router)
 app.include_router(prescription_templates_router)
 app.include_router(exam_templates_router)
+app.include_router(procedure_reminders_router)
 app.include_router(chat_router)
 app.include_router(messages_router)
 include_all(app)
