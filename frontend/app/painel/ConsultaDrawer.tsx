@@ -4623,7 +4623,20 @@ function TabLaudos({ patient, clinic }: { patient: any; clinic?: any }) {
   const gerarLaudoIA = async () => {
     if (!ditado.trim() || ditado.trim().length < 20) { toast.error("Dite o caso primeiro (história, exame, exames de imagem…)"); return; }
     if (!patient?.id) { toast.error("Paciente inválido"); return; }
-    if (text.trim() && !window.confirm("Substituir o texto atual do laudo pelo gerado pela IA?")) return;
+    // Esta era a única saída silenciosa da função (Valth 13/08: "cliquei e não
+    // disse nada"). Havendo rascunho salvo, o confirm aparecia; se ele fosse
+    // cancelado — ou bloqueado pelo navegador, que devolve false calado — a
+    // geração era abortada sem uma palavra na tela. Agora ela sempre fala.
+    if (text.trim()) {
+      const substituir = window.confirm(
+        "Já existe texto no laudo. Substituir pelo que a IA vai gerar?\n\n" +
+        "OK = gera e substitui · Cancelar = mantém o que está escrito"
+      );
+      if (!substituir) {
+        toast("Mantive o laudo que já estava escrito — nada foi gerado.", { icon: "✋", duration: 5000 });
+        return;
+      }
+    }
     setGerandoIA(true);
     try {
       const res = await api.post("/api/laudo-inss/gerar", {
