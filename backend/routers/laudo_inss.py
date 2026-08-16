@@ -63,6 +63,10 @@ FIDELIDADE AO DITADO (regra de ouro)
 - CONFLITO ditado × cadastro: o DITADO SEMPRE PREVALECE. Se o médico ditar a profissão
   (ex.: "agricultor"), use a ditada e IGNORE a do cadastro; idem para idade ou qualquer
   outro dado. O cadastro só completa o que o ditado não mencionou.
+- IDADE E PROFISSÃO: só podem aparecer no laudo se vierem NO DITADO ou no bloco PACIENTE
+  acima. Se não vierem, escreva apenas o nome e siga em frente — NÃO estime, NÃO deduza
+  pelo nome, NÃO copie a idade nem a profissão do exemplo abaixo. Um laudo com idade
+  errada é um documento falso diante da perícia.
 
 NORMALIZAÇÃO DO DITADO POR VOZ (obrigatória — não é invenção, é correção de transcrição)
 O ditado vem de reconhecimento de voz e chega com erros de transcrição. Você DEVE normalizar
@@ -198,8 +202,14 @@ async def gerar_laudo(
         else:
             pedidos.append(modelo)
 
+    # Sem data de nascimento no cadastro, a IA estava CHUTANDO a idade (13/08:
+    # escreveu "17 anos" para uma paciente sem nascimento cadastrado, três vezes
+    # seguidas). Dizer explicitamente que não há idade é o que impede o chute.
     contexto = [
-        f"PACIENTE: {p.name}" + (f", {idade} anos" if idade is not None else ""),
+        f"PACIENTE: {p.name}" + (
+            f", {idade} anos" if idade is not None
+            else " (IDADE NÃO INFORMADA — não escreva idade alguma no laudo)"
+        ),
         f"PROFISSÃO (cadastro — só usar se o ditado não citar profissão): {p.occupation}" if getattr(p, "occupation", None) else None,
         "",
         "DITADO DO MÉDICO:",
