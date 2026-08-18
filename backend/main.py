@@ -356,6 +356,7 @@ def health():
     # host, nunca a connection string). Persistência dos dados depende disso:
     #  - "sqlite" em produção = disco efêmero do Render = dados somem no deploy (RUIM)
     #  - "postgresql" + host neon/render = banco gerenciado persistente (BOM)
+    import re
     from sqlalchemy import text as _text
     from database import engine  # não importado no topo — sem isto o handler quebra (NameError) e o Render reprova o deploy no health check
     db_engine = engine.dialect.name  # "sqlite" | "postgresql"
@@ -370,12 +371,22 @@ def health():
         db_host_kind = "local"
     else:
         db_host_kind = "outro"
+    # Quando o banco cai, saber POR QUE cai vale a queda inteira: sem os logs do
+    # Render em maos, era impossivel distinguir "Neon suspenso" de "senha trocada"
+    # de "rede". Guardamos tipo + mensagem SANITIZADA (18/08: apagao de ~1h).
+    db_ok = False
+    db_error = None
     try:
         with engine.connect() as conn:
             conn.execute(_text("SELECT 1"))
         db_ok = True
-    except Exception:
-        db_ok = False
+    except Exception as exc:
+        # A mensagem do driver pode embutir a connection string inteira, com
+        # senha. Removemos qualquer coisa parecida com credencial antes de expor.
+        bruto = f"{type(exc).__name__}: {exc}"
+        limpo = re.sub(r"postgres(ql)?://[^\s'\")]+", "[connection string omitida]", bruto)
+        limpo = re.sub(r"(password|senha)\s*=\s*\S+", r"=[oculto]", limpo, flags=re.I)
+        db_error = limpo[:400]
     return {
         "status": "ok",
         "app": "OrthoClinic",
@@ -384,6 +395,7 @@ def health():
         "db_host_kind": db_host_kind,
         "db_ok": db_ok,
         "db_persistent": db_engine == "postgresql" and db_ok,
+        "db_error": db_error,
     }
 
 
