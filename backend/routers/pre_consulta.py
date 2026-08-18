@@ -5,12 +5,14 @@ Não exige JWT — é chamado antes da consulta, pelo próprio paciente.
 """
 
 import hmac
+import logging
 import hashlib
 import os
 import re
 import secrets
 import shutil
 import time
+import unicodedata
 import uuid
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -25,6 +27,9 @@ from database import get_db
 from models.anamnesis import Anamnesis
 from models.clinic import Appointment, Clinic
 from models.patient import Patient
+from routers.clinic import assert_clinica_atende
+
+logger = logging.getLogger("orthoclinic.pre_consulta")
 
 router = APIRouter(prefix="/pre-consulta", tags=["Pré-Consulta"])
 
@@ -218,27 +223,71 @@ def _atualizar_paciente(patient: Patient, data: PreConsultaPayload) -> None:
 # "Unimagem", "Mário Bento", "Clínica Artro") pro nome exato da Clinic cadastrada + o
 # horário de início/fim do turno daquela unidade (usado só como sugestão no agendamento
 # automático — a secretária revisa e ajusta se precisar).
-_UNIDADE_PARA_CLINICA = [
-    (("artro",), "Clínica Artro", "15:00", "19:00"),
-    (("cto",), "Clínica CTO", "08:00", "12:00"),
-    (("pernambuco", " ip", "instituto pe"), "Clínica IP", "09:00", "13:00"),
-    (("unimagem",), "Clínica Unimagem", "13:00", "16:00"),
-    (("mário bento", "mario bento", "palmares"), "Clínica Mário Bento", "10:00", "15:00"),
+# Apelidos que o paciente/bot pode escrever -> pedaco que identifica a clinica
+# DENTRO DO NOME REAL cadastrado. NAO repetimos aqui o nome exato da clinica:
+# era exatamente esse acoplamento que quebrou (18/08). A tabela dizia
+# "Clínica IP", o banco guarda "Instituto Pernambuco (IP)", o == nunca casava
+# e TODO paciente do IP caia fora — na pratica, ia parar na Unimagem.
+#
+# Horarios tambem sairam daqui de proposito: agora vem da GRADE REAL da clinica
+# no dia agendado. A tabela antiga tinha os cinco horarios errados (Unimagem
+# 13-16 quando o turno e 14-17, CTO 08-12 quando e 09-13...).
+_APELIDOS_UNIDADE = [
+    (("artro",), "artro"),
+    (("cto",), "cto"),
+    (("pernambuco", " ip ", "instituto pe", " ip"), "instituto pernambuco"),
+    (("unimagem",), "unimagem"),
+    (("mario bento", "mário bento", "palmares"), "mario bento"),
 ]
 
 
-def _resolver_clinic(db: Session, unidade: Optional[str]) -> tuple[Optional[Clinic], Optional[str], Optional[str]]:
-    """Retorna (clinic, start_time_sugerido, end_time_sugerido) ou (None, None, None)
-    se a unidade não veio ou não bate com nenhuma unidade conhecida."""
+def _sem_acento(t: str) -> str:
+    return "".join(
+        c for c in unicodedata.normalize("NFD", (t or "").lower())
+        if unicodedata.category(c) != "Mn"
+    )
+
+
+def _resolver_clinic(
+    db: Session, unidade: Optional[str], quando: Optional[date] = None
+) -> tuple[Optional[Clinic], Optional[str], Optional[str]]:
+    """Retorna (clinic, start_time, end_time) da unidade pedida, com o horario
+    tirado da GRADE REAL da clinica no dia `quando`.
+
+    Casa o apelido escrito pelo paciente contra o nome REAL das clinicas ativas
+    (sem acento, sem diferenciar maiuscula), em vez de comparar com um nome fixo
+    escrito neste arquivo. Se a clinica nao atende no dia pedido, devolve
+    (clinic, None, None) — quem chama decide o que fazer, e a trava
+    assert_clinica_atende recusa o agendamento com uma mensagem clara.
+    """
     if not unidade:
         return None, None, None
-    texto = f" {unidade.lower()} "
-    for chaves, nome_clinica, inicio, fim in _UNIDADE_PARA_CLINICA:
-        if any(chave in texto for chave in chaves):
-            clinic = db.query(Clinic).filter(Clinic.name == nome_clinica, Clinic.active == True).first()  # noqa: E712
-            if clinic:
-                return clinic, inicio, fim
-    return None, None, None
+
+    texto = f" {_sem_acento(unidade)} "
+    ativas = db.query(Clinic).filter(Clinic.active == True).all()  # noqa: E712
+
+    alvo = None
+    for chaves, marca in _APELIDOS_UNIDADE:
+        if any(_sem_acento(chave) in texto for chave in chaves):
+            alvo = next((c for c in ativas if marca in _sem_acento(c.name)), None)
+            if alvo:
+                break
+    if alvo is None:
+        # Ultimo recurso: o texto ja contem o nome da propria clinica?
+        alvo = next((c for c in ativas if _sem_acento(c.name) in texto), None)
+    if alvo is None:
+        logger.warning("Unidade nao reconhecida no agendamento automatico: %r", unidade)
+        return None, None, None
+
+    if quando is None:
+        return alvo, None, None
+
+    dow = quando.weekday()  # 0=Seg
+    turnos = [s for s in (alvo.schedules or []) if s.active and s.day_of_week == dow]
+    if not turnos:
+        return alvo, None, None
+    turno = min(turnos, key=lambda s: s.start_time or "00:00")
+    return alvo, turno.start_time, turno.end_time
 
 
 _RE_DATA = re.compile(r"^(\d{1,2})/(\d{1,2})(?:/(\d{4}))?$")
@@ -273,9 +322,20 @@ def _criar_agendamento_se_possivel(
     """Cria (ou reaproveita) o agendamento 'pending' na agenda a partir da unidade
     e data que o bot mandou. Dedup por telefone+clínica+data (robusto a retries/
     cold-start). Retorna (appointment_id, criado). Usado por /submit e /confirmar."""
-    clinic, inicio_sugerido, fim_sugerido = _resolver_clinic(db, data.unidade)
     data_consulta = _parse_data_consulta(data.data_consulta)
+    clinic, inicio_sugerido, fim_sugerido = _resolver_clinic(db, data.unidade, data_consulta)
     if not (clinic and data_consulta):
+        return None, False
+    # A trava de dia/hora existe desde 05/08 para ser o PORTAO UNICO, mas este
+    # caminho (formulario/bot) nunca passava por ela — por isso apareceram
+    # pacientes marcados em dia que a unidade nao atende. Agora passa.
+    try:
+        assert_clinica_atende(db, clinic, data_consulta, inicio_sugerido)
+    except HTTPException as exc:
+        logger.warning(
+            "Agendamento automatico recusado (%s, %s): %s",
+            clinic.name, data_consulta, getattr(exc, "detail", exc),
+        )
         return None, False
     existente = (
         db.query(Appointment)
