@@ -14,7 +14,7 @@ const HTML_CONTENT = `<!DOCTYPE html>
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Pré-Consulta – CTO</title>
+  <title>Formulário Pré-Consulta</title>
   <style>
     :root {
       --azul: #1a4fa0;
@@ -186,36 +186,10 @@ const HTML_CONTENT = `<!DOCTYPE html>
       color: var(--azul);
     }
 
-    .upload-area {
-      border: 2px dashed var(--borda);
-      border-radius: var(--radius);
-      background: white;
-      padding: 24px;
-      text-align: center;
-      cursor: pointer;
-      transition: border-color .2s;
-    }
-    .upload-area:hover { border-color: var(--azul); }
-    .upload-area p { font-size: 14px; color: #999; margin-top: 6px; }
-    .upload-icon { font-size: 32px; }
-    #upload-input { display: none; }
-
-    .miniaturas {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-top: 10px;
-    }
-    .miniatura {
-      background: #e8f0fc;
-      border-radius: 8px;
-      padding: 6px 10px;
-      font-size: 12px;
-      color: var(--azul);
-      display: flex;
-      align-items: center;
-      gap: 5px;
-    }
+    .campo-duplo { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .cep-aviso { font-size: 13px; margin-top: 6px; min-height: 18px; }
+    .cep-aviso.ok  { color: #0f7a4d; }
+    .cep-aviso.err { color: var(--vermelho); }
     .spinner {
       display: none;
       width: 18px; height: 18px;
@@ -311,8 +285,8 @@ const HTML_CONTENT = `<!DOCTYPE html>
 <div id="app" style="display:none">
 
   <header>
-    <h1>CTO – Formulário Pré-Consulta</h1>
-    <p>Dr. Valth Menezes Guimarães · CRM-PB 6326</p>
+    <h1 id="cab-unidade">Formulário Pré-Consulta</h1>
+    <p>Dr. Valth Menezes Guimarães · <span id="cab-crm">CRM-PB 6326</span></p>
   </header>
 
   <div class="progresso">
@@ -323,9 +297,77 @@ const HTML_CONTENT = `<!DOCTYPE html>
 
   <main>
 
-    <!-- Seção 1: Queixa Principal -->
+    <!-- Bloco 1: Identificação -->
     <div class="secao ativa" id="sec1">
-      <div class="secao-titulo">Queixa Principal</div>
+      <div class="secao-titulo">Identificação</div>
+
+      <div class="campo" id="c-nasc">
+        <label>Data de nascimento</label>
+        <input type="date" id="nascimento" />
+        <div class="erro-campo">Informe sua data de nascimento.</div>
+      </div>
+
+      <div class="campo">
+        <label>Sexo</label>
+        <div class="radio-group" id="grupo-sexo">
+          <label><input type="radio" name="sexo" value="F" /> Feminino</label>
+          <label><input type="radio" name="sexo" value="M" /> Masculino</label>
+        </div>
+      </div>
+
+      <div class="campo" id="c-cpf">
+        <label>CPF</label>
+        <input type="text" id="cpf" inputmode="numeric" placeholder="000.000.000-00" />
+        <div class="erro-campo">Informe seu CPF.</div>
+      </div>
+
+      <div class="campo">
+        <label>Profissão <span class="opt">(opcional)</span></label>
+        <input type="text" id="profissao" placeholder="Ex: professora, agricultor…" />
+      </div>
+
+      <div class="campo" id="c-cep">
+        <label>CEP <span class="opt">(o endereço aparece sozinho)</span></label>
+        <input type="text" id="cep" inputmode="numeric" placeholder="00000-000" />
+        <div class="cep-aviso" id="cep-aviso"></div>
+      </div>
+
+      <div class="campo">
+        <label>Rua</label>
+        <input type="text" id="logradouro" placeholder="Preenchido pelo CEP" />
+      </div>
+
+      <div class="campo-duplo">
+        <div class="campo">
+          <label>Número</label>
+          <input type="text" id="numero" placeholder="123" />
+        </div>
+        <div class="campo">
+          <label>Complemento <span class="opt">(opcional)</span></label>
+          <input type="text" id="complemento" placeholder="Apto 202" />
+        </div>
+      </div>
+
+      <div class="campo">
+        <label>Bairro</label>
+        <input type="text" id="bairro" placeholder="Preenchido pelo CEP" />
+      </div>
+
+      <div class="campo-duplo">
+        <div class="campo">
+          <label>Cidade</label>
+          <input type="text" id="cidade" placeholder="Preenchido pelo CEP" />
+        </div>
+        <div class="campo">
+          <label>UF</label>
+          <input type="text" id="uf" maxlength="2" placeholder="PE" />
+        </div>
+      </div>
+    </div>
+
+    <!-- Bloco 2: Queixa -->
+    <div class="secao ativa">
+      <div class="secao-titulo">Queixa</div>
 
       <div class="campo" id="c-regiao">
         <label>Região do corpo afetada</label>
@@ -370,25 +412,11 @@ const HTML_CONTENT = `<!DOCTYPE html>
           <div class="slider-labels"><span>0 – Sem dor</span><span>10 – Dor máxima</span></div>
         </div>
       </div>
+    </div>
 
-      <div class="campo" id="c-nasc">
-        <label>Data de nascimento</label>
-        <input type="date" id="nascimento" />
-        <div class="erro-campo">Informe sua data de nascimento.</div>
-      </div>
-
-      <div class="campo">
-        <label>Sexo</label>
-        <div class="radio-group" id="grupo-sexo">
-          <label><input type="radio" name="sexo" value="F" /> Feminino</label>
-          <label><input type="radio" name="sexo" value="M" /> Masculino</label>
-        </div>
-      </div>
-
-      <div class="campo">
-        <label>Alergias a medicamentos <span class="opt">(especialmente dipirona / anti-inflamatórios)</span></label>
-        <input type="text" id="alergias" placeholder="Ex: Dipirona — ou 'nenhuma conhecida'" />
-      </div>
+    <!-- Bloco 3: Saúde geral -->
+    <div class="secao ativa">
+      <div class="secao-titulo">Saúde geral</div>
 
       <div class="campo">
         <label>Doenças que você tem <span class="opt">(marque as que se aplicam)</span></label>
@@ -408,6 +436,21 @@ const HTML_CONTENT = `<!DOCTYPE html>
       </div>
 
       <div class="campo">
+        <label>Alergias a medicamentos <span class="opt">(especialmente dipirona / anti-inflamatórios)</span></label>
+        <input type="text" id="alergias" placeholder="Ex: Dipirona — ou 'nenhuma conhecida'" />
+      </div>
+
+      <div class="campo">
+        <label>Cirurgias anteriores <span class="opt">(opcional)</span></label>
+        <input type="text" id="cirurgias_anteriores" placeholder="Ex: menisco joelho direito, 2019" />
+      </div>
+    </div>
+
+    <!-- Bloco 4: Pagamento -->
+    <div class="secao ativa">
+      <div class="secao-titulo">Pagamento</div>
+
+      <div class="campo">
         <label>Como vai pagar a consulta?</label>
         <div class="radio-group" id="forma_pagamento">
           <label><input type="radio" name="pagamento" value="particular" /> Particular</label>
@@ -418,17 +461,6 @@ const HTML_CONTENT = `<!DOCTYPE html>
       <div class="campo" id="campo-plano" style="display:none">
         <label>Qual plano de saúde?</label>
         <input type="text" id="plano_saude" placeholder="Ex: Unimed, Bradesco Saúde…" />
-      </div>
-
-      <div class="campo">
-        <label>Tem exames? Envie foto <span class="opt">(opcional — raio-X, ressonância, laudos)</span></label>
-        <div class="upload-area" onclick="document.getElementById('upload-input').click()">
-          <div class="upload-icon">📎</div>
-          <p>Toque para selecionar imagens ou PDF</p>
-          <div class="spinner" id="spinner-upload"></div>
-        </div>
-        <input type="file" id="upload-input" accept=".jpg,.jpeg,.png,.pdf" multiple />
-        <div class="miniaturas" id="miniaturas"></div>
       </div>
     </div>
 
@@ -451,7 +483,29 @@ const EXP         = params.get('exp')    || '';
 const TOKEN       = params.get('token')  || '';
 const UNIDADE     = params.get('unidade')|| '';
 
-const examesUrls = [];
+// A unidade vem no link do agendamento. Nunca mais escrever "CTO" fixo: era
+// isso que fazia o paciente do IP abrir uma pagina com o nome de outra clinica.
+const UNIDADES = [
+  { chaves: ['artro'],                                  nome: 'Clínica Artro',             uf: 'PB' },
+  { chaves: ['cto'],                                    nome: 'Clínica CTO',               uf: 'PB' },
+  { chaves: ['pernambuco', 'instituto pe', 'ip'],       nome: 'Instituto Pernambuco (IP)', uf: 'PE' },
+  { chaves: ['unimagem'],                               nome: 'Clínica Unimagem',          uf: 'PE' },
+  { chaves: ['mario bento', 'mário bento', 'palmares'], nome: 'Clínica Mário Bento',       uf: 'PE' },
+];
+const CRM = { PB: 'CRM-PB 6326', PE: 'CREMEPE 16.551' };
+
+function semAcento(t) {
+  return (t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+function aplicarCabecalho() {
+  const texto = ' ' + semAcento(UNIDADE) + ' ';
+  const u = UNIDADES.find(x => x.chaves.some(c => texto.includes(semAcento(c))));
+  if (!u) return;
+  document.getElementById('cab-unidade').textContent = u.nome + ' – Formulário Pré-Consulta';
+  document.getElementById('cab-crm').textContent = CRM[u.uf];
+  document.title = 'Pré-Consulta – ' + u.nome;
+}
 
 function init() {
   if (!TOKEN || !EXP || !AID) {
@@ -480,8 +534,9 @@ function init() {
     }
   }
 
+  aplicarCabecalho();
   initEva();
-  initUpload();
+  initCep();
   initPagamento();
 }
 
@@ -505,53 +560,42 @@ function initEva() {
   atualizar();
 }
 
-function initUpload() {
-  const inp = document.getElementById('upload-input');
-  inp.addEventListener('change', async () => {
-    const files = Array.from(inp.files);
-    if (files.length + examesUrls.length > 5) {
-      alert('Máximo de 5 arquivos.');
-      inp.value = '';
-      return;
-    }
-    for (const f of files) {
-      await uploadArquivo(f);
-    }
-    inp.value = '';
+function initCep() {
+  const inp = document.getElementById('cep');
+  const aviso = document.getElementById('cep-aviso');
+  inp.addEventListener('input', () => {
+    const d = inp.value.replace(/\D/g, '').slice(0, 8);
+    inp.value = d.length > 5 ? d.slice(0, 5) + '-' + d.slice(5) : d;
+    if (d.length === 8) buscarCep(d, aviso);
+    else aviso.textContent = '';
   });
 }
 
-async function uploadArquivo(arquivo) {
-  const spinner = document.getElementById('spinner-upload');
-  spinner.style.display = 'block';
+async function buscarCep(cep, aviso) {
+  aviso.className = 'cep-aviso';
+  aviso.textContent = 'Buscando endereço…';
   try {
-    const form = new FormData();
-    form.append('arquivo', arquivo);
-    const res = await fetch(
-      '/pre-consulta/upload-exame?token=' + TOKEN + '&exp=' + EXP + '&agendamento_id=' + AID,
-      { method: 'POST', body: form }
-    );
-    if (!res.ok) {
-      const { erro } = await res.json();
-      if (erro === 'token_expirado') { mostrarExpirado(); return; }
-      alert('Erro ao enviar ' + arquivo.name);
+    const res = await fetch('https://viacep.com.br/ws/' + cep + '/json/');
+    const d = await res.json();
+    if (d.erro) {
+      aviso.className = 'cep-aviso err';
+      aviso.textContent = 'CEP não encontrado — pode preencher à mão.';
       return;
     }
-    const { url, nome } = await res.json();
-    examesUrls.push(url);
-    adicionarMiniatura(nome);
+    // Cidades pequenas tem CEP unico: vem so a cidade, sem rua/bairro. Nao
+    // apagamos o que o paciente ja digitou nesse caso.
+    if (d.logradouro) document.getElementById('logradouro').value = d.logradouro;
+    if (d.bairro)     document.getElementById('bairro').value     = d.bairro;
+    document.getElementById('cidade').value = d.localidade || '';
+    document.getElementById('uf').value     = d.uf || '';
+    aviso.className = 'cep-aviso ok';
+    aviso.textContent = d.logradouro ? '✓ endereço encontrado'
+                                     : '✓ cidade encontrada — complete a rua e o bairro';
+    document.getElementById('numero').focus();
   } catch {
-    alert('Falha de rede ao enviar ' + arquivo.name);
-  } finally {
-    spinner.style.display = 'none';
+    aviso.className = 'cep-aviso err';
+    aviso.textContent = 'Não consegui buscar agora — pode preencher à mão.';
   }
-}
-
-function adicionarMiniatura(nome) {
-  const div = document.createElement('div');
-  div.className = 'miniatura';
-  div.textContent = '✓ ' + nome;
-  document.getElementById('miniaturas').appendChild(div);
 }
 
 function initPagamento() {
@@ -573,10 +617,11 @@ function validarCampo(idCampo, idInput) {
 }
 
 async function enviar() {
-  // Folha única: só 3 obrigatórios (região, descrição, nascimento).
-  const ok = validarCampo('c-regiao', 'regiao_corpo') &
-             validarCampo('c-desc', 'descricao') &
-             validarCampo('c-nasc', 'nascimento');
+  // Obrigatorios (Valth 19/08: CPF e nascimento SEMPRE, de todo paciente).
+  const ok = validarCampo('c-nasc', 'nascimento') &
+             validarCampo('c-cpf', 'cpf') &
+             validarCampo('c-regiao', 'regiao_corpo') &
+             validarCampo('c-desc', 'descricao');
   if (!ok) {
     const inv = document.querySelector('.campo.invalido');
     if (inv) inv.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -600,17 +645,22 @@ async function enviar() {
     data_consulta:  DATA,
     nascimento:     document.getElementById('nascimento').value,
     sexo:           (document.querySelector('input[name="sexo"]:checked') || {}).value || null,
-    cpf:            '',
-    cidade:         '',
+    cpf:            document.getElementById('cpf').value,
+    cidade:         document.getElementById('cidade').value,
     unidade:        UNIDADE,
-    bairro:         '',
-    profissao:      '',
+    bairro:         document.getElementById('bairro').value,
+    profissao:      document.getElementById('profissao').value,
     estado_civil:   '',
     filhos:         0,
+    cep:            document.getElementById('cep').value,
+    logradouro:     document.getElementById('logradouro').value,
+    numero:         document.getElementById('numero').value,
+    complemento:    document.getElementById('complemento').value,
+    uf:             document.getElementById('uf').value,
     doencas_cronicas: doencas,
     medicacoes:         document.getElementById('medicacoes').value,
     alergias:           document.getElementById('alergias').value,
-    cirurgias_anteriores: '',
+    cirurgias_anteriores: document.getElementById('cirurgias_anteriores').value,
     tabagismo:      '',
     alcool:         '',
     regiao_corpo:   document.getElementById('regiao_corpo').value,
@@ -622,7 +672,7 @@ async function enviar() {
     melhora:        '',
     tratamento_anterior: '',
     uso_analgesicos:     '',
-    exames_urls:    examesUrls,
+    exames_urls:    [],
     forma_pagamento: pagamento ? pagamento.value : 'particular',
     plano_saude:    document.getElementById('plano_saude').value || null,
   };

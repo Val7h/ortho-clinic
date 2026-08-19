@@ -74,6 +74,12 @@ class PreConsultaPayload(BaseModel):
     cpf: Optional[str] = None
     cidade: Optional[str] = None
     bairro: Optional[str] = None
+    # Endereco de volta ao formulario (Valth 19/08), preenchido pelo CEP.
+    cep: Optional[str] = None
+    logradouro: Optional[str] = None
+    numero: Optional[str] = None
+    complemento: Optional[str] = None
+    uf: Optional[str] = None
     profissao: Optional[str] = None
     estado_civil: Optional[str] = None
     filhos: Optional[int] = None
@@ -195,8 +201,27 @@ def _atualizar_paciente(patient: Patient, data: PreConsultaPayload) -> None:
             pass
     if data.cidade:
         patient.address_city = data.cidade
+    if data.uf:
+        patient.address_state = (data.uf or "").strip().upper()[:2]
+    if data.cep:
+        patient.address_zip = re.sub(r"\D", "", data.cep)[:8]
     if data.bairro:
-        patient.address_street = data.bairro
+        # ANTES ia para address_street, a linha que os documentos imprimem —
+        # o endereco do paciente saia como "Centro" e mais nada. Cada parte
+        # agora vai para a sua coluna (mesmo padrao do cadastro normal).
+        patient.address_neighborhood = data.bairro
+    if data.numero:
+        patient.address_number = data.numero
+    if data.complemento:
+        patient.address_complement = data.complemento
+    if data.logradouro:
+        # address_street guarda a LINHA COMPLETA: e o que sai impresso.
+        linha = data.logradouro.strip()
+        if data.numero:
+            linha += f", {data.numero.strip()}"
+        if data.complemento:
+            linha += f" — {data.complemento.strip()}"
+        patient.address_street = linha
     if data.profissao:
         patient.occupation = data.profissao
     if data.estado_civil:
