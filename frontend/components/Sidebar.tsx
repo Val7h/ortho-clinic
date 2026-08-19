@@ -81,6 +81,9 @@ export function Sidebar() {
     // --- Fluxo clínico diário ---
     { label: 'Agenda',        href: '/agenda',     icon: '📅', group: 'clinic', roles: ['admin', 'superadmin', 'doctor', 'secretary'] },
     { label: 'Pacientes',     href: '/pacientes',  icon: '👥', group: 'clinic', roles: ['admin', 'superadmin', 'doctor', 'secretary'] },
+    // Duplicados (19/08): a mesma pessoa cadastrada duas vezes esconde metade
+    // do prontuario. So o medico unifica — mexe em historico clinico.
+    { label: 'Duplicados',    href: '/pacientes/duplicados', icon: '🧩', group: 'clinic', roles: ['admin', 'superadmin', 'doctor'] },
     { label: 'Sala de Espera',href: '/painel',     icon: null,  group: 'clinic', roles: ['admin', 'superadmin', 'doctor', 'secretary'] },
     // Retornos de procedimento (11/08): quem liga é a secretária, mas ele
     // também acompanha. Visco/zoledrônico têm data certa para repetir.

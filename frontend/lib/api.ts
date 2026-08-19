@@ -161,6 +161,11 @@ export const patientsApi = {
   update: (id: number, data: any) => api.put(`/patients/${id}`, data).then((r) => r.data),
   delete: (id: number) => api.delete(`/patients/${id}`),
   timeline: (id: number) => api.get(`/patients/${id}/timeline`).then((r) => r.data),
+  // Duplicados (19/08): o Alexandre tinha a anamnese num cadastro e o
+  // agendamento do dia noutro — o médico abria a ficha vazia.
+  duplicados: () => api.get("/patients/duplicados/possiveis").then((r) => r.data),
+  unificar: (ficaId: number, duplicadoId: number) =>
+    api.post(`/patients/${ficaId}/unificar`, { duplicado_id: duplicadoId }).then((r) => r.data),
   uploadPhoto: (id: number, file: File) => {
     const fd = new FormData();
     fd.append("file", file);
