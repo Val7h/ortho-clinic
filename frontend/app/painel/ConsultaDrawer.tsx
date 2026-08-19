@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { api, patientsApi, consultationsApi, prescriptionsApi, prescriptionTemplatesApi, examsApi, evolutionApi, clinicApi, chatApi, reportsApi, leafletsApi, waitingRoomApi, remindersApi, msgErro } from "@/lib/api";
-import { formatDate } from "@/lib/utils";
+import { formatDate, calcAge } from "@/lib/utils";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -376,14 +376,6 @@ function aniversarioProximo(birthDate: string | null | undefined): string | null
   } catch {
     return null;
   }
-}
-
-function calcAge(birthDate: string | null): string {
-  if (!birthDate) return "";
-  const birth = new Date(birthDate);
-  const now = new Date();
-  const age = now.getFullYear() - birth.getFullYear();
-  return `${age} anos`;
 }
 
 function parseList(val: any): string[] {
