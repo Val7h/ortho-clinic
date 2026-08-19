@@ -692,6 +692,19 @@ def migrate_db():
         return
 
     with engine.begin() as conn:
+        # CPF: de unico-no-sistema para unico-POR-CONTA (19/08). Enquanto so
+        # existe um medico as duas regras se confundem; com dois, o mesmo
+        # paciente atendido pelos dois nao cabia no banco. Cada comando roda
+        # protegido logo abaixo — se ja tiver sido aplicado, e ignorado.
+        if "patients" in existing_tables and engine.dialect.name == "postgresql":
+            migrations.append("ALTER TABLE patients DROP CONSTRAINT IF EXISTS patients_cpf_key")
+            migrations.append("DROP INDEX IF EXISTS ix_patients_cpf")
+            migrations.append("CREATE INDEX IF NOT EXISTS ix_patients_cpf ON patients (cpf)")
+            migrations.append(
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_patients_org_cpf "
+                "ON patients (organization_id, cpf)"
+            )
+
         for sql in migrations:
             try:
                 conn.execute(text(sql))

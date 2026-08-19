@@ -1,4 +1,7 @@
-from sqlalchemy import Column, Integer, String, Date, DateTime, Text, Boolean, ForeignKey, JSON, Numeric
+from sqlalchemy import (
+    Column, Integer, String, Date, DateTime, Text, Boolean, ForeignKey, JSON,
+    Numeric, UniqueConstraint,
+)
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from database import Base
@@ -6,12 +9,18 @@ from database import Base
 
 class Patient(Base):
     __tablename__ = "patients"
+    # O CPF identifica o paciente DENTRO da conta do medico, nao no sistema
+    # inteiro: o mesmo paciente pode ser atendido por dois medicos diferentes,
+    # e cada um tem o seu proprio prontuario dele.
+    __table_args__ = (
+        UniqueConstraint("organization_id", "cpf", name="uq_patients_org_cpf"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, default=1, index=True)
     name = Column(String(200), nullable=False, index=True)
     birthdate = Column(Date, nullable=True)
-    cpf = Column(String(14), unique=True, nullable=True, index=True)
+    cpf = Column(String(14), nullable=True, index=True)
     rg = Column(String(20), nullable=True)
     phone = Column(String(20), nullable=True)
     phone2 = Column(String(20), nullable=True)

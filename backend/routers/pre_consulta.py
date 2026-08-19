@@ -146,23 +146,42 @@ def _validar_token(agendamento_id: str, exp: str, token: str) -> None:
         raise HTTPException(401, "token_invalido")
 
 
+def _org_da_unidade(db: Session, unidade: Optional[str]) -> Optional[int]:
+    """A qual medico/conta pertence a unidade do link? Vem da CLINICA.
+
+    Antes isto era PRE_CONSULTA_ORG_ID, um numero fixo. Funcionava porque so
+    existe um medico; no dia em que entrar o segundo, todo paciente cairia na
+    conta errada. A unidade ja identifica a clinica, e a clinica pertence a
+    uma organizacao — a resposta ja estava no banco.
+    """
+    clinic, _, _ = _resolver_clinic(db, unidade)
+    return clinic.organization_id if clinic else None
+
+
 def _buscar_ou_criar_paciente(db: Session, data: PreConsultaPayload) -> tuple[Patient, bool]:
-    """Retorna (paciente, criado). Busca por CPF, depois telefone."""
+    """Retorna (paciente, criado). Busca por CPF, depois telefone — SEMPRE
+    dentro da organizacao dona da unidade: dois medicos podem atender o mesmo
+    paciente, e o cadastro de um nunca pode ser lido nem sobrescrito pelo
+    formulario do outro."""
     patient = None
+    org_id = _org_da_unidade(db, data.unidade)
+
+    def no_escopo(q):
+        return q.filter(Patient.organization_id == org_id) if org_id else q
 
     if data.cpf:
         cpf_limpo = "".join(c for c in data.cpf if c.isdigit())
-        patient = db.query(Patient).filter(Patient.cpf == data.cpf).first()
+        patient = no_escopo(db.query(Patient).filter(Patient.cpf == data.cpf)).first()
         if not patient and cpf_limpo:
-            patient = db.query(Patient).filter(
+            patient = no_escopo(db.query(Patient).filter(
                 Patient.cpf.like(f"%{cpf_limpo[:11]}%")
-            ).first()
+            )).first()
 
     if not patient and data.telefone:
         tel = data.telefone.replace("+", "").replace(" ", "")
-        patient = db.query(Patient).filter(
+        patient = no_escopo(db.query(Patient).filter(
             Patient.phone.like(f"%{tel[-9:]}%")
-        ).first()
+        )).first()
 
     if patient:
         # atualiza campos que vieram do formulário
@@ -171,10 +190,16 @@ def _buscar_ou_criar_paciente(db: Session, data: PreConsultaPayload) -> tuple[Pa
         db.refresh(patient)
         return patient, False
 
-    # cria novo — resolve uma organização válida (evita FK violation se
-    # PRE_CONSULTA_ORG_ID não existir no banco; cai para a primeira org).
+    # cria novo na conta dona da unidade. Se a unidade nao veio ou nao bate com
+    # clinica nenhuma, cai para PRE_CONSULTA_ORG_ID e, por ultimo, para a
+    # primeira organizacao (evita violar a chave estrangeira).
     from models.organization import Organization
-    org_id = PRE_CONSULTA_ORG_ID
+    if org_id is None:
+        org_id = PRE_CONSULTA_ORG_ID
+        logger.warning(
+            "Pre-consulta sem unidade reconhecida (%r) — paciente %r caiu na "
+            "organizacao padrao %s", data.unidade, data.nome, org_id,
+        )
     if not db.query(Organization.id).filter(Organization.id == org_id).first():
         first_org = db.query(Organization).order_by(Organization.id).first()
         if first_org:
