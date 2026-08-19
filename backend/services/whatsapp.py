@@ -46,6 +46,58 @@ def format_phone(phone: str) -> str:
     return digits
 
 
+def connection_state(instance: str | None = None) -> dict:
+    """A sessao do WhatsApp esta conectada AGORA?
+
+    Modo de falha conhecido: o celular desconecta a sessao (device_removed) e a
+    Evolution continua aceitando mensagens que nunca saem. Sem esta checagem,
+    o sistema jura que enviou.
+    Retorna {"conectado": bool, "estado": str, "erro": str|None}.
+    """
+    if is_demo():
+        return {"conectado": False, "estado": "demo", "erro": "Evolution não configurada"}
+    inst = instance or EVOLUTION_DEFAULT_INSTANCE
+    try:
+        r = httpx.get(
+            f"{EVOLUTION_URL}/instance/connectionState/{inst}",
+            headers={"apikey": EVOLUTION_KEY}, timeout=8,
+        )
+        r.raise_for_status()
+        d = r.json() or {}
+        estado = ((d.get("instance") or {}).get("state") or d.get("state") or "desconhecido")
+        return {"conectado": estado == "open", "estado": estado, "erro": None}
+    except Exception as e:
+        logger.error("[WA] falha ao consultar conexão: %s", type(e).__name__)
+        return {"conectado": False, "estado": "indisponível", "erro": type(e).__name__}
+
+
+def numero_tem_whatsapp(phone: str, instance: str | None = None) -> bool | None:
+    """O numero tem conta de WhatsApp? True/False, ou None se nao deu para saber.
+
+    None NAO bloqueia o envio: se a checagem falhar, seguimos e tentamos — e
+    melhor tentar do que travar por causa do verificador.
+    """
+    if is_demo():
+        return None
+    inst = instance or EVOLUTION_DEFAULT_INSTANCE
+    numero = format_phone(phone)
+    try:
+        r = httpx.post(
+            f"{EVOLUTION_URL}/chat/whatsappNumbers/{inst}",
+            headers={"apikey": EVOLUTION_KEY, "Content-Type": "application/json"},
+            json={"numbers": [numero]}, timeout=8,
+        )
+        r.raise_for_status()
+        dados = r.json()
+        if isinstance(dados, list) and dados:
+            return bool(dados[0].get("exists"))
+        return None
+    except Exception as e:
+        logger.warning("[WA] não consegui verificar o número (%s) — seguindo mesmo assim",
+                       type(e).__name__)
+        return None
+
+
 def send_whatsapp(phone: str, message: str, instance: str | None = None) -> dict:
     """
     Envia mensagem via Evolution API.
@@ -58,6 +110,20 @@ def send_whatsapp(phone: str, message: str, instance: str | None = None) -> dict
         return {"sent": False, "demo": True}
 
     instance = instance or EVOLUTION_DEFAULT_INSTANCE
+
+    # Duas perguntas ANTES de enviar — cada uma explica um "nao chegou" que
+    # antes virava um "enviado" mentiroso.
+    conexao = connection_state(instance)
+    if not conexao["conectado"]:
+        logger.error("[WA] sessão não conectada (%s) — nada foi enviado", conexao["estado"])
+        return {"sent": False, "demo": False,
+                "error": f"WhatsApp desconectado ({conexao['estado']}) — leia o QR code de novo"}
+
+    if numero_tem_whatsapp(phone, instance) is False:
+        logger.warning("[WA] número sem WhatsApp: %s", _mask_phone(phone))
+        return {"sent": False, "demo": False,
+                "error": "Este número não tem WhatsApp — confira o cadastro do paciente"}
+
     url = f"{EVOLUTION_URL}/message/sendText/{instance}"
     headers = {"apikey": EVOLUTION_KEY, "Content-Type": "application/json"}
     body = {

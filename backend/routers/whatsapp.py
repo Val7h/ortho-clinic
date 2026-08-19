@@ -103,6 +103,32 @@ def get_config():
     }
 
 
+@router.get("/conexao")
+def get_conexao():
+    """A sessao do WhatsApp esta conectada AGORA, e o numero X tem WhatsApp?
+
+    Existe porque em 19/08 uma orientacao "enviada" nao chegou na paciente: o
+    registro dizia "sent" so porque a Evolution aceitou o pedido. Isto responde
+    a pergunta que faltava.
+    """
+    from services.whatsapp import connection_state
+    return connection_state()
+
+
+@router.get("/verificar-numero")
+def verificar_numero(telefone: str):
+    from services.whatsapp import numero_tem_whatsapp, format_phone
+    tem = numero_tem_whatsapp(telefone)
+    return {
+        "telefone_enviado": telefone,
+        "numero_usado": format_phone(telefone),
+        "tem_whatsapp": tem,
+        "conclusao": ("tem WhatsApp" if tem is True
+                      else "NAO tem WhatsApp" if tem is False
+                      else "nao foi possivel verificar"),
+    }
+
+
 @router.get("/dashboard")
 def get_dashboard(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     today = date.today()

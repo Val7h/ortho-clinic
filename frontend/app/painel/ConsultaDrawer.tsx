@@ -1610,6 +1610,7 @@ function TabProntuario({ patientId, patient }: { patientId: number; patient?: an
   const [evolutions, setEvolutions] = useState<Evolution[]>([]);
   const [loading, setLoading] = useState(true);
   const [newText, setNewText] = useState("");
+  const [rascunhoSalvo, setRascunhoSalvo] = useState(false);
   const [consultType, setConsultType] = useState("retorno");
   const [saving, setSaving] = useState(false);
   const [recentlySavedId, setRecentlySavedId] = useState<number | null>(null);
@@ -1630,6 +1631,31 @@ function TabProntuario({ patientId, patient }: { patientId: number; patient?: an
       todayBRFull: formatDateBRFull(d.toISOString().split("T")[0]),
     };
   }, []);
+
+  // Rascunho da anamnese (19/08). Sem isto, o texto so existia na memoria da
+  // tela: qualquer deslogue, recarga ou queda levava tudo. A receita nao se
+  // perdia porque ja tinha rascunho — a anamnese nao tinha.
+  const anamneseDraftKey = `orthoclinic_anamnese_draft_${userScope()}_${patientId}`;
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const salvo = localStorage.getItem(anamneseDraftKey);
+    if (salvo && salvo.trim()) {
+      setNewText(salvo);
+      toast.success("Rascunho da anamnese restaurado", { icon: "📝" });
+    }
+  }, [anamneseDraftKey]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!newText.trim()) return;
+    const t = setTimeout(() => {
+      localStorage.setItem(anamneseDraftKey, newText);
+      setRascunhoSalvo(true);
+      setTimeout(() => setRascunhoSalvo(false), 1500);
+    }, 2000);
+    return () => clearTimeout(t);
+  }, [newText, anamneseDraftKey]);
 
   useEffect(() => {
     setLoading(true);
@@ -1674,6 +1700,7 @@ function TabProntuario({ patientId, patient }: { patientId: number; patient?: an
       });
       setEvolutions((prev) => [created as Evolution, ...prev]);
       setNewText("");
+      try { localStorage.removeItem(anamneseDraftKey); } catch {}
       setRecentlySavedId((created as Evolution).id);
       setTimeout(() => setRecentlySavedId(null), 2500);
       toast.success("Evolução registrada!");
@@ -1972,7 +1999,9 @@ function TabProntuario({ patientId, patient }: { patientId: number; patient?: an
 
         <div className="flex items-center justify-between mt-2 gap-3">
           <div className="flex items-center gap-2 min-w-0 flex-1">
-            <span className="text-[11px] text-slate-400 truncate">Ctrl+Enter para salvar · {newText.length} caracteres</span>
+            <span className="text-[11px] text-slate-400 truncate">
+              {rascunhoSalvo ? "✓ rascunho salvo" : `Ctrl+Enter para salvar · ${newText.length} caracteres`}
+            </span>
             <BotaoLembrete patientId={patientId} />
           </div>
           <button
