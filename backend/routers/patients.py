@@ -79,7 +79,42 @@ def list_patients(
     return result
 
 
-@router.post("", response_model=PatientOut, status_code=201)
+# O que a secretaria NAO pode deixar em branco. Ordem = ordem da tela.
+CADASTRO_OBRIGATORIO = [
+    ("name", "Nome completo"),
+    ("cpf", "CPF"),
+    ("phone", "Telefone / WhatsApp"),
+    ("address_street", "Endereço"),
+    ("address_city", "Cidade"),
+    ("address_state", "Estado (UF)"),
+    ("insurance", "Particular ou convênio"),
+]
+
+
+def _exigir_cadastro_completo(data, current_user: User) -> None:
+    """Secretaria so cadastra paciente com o essencial preenchido.
+
+    Devolve TODOS os campos que faltam de uma vez — devolver um por vez faz a
+    secretaria descobrir o proximo so depois de corrigir o anterior.
+    """
+    if current_user.role != "secretary":
+        return
+
+    faltando = [
+        rotulo for campo, rotulo in CADASTRO_OBRIGATORIO
+        if not str(getattr(data, campo, "") or "").strip()
+    ]
+    if faltando:
+        raise HTTPException(
+            422,
+            "Cadastro incompleto — preencha: " + ", ".join(faltando) +
+            ". Se o paciente não tiver o dado agora, peça na chegada.",
+        )
+
+    if not _cpf_valido(str(getattr(data, "cpf", "") or "")):
+        raise HTTPException(422, "CPF inválido — confira os números digitados.")
+
+
 def _arrumar_telefones(data) -> None:
     """Conserta o que da para consertar e recusa o que nao e telefone.
 
@@ -100,12 +135,14 @@ def _arrumar_telefones(data) -> None:
         setattr(data, campo, normalizar_telefone(bruto))
 
 
+@router.post("", response_model=PatientOut, status_code=201)
 def create_patient(
     data: PatientCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     _arrumar_telefones(data)
+    _exigir_cadastro_completo(data, current_user)
     if data.cpf:
         existing = db.query(Patient).filter(
             Patient.cpf == data.cpf,
