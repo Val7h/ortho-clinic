@@ -425,6 +425,8 @@ def get_timeline(
     current_user: User = Depends(get_current_user),
 ):
     from models.documents import Prescription, ExamRequest, PhysioRequest, MedicalReport
+    from models.clinical_evolution import ClinicalEvolution
+    from models.patient_rx import PatientRx
 
     q = db.query(Patient).filter(Patient.id == patient_id)
     q = _org_filter(q, current_user)
@@ -440,6 +442,56 @@ def get_timeline(
     is_secretary = current_user.role == "secretary"
 
     timeline = []
+
+    # Evolucoes clinicas: o historico que o medico escreve em cada consulta.
+    # Faltava aqui — era a causa principal da aba Historico parecer vazia.
+    for ev in (
+        db.query(ClinicalEvolution)
+        .filter(ClinicalEvolution.patient_id == patient_id)
+        .all()
+    ):
+        texto = (ev.content or "").strip()
+        # O tipo vem marcado no inicio do texto como "[RETORNO]", "[1ª CONSULTA]"...
+        rotulo = "Atendimento"
+        if texto.startswith("["):
+            fecha = texto.find("]")
+            if 0 < fecha <= 30:
+                rotulo = texto[1:fecha].capitalize()
+        evento = {
+            "id": ev.id,
+            "type": "evolucao",
+            "date": ev.entry_date.isoformat(),
+            "title": rotulo,
+        }
+        if not is_secretary:
+            corpo = texto[texto.find("]") + 1:].strip() if texto.startswith("[") else texto
+            evento["summary"] = corpo[:180]
+        timeline.append(evento)
+
+    # Receitas da tela de atendimento (tabela patient_prescriptions). A tabela
+    # antiga "prescriptions" continua sendo lida logo abaixo, para nao perder o
+    # que foi emitido antes.
+    for rx in (
+        db.query(PatientRx)
+        .filter(PatientRx.patient_id == patient_id)
+        .all()
+    ):
+        titulos = {
+            "simples": "Receita simples",
+            "controle_especial": "Receita de controle especial",
+            "especial_azul": "Receita de controle especial",
+            "antimicrobiano": "Receita de antimicrobiano",
+        }
+        evento = {
+            "id": rx.id,
+            "type": "receita",
+            "date": rx.date.isoformat(),
+            "title": titulos.get(rx.prescription_type, "Receita médica"),
+        }
+        if not is_secretary:
+            nomes = [m.get("name", "") for m in (rx.medications or []) if m.get("name")]
+            evento["summary"] = ", ".join(nomes[:3])
+        timeline.append(evento)
 
     for c in patient.consultations:
         event = {
