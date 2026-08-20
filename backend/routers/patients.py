@@ -8,6 +8,10 @@ import httpx
 from services.storage import upload_file
 from database import get_db
 from models.patient import Patient
+from services.telefone_br import (
+    normalizar as normalizar_telefone,
+    validar as validar_telefone,
+)
 from models.consultation import Consultation
 from models.organization import User
 from schemas.patient import PatientCreate, PatientUpdate, PatientOut, PatientSummary
@@ -76,11 +80,32 @@ def list_patients(
 
 
 @router.post("", response_model=PatientOut, status_code=201)
+def _arrumar_telefones(data) -> None:
+    """Conserta o que da para consertar e recusa o que nao e telefone.
+
+    Antes o campo aceitava qualquer coisa: a Maria do Socorro ficou com um
+    numero de carteirinha no lugar do telefone (20/08) e ninguem soube, ate a
+    mensagem nao chegar. Zero antigo antes do DDD (083...) e +55 sao arrumados
+    em silencio; o que nao e telefone e recusado com o motivo em portugues.
+    """
+    for campo in ("phone", "phone2", "emergency_phone"):
+        bruto = getattr(data, campo, None)
+        if bruto is None or not str(bruto).strip():
+            continue
+        erro = validar_telefone(bruto)
+        if erro:
+            rotulo = {"phone": "Telefone", "phone2": "Telefone 2",
+                      "emergency_phone": "Telefone de emergência"}[campo]
+            raise HTTPException(422, f"{rotulo}: {erro}")
+        setattr(data, campo, normalizar_telefone(bruto))
+
+
 def create_patient(
     data: PatientCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    _arrumar_telefones(data)
     if data.cpf:
         existing = db.query(Patient).filter(
             Patient.cpf == data.cpf,
@@ -312,6 +337,7 @@ def update_patient(
     patient = q.first()
     if not patient:
         raise HTTPException(404, "Paciente não encontrado")
+    _arrumar_telefones(data)
     for key, value in data.model_dump(exclude_unset=True).items():
         setattr(patient, key, value)
     db.commit()

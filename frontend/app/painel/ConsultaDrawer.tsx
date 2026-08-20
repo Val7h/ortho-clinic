@@ -10,7 +10,7 @@ import {
   Pencil, Download, MessageSquare,
 } from "lucide-react";
 import toast from "react-hot-toast";
-import { api, patientsApi, consultationsApi, prescriptionsApi, prescriptionTemplatesApi, examsApi, evolutionApi, clinicApi, chatApi, reportsApi, leafletsApi, waitingRoomApi, remindersApi, msgErro } from "@/lib/api";
+import { anamnesisApi, api, patientsApi, consultationsApi, prescriptionsApi, prescriptionTemplatesApi, examsApi, evolutionApi, clinicApi, chatApi, reportsApi, leafletsApi, waitingRoomApi, remindersApi, msgErro } from "@/lib/api";
 import { formatDate, calcAge } from "@/lib/utils";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -1606,6 +1606,113 @@ function BotaoLembrete({ patientId }: { patientId: number }) {
   );
 }
 
+// Rotulos em portugues para o que o paciente respondeu no formulario.
+const ROTULOS_FORM: Array<[string, string]> = [
+  ["chief_complaint", "Queixa principal"],
+  ["pain_location", "Região"],
+  ["symptom_duration", "Há quanto tempo"],
+  ["pain_scale", "Dor (0–10)"],
+  ["aggravating_factors", "Piora com"],
+  ["relieving_factors", "Melhora com"],
+  ["previous_treatments", "Tratamento anterior"],
+  ["current_medications", "Medicações em uso"],
+  ["allergies", "Alergias"],
+  ["surgeries_history", "Cirurgias anteriores"],
+  ["chronic_conditions", "Doenças crônicas"],
+  ["additional_notes", "Outras informações"],
+];
+
+const REGIOES_FORM: Record<string, string> = {
+  joelho_dir: "Joelho direito", joelho_esq: "Joelho esquerdo", quadril: "Quadril",
+  ombro: "Ombro", tornozelo: "Tornozelo", coluna: "Coluna",
+  mao_punho: "Mão / punho", outro: "Outro",
+};
+const TEMPO_FORM: Record<string, string> = {
+  menos_1sem: "Menos de 1 semana", "1_4sem": "1 a 4 semanas",
+  "1_6meses": "1 a 6 meses", mais_6meses: "Mais de 6 meses", mais_1ano: "Mais de 1 ano",
+};
+
+// Formulario de pre-consulta respondido pelo paciente. Fica recolhido; um
+// clique abre, outro fecha.
+function FormularioRespondido({ patientId }: { patientId: number }) {
+  const [aberto, setAberto] = useState(false);
+  const [dados, setDados] = useState<any[] | null>(null);
+  const [carregando, setCarregando] = useState(false);
+
+  useEffect(() => { setAberto(false); setDados(null); }, [patientId]);
+
+  const abrir = async () => {
+    if (aberto) { setAberto(false); return; }
+    setAberto(true);
+    if (dados) return;
+    setCarregando(true);
+    try {
+      setDados(await anamnesisApi.list(patientId));
+    } catch (e: any) {
+      toast.error(msgErro(e, "Não consegui carregar o formulário"));
+      setAberto(false);
+    } finally {
+      setCarregando(false);
+    }
+  };
+
+  const respondido = (dados || []).filter((a: any) => a?.responses && Object.keys(a.responses).length);
+
+  return (
+    <div className="px-5 pb-2 flex-shrink-0">
+      <button
+        type="button"
+        onClick={abrir}
+        className="w-full flex items-center justify-between gap-2 rounded-lg border border-teal-300 dark:border-teal-800 bg-teal-50 dark:bg-teal-900/20 px-3 py-2 hover:bg-teal-100 dark:hover:bg-teal-900/40 transition-colors"
+      >
+        <span className="flex items-center gap-2 text-[13px] font-semibold text-teal-800 dark:text-teal-300">
+          <ClipboardCheck className="w-4 h-4" />
+          Formulário respondido pelo paciente
+        </span>
+        {aberto ? <ChevronUp className="w-4 h-4 text-teal-700 dark:text-teal-400" />
+                : <ChevronDown className="w-4 h-4 text-teal-700 dark:text-teal-400" />}
+      </button>
+
+      {aberto && (
+        <div className="mt-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
+          {carregando && <p className="text-xs text-slate-500">Carregando…</p>}
+
+          {!carregando && respondido.length === 0 && (
+            <p className="text-xs text-slate-500">
+              Este paciente não respondeu o formulário de pré-consulta.
+            </p>
+          )}
+
+          {respondido.map((a: any) => (
+            <div key={a.id} className="space-y-1.5">
+              <p className="text-[11px] text-slate-400">
+                Respondido em {a.filled_at ? new Date(a.filled_at).toLocaleString("pt-BR") : "—"}
+              </p>
+              {ROTULOS_FORM.map(([campo, rotulo]) => {
+                let v = a.responses?.[campo];
+                if (v === null || v === undefined || v === "") return null;
+                if (campo === "pain_location") v = REGIOES_FORM[v] || v;
+                if (campo === "symptom_duration") v = TEMPO_FORM[v] || v;
+                const alerta = campo === "allergies";
+                return (
+                  <div key={campo} className="flex gap-2 text-[13px]">
+                    <span className="text-slate-500 shrink-0 w-40">{rotulo}</span>
+                    <span className={alerta
+                      ? "font-semibold text-red-600 dark:text-red-400"
+                      : "text-slate-800 dark:text-slate-100"}>
+                      {String(v)}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TabProntuario({ patientId, patient }: { patientId: number; patient?: any }) {
   const [evolutions, setEvolutions] = useState<Evolution[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1799,6 +1906,8 @@ function TabProntuario({ patientId, patient }: { patientId: number; patient?: an
       <div className="px-5 flex-shrink-0">
         <DiagnosticosCids patientId={patientId} patient={patient} />
       </div>
+
+      <FormularioRespondido patientId={patientId} />
 
       {/* ── Adendo modal ── */}
       {adendoId !== null && (() => {
