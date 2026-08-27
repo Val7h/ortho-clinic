@@ -40,7 +40,15 @@ export default function NewPatientPage() {
       address_number: e.numero,
       address_complement: e.complemento,
       address_neighborhood: e.bairro,
-      address_street: montarEndereco(e.logradouro, e.numero, e.complemento, e.bairro),
+      // BUG (27/08, relatado pela Sandra): ao digitar o BAIRRO, o nome da rua
+      // sumia do campo Endereço. A linha era remontada a partir do logradouro
+      // que veio do CEP — e quando a secretária digita a rua à mão, esse
+      // logradouro está vazio: a linha inteira virava só o bairro.
+      // Agora só remontamos quando o CEP realmente trouxe a rua. Sem rua do
+      // CEP, o que ela digitou é a verdade e não se toca.
+      ...(e.logradouro
+        ? { address_street: montarEndereco(e.logradouro, e.numero, e.complemento, e.bairro) }
+        : {}),
     }));
   };
 
