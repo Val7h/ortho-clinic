@@ -1,10 +1,10 @@
 "use client";
-import { useState, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import NavBar from "@/components/NavBar";
 import { PageWithSidebar } from "@/components/PageWithSidebar";
-import { patientsApi, msgErro } from "@/lib/api";
+import { clinicApi, patientsApi, msgErro } from "@/lib/api";
 import { buscarCep, cepCompleto, formatarCep, montarEndereco } from "@/lib/cep";
 
 const BLOOD_TYPES = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"];
@@ -25,6 +25,28 @@ export default function NewPatientPage() {
   // CEP preenche o endereço sozinho (pedido Valth 06/08): a secretária digita
   // o CEP e só completa número e complemento. O banco guarda tudo em
   // address_street, então logradouro/nº/compl./bairro são remontados aqui.
+  // Cidade e UF já nascem com a clínica do turno (Valth 27/08): sem isso, o
+  // cadastro sem CEP dava "Cidade é obrigatório" depois de tudo preenchido.
+  useEffect(() => {
+    let vivo = true;
+    clinicApi.list()
+      .then((lista: any) => {
+        if (!vivo) return;
+        const dow = (new Date().getDay() + 6) % 7;          // 0 = segunda
+        const doDia = (lista || []).find((c: any) =>
+          (c.schedules || []).some((h: any) => h.active !== false && h.day_of_week === dow));
+        const clinica = doDia || (lista || [])[0];
+        if (!clinica?.city) return;
+        setForm((f) => ({
+          ...f,
+          address_city: f.address_city || clinica.city,
+          address_state: f.address_state || clinica.state || "",
+        }));
+      })
+      .catch(() => {});
+    return () => { vivo = false; };
+  }, []);
+
   const [buscandoCep, setBuscandoCep] = useState(false);
   const [cepNaoEncontrado, setCepNaoEncontrado] = useState(false);
   const [cepSemRua, setCepSemRua] = useState(false);
@@ -86,11 +108,22 @@ export default function NewPatientPage() {
       ["name", "Nome completo"], ["cpf", "CPF"], ["phone", "Telefone"],
       ["address_street", "Endereço"], ["address_city", "Cidade"], ["address_state", "Estado"],
     ];
-    for (const [k, label] of obrigatorios) {
-      if (!form[k]?.trim()) { toast.error(`${label} é obrigatório`); return; }
+    // Um aviso com TUDO que falta. Antes vinha um campo por vez: ela corrigia,
+    // tentava de novo, e descobria o próximo — três tentativas para salvar.
+    const faltando = obrigatorios
+      .filter(([k]) => !form[k]?.trim())
+      .map(([, label]) => label);
+    if (!pagamento) faltando.push("Particular ou convênio");
+    if (pagamento === "convenio" && !form.insurance?.trim()) faltando.push("Nome do convênio");
+    if (faltando.length) {
+      toast.error(
+        faltando.length === 1
+          ? `Falta preencher: ${faltando[0]}`
+          : `Faltam ${faltando.length} campos: ${faltando.join(", ")}`,
+        { duration: 6000 },
+      );
+      return;
     }
-    if (!pagamento) { toast.error("Informe se o atendimento é Particular ou Convênio"); return; }
-    if (pagamento === "convenio" && !form.insurance?.trim()) { toast.error("Informe o nome do convênio"); return; }
     setSaving(true);
     try {
       const patient = await patientsApi.create({
@@ -175,7 +208,7 @@ export default function NewPatientPage() {
             {/* CEP vem primeiro: preenche rua, bairro, cidade e UF sozinho e
                 pula o cursor para o número (pedido Valth 06/08). */}
             <div>
-              <label className="label">CEP</label>
+              <label className="label">CEP <span className="text-slate-400 font-normal">(se o paciente souber)</span></label>
               <input
                 className="input"
                 placeholder="00000-000"
