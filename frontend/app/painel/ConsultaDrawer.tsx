@@ -900,6 +900,62 @@ const PRESCRIPTION_TYPE_LABELS: Record<PrescriptionType, string> = {
 };
 
 // Print prescription modal — 3 tipos que o médico pode imprimir + aviso para A/B
+// ── Formatação do texto livre da receita (Valth 27/08) ──────────────────────
+// "texto receita poder colocar negrito, italico, tamanho fonte, justificar".
+//
+// Negrito e itálico são marcados no próprio texto com *asterisco* e _traço
+// baixo_ — a mesma marcação que o WhatsApp entende. Assim a receita sai em
+// negrito no papel E na mensagem, e o texto continua legível em qualquer lugar
+// que o mostre cru (histórico, banco, exportação).
+//
+// Tamanho e alinhamento são preferência do médico: ele ajusta uma vez e vale
+// para toda receita. Ficam no navegador dele, não no prontuário do paciente.
+interface FormatoReceita { tamanho: number | null; justificar: boolean }
+const FORMATO_RECEITA_PADRAO: FormatoReceita = { tamanho: null, justificar: false };
+
+function chaveFormatoReceita(): string {
+  return `orthoclinic_receita_formato_${userScope()}`;
+}
+
+function lerFormatoReceita(): FormatoReceita {
+  if (typeof window === "undefined") return FORMATO_RECEITA_PADRAO;
+  try {
+    const cru = localStorage.getItem(chaveFormatoReceita());
+    if (!cru) return FORMATO_RECEITA_PADRAO;
+    const f = JSON.parse(cru);
+    return {
+      tamanho: typeof f.tamanho === "number" ? f.tamanho : null,
+      justificar: !!f.justificar,
+    };
+  } catch {
+    return FORMATO_RECEITA_PADRAO;
+  }
+}
+
+// Marcas pareadas na mesma linha viram negrito/itálico. Um asterisco solto
+// (multiplicação, nota de rodapé) fica como está — não vira formatação.
+const MARCAS_RECEITA = /(\*[^*\n]+\*|_[^_\n]+_)/g;
+
+function textoReceitaFormatado(texto: string): React.ReactNode {
+  if (!texto) return texto;
+  const partes: React.ReactNode[] = [];
+  let ultimo = 0;
+  let chave = 0;
+  let m: RegExpExecArray | null;
+  MARCAS_RECEITA.lastIndex = 0;
+  while ((m = MARCAS_RECEITA.exec(texto)) !== null) {
+    if (m.index > ultimo) partes.push(texto.slice(ultimo, m.index));
+    const trecho = m[0];
+    const miolo = trecho.slice(1, -1);
+    partes.push(trecho[0] === "*"
+      ? <strong key={chave++}>{miolo}</strong>
+      : <em key={chave++}>{miolo}</em>);
+    ultimo = m.index + trecho.length;
+  }
+  if (ultimo < texto.length) partes.push(texto.slice(ultimo));
+  return partes.length ? partes : texto;
+}
+
 function PrintModal({ rx, patient, clinic, onClose, collectorId }: {
   rx: {
     date: string;
@@ -917,6 +973,10 @@ function PrintModal({ rx, patient, clinic, onClose, collectorId }: {
   // que uma receita antiga sobreponha/apague a receita gerada hoje.
   collectorId?: string | null;
 }) {
+  // Tamanho e alinhamento que o medico escolheu na aba Receita (preferencia
+  // dele, guardada no navegador). Lido a cada render para valer ja na proxima
+  // impressao, sem precisar recarregar a pagina.
+  const fmtReceita = lerFormatoReceita();
   const type = normalizePrescriptionType(rx.prescription_type);
   const isRCE = type === "controle_especial";
   const isATB = type === "antimicrobiano";
@@ -1014,7 +1074,7 @@ function PrintModal({ rx, patient, clinic, onClose, collectorId }: {
             )}
           </>
         ) : (
-          <p style={{ whiteSpace: "pre-wrap", fontSize: "12.5px", margin: "0", lineHeight: 1.7 }}>{rx.instructions}</p>
+          <p style={{ whiteSpace: "pre-wrap", fontSize: `${fmtReceita.tamanho ?? 12.5}px`, textAlign: fmtReceita.justificar ? "justify" : "left", margin: 0, lineHeight: 1.7 }}>{textoReceitaFormatado(rx.instructions)}</p>
         )}
       </div>
 
@@ -1124,7 +1184,7 @@ function PrintModal({ rx, patient, clinic, onClose, collectorId }: {
             )}
           </>
         ) : (
-          <p style={{ whiteSpace: "pre-wrap", fontSize: "12px", margin: "0", lineHeight: 1.6 }}>{rx.instructions}</p>
+          <p style={{ whiteSpace: "pre-wrap", fontSize: `${fmtReceita.tamanho ?? 12}px`, textAlign: fmtReceita.justificar ? "justify" : "left", margin: 0, lineHeight: 1.6 }}>{textoReceitaFormatado(rx.instructions)}</p>
         )}
       </div>
 
@@ -1178,7 +1238,7 @@ function PrintModal({ rx, patient, clinic, onClose, collectorId }: {
             ))}
           </ol>
         ) : (
-          <p style={{ whiteSpace: "pre-wrap", fontSize: "13px", margin: 0, lineHeight: 1.6 }}>{rx.instructions}</p>
+          <p style={{ whiteSpace: "pre-wrap", fontSize: `${fmtReceita.tamanho ?? 13}px`, textAlign: fmtReceita.justificar ? "justify" : "left", margin: 0, lineHeight: 1.6 }}>{textoReceitaFormatado(rx.instructions)}</p>
         )}
       </div>
 
@@ -2153,6 +2213,37 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
   const rxDocSeq = useRef(0);
   // S8: auto-resize do editor de texto livre da receita
   const freeTextRef = useRef<HTMLTextAreaElement>(null);
+  // Formatação do texto livre (Valth 27/08). Tamanho e alinhamento são
+  // preferência dele: ajusta uma vez e vale para toda receita.
+  const [fmt, setFmt] = useState<FormatoReceita>(FORMATO_RECEITA_PADRAO);
+  useEffect(() => { setFmt(lerFormatoReceita()); }, []);
+  const guardarFmt = (novo: FormatoReceita) => {
+    setFmt(novo);
+    try { localStorage.setItem(chaveFormatoReceita(), JSON.stringify(novo)); } catch {}
+  };
+  // Envolve o trecho selecionado com a marca. Sem seleção, coloca a marca e
+  // deixa o cursor no meio, pronto para digitar.
+  const marcar = (marca: string) => {
+    const ta = freeTextRef.current;
+    if (!ta) return;
+    const ini = ta.selectionStart, fim = ta.selectionEnd;
+    const sel = freeText.slice(ini, fim);
+    const jaMarcado = sel.length > 2 && sel.startsWith(marca) && sel.endsWith(marca);
+    const novoTrecho = jaMarcado ? sel.slice(1, -1) : `${marca}${sel}${marca}`;
+    const novo = freeText.slice(0, ini) + novoTrecho + freeText.slice(fim);
+    setFreeText(novo);
+    setTimeout(() => {
+      ta.focus();
+      if (sel) ta.setSelectionRange(ini, ini + novoTrecho.length);
+      else ta.setSelectionRange(ini + 1, ini + 1);
+    }, 0);
+  };
+  const TAM_MIN = 9, TAM_MAX = 16, TAM_PADRAO = 12.5;
+  const mudarTamanho = (passo: number) => {
+    const atual = fmt.tamanho ?? TAM_PADRAO;
+    const novo = Math.min(TAM_MAX, Math.max(TAM_MIN, +(atual + passo).toFixed(1)));
+    guardarFmt({ ...fmt, tamanho: novo });
+  };
 
   // Templates
   const [templates, setTemplates] = useState<any[]>([]);
@@ -2651,16 +2742,82 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
             {freeTextMode ? (
               <div>
                 <label className={lbl}>Conteúdo da receita (texto livre)</label>
+
+                {/* Barra de formatação (Valth 27/08). Negrito e itálico marcam o
+                    trecho selecionado; tamanho e justificado valem para toda
+                    receita e ficam gravados. */}
+                <div className="flex items-center gap-1 mb-1.5 flex-wrap">
+                  <button
+                    type="button" onClick={() => marcar("*")}
+                    title="Negrito no trecho selecionado (Ctrl+B)"
+                    className="w-7 h-7 rounded border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 font-bold text-sm hover:bg-slate-100 dark:hover:bg-slate-700"
+                  >N</button>
+                  <button
+                    type="button" onClick={() => marcar("_")}
+                    title="Itálico no trecho selecionado (Ctrl+I)"
+                    className="w-7 h-7 rounded border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 italic font-serif text-sm hover:bg-slate-100 dark:hover:bg-slate-700"
+                  >I</button>
+
+                  <span className="w-px h-5 bg-slate-200 dark:bg-slate-600 mx-1" />
+
+                  <button
+                    type="button" onClick={() => mudarTamanho(-0.5)}
+                    title="Diminuir a letra da receita impressa"
+                    className="w-7 h-7 rounded border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 text-[11px] hover:bg-slate-100 dark:hover:bg-slate-700"
+                  >A−</button>
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400 w-11 text-center tabular-nums">
+                    {(fmt.tamanho ?? TAM_PADRAO).toFixed(1)}
+                  </span>
+                  <button
+                    type="button" onClick={() => mudarTamanho(0.5)}
+                    title="Aumentar a letra da receita impressa"
+                    className="w-7 h-7 rounded border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 text-sm hover:bg-slate-100 dark:hover:bg-slate-700"
+                  >A+</button>
+
+                  <span className="w-px h-5 bg-slate-200 dark:bg-slate-600 mx-1" />
+
+                  <button
+                    type="button" onClick={() => guardarFmt({ ...fmt, justificar: !fmt.justificar })}
+                    title={fmt.justificar ? "Voltar ao alinhamento à esquerda" : "Justificar o texto da receita"}
+                    className={`h-7 px-2 rounded border text-[11px] font-semibold transition-colors ${
+                      fmt.justificar
+                        ? "border-blue-400 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
+                        : "border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
+                    }`}
+                  >justificado</button>
+
+                  {(fmt.tamanho !== null || fmt.justificar) && (
+                    <button
+                      type="button" onClick={() => guardarFmt(FORMATO_RECEITA_PADRAO)}
+                      title="Voltar ao tamanho e alinhamento originais"
+                      className="text-[11px] text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 underline ml-1"
+                    >padrão</button>
+                  )}
+                </div>
+
                 {/* S8: auto-resize + fonte alinhada à impressão (sem font-mono, que
                     não bate com a fonte proporcional das folhas de receita) */}
                 <textarea
                   ref={freeTextRef}
                   className={inp + " min-h-[220px] resize-none"}
+                  style={{
+                    fontSize: `${((fmt.tamanho ?? TAM_PADRAO) + 1.5).toFixed(1)}px`,
+                    textAlign: fmt.justificar ? "justify" : "left",
+                  }}
                   placeholder={"Escreva a receita à mão livre. Ex:\n\n1. Nimesulida 100mg — 1 cp de 12/12h por 5 dias\n2. Omeprazol 20mg — 1 cp em jejum por 30 dias\n\nOrientações: repouso relativo, retorno em 7 dias."}
                   value={freeText}
                   onChange={(e) => setFreeText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.ctrlKey && (e.key === "b" || e.key === "B")) { e.preventDefault(); marcar("*"); }
+                    if (e.ctrlKey && (e.key === "i" || e.key === "I")) { e.preventDefault(); marcar("_"); }
+                  }}
                   rows={12}
                 />
+                <p className="text-[11px] text-slate-400 mt-1">
+                  O negrito aparece como <span className="font-mono">*assim*</span> e o itálico como{" "}
+                  <span className="font-mono">_assim_</span> enquanto o senhor escreve. No papel e no
+                  WhatsApp sai formatado de verdade.
+                </p>
               </div>
             ) : (
               <>
