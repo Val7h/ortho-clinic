@@ -38,6 +38,14 @@ export function msgErro(err: any, padrao = "Não foi possível concluir"): strin
   return padrao;
 }
 
+// Endpoints que chamam a IA — precisam de fôlego, ver o interceptor abaixo.
+const ROTAS_DE_IA = [
+  '/api/laudo-inss/gerar',       // laudo por ditado
+  '/justificativa-exame',        // justificativa clínica de exame
+  '/patients/ler-foto',          // cadastro por foto (visão)
+  '/chat',                       // assistente da clínica
+];
+
 export const api = axios.create({
   baseURL: API_URL,
   headers: { "Content-Type": "application/json" },
@@ -57,6 +65,15 @@ api.interceptors.request.use((config) => {
   if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
     delete (config.headers as any)['Content-Type'];
     delete (config.headers as any)['content-type'];
+  }
+  // Rotas que dependem da IA levam MUITO mais que os 15s do limite geral:
+  // escrever um laudo a partir de um ditado longo passa fácil de meio minuto.
+  // O limite curto existe para a rede de celular não travar a tela — mas
+  // aqui ele cortava a geração no meio e o médico via "timeout" enquanto o
+  // servidor terminava o trabalho sozinho (Valth 27/08: "os mais longos").
+  const url = config.url || '';
+  if (ROTAS_DE_IA.some((r) => url.includes(r))) {
+    config.timeout = 180_000;   // 3 minutos
   }
   return config;
 });

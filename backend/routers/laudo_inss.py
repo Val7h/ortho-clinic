@@ -229,7 +229,11 @@ async def gerar_laudo(
     }
 
     try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        # 150s: ditado longo gera laudo longo, e 60s cortava no meio
+        # (Valth 27/08). Fica abaixo do limite de 3 min do navegador,
+        # para o erro que ele vê ser o nosso, explicativo, e nao um
+        # timeout seco do axios.
+        async with httpx.AsyncClient(timeout=150.0) as client:
             resp = await client.post(
                 ANTHROPIC_API_URL,
                 headers={
@@ -239,6 +243,13 @@ async def gerar_laudo(
                 },
                 json=payload,
             )
+    except httpx.TimeoutException:
+        logger.error("Anthropic API: tempo esgotado gerando laudo")
+        raise HTTPException(
+            504,
+            "A IA demorou demais para responder. O seu ditado NÃO se perdeu — "
+            "tente gerar de novo; se repetir, divida o ditado em duas partes.",
+        )
     except httpx.RequestError as exc:
         # Não logar str(exc): pode embutir header (inclusive a API key) na mensagem.
         logger.error(f"Erro de rede na Anthropic API: {type(exc).__name__}")
