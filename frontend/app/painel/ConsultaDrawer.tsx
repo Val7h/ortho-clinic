@@ -2065,9 +2065,12 @@ function TabProntuario({ patientId, patient }: { patientId: number; patient?: an
             <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
           </div>
         ) : (
+          // Letra menor e linhas mais juntas (Valth 27/08): "diminuir a anamnese
+          // pra ver melhor de uma vez só". 13px/1.45 no lugar de 14px/1.625 —
+          // cabe cerca de um quinto a mais de folha na mesma tela.
           <textarea
             ref={textareaRef}
-            className={`w-full font-mono text-sm text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 border rounded-lg px-3 py-2 resize-none leading-relaxed placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors ${salvoAgora ? "border-green-400 dark:border-green-600" : "border-slate-200 dark:border-slate-700"}`}
+            className={`w-full font-mono text-[13px] leading-[1.45] text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 border rounded-lg px-3 py-2 resize-none placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors ${salvoAgora ? "border-green-400 dark:border-green-600" : "border-slate-200 dark:border-slate-700"}`}
             style={{ minHeight: "260px", overflow: "hidden" }}
             placeholder="Queixa principal, história da doença, exame físico, hipótese diagnóstica e conduta..."
             value={folha}
