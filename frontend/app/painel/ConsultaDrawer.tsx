@@ -8,6 +8,7 @@ import {
   Plus, Trash2, Printer, ChevronDown, ChevronUp, Save,
   Send, ClipboardCheck, Award, Camera, FileSearch2, Upload, ImageIcon, ZoomIn, ZoomOut,
   Pencil, Download, MessageSquare,
+  Search,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { anamnesisApi, api, patientsApi, consultationsApi, prescriptionsApi, prescriptionTemplatesApi, examsApi, evolutionApi, clinicApi, chatApi, reportsApi, leafletsApi, waitingRoomApi, remindersApi, msgErro } from "@/lib/api";
@@ -1713,128 +1714,254 @@ function FormularioRespondido({ patientId }: { patientId: number }) {
   );
 }
 
+// ── Anamnese em FOLHA CORRIDA (Valth 27/08) ──────────────────────────────────
+// "gostaria que a anamnese fosse corrida, vou salvando e ela vai ficando na
+// mesma caixa". Antes eram cartões separados e a caixa esvaziava a cada Salvar.
+// Agora é uma folha só, editável, como o prontuário de papel.
+//
+// Por baixo, cada dia continua sendo um registro próprio no banco — a linha do
+// tempo do paciente, os documentos e a auditoria dependem disso. A folha é
+// montada a partir desses registros e, ao salvar, desmontada de volta neles.
+const CABECALHO_RE = /^──\s(\d{2}\/\d{2}\/\d{4})(?:\s·\s([^─]+?))?\s──$/;
+
+function cabecalhoFolha(dataISO: string, tipo?: string | null): string {
+  const [a, m, d] = dataISO.split("-");
+  return `── ${d}/${m}/${a}${tipo ? ` · ${tipo}` : ""} ──`;
+}
+
+function isoDoCabecalho(dataBR: string): string {
+  const [d, m, a] = dataBR.split("/");
+  return `${a}-${m}-${d}`;
+}
+
+// O tipo de consulta é gravado como "[RETORNO]" na primeira linha do registro —
+// é assim que a linha do tempo monta o título. Na folha ele aparece no
+// cabeçalho do dia, e volta para dentro do texto na hora de salvar.
+function separarTipo(content: string): { tipo: string | null; texto: string } {
+  const m = content.match(/^\[([^\]\n]+)\]\n?/);
+  if (!m) return { tipo: null, texto: content };
+  const label = CONSULT_TYPES.find(c => c.label.toUpperCase() === m[1].toUpperCase())?.label;
+  return { tipo: label ?? m[1], texto: content.slice(m[0].length) };
+}
+
+interface BlocoFolha {
+  id: number | null;
+  dataISO: string;
+  tipo: string | null;
+  texto: string;
+}
+
+function montarFolha(blocos: BlocoFolha[]): string {
+  return blocos
+    .map(b => `${cabecalhoFolha(b.dataISO, b.tipo)}\n${b.texto}`)
+    .join("\n\n");
+}
+
+// Desmonta a folha de volta em blocos por dia. Texto solto antes do primeiro
+// cabeçalho (o senhor apagou a linha da data) vai para o bloco seguinte — pode
+// ficar no dia errado, mas não some.
+function lerFolha(folha: string): BlocoFolha[] {
+  const blocos: BlocoFolha[] = [];
+  const soltas: string[] = [];
+  let atual: string[] | null = null;
+  for (const linha of folha.split("\n")) {
+    const m = linha.trim().match(CABECALHO_RE);
+    if (m) {
+      atual = [];
+      blocos.push({ id: null, dataISO: isoDoCabecalho(m[1]), tipo: (m[2] || "").trim() || null, texto: "" });
+      (blocos[blocos.length - 1] as any)._linhas = atual;
+    } else if (atual) {
+      atual.push(linha);
+    } else {
+      soltas.push(linha);
+    }
+  }
+  if (blocos.length && soltas.join("").trim()) {
+    (blocos[0] as any)._linhas.unshift(...soltas);
+  }
+  for (const b of blocos) {
+    b.texto = ((b as any)._linhas as string[]).join("\n").trim();
+    delete (b as any)._linhas;
+  }
+  return blocos;
+}
+
 function TabProntuario({ patientId, patient }: { patientId: number; patient?: any }) {
-  const [evolutions, setEvolutions] = useState<Evolution[]>([]);
+  const [folha, setFolha] = useState("");
   const [loading, setLoading] = useState(true);
-  const [newText, setNewText] = useState("");
   const [rascunhoSalvo, setRascunhoSalvo] = useState(false);
   const [consultType, setConsultType] = useState("retorno");
   const [saving, setSaving] = useState(false);
-  const [recentlySavedId, setRecentlySavedId] = useState<number | null>(null);
-  const [sortAsc, setSortAsc] = useState(false);
-  // Adendo modal state (immutable append instead of edit)
-  const [adendoId, setAdendoId] = useState<number | null>(null);
-  const [adendoText, setAdendoText] = useState("");
-  const [adendoSaving, setAdendoSaving] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const [salvoAgora, setSalvoAgora] = useState(false);
+  const [busca, setBusca] = useState("");
+  const [totalDias, setTotalDias] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const adendoTextareaRef = useRef<HTMLTextAreaElement>(null);
+  // Como a folha estava na última vez que veio do servidor. É por aqui que o
+  // app sabe qual pedaço da folha é qual registro.
+  const refBlocos = useRef<BlocoFolha[]>([]);
 
-  const { todayBRFull, todayISO } = useMemo(() => {
-    const d = new Date();
-    return {
-      todayISO: d.toISOString().split("T")[0],
-      todayBRFull: formatDateBRFull(d.toISOString().split("T")[0]),
-    };
-  }, []);
+  const todayISO = useMemo(() => new Date().toISOString().split("T")[0], []);
+  const tipoLabel = (v: string) => CONSULT_TYPES.find(c => c.value === v)?.label ?? "";
 
-  // Rascunho da anamnese (19/08). Sem isto, o texto so existia na memoria da
-  // tela: qualquer deslogue, recarga ou queda levava tudo. A receita nao se
-  // perdia porque ja tinha rascunho — a anamnese nao tinha.
-  const anamneseDraftKey = `orthoclinic_anamnese_draft_${userScope()}_${patientId}`;
+  const rascunhoKey = `orthoclinic_anamnese_folha_${userScope()}_${patientId}`;
+  const rascunhoKeyAntiga = `orthoclinic_anamnese_draft_${userScope()}_${patientId}`;
 
+  // ── carrega o prontuário e monta a folha ──────────────────────────────────
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    const salvo = localStorage.getItem(anamneseDraftKey);
-    if (salvo && salvo.trim()) {
-      setNewText(salvo);
-      toast.success("Rascunho da anamnese restaurado", { icon: "📝" });
-    }
-  }, [anamneseDraftKey]);
+    let vivo = true;
+    setLoading(true);
+    setFolha("");
+    evolutionApi
+      .list(patientId)
+      .then((data) => {
+        if (!vivo) return;
+        const evs = (data as Evolution[])
+          .slice()
+          .sort((a, b) => a.entry_date.localeCompare(b.entry_date) || (a.id - b.id));
+        const blocos: BlocoFolha[] = evs.map(ev => {
+          const { tipo, texto } = separarTipo(ev.content);
+          return { id: ev.id, dataISO: ev.entry_date, tipo, texto };
+        });
+        refBlocos.current = blocos;
+        setTotalDias(blocos.length);
 
+        let texto = montarFolha(blocos);
+        // A data entra sozinha: se ainda não há bloco de hoje, a folha já abre
+        // com o cabeçalho de hoje e o cursor embaixo dele.
+        if (!blocos.some(b => b.dataISO === todayISO)) {
+          texto = (texto ? texto + "\n\n" : "") + cabecalhoFolha(todayISO, tipoLabel(consultType)) + "\n";
+        } else {
+          const daquiHoje = blocos.find(b => b.dataISO === todayISO);
+          if (daquiHoje?.tipo) {
+            const v = CONSULT_TYPES.find(c => c.label === daquiHoje.tipo)?.value;
+            if (v) setConsultType(v);
+          }
+        }
+
+        // Rascunho: o que ele estava escrevendo e não chegou a salvar.
+        try {
+          const salvo = localStorage.getItem(rascunhoKey);
+          if (salvo && salvo.trim() && salvo !== texto) {
+            texto = salvo;
+            toast.success("Rascunho da anamnese restaurado", { icon: "📝" });
+          }
+          // Rascunho do formato antigo (só o texto novo, sem cabeçalho).
+          const antigo = localStorage.getItem(rascunhoKeyAntiga);
+          if (antigo && antigo.trim()) {
+            texto = texto.trimEnd() + "\n" + antigo.trim();
+            localStorage.removeItem(rascunhoKeyAntiga);
+            toast.success("Rascunho anterior recuperado para a folha", { icon: "📝" });
+          }
+        } catch {}
+
+        setFolha(texto);
+        setTimeout(() => {
+          const ta = textareaRef.current;
+          if (!ta) return;
+          ta.setSelectionRange(ta.value.length, ta.value.length);
+          ta.scrollTop = ta.scrollHeight;
+        }, 60);
+      })
+      .catch(() => toast.error("Erro ao carregar o prontuário"))
+      .finally(() => { if (vivo) setLoading(false); });
+    return () => { vivo = false; };
+  }, [patientId]);
+
+  // ── rascunho automático ───────────────────────────────────────────────────
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (!newText.trim()) return;
+    if (typeof window === "undefined" || loading || !folha.trim()) return;
     const t = setTimeout(() => {
-      localStorage.setItem(anamneseDraftKey, newText);
+      try { localStorage.setItem(rascunhoKey, folha); } catch {}
       setRascunhoSalvo(true);
       setTimeout(() => setRascunhoSalvo(false), 1500);
     }, 2000);
     return () => clearTimeout(t);
-  }, [newText, anamneseDraftKey]);
+  }, [folha, rascunhoKey, loading]);
 
-  useEffect(() => {
-    setLoading(true);
-    setEvolutions([]);
-    evolutionApi
-      .list(patientId)
-      .then((data) => setEvolutions(data as Evolution[]))
-      .catch(() => toast.error("Erro ao carregar evoluções"))
-      .finally(() => setLoading(false));
-  }, [patientId]);
-
-  // Auto-resize textarea
+  // A caixa cresce com o texto, dentro do espaço disponível.
   useEffect(() => {
     const el = textareaRef.current;
     if (!el) return;
     el.style.height = "auto";
-    el.style.height = Math.min(el.scrollHeight, 400) + "px";
-  }, [newText]);
+    el.style.height = el.scrollHeight + "px";
+  }, [folha]);
 
-  // Auto-resize adendo textarea
-  useEffect(() => {
-    const ta = adendoTextareaRef.current;
-    if (!ta) return;
-    ta.style.height = "auto";
-    ta.style.height = Math.min(ta.scrollHeight, 500) + "px";
-  }, [adendoText]);
-
-  const handleSave = async () => {
-    if (!newText.trim()) {
-      toast.error("Digite a evolução antes de salvar");
-      return;
-    }
-    setSaving(true);
-    try {
-      // Use fresh date at save time — avoids stale date if drawer was open past midnight
-      const saveDateISO = new Date().toISOString().split("T")[0];
-      const typePrefix = CONSULT_TYPES.find(c => c.value === consultType)?.label ?? "";
-      const contentWithType = typePrefix ? `[${typePrefix.toUpperCase()}]\n${newText.trim()}` : newText.trim();
-      const created = await evolutionApi.create(patientId, {
-        entry_date: saveDateISO,
-        content: contentWithType,
-      });
-      setEvolutions((prev) => [created as Evolution, ...prev]);
-      setNewText("");
-      try { localStorage.removeItem(anamneseDraftKey); } catch {}
-      setRecentlySavedId((created as Evolution).id);
-      setTimeout(() => setRecentlySavedId(null), 2500);
-      toast.success("Evolução registrada!");
-    } catch (err: any) {
-      toast.error(msgErro(err, "Erro ao salvar evolução"));
-    } finally {
-      setSaving(false);
-    }
+  // Trocar o tipo de consulta reescreve o cabeçalho de hoje.
+  const trocarTipo = (valor: string) => {
+    setConsultType(valor);
+    const antigo = new RegExp(`^──\\s${cabecalhoFolha(todayISO).slice(3, 13)}[^\\n]*──$`, "m");
+    setFolha(f => antigo.test(f)
+      ? f.replace(antigo, cabecalhoFolha(todayISO, tipoLabel(valor)))
+      : f);
   };
 
-  const handleAdendoSave = async (ev: Evolution) => {
-    if (!adendoText.trim()) return;
-    setAdendoSaving(true);
-    const now = new Date();
-    const dateTag = `${String(now.getDate()).padStart(2,"0")}/${String(now.getMonth()+1).padStart(2,"0")}/${now.getFullYear()}`;
-    const adendoContent = `${ev.content}\n\n--- ADENDO [${dateTag}] ---\n${adendoText.trim()}`;
+  // ── salvar: desmonta a folha e grava dia a dia ────────────────────────────
+  const handleSave = async () => {
+    const blocos = lerFolha(folha);
+    if (!blocos.length) {
+      // Ele apagou os cabeçalhos: grava tudo como o registro de hoje.
+      if (!folha.trim()) { toast.error("A folha está vazia"); return; }
+      blocos.push({ id: null, dataISO: todayISO, tipo: tipoLabel(consultType), texto: folha.trim() });
+    }
+    setSaving(true);
+    const ref = refBlocos.current;
+    const usados = new Set<number>();
+    let criados = 0, atualizados = 0;
+    const esvaziados: string[] = [];
     try {
-      await evolutionApi.update(ev.id, { content: adendoContent });
-      setEvolutions(prev => prev.map(e => e.id === ev.id ? { ...e, content: adendoContent } : e));
-      setAdendoId(null);
-      setAdendoText("");
-      toast.success("Adendo registrado");
-    } catch {
-      toast.error("Erro ao salvar adendo — tente novamente");
-      // keep adendoId open so user doesn't lose text
+      for (let i = 0; i < blocos.length; i++) {
+        const b = blocos[i];
+        const naMesmaPosicao = ref[i] && ref[i].dataISO === b.dataISO && ref[i].id != null && !usados.has(ref[i].id!)
+          ? ref[i]
+          : ref.find(r => r.dataISO === b.dataISO && r.id != null && !usados.has(r.id!));
+        const conteudo = b.tipo ? `[${b.tipo.toUpperCase()}]\n${b.texto}` : b.texto;
+
+        if (naMesmaPosicao) {
+          usados.add(naMesmaPosicao.id!);
+          if (!b.texto) {
+            // Não apago um registro trocando o texto por vazio.
+            esvaziados.push(cabecalhoFolha(b.dataISO));
+            continue;
+          }
+          const antes = naMesmaPosicao.tipo ? `[${naMesmaPosicao.tipo.toUpperCase()}]\n${naMesmaPosicao.texto}` : naMesmaPosicao.texto;
+          if (antes !== conteudo) {
+            await evolutionApi.update(naMesmaPosicao.id!, { content: conteudo });
+            atualizados++;
+          }
+        } else if (b.texto) {
+          await evolutionApi.create(patientId, { entry_date: b.dataISO, content: conteudo });
+          criados++;
+        }
+      }
+
+      const sumidos = ref.filter(r => r.id != null && !usados.has(r.id));
+      // Recarrega do servidor: garante que a folha e os registros ficam iguais.
+      const data = await evolutionApi.list(patientId);
+      const evs = (data as Evolution[]).slice()
+        .sort((a, b) => a.entry_date.localeCompare(b.entry_date) || (a.id - b.id));
+      const novos: BlocoFolha[] = evs.map(ev => {
+        const { tipo, texto } = separarTipo(ev.content);
+        return { id: ev.id, dataISO: ev.entry_date, tipo, texto };
+      });
+      refBlocos.current = novos;
+      setTotalDias(novos.length);
+      setFolha(montarFolha(novos));
+      try { localStorage.removeItem(rascunhoKey); } catch {}
+
+      setSalvoAgora(true);
+      setTimeout(() => setSalvoAgora(false), 2500);
+      const partes: string[] = [];
+      if (criados) partes.push(`${criados} novo${criados > 1 ? "s" : ""}`);
+      if (atualizados) partes.push(`${atualizados} corrigido${atualizados > 1 ? "s" : ""}`);
+      toast.success(partes.length ? `Folha salva — ${partes.join(", ")}` : "Folha salva");
+      for (const c of [...esvaziados, ...sumidos.map(r => cabecalhoFolha(r.dataISO))]) {
+        toast(`O dia ${c.replace(/──\s?/g, "").trim()} ficou sem texto — mantive o registro anterior.`,
+              { icon: "⚠️", duration: 7000 });
+      }
+    } catch (err: any) {
+      toast.error(msgErro(err, "Erro ao salvar a folha — o texto continua aqui"));
     } finally {
-      setAdendoSaving(false);
+      setSaving(false);
     }
   };
 
@@ -1844,7 +1971,6 @@ function TabProntuario({ patientId, patient }: { patientId: number; patient?: an
       handleSave();
       return;
     }
-    // Tab-stop: jump to next __ placeholder in the textarea
     if (e.key === "Tab") {
       const ta = textareaRef.current;
       if (!ta) return;
@@ -1853,225 +1979,50 @@ function TabProntuario({ patientId, patient }: { patientId: number; patient?: an
         e.preventDefault();
         ta.setSelectionRange(nextPos, nextPos + 2);
       }
-      // else: default Tab behavior (move focus out)
     }
   };
 
   const insertTemplate = (templateText: string) => {
     const ta = textareaRef.current;
-    if (!ta) {
-      setNewText(prev => prev + templateText);
-      return;
-    }
+    if (!ta) { setFolha(prev => prev + templateText); return; }
     const updated = insertAtCursor(ta, templateText);
-    setNewText(updated);
+    setFolha(updated);
     setTimeout(() => {
-      // Tab-stop: select first __ in the inserted text
-      const firstUnderscore = updated.indexOf("__");
-      if (firstUnderscore >= 0) {
-        ta.setSelectionRange(firstUnderscore, firstUnderscore + 2);
-      } else {
-        const pos = ta.selectionStart + templateText.length;
-        ta.setSelectionRange(pos, pos);
-      }
+      const firstUnderscore = updated.indexOf("__", ta.selectionStart);
+      if (firstUnderscore >= 0) ta.setSelectionRange(firstUnderscore, firstUnderscore + 2);
       ta.focus();
     }, 0);
   };
 
-  const filteredEvolutions = useMemo(() => {
-    const sorted = [...evolutions].sort((a, b) => {
-      const cmp = b.entry_date.localeCompare(a.entry_date) || (b.id - a.id);
-      return sortAsc ? -cmp : cmp;
-    });
-    if (!searchQuery.trim()) return sorted;
-    const q = searchQuery.toLowerCase();
-    return sorted.filter(ev =>
-      ev.content.toLowerCase().includes(q) || ev.entry_date.includes(q)
-    );
-  }, [evolutions, searchQuery, sortAsc]);
-
-  const highlightText = (text: string, query: string): React.ReactNode => {
-    if (!query.trim()) return text;
-    const parts = text.split(new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "gi"));
-    return parts.map((part, i) =>
-      part.toLowerCase() === query.toLowerCase()
-        ? <mark key={i} className="bg-yellow-200 dark:bg-yellow-800 rounded px-0.5">{part}</mark>
-        : part
-    );
+  // Buscar dentro da folha: leva o cursor até a próxima ocorrência.
+  const procurar = () => {
+    const ta = textareaRef.current;
+    const alvo = busca.trim().toLowerCase();
+    if (!ta || !alvo) return;
+    const texto = ta.value.toLowerCase();
+    let pos = texto.indexOf(alvo, ta.selectionEnd);
+    if (pos < 0) pos = texto.indexOf(alvo);
+    if (pos < 0) { toast(`"${busca}" não aparece nesta folha`, { icon: "🔍" }); return; }
+    ta.focus();
+    ta.setSelectionRange(pos, pos + alvo.length);
+    const linhaAprox = ta.value.slice(0, pos).split("\n").length;
+    ta.scrollTop = Math.max(0, (linhaAprox - 4) * 21);
   };
 
   return (
     <div className="flex flex-col h-full">
-      {/* ── Diagnósticos fixos (CID) + lembretes de oferta (Valth 02/08) ── */}
       <div className="px-5 flex-shrink-0">
         <DiagnosticosCids patientId={patientId} patient={patient} />
       </div>
 
       <FormularioRespondido patientId={patientId} />
 
-      {/* ── Adendo modal ── */}
-      {adendoId !== null && (() => {
-        const ev = evolutions.find(e => e.id === adendoId);
-        if (!ev) return null;
-        return (
-          <div className="fixed inset-0 z-[300] flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.6)" }}>
-            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-lg flex flex-col overflow-hidden max-h-[85vh]">
-              <div className="px-5 pt-4 pb-3 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between flex-shrink-0">
-                <div>
-                  <p className="font-bold text-slate-900 dark:text-slate-50 text-sm">Acrescentar Adendo</p>
-                  <p className="text-xs text-slate-400 mt-0.5">O registro original é preservado — o adendo é acrescentado abaixo</p>
-                </div>
-                <button onClick={() => { setAdendoId(null); setAdendoText(""); }} className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg">
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-              <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                <div>
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Registro original (somente leitura)</p>
-                  <div className="bg-slate-100 dark:bg-slate-800 rounded-lg px-3 py-2 text-xs font-mono text-slate-600 dark:text-slate-400 whitespace-pre-wrap max-h-40 overflow-y-auto border border-slate-200 dark:border-slate-700">
-                    {ev.content}
-                  </div>
-                </div>
-                <div>
-                  <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Texto do adendo / correção *</p>
-                  <textarea
-                    ref={adendoTextareaRef}
-                    autoFocus
-                    className="w-full font-mono text-sm text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-700 border border-blue-300 dark:border-blue-600 rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    style={{ minHeight: "120px", maxHeight: "500px" }}
-                    placeholder="Descreva a correção ou complemento..."
-                    value={adendoText}
-                    onChange={e => setAdendoText(e.target.value)}
-                  />
-                </div>
-              </div>
-              <div className="px-4 pb-4 flex gap-2 justify-end flex-shrink-0">
-                <button type="button" onClick={() => { setAdendoId(null); setAdendoText(""); }} className="px-3 py-1.5 text-xs text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50">Cancelar</button>
-                <button
-                  type="button"
-                  onClick={() => handleAdendoSave(ev)}
-                  disabled={adendoSaving || !adendoText.trim()}
-                  className="px-4 py-1.5 text-xs text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 font-semibold"
-                >
-                  {adendoSaving ? "Salvando..." : "Salvar Adendo"}
-                </button>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
-
-      {/* ── Histórico header ── */}
-      {!loading && evolutions.length > 0 && (() => {
-        const todayISO = new Date().toISOString().split("T")[0];
-        const todayEv = evolutions.find(e => e.entry_date === todayISO);
-        const todayTime = todayEv?.created_at
-          ? new Date(todayEv.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
-          : null;
-        return (
-          <div className="px-5 pt-2 pb-1 border-b border-slate-100 dark:border-slate-800 flex-shrink-0 space-y-1.5">
-            {/* Banner: evolução registrada hoje */}
-            {todayEv && (
-              <div className="flex items-center gap-2 bg-green-50 dark:bg-green-900/20 border border-green-300 dark:border-green-700 rounded-lg px-3 py-1.5">
-                <CheckCircle className="w-3.5 h-3.5 text-green-600 dark:text-green-400 flex-shrink-0" />
-                <p className="text-[11px] text-green-700 dark:text-green-300 font-semibold">
-                  Evolução registrada hoje{todayTime ? ` às ${todayTime}` : ""}
-                </p>
-              </div>
-            )}
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-slate-500">
-                {evolutions.length} evolução{evolutions.length !== 1 ? "ões" : ""} · {sortAsc ? "mais antigo primeiro" : "mais recente primeiro"}
-              </span>
-              <button
-                type="button"
-                onClick={() => setSortAsc(v => !v)}
-                title={sortAsc ? "Mostrar mais recente primeiro" : "Mostrar mais antigo primeiro"}
-                className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
-              >
-                {sortAsc ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-              </button>
-            </div>
-            <div className="relative">
-              <input
-                type="text"
-                className="w-full px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-50 text-xs placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                placeholder="Buscar no histórico de evoluções..."
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-              />
-              {searchQuery.trim() && (
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-400">
-                  {filteredEvolutions.length} de {evolutions.length}
-                </span>
-              )}
-            </div>
-          </div>
-        );
-      })()}
-
-      {/* ── Documento evolutivo (scrollável) ── */}
-      <div
-        ref={scrollRef}
-        className="flex-1 overflow-y-auto px-5 pt-2 pb-2 min-h-0"
-        style={{ maxHeight: "calc(100vh - 440px)", minHeight: "120px" }}
-      >
-        {loading ? (
-          <div className="flex items-center justify-center h-20">
-            <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-          </div>
-        ) : evolutions.length === 0 ? (
-          // Paciente sem histórico: nada na tela. O Valth pediu (13/08) que o
-          // app pare de sugerir resumo de prontuário anterior — mesmo motivo
-          // pelo qual o "importar resumo" saiu. Ele começa a escrever e pronto.
-          null
-        ) : filteredEvolutions.length === 0 ? (
-          <p className="text-xs text-slate-400 italic py-4 text-center">Nenhuma evolução encontrada para "{searchQuery}"</p>
-        ) : (
-          <div className="space-y-3 py-1">
-            {filteredEvolutions.map((ev) => {
-              const isToday = ev.entry_date === new Date().toISOString().split("T")[0];
-              return (
-              <div
-                key={ev.id}
-                className={`border-l-4 ${isToday ? "border-green-500" : "border-blue-500"} bg-slate-50 dark:bg-slate-800 rounded-r-lg p-3 transition-all duration-1000 ${recentlySavedId === ev.id ? "ring-2 ring-green-400 ring-offset-1" : ""}`}
-              >
-                <div className="flex justify-between items-center mb-1">
-                  <div className="flex items-center gap-2">
-                    <span className={`text-xs font-bold ${isToday ? "text-green-600 dark:text-green-400" : "text-blue-600 dark:text-blue-400"}`}>{formatDateBRFull(ev.entry_date)}</span>
-                    {isToday && <span className="text-[9px] bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 px-1.5 py-0.5 rounded-full font-bold">HOJE</span>}
-                    {ev.created_at && (
-                      <span className="text-[10px] text-slate-400">
-                        {new Date(ev.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
-                      </span>
-                    )}
-                  </div>
-                  <button
-                    type="button"
-                    title="Acrescentar adendo a esta evolução"
-                    onClick={() => { setAdendoId(ev.id); setAdendoText(""); }}
-                    className="p-1 text-slate-300 hover:text-blue-600 dark:text-slate-600 dark:hover:text-blue-400 transition-colors"
-                  >
-                    <Pencil className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-                <p className="text-sm text-slate-800 dark:text-slate-200 whitespace-pre-wrap leading-relaxed font-mono">
-                  {highlightText(ev.content, searchQuery)}
-                </p>
-              </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      {/* ── Área de nova entrada (fixa no bottom) ── */}
-      <div className="flex-shrink-0 border-t border-slate-200 dark:border-slate-700 px-5 pt-3 pb-4 bg-white dark:bg-slate-900">
-        {/* Tipo de consulta + Templates rápidos */}
-        <div className="flex items-center gap-2 mb-2 flex-wrap">
+      {/* ── Barra: tipo de consulta, modelos e busca ── */}
+      <div className="flex-shrink-0 px-5 pt-2 pb-2 space-y-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <select
             value={consultType}
-            onChange={e => setConsultType(e.target.value)}
+            onChange={e => trocarTipo(e.target.value)}
             className="text-xs border border-slate-200 dark:border-slate-600 rounded px-2 py-1 text-slate-600 dark:text-slate-400 bg-white dark:bg-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-400"
           >
             {CONSULT_TYPES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
@@ -2089,34 +2040,60 @@ function TabProntuario({ patientId, patient }: { patientId: number; patient?: an
             ))}
           </div>
         </div>
+        {totalDias > 2 && (
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                className="w-full pl-8 pr-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-50 text-xs placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                placeholder="Buscar na folha deste paciente..."
+                value={busca}
+                onChange={e => setBusca(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); procurar(); } }}
+              />
+            </div>
+            <span className="text-[11px] text-slate-400 whitespace-nowrap">{totalDias} dias</span>
+          </div>
+        )}
+      </div>
 
-        {/* Label com data de hoje */}
-        <div className="flex items-center gap-1 mb-1.5">
-          <span className="text-xs font-bold text-blue-600 dark:text-blue-400">{todayBRFull}</span>
-          <span className="text-[11px] text-slate-400 ml-1">(hoje)</span>
-        </div>
+      {/* ── A folha ── */}
+      <div className="flex-1 overflow-y-auto px-5 min-h-0">
+        {loading ? (
+          <div className="flex items-center justify-center h-20">
+            <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : (
+          <textarea
+            ref={textareaRef}
+            className={`w-full font-mono text-sm text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 border rounded-lg px-3 py-2 resize-none leading-relaxed placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors ${salvoAgora ? "border-green-400 dark:border-green-600" : "border-slate-200 dark:border-slate-700"}`}
+            style={{ minHeight: "260px", overflow: "hidden" }}
+            placeholder="Queixa principal, história da doença, exame físico, hipótese diagnóstica e conduta..."
+            value={folha}
+            onChange={(e) => setFolha(e.target.value)}
+            onKeyDown={handleKeyDown}
+          />
+        )}
+      </div>
 
-        <textarea
-          ref={textareaRef}
-          className="w-full font-mono text-sm text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 resize-none placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          style={{ minHeight: "120px", maxHeight: "400px" }}
-          placeholder="Queixa principal, história da doença, exame físico, hipótese diagnóstica e conduta..."
-          value={newText}
-          onChange={(e) => setNewText(e.target.value)}
-          onKeyDown={handleKeyDown}
-        />
-
-        <div className="flex items-center justify-between mt-2 gap-3">
+      {/* ── Rodapé ── */}
+      <div className="flex-shrink-0 border-t border-slate-200 dark:border-slate-700 px-5 pt-2.5 pb-4 bg-white dark:bg-slate-900">
+        <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 min-w-0 flex-1">
             <span className="text-[11px] text-slate-400 truncate">
-              {rascunhoSalvo ? "✓ rascunho salvo" : `Ctrl+Enter para salvar · ${newText.length} caracteres`}
+              {salvoAgora ? (
+                <span className="text-green-600 dark:text-green-400 font-semibold inline-flex items-center gap-1">
+                  <CheckCircle className="w-3 h-3" /> salvo
+                </span>
+              ) : rascunhoSalvo ? "✓ rascunho salvo" : `Ctrl+Enter para salvar · ${folha.length} caracteres`}
             </span>
             <BotaoLembrete patientId={patientId} />
           </div>
           <button
             type="button"
             onClick={handleSave}
-            disabled={saving || !newText.trim()}
+            disabled={saving || !folha.trim()}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-40 font-semibold text-sm"
           >
             {saving ? (
