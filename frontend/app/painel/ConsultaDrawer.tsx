@@ -4534,6 +4534,8 @@ function calcReturnDate(startDate: string, days: string): string | null {
 function TabAtestados({ patient, clinic }: { patient: any; clinic?: any }) {
   const [docKind, setDocKind] = useState<"atestado" | "comparecimento">("atestado");
   const [cid, setCid] = useState("");
+  // CIDs secundários (Valth 27/08). Mesmo padrão já usado no laudo desde 11/08.
+  const [cidsSecundarios, setCidsSecundarios] = useState<string[]>([]);
   const [days, setDays] = useState("1");
   const [certType, setCertType] = useState("trabalho");
   const [obs, setObs] = useState("");
@@ -4543,7 +4545,7 @@ function TabAtestados({ patient, clinic }: { patient: any; clinic?: any }) {
   const [accompRel, setAccompRel] = useState("");
   const todayStr = useMemo(() => new Date().toISOString().split("T")[0], []);
   const [startDate, setStartDate] = useState(todayStr);
-  const [printData, setPrintData] = useState<{ cid: string; days: string; certType: string; obs: string; startDate: string; accompName: string; accompRel: string } | null>(null);
+  const [printData, setPrintData] = useState<{ cid: string; cidsSecundarios: string[]; days: string; certType: string; obs: string; startDate: string; accompName: string; accompRel: string } | null>(null);
 
   // Declaração de Comparecimento
   const [compDate, setCompDate] = useState(todayStr);
@@ -4577,12 +4579,14 @@ function TabAtestados({ patient, clinic }: { patient: any; clinic?: any }) {
     try {
       const typeLabel = CERTIFICATE_TYPES.find(c => c.value === certType)?.label ?? certType;
       const retDate = calcReturnDate(startDate, days) ?? "";
+      const cidsLimpos = cidsSecundarios.filter(c => c.trim());
       const content =
         `Atesto que o(a) paciente ${patient?.name}` +
         (patient?.cpf ? `, CPF ${patient.cpf}` : "") +
         ` foi avaliado(a) em ${dateStr} e necessita afastar-se de ${typeLabel} pelo período de ${days} dia(s), a contar de ${formatDateBR(startDate)}, com retorno previsto para ${retDate}.` +
         (certType === "acompanhamento" && accompName ? `\nPaciente acompanhado: ${accompName}${accompRel ? ` (${accompRel})` : ""}` : "") +
         (cid ? `\nCID-10: ${cid}` : "") +
+        (cidsLimpos.length ? `\nCID-10 secundário(s): ${cidsLimpos.join(", ")}` : "") +
         (obs ? `\nRestrições/Observações: ${obs}` : "");
       await reportsApi.create(patient.id, { date: startDate, report_type: "atestado", title: `Atestado — ${typeLabel}`, content });
       toast.success("Atestado salvo no prontuário");
@@ -4642,8 +4646,14 @@ function TabAtestados({ patient, clinic }: { patient: any; clinic?: any }) {
             </p>
           )}
           {printData.cid && (
-            <p style={{ marginTop: "12px" }}>
+            <p style={{ marginTop: "12px", marginBottom: printData.cidsSecundarios.length ? "0" : undefined }}>
               <strong>CID-10:</strong> {printData.cid}
+            </p>
+          )}
+          {printData.cidsSecundarios.length > 0 && (
+            <p style={{ marginTop: "4px", fontSize: "11.5px", color: "#444" }}>
+              <strong style={{ fontWeight: 400 }}>CID-10 secundário(s):</strong>{" "}
+              {printData.cidsSecundarios.join(", ")}
             </p>
           )}
           {printData.obs && (
@@ -4803,6 +4813,44 @@ function TabAtestados({ patient, clinic }: { patient: any; clinic?: any }) {
         <CidSearch value={cid} onChange={setCid} />
       </div>
 
+      {/* CIDs secundários (Valth 27/08) — mesma aparência do laudo. Só aparece
+          o botão até ele adicionar o primeiro, para não ocupar espaço à toa. */}
+      <div>
+        {cidsSecundarios.length > 0 && (
+          <>
+            <label className={lbl}>CID-10 Secundário(s)</label>
+            <div className="space-y-2">
+              {cidsSecundarios.map((c, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <div className="flex-1">
+                    <CidSearch
+                      value={c}
+                      autoFocus={c === "" && i === cidsSecundarios.length - 1}
+                      onChange={(v) => setCidsSecundarios(prev => prev.map((x, idx) => idx === i ? v : x))}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setCidsSecundarios(prev => prev.filter((_, idx) => idx !== i))}
+                    className="p-2 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 flex-shrink-0"
+                    title="Remover"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+        <button
+          type="button"
+          onClick={() => setCidsSecundarios(prev => [...prev, ""])}
+          className="mt-1.5 flex items-center gap-1.5 text-[11px] text-blue-600 hover:text-blue-700 font-semibold"
+        >
+          <Plus className="w-3.5 h-3.5" /> Adicionar CID secundário
+        </button>
+      </div>
+
       {/* Acompanhamento extra fields */}
       {certType === "acompanhamento" && (
         <div className="grid grid-cols-2 gap-3">
@@ -4855,7 +4903,7 @@ function TabAtestados({ patient, clinic }: { patient: any; clinic?: any }) {
             if ((certType === "trabalho" || certType === "geral") && !cid.trim()) {
               if (typeof window !== "undefined" && !window.confirm("Atestado para trabalho/INSS geralmente exige CID-10. Imprimir sem CID?")) return;
             }
-            setPrintData({ cid, days, certType, obs, startDate, accompName, accompRel });
+            setPrintData({ cid, cidsSecundarios: cidsSecundarios.filter(c => c.trim()), days, certType, obs, startDate, accompName, accompRel });
           }}
           className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold text-xs disabled:opacity-50 disabled:cursor-not-allowed"
         >
