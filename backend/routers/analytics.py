@@ -25,6 +25,7 @@ from schemas.analytics import (
     RebalancingRecommendationResponse, RebalancingRecommendationCreate,
     PortfolioDetailResponse
 )
+from tzutil import today_br
 
 router = APIRouter(prefix="/api/analytics", tags=["analytics"])
 
@@ -208,7 +209,7 @@ def get_portfolio_breakdown(portfolio_id: int, snapshot_date: Optional[date] = N
         raise HTTPException(status_code=404, detail="Portfolio not found")
 
     if not snapshot_date:
-        snapshot_date = date.today()
+        snapshot_date = today_br()
 
     allocations = db.query(AssetAllocation).filter(
         and_(
@@ -236,7 +237,7 @@ def get_portfolio_returns(
     if not portfolio:
         raise HTTPException(status_code=404, detail="Portfolio not found")
 
-    end_date = date.today()
+    end_date = today_br()
     start_date = end_date - timedelta(days=period_days)
 
     snapshots = db.query(PortfolioPerformanceSnapshot).filter(

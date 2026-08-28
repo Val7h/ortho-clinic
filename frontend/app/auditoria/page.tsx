@@ -18,6 +18,7 @@ import { ProtectedPageLayout } from "@/components/ProtectedPageLayout";
 import { useAuth } from "@/components/AuthProvider";
 import { auditApi, patientsApi } from "@/lib/api";
 import toast from "react-hot-toast";
+import { hojeISO } from "@/lib/utils";
 
 type Aba = "prontuario" | "atividade" | "resumo";
 
@@ -101,7 +102,7 @@ export default function AuditoriaPage() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `auditoria-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.download = `auditoria-${hojeISO()}.csv`;
       a.click();
       URL.revokeObjectURL(url);
     } catch {

@@ -8,7 +8,7 @@ from pydantic import BaseModel
 import logging
 import secrets
 from database import get_db
-from tzutil import today_br
+from tzutil import now_br, today_br
 from models.clinic import Clinic, ClinicSchedule, Appointment
 from models.patient import Patient
 from models.organization import User
@@ -617,7 +617,7 @@ def get_available_slots(slug: str, date_req: date, db: Session = Depends(get_db)
         }
 
     # ── Appointment: return time slots ────────────────────────────────────────
-    now = datetime.now()
+    now = now_br().replace(tzinfo=None)
     existing = db.query(Appointment).filter(
         Appointment.clinic_id == clinic.id,
         Appointment.date == date_req,

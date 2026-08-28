@@ -12,6 +12,7 @@
 
 import { useEffect, useState } from "react";
 import { agendaApi } from "@/lib/api";
+import { hojeISO } from "@/lib/utils";
 
 interface BadgeCounts {
   agendaBadge: number;
@@ -29,7 +30,7 @@ export function useNotificationBadge(): BadgeCounts {
 
     async function fetchCounts() {
       try {
-        const today = new Date().toISOString().split("T")[0];
+        const today = hojeISO();
         // Fetch today's agenda items
         const items = await agendaApi.get(today, today);
         if (cancelled) return;

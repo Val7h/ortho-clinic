@@ -6,7 +6,7 @@ import toast from "react-hot-toast";
 import NavBar from "@/components/NavBar";
 import { PageWithSidebar } from "@/components/PageWithSidebar";
 import { reportsApi, patientsApi } from "@/lib/api";
-import { formatDate, resolveDynamicParam } from "@/lib/utils";
+import { formatDate, resolveDynamicParam, hojeISO } from "@/lib/utils";
 
 const REPORT_TYPES = [
   "Atestado Médico",
@@ -54,7 +54,7 @@ export default function ReportPage() {
     if (!form.content.trim()) { toast.error("Conteúdo obrigatório"); return; }
     setSaving(true);
     try {
-      const newR = await reportsApi.create(pid, { ...form, date: new Date().toISOString().split("T")[0] });
+      const newR = await reportsApi.create(pid, { ...form, date: hojeISO() });
       toast.success("Laudo salvo!");
       setReports((prev) => [newR, ...prev]);
       setForm({ report_type: "Atestado Médico", title: "", content: "", purpose: "" });

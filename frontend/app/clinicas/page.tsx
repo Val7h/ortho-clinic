@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/Input";
 import { clinicApi } from "@/lib/api";
 import { useProtectedPage } from "@/components/AuthProvider";
 import toast from "react-hot-toast";
+import { hojeISO } from "@/lib/utils";
 
 const STATUS_CONFIG: Record<string, { label: string; variant: any }> = {
   pending:   { label: "Pendente",    variant: "warning" },
@@ -38,7 +39,7 @@ function getNextDates(dayOfWeek: number, count = 4): string[] {
     const d = new Date(today);
     d.setDate(today.getDate() + i);
     const dow = d.getDay() === 0 ? 6 : d.getDay() - 1;
-    if (dow === dayOfWeek) results.push(d.toISOString().slice(0, 10));
+    if (dow === dayOfWeek) results.push(hojeISO(d));
   }
   return results;
 }
@@ -79,12 +80,12 @@ export default function ClinicasPage() {
   const loadAppointments = async (clinicId: number) => {
     setApptLoading(clinicId);
     try {
-      const today = new Date().toISOString().slice(0, 10);
+      const today = hojeISO();
       const future = new Date();
       future.setDate(future.getDate() + 30);
       const data = await clinicApi.appointments(clinicId, {
         date_from: today,
-        date_to: future.toISOString().slice(0, 10),
+        date_to: hojeISO(future),
       });
       setApptsByClinic((prev) => ({ ...prev, [clinicId]: data }));
     } catch {

@@ -24,6 +24,7 @@ import {
 import { useProtectedPage } from '@/components/AuthProvider';
 import toast from 'react-hot-toast';
 import { Button, Card, Input, Select, Badge, Modal, useModal } from '@/components/ui';
+import { hojeISO } from "@/lib/utils";
 
 const METHODS: Record<string, { label: string; icon: any; color: string }> = {
   pix: { label: "Pix", icon: Smartphone, color: "text-teal-600 bg-teal-50" },
@@ -80,14 +81,14 @@ export default function FinanceiroPage() {
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const privileged = ['doctor', 'admin', 'superadmin'].includes((user as any)?.role ?? '');
-  const emptyForm = () => ({ patient_id: "", amount: "", payment_method: "pix", description: "", status: "paid", date: today.toISOString().slice(0, 10), notes: "" });
+  const emptyForm = () => ({ patient_id: "", amount: "", payment_method: "pix", description: "", status: "paid", date: hojeISO(today), notes: "" });
   const [form, setForm] = useState({
     patient_id: "",
     amount: "",
     payment_method: "pix",
     description: "",
     status: "paid",
-    date: today.toISOString().slice(0, 10),
+    date: hojeISO(today),
     notes: "",
   });
 

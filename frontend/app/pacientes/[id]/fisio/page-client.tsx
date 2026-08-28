@@ -6,7 +6,7 @@ import toast from "react-hot-toast";
 import NavBar from "@/components/NavBar";
 import { PageWithSidebar } from "@/components/PageWithSidebar";
 import { physioApi, patientsApi } from "@/lib/api";
-import { formatDate, resolveDynamicParam } from "@/lib/utils";
+import { formatDate, resolveDynamicParam, hojeISO } from "@/lib/utils";
 
 export default function PhysioPage() {
   const params = useParams();
@@ -34,7 +34,7 @@ export default function PhysioPage() {
     e.preventDefault();
     setSaving(true);
     try {
-      const newFi = await physioApi.create(pid, { ...form, sessions: Number(form.sessions), date: new Date().toISOString().split("T")[0] });
+      const newFi = await physioApi.create(pid, { ...form, sessions: Number(form.sessions), date: hojeISO() });
       toast.success("Encaminhamento salvo!");
       setPhysioList((prev) => [newFi, ...prev]);
       setForm({ diagnosis: "", cid10: "", sessions: "10", frequency: "3x por semana", goals: "", precautions: "", techniques: "", notes: "" });

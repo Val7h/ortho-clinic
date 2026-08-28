@@ -10,7 +10,7 @@ import toast from "react-hot-toast";
 import NavBar from "@/components/NavBar";
 import { PageWithSidebar } from "@/components/PageWithSidebar";
 import { api, prescriptionsApi, patientsApi } from "@/lib/api";
-import { formatDate, resolveDynamicParam } from "@/lib/utils";
+import { formatDate, resolveDynamicParam, hojeISO } from "@/lib/utils";
 
 interface MemedConfig {
   enabled: boolean;
@@ -514,7 +514,7 @@ export default function PrescriptionPage() {
       setMemedSaving(true);
       try {
         const newRx = await prescriptionsApi.create(pid, {
-          date: new Date().toISOString().split("T")[0],
+          date: hojeISO(),
           medications: meds,
           memed_id: memedId,
           instructions: "",
@@ -620,7 +620,7 @@ export default function PrescriptionPage() {
       setSaving(true);
       try {
         const newRx = await prescriptionsApi.create(pid, {
-          date: new Date().toISOString().split("T")[0],
+          date: hojeISO(),
           medications: [],
           instructions: freeText,
         });
@@ -639,7 +639,7 @@ export default function PrescriptionPage() {
     setSaving(true);
     try {
       const newRx = await prescriptionsApi.create(pid, {
-        date: new Date().toISOString().split("T")[0],
+        date: hojeISO(),
         medications: validMeds,
         instructions,
       });
@@ -658,7 +658,7 @@ export default function PrescriptionPage() {
     if (freeTextMode) {
       if (!freeText.trim()) { toast.error("Escreva o conteudo da receita para imprimir"); return; }
       setPrintRx({
-        date: new Date().toISOString().split("T")[0],
+        date: hojeISO(),
         medications: [],
         instructions: freeText,
       });
@@ -667,7 +667,7 @@ export default function PrescriptionPage() {
     const validMeds = medications.filter((m) => m.name.trim());
     if (validMeds.length === 0) { toast.error("Adicione pelo menos um medicamento para imprimir"); return; }
     setPrintRx({
-      date: new Date().toISOString().split("T")[0],
+      date: hojeISO(),
       medications: validMeds,
       instructions,
     });
@@ -687,7 +687,7 @@ export default function PrescriptionPage() {
       if (!controlledFreeText.trim()) { toast.error("Escreva o conteudo da receita"); return; }
       const rx: ControlledPrescription = {
         id: `RX-${Date.now()}`,
-        date: new Date().toISOString().split("T")[0],
+        date: hojeISO(),
         medications: [],
         instructions: controlledFreeText,
         controlType,
@@ -700,7 +700,7 @@ export default function PrescriptionPage() {
     if (validMeds.length === 0) { toast.error("Adicione pelo menos um medicamento"); return; }
     const rx: ControlledPrescription = {
       id: `RX-${Date.now()}`,
-      date: new Date().toISOString().split("T")[0],
+      date: hojeISO(),
       medications: validMeds,
       instructions: controlledInstructions,
       controlType,

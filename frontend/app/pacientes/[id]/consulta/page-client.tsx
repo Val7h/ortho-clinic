@@ -9,7 +9,7 @@ import toast from "react-hot-toast";
 import NavBar from "@/components/NavBar";
 import { PageWithSidebar } from "@/components/PageWithSidebar";
 import { consultationsApi, patientsApi, mediaApi, msgErro } from "@/lib/api";
-import { resolveDynamicParam } from "@/lib/utils";
+import { resolveDynamicParam, hojeISO } from "@/lib/utils";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants
@@ -217,7 +217,14 @@ export default function ConsultationPage() {
   const [teleconsultUrl, setTeleconsultUrl] = useState<string | null>(null);
 
   // Identification
-  const [consultDate, setConsultDate] = useState(new Date().toISOString().slice(0, 16));
+  // Data e HORA da consulta pelo relógio local. Com toISOString o campo
+  // nascia 3 horas à frente e, à noite, no dia seguinte.
+  const [consultDate, setConsultDate] = useState(() => {
+    const agora = new Date();
+    const hh = String(agora.getHours()).padStart(2, "0");
+    const mm = String(agora.getMinutes()).padStart(2, "0");
+    return `${hojeISO(agora)}T${hh}:${mm}`;
+  });
   const [consultType, setConsultType] = useState("retorno");
 
   // Anamnese
@@ -320,7 +327,7 @@ export default function ConsultationPage() {
     if (!returnDays) return undefined;
     const d = new Date();
     d.setDate(d.getDate() + parseInt(returnDays));
-    return d.toISOString().slice(0, 10);
+    return hojeISO(d);
   };
 
   // ── Submit ─────────────────────────────────────────────────────────────────

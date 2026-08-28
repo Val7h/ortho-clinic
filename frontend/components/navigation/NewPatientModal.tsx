@@ -14,6 +14,7 @@ import { patientsApi } from "@/lib/api";
 import { User, Phone, Mail, Calendar, CreditCard, AlertTriangle } from "lucide-react";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
+import { hojeISO } from "@/lib/utils";
 
 interface NewPatientModalProps {
   open: boolean;
@@ -280,7 +281,7 @@ export function NewPatientModal({ open, onClose, onSuccess }: NewPatientModalPro
               type="date"
               value={form.birthdate}
               onChange={update("birthdate")}
-              max={new Date().toISOString().split("T")[0]}
+              max={hojeISO()}
               className="w-full h-12 pl-9 pr-4 text-base rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-400"
             />
           </div>

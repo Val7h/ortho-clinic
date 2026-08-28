@@ -10,6 +10,7 @@ from models.financial import FinancialRecord
 from models.organization import User
 from schemas.consultation import ConsultationCreate, ConsultationUpdate, ConsultationOut
 from deps import require_doctor, get_current_user
+from tzutil import today_br
 
 router = APIRouter(prefix="/patients/{patient_id}/consultations", tags=["consultations"], dependencies=[Depends(require_doctor)])
 
@@ -66,7 +67,7 @@ def create_consultation(
         payment_method="a_definir",
         status="pending",
         description=financial_description[:300],
-        date=datetime.utcnow().date(),
+        date=today_br(),                      # dia do consultorio, nao de Londres
     )
     db.add(financial_record)
 
@@ -85,7 +86,7 @@ def get_agenda(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    today = date.today()
+    today = today_br()
     if start is None:
         start = today - timedelta(days=today.weekday())  # Monday of current week
     if end is None:

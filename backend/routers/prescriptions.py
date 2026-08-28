@@ -22,6 +22,7 @@ from schemas.prescription import (
 )
 from services.pdf_generator import PrescriptionPDFGenerator, compute_pdf_checksum
 from services.clicksign_service import ClickSignService, generate_qr_code_token
+from tzutil import today_br
 
 router = APIRouter(prefix="/api/prescriptions", tags=["prescriptions"])
 
@@ -510,7 +511,7 @@ def prescription_to_detail_response(prescription: Prescription):
 
 def calculate_age(birth_date) -> int:
     """Calcula idade a partir de data de nascimento"""
-    today = datetime.utcnow().date()
+    today = today_br()
     age = today.year - birth_date.year
     if (today.month, today.day) < (birth_date.month, birth_date.day):
         age -= 1

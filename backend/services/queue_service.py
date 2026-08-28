@@ -1,6 +1,6 @@
 """Queue Management Services - Business logic for queue operations."""
 
-from datetime import datetime, timedelta
+from datetime import datetime, time, timedelta
 from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
 from sqlalchemy import func
@@ -9,6 +9,7 @@ from models.queue import ClinicQueue, PrescriptionSignature, AnamnesisTemplate
 from models.clinic import Clinic, Appointment
 from models.patient import Patient
 from models.documents import Prescription
+from tzutil import today_br
 
 
 class QueueService:
@@ -122,7 +123,8 @@ class QueueService:
         completed_today = db.query(func.count(ClinicQueue.id)).filter(
             ClinicQueue.clinic_id == clinic_id,
             ClinicQueue.status == "completed",
-            ClinicQueue.updated_at >= datetime.utcnow().replace(hour=0, minute=0, second=0)
+            # 'hoje' comeca a meia-noite do consultorio, nao de Londres
+            ClinicQueue.updated_at >= datetime.combine(today_br(), time.min)
         ).scalar()
 
         avg_wait = QueueService.get_avg_wait_time(clinic_id=clinic_id, db=db)

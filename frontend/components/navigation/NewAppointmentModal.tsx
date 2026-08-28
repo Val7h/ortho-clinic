@@ -18,6 +18,7 @@ import { patientsApi, consultationsApi } from "@/lib/api";
 import { ChevronLeft, ChevronRight, Check, Search, User, Calendar } from "lucide-react";
 import toast from "react-hot-toast";
 import { useRouter, useSearchParams } from "next/navigation";
+import { hojeISO } from "@/lib/utils";
 
 interface NewAppointmentModalProps {
   open: boolean;
@@ -40,7 +41,7 @@ interface FormState {
 const INITIAL_FORM: FormState = {
   patientId: null,
   patientName: "",
-  date: new Date().toISOString().split("T")[0],
+  date: hojeISO(),
   time: "08:00",
   notes: "",
 };
@@ -203,7 +204,7 @@ export function NewAppointmentModal({
             <input
               type="date"
               value={form.date}
-              min={new Date().toISOString().split("T")[0]}
+              min={hojeISO()}
               onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))}
               className="w-full h-12 px-4 text-base rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500/40"
             />

@@ -6,7 +6,7 @@ import toast from "react-hot-toast";
 import NavBar from "@/components/NavBar";
 import { PageWithSidebar } from "@/components/PageWithSidebar";
 import { examsApi, patientsApi } from "@/lib/api";
-import { formatDate, resolveDynamicParam } from "@/lib/utils";
+import { formatDate, resolveDynamicParam, hojeISO } from "@/lib/utils";
 
 interface ExamItem { name: string; laterality: string; notes: string; }
 const emptyExam = (): ExamItem => ({ name: "", laterality: "", notes: "" });
@@ -62,7 +62,7 @@ export default function ExamsPage() {
     setSaving(true);
     try {
       const newEx = await examsApi.create(pid, {
-        date: new Date().toISOString().split("T")[0],
+        date: hojeISO(),
         exams: valid,
         clinical_indication: indication,
         urgency,

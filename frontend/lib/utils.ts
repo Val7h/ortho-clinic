@@ -83,3 +83,18 @@ export const TIMELINE_ICON_COLORS: Record<string, string> = {
   fisio: "bg-amber-600",
   laudo: "bg-gray-600",
 };
+
+// ── A data de HOJE, pelo relógio de quem está usando ────────────────────────
+// 27/08 — um atestado emitido às 23h saía com "avaliado em 27/08" e
+// "afastamento a contar de 28/08". O app calculava a data dos campos com
+// toISOString(), que devolve a data em Londres: depois das 21h no Brasil já é
+// o dia seguinte lá. Documento com data errada é problema sério — atestado é
+// documento legal.
+//
+// Aqui a data sai do relógio local, montada peça por peça, sem passar por UTC.
+export function hojeISO(d: Date = new Date()): string {
+  const ano = d.getFullYear();
+  const mes = String(d.getMonth() + 1).padStart(2, "0");
+  const dia = String(d.getDate()).padStart(2, "0");
+  return `${ano}-${mes}-${dia}`;
+}

@@ -8,13 +8,14 @@ from models.consultation import Consultation
 from models.queue import WaitingRoomEntry
 from deps import get_current_user
 from models.organization import User
+from tzutil import today_br
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"], dependencies=[Depends(get_current_user)])
 
 
 @router.get("")
 def get_dashboard(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    today = date.today()
+    today = today_br()
     start_month = today.replace(day=1)
     start_week = today - timedelta(days=today.weekday())
 

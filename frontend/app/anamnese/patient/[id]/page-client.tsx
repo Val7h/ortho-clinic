@@ -17,6 +17,7 @@ import {
 import toast from 'react-hot-toast';
 import Link from 'next/link';
 import { resolveDynamicParam } from '@/lib/utils';
+import { hojeISO } from "@/lib/utils";
 
 interface PatientData {
   id: number;
@@ -217,7 +218,7 @@ export default function PatientAnamnesePage() {
               patientName={patient.name}
               lastConsultationDate={
                 anamneseHistory.length > 0
-                  ? new Date(anamneseHistory[0].created_at).toISOString().split('T')[0]
+                  ? hojeISO(new Date(anamneseHistory[0].created_at))
                   : undefined
               }
               lastPainIntensity={

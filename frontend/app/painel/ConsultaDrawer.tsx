@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { anamnesisApi, api, patientsApi, consultationsApi, prescriptionsApi, prescriptionTemplatesApi, examsApi, evolutionApi, clinicApi, chatApi, reportsApi, leafletsApi, waitingRoomApi, remindersApi, msgErro } from "@/lib/api";
-import { formatDate, calcAge } from "@/lib/utils";
+import { formatDate, calcAge, hojeISO } from "@/lib/utils";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -1860,7 +1860,7 @@ function TabProntuario({ patientId, patient }: { patientId: number; patient?: an
   // app sabe qual pedaço da folha é qual registro.
   const refBlocos = useRef<BlocoFolha[]>([]);
 
-  const todayISO = useMemo(() => new Date().toISOString().split("T")[0], []);
+  const todayISO = useMemo(() => hojeISO(), []);
   const tipoLabel = (v: string) => CONSULT_TYPES.find(c => c.value === v)?.label ?? "";
 
   const rascunhoKey = `orthoclinic_anamnese_folha_${userScope()}_${patientId}`;
@@ -2379,7 +2379,7 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
     setSaving(true);
     try {
       const newRx = await prescriptionsApi.create(patientId, {
-        date: new Date().toISOString().split("T")[0],
+        date: hojeISO(),
         prescription_type: rxType,
         medications: validMeds,
         instructions: freeTextMode ? freeText : instructions,
@@ -2422,7 +2422,7 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
     rxDocSeq.current += 1;
     setPrintRxCollectorId(`receita-${rxDocSeq.current}`);
     setPrintRx({
-      date: new Date().toISOString().split("T")[0],
+      date: hojeISO(),
       medications: validMeds,
       instructions: freeTextMode ? freeText : instructions,
       prescription_type: rxType,
@@ -3287,7 +3287,7 @@ function TabExames({ patientId, patient, clinic }: { patientId: number; patient:
     setSaving(true);
     try {
       const newEx = await examsApi.create(patientId, {
-        date: new Date().toISOString().split("T")[0],
+        date: hojeISO(),
         exams: [],
         free_text: freeText.trim(),
       });
@@ -4303,7 +4303,7 @@ function TabProcedimentos({ patientId, patient, clinic }: { patientId: number; p
     try {
       // Persist via evolutionApi with procedure tag until dedicated endpoint exists
       await evolutionApi.create(patientId, {
-        entry_date: new Date().toISOString().split("T")[0],
+        entry_date: hojeISO(),
         content: `[PROCEDIMENTO]${cid ? ` — CID: ${cid}` : ""}${duration ? ` — Duração: ${duration}` : ""}\n${text.trim()}`,
       });
       // 11/08 — o lembrete de repetição. Visco e zoledrônico têm data certa
@@ -4543,7 +4543,7 @@ function TabAtestados({ patient, clinic }: { patient: any; clinic?: any }) {
   // inputs não-controlados por id e não entravam no impresso)
   const [accompName, setAccompName] = useState("");
   const [accompRel, setAccompRel] = useState("");
-  const todayStr = useMemo(() => new Date().toISOString().split("T")[0], []);
+  const todayStr = useMemo(() => hojeISO(), []);
   const [startDate, setStartDate] = useState(todayStr);
   const [printData, setPrintData] = useState<{ cid: string; cidsSecundarios: string[]; days: string; certType: string; obs: string; startDate: string; accompName: string; accompRel: string } | null>(null);
 
@@ -5430,7 +5430,7 @@ function TabFotos({ patientId }: { patientId: number }) {
       fd.append("file", file);
       fd.append("title", file.name || "Foto de exame");
       fd.append("category", "photo");
-      fd.append("date", new Date().toISOString().split("T")[0]);
+      fd.append("date", hojeISO());
       try {
         const res = await fetch(`${API_URL}/patients/${patientId}/documents/upload`, {
           method: "POST",
@@ -5845,7 +5845,7 @@ export default function ConsultaDrawer({ entry, onClose, onStatusChange }: Consu
     }
     (async () => {
       try {
-        const hoje = new Date().toISOString().slice(0, 10);
+        const hoje = hojeISO();
         const wk = await clinicApi.week(hoje, hoje);
         const appt = (wk || []).find((a: any) =>
           a.source === "appointment" && a.clinic_id &&

@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { resolveDynamicParam } from "@/lib/utils";
+import { resolveDynamicParam, hojeISO } from "@/lib/utils";
 import {
   ChevronLeft, ChevronRight, CheckCircle, Loader2,
   AlertCircle, Clock, MapPin, Users, Hash,
@@ -11,7 +11,9 @@ import { clinicApi } from "@/lib/api";
 const MONTHS_PT = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 const DOW_NAMES = ["Segunda","Terça","Quarta","Quinta","Sexta","Sábado","Domingo"];
 
-function toISO(d: Date) { return d.toISOString().slice(0, 10); }
+// Dia do calendário pelo relógio de quem está marcando, não pelo de
+// Londres (27/08): à noite o dia inteiro escorregava para o seguinte.
+function toISO(d: Date) { return hojeISO(d); }
 
 export default function AgendarPage() {
   const params = useParams();

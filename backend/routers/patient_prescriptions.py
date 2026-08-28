@@ -16,6 +16,7 @@ from models.patient import Patient
 from models.patient_rx import PatientRx
 from models.organization import User
 from deps import get_current_user
+from tzutil import today_br
 
 router = APIRouter(
     prefix="/patients/{patient_id}/prescriptions",
@@ -101,7 +102,7 @@ def create_prescription(
     try:
         rx_date = date.fromisoformat(data.date)
     except (ValueError, TypeError):
-        rx_date = date.today()
+        rx_date = today_br()
 
     rx = PatientRx(
         patient_id=patient_id,

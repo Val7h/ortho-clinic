@@ -16,6 +16,7 @@ import {
   X, Loader2, Check,
 } from "lucide-react";
 import { patientDocsApi, msgErro } from "@/lib/api";
+import { hojeISO } from "@/lib/utils";
 
 const ACCEPTED_FILE = ".pdf,.jpg,.jpeg,.png,.webp,.heic,.heif,.doc,.docx";
 const MAX_MB = 25;
@@ -46,7 +47,7 @@ export function UploadModal({
   const [preview, setPreview] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState(mode === "camera" ? "exam" : "other");
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(hojeISO());
   const [description, setDescription] = useState("");
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);

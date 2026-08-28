@@ -21,6 +21,7 @@ import { PatientAutocomplete } from '@/components/PatientAutocomplete';
 import { appointmentsApi, clinicApi, msgErro } from '@/lib/api';
 import { useOfflineAppointmentQueue } from '@/hooks/useOfflineAppointmentQueue';
 import { useAppointmentReminders } from '@/hooks/useAppointmentReminders';
+import { hojeISO } from "@/lib/utils";
 
 const APPOINTMENT_TYPES = [
   { value: 'consulta',      label: '1ª Consulta',  color: '#0F2D5E' },
@@ -293,7 +294,7 @@ export function AppointmentFormModal({
             <input
               type="date"
               value={date}
-              min={new Date().toISOString().slice(0, 10)}
+              min={hojeISO()}
               onChange={e => { setDate(e.target.value); setStartTime(''); }}
               className="input"
               required
