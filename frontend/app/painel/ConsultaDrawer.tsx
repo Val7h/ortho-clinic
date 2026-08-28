@@ -3094,7 +3094,14 @@ function PrintExamModal({ text, patientName, patient, clinic, onClose, fontSize 
         <div id="exam-print-portal" data-print-portal style={{ display: "none" }}>{folha}</div>,
         document.body,
       )}
-      <div id="print-exam-root" className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-lg flex flex-col overflow-hidden">
+      {/* 27/08 — o preview do pedido de exame era a ÚNICA janela de impressão
+          sem limite de altura (receita, documento e centro de impressão já
+          tinham max-h). Com uma lista grande de exames laboratoriais a caixa
+          crescia mais que a tela e, centralizada, empurrava o cabeçalho para
+          fora por cima: o botão Imprimir ficava inalcançável e só dava para
+          usá-lo diminuindo o zoom do navegador. Com max-h a folha rola dentro
+          da janela e o cabeçalho fica sempre visível. */}
+      <div id="print-exam-root" className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
         <div className="no-print px-5 pt-4 pb-3 border-b border-gray-200 dark:border-slate-700 flex items-center justify-between flex-shrink-0">
           <h2 className="font-bold text-slate-900 dark:text-slate-50 text-sm">Preview — Pedido de Exame</h2>
           <div className="flex items-center gap-2">
@@ -3106,8 +3113,11 @@ function PrintExamModal({ text, patientName, patient, clinic, onClose, fontSize 
             </button>
           </div>
         </div>
-        {/* A tela mostra exatamente a mesma folha que vai para a impressora. */}
-        <div className="flex-1 overflow-y-auto p-6 bg-white">
+        {/* A tela mostra exatamente a mesma folha que vai para a impressora.
+            Rolagem nos dois sentidos: se a folha for mais larga que a janela
+            (tela pequena), o senhor alcança o lado direito rolando, em vez de
+            o conteúdo ser cortado pelo overflow-hidden da caixa. */}
+        <div className="flex-1 overflow-auto p-6 bg-white">
           {folha}
         </div>
       </div>
