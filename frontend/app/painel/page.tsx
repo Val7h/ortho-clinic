@@ -137,9 +137,12 @@ interface PatientCardProps {
   onSelect: (entry: WaitingRoomEntry) => void;
   busy: boolean;
   selected: boolean;
+  // Acabou de sair do filtro atual (mudou de status); continua visível e
+  // sem clique por um instante para ninguém ocupar o lugar dele na tela.
+  saindo?: boolean;
 }
 
-function PatientCard({ entry, onStatusChange, onRemove, onAddValue, onSelect, busy, selected }: PatientCardProps) {
+function PatientCard({ entry, onStatusChange, onRemove, onAddValue, onSelect, busy, selected, saindo }: PatientCardProps) {
   const isAttended = entry.status === 'attended';
   const isAbsent = entry.status === 'absent';
   const isDimmed = isAttended || isAbsent;
@@ -163,8 +166,8 @@ function PatientCard({ entry, onStatusChange, onRemove, onAddValue, onSelect, bu
           : entry.status === 'waiting'
           ? 'border-amber-300 dark:border-amber-700'
           : 'border-slate-200 dark:border-slate-700'
-      } bg-white dark:bg-slate-900 ${isDimmed ? 'opacity-55' : ''}`}
-      onClick={() => onSelect(entry)}
+      } bg-white dark:bg-slate-900 ${isDimmed ? 'opacity-55' : ''} ${saindo ? 'opacity-40 pointer-events-none transition-opacity duration-700' : ''}`}
+      onClick={() => { if (!saindo) onSelect(entry); }}
     >
       {entry.status === 'attending' && !selected && (
         <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
@@ -355,6 +358,13 @@ export default function SalaDeEsperaPage() {
 
   // Drawer state
   const [selectedEntry, setSelectedEntry] = useState<WaitingRoomEntry | null>(null);
+  // Fila não reflui debaixo do clique (Valth 28/08): "clico no paciente pra
+  // iniciar e inicia com outro". Ao mudar de status e sumir do filtro atual,
+  // o cartão fica visível (apagado, sem clique) por ~900ms antes de sumir de
+  // verdade — nesse intervalo nada mais ocupa a posição dele na tela.
+  const [saindoIds, setSaindoIds] = useState<Set<number>>(new Set());
+  const saindoTimersRef = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
+  useEffect(() => () => { saindoTimersRef.current.forEach(clearTimeout); }, []);
 
   const checkinModal = useModal();
   const [patientResults, setPatientResults] = useState<any[]>([]);
@@ -454,7 +464,7 @@ export default function SalaDeEsperaPage() {
   const attendedCount = countBy('attended');
   const absentCount = countBy('absent');
 
-  const filtered = filter === 'all' ? entries : entries.filter((e) => e.status === filter);
+  const filtered = filter === 'all' ? entries : entries.filter((e) => e.status === filter || saindoIds.has(e.id));
 
   // "Total do dia" ignora pacientes ausentes (não compareceram → não gera receita)
   const totalValueCents = entries
@@ -466,6 +476,13 @@ export default function SalaDeEsperaPage() {
     try {
       const updated = await waitingRoomApi.updateStatus(id, newStatus);
       setEntries((prev) => prev.map((e) => (e.id === id ? { ...e, ...updated } : e)));
+      setSaindoIds((prev) => new Set(prev).add(id));
+      const timerAntigo = saindoTimersRef.current.get(id);
+      if (timerAntigo) clearTimeout(timerAntigo);
+      saindoTimersRef.current.set(id, setTimeout(() => {
+        setSaindoIds((prev) => { const n = new Set(prev); n.delete(id); return n; });
+        saindoTimersRef.current.delete(id);
+      }, 900));
       // Sync selected entry status
       setSelectedEntry((prev) => (prev && prev.id === id ? { ...prev, ...updated } : prev));
       const labels: Record<QueueStatus, string> = {
@@ -774,6 +791,7 @@ export default function SalaDeEsperaPage() {
                       onSelect={handleSelectEntry}
                       busy={busyIds.has(entry.id)}
                       selected={selectedEntry?.id === entry.id}
+                      saindo={saindoIds.has(entry.id)}
                     />
                   ))}
                   {totalValueCents > 0 && (

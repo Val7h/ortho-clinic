@@ -5203,6 +5203,12 @@ function TabLaudos({ patient, clinic }: { patient: any; clinic?: any }) {
           🎙️ Laudo INSS por ditado (IA)
           <span className="font-normal text-[10px] text-indigo-400">médico assistente · Sonnet 5</span>
         </p>
+        {/* Nome bem visível logo acima do ditado (Valth 28/08): laudo saiu com o
+            nome de outra paciente. Aqui é onde o olho para antes de começar a
+            falar — mais eficaz que só o cabeçalho da gaveta, lá em cima. */}
+        <p className="text-sm font-bold text-indigo-900 dark:text-indigo-200 -mt-1">
+          Ditando para: {patient?.name || "—"}
+        </p>
         <textarea
           className={`${inp} resize-none`}
           rows={4}
