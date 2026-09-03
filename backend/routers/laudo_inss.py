@@ -14,7 +14,9 @@ Travas herdadas da doutrina de laudos do Valth:
   - Prosa corrida técnica (sem bullets), datas por extenso, PT-BR.
 """
 import os
+import asyncio
 import logging
+import time
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional
 
@@ -228,36 +230,81 @@ async def gerar_laudo(
         "messages": [{"role": "user", "content": "\n".join(c for c in contexto if c is not None)}],
     }
 
-    try:
-        # 150s: ditado longo gera laudo longo, e 60s cortava no meio
-        # (Valth 27/08). Fica abaixo do limite de 3 min do navegador,
-        # para o erro que ele vê ser o nosso, explicativo, e nao um
-        # timeout seco do axios.
-        async with httpx.AsyncClient(timeout=150.0) as client:
-            resp = await client.post(
-                ANTHROPIC_API_URL,
-                headers={
-                    "x-api-key": api_key,
-                    "anthropic-version": "2023-06-01",
-                    "content-type": "application/json",
-                },
-                json=payload,
+    # 28/08 — "servico de IA indisponivel" apareceu para o Valth num laudo
+    # que, testado minutos depois, gerou normal. A causa nao era bug nosso:
+    # a Anthropic devolveu um erro transitorio (sobrecarga/rate limit) e a
+    # primeira tentativa desistia na hora. Agora tenta de nao mais de 3x
+    # antes de mostrar erro, com um pequeno intervalo entre tentativas —
+    # um tropeco passageiro do lado deles nao deve mais chegar ate ele.
+    #
+    # 429/500/502/503/529 sao transitorios (vale repetir). 400/401/403/404
+    # nao mudam numa segunda tentativa — falha na hora, sem desperdicar tempo.
+    TRANSITORIOS = {429, 500, 502, 503, 529}
+    MAX_TENTATIVAS = 3
+    ORCAMENTO_TOTAL_S = 170.0  # margem sob os 180s de timeout do navegador
+
+    inicio = time.monotonic()
+    resp = None
+    ultimo_erro_rede = None
+    ultimo_status = None
+
+    for tentativa in range(1, MAX_TENTATIVAS + 1):
+        restante = ORCAMENTO_TOTAL_S - (time.monotonic() - inicio)
+        if restante <= 5:
+            break
+        try:
+            async with httpx.AsyncClient(timeout=min(60.0, restante)) as client:
+                resp = await client.post(
+                    ANTHROPIC_API_URL,
+                    headers={
+                        "x-api-key": api_key,
+                        "anthropic-version": "2023-06-01",
+                        "content-type": "application/json",
+                    },
+                    json=payload,
+                )
+        except httpx.TimeoutException:
+            logger.warning(f"Anthropic API: tentativa {tentativa}/{MAX_TENTATIVAS} sem resposta a tempo")
+            resp = None
+        except httpx.RequestError as exc:
+            # Não logar str(exc): pode embutir header (inclusive a API key) na mensagem.
+            logger.warning(f"Anthropic API: erro de rede na tentativa {tentativa}/{MAX_TENTATIVAS}: {type(exc).__name__}")
+            ultimo_erro_rede = exc
+            resp = None
+        else:
+            if resp.status_code == 200:
+                break
+            ultimo_status = resp.status_code
+            if resp.status_code in TRANSITORIOS:
+                logger.warning(f"Anthropic API {resp.status_code} na tentativa {tentativa}/{MAX_TENTATIVAS}: {resp.text[:300]}")
+                resp = None
+            else:
+                # erro definitivo (autenticação, requisição inválida...): não adianta repetir
+                logger.error(f"Anthropic API {resp.status_code}: {resp.text[:300]}")
+                break
+
+        if tentativa < MAX_TENTATIVAS:
+            restante = ORCAMENTO_TOTAL_S - (time.monotonic() - inicio)
+            if restante <= 5:
+                break
+            await asyncio.sleep(min(1.5 * tentativa, restante - 3))
+
+    if resp is None or resp.status_code != 200:
+        if resp is not None and resp.status_code not in TRANSITORIOS:
+            raise HTTPException(502, "Serviço de IA rejeitou a solicitação")
+        if ultimo_status is not None:
+            raise HTTPException(
+                504,
+                "A IA está sobrecarregada no momento e não respondeu após 3 tentativas. "
+                "O seu ditado NÃO se perdeu — tente gerar de novo em alguns instantes.",
             )
-    except httpx.TimeoutException:
-        logger.error("Anthropic API: tempo esgotado gerando laudo")
+        if ultimo_erro_rede is not None:
+            raise HTTPException(502, "Falha ao conectar com o serviço de IA")
         raise HTTPException(
             504,
             "A IA demorou demais para responder. O seu ditado NÃO se perdeu — "
             "tente gerar de novo; se repetir, divida o ditado em duas partes.",
         )
-    except httpx.RequestError as exc:
-        # Não logar str(exc): pode embutir header (inclusive a API key) na mensagem.
-        logger.error(f"Erro de rede na Anthropic API: {type(exc).__name__}")
-        raise HTTPException(502, "Falha ao conectar com o serviço de IA")
-
-    if resp.status_code != 200:
-        logger.error(f"Anthropic API {resp.status_code}: {resp.text[:300]}")
-        raise HTTPException(502, "Serviço de IA indisponível no momento")
 
     blocks = resp.json().get("content", [])
     texto = "".join(b.get("text", "") for b in blocks if b.get("type") == "text").strip()
