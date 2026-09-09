@@ -3125,6 +3125,86 @@ function PrintExamModal({ text, patientName, patient, clinic, onClose, fontSize 
   );
 }
 
+// ── Guia SADT posicionada (piloto Unimed Caruaru, 09/09) ────────────────────
+// Pedido do Valth (por voz, via Chief of Staff): fotografou 4 guias TISS em
+// branco (GEAP, Unimed Caruaru, Bradesco Saúde, SASSEPE) e quer os dados já
+// nos campos certos, sem escrever à mão. Layouts DIFERENTES entre si — cada
+// convênio precisa da própria calibração. Este é o piloto de UM: Unimed
+// Caruaru, que segue o padrão nacional TISS 3.02.00 (a GEAP usa o mesmo
+// layout — calibrando esta, a da GEAP fica muito perto de pronta também).
+//
+// Coordenadas em mm a partir do canto superior esquerdo da folha A4, lidas a
+// olho de uma FOTO DE CELULAR em ângulo — não são confiáveis no milímetro que
+// os campos exigem. CALIBRADO fica false até o Valth medir com régua o
+// original em branco e confirmar os números (ver guiaSadtCalibrar() abaixo).
+interface CampoGuiaSadt { numero: string; xMm: number; yMm: number; larguraMm: number; fonteMm?: number }
+
+const GUIA_UNIMED_CARUARU_CALIBRADO = false;
+const GUIA_UNIMED_CARUARU_CAMPOS: CampoGuiaSadt[] = [
+  { numero: "8-Nº Beneficiário",         xMm: 60,  yMm: 28,  larguraMm: 55 },
+  { numero: "10-Nome",                   xMm: 60,  yMm: 40,  larguraMm: 100 },
+  { numero: "14-Nome do Contratado",     xMm: 15,  yMm: 58,  larguraMm: 100 },
+  { numero: "15-Nome do Profissional Solicitante", xMm: 15, yMm: 70, larguraMm: 100 },
+  { numero: "17-Número no Conselho",     xMm: 130, yMm: 70,  larguraMm: 25 },
+  { numero: "18-UF",                     xMm: 160, yMm: 70,  larguraMm: 10 },
+  { numero: "6-Data",                    xMm: 15,  yMm: 25,  larguraMm: 25 },
+  { numero: "23-Indicação Clínica",      xMm: 15,  yMm: 92,  larguraMm: 175 },
+  { numero: "36-Data (execução)",        xMm: 15,  yMm: 112, larguraMm: 20 },
+  { numero: "41-Descrição (exames)",     xMm: 60,  yMm: 112, larguraMm: 130, fonteMm: 3 },
+];
+
+// Ferramenta de calibração: o Valth mede com uma régua, no ORIGINAL em
+// branco, a distância do canto superior esquerdo da folha até o início de
+// cada campo listado acima — em centímetros está bom, dá pra converter. Ele
+// me passa os números e eu atualizo GUIA_UNIMED_CARUARU_CAMPOS de uma vez.
+function GuiaSadtDebugRegua() {
+  const marcas = [];
+  for (let x = 0; x <= 210; x += 10) marcas.push(<div key={`x${x}`} style={{ position: "absolute", left: `${x}mm`, top: 0, fontSize: "2mm", color: "#c00" }}>{x}</div>);
+  for (let y = 0; y <= 297; y += 10) marcas.push(<div key={`y${y}`} style={{ position: "absolute", top: `${y}mm`, left: 0, fontSize: "2mm", color: "#c00" }}>{y}</div>);
+  return <div style={{ position: "relative", width: "210mm", height: "297mm", background: "#fff" }}>{marcas}</div>;
+}
+
+function GuiaSadtOverlay({ campos, valores }: { campos: CampoGuiaSadt[]; valores: Record<string, string> }) {
+  return (
+    <div style={{ position: "relative", width: "210mm", height: "297mm", background: "#fff", fontFamily: "Arial, Helvetica, sans-serif" }}>
+      {campos.map((c) => valores[c.numero] ? (
+        <div
+          key={c.numero}
+          style={{
+            position: "absolute",
+            left: `${c.xMm}mm`,
+            top: `${c.yMm}mm`,
+            width: `${c.larguraMm}mm`,
+            fontSize: `${c.fonteMm ?? 3.2}mm`,
+            lineHeight: 1.15,
+            color: "#000",
+            whiteSpace: "pre-wrap",
+          }}
+        >
+          {valores[c.numero]}
+        </div>
+      ) : null)}
+    </div>
+  );
+}
+
+function montarValoresGuiaSadt(patient: any, clinic: any, examesTexto: string): Record<string, string> {
+  const hoje = new Date();
+  const dataHoje = `${String(hoje.getDate()).padStart(2, "0")}/${String(hoje.getMonth() + 1).padStart(2, "0")}/${hoje.getFullYear()}`;
+  return {
+    "8-Nº Beneficiário": patient?.insurance_number || "",
+    "10-Nome": patient?.name || "",
+    "14-Nome do Contratado": clinic?.name || "",
+    "15-Nome do Profissional Solicitante": "Dr. Valth Menezes Guimarães",
+    "17-Número no Conselho": "6326",
+    "18-UF": "PB",
+    "6-Data": dataHoje,
+    "23-Indicação Clínica": Array.isArray(patient?.cids) && patient.cids.length ? patient.cids.join(", ") : "",
+    "36-Data (execução)": dataHoje,
+    "41-Descrição (exames)": examesTexto,
+  };
+}
+
 function TabExames({ patientId, patient, clinic }: { patientId: number; patient: any; clinic?: any }) {
   const [freeText, setFreeText] = useState("");
   const [saving, setSaving] = useState(false);
@@ -3143,6 +3223,8 @@ function TabExames({ patientId, patient, clinic }: { patientId: number; patient:
 
   // Impressão
   const [printText, setPrintText] = useState<string | null>(null);
+  const [mostrarGuiaSadt, setMostrarGuiaSadt] = useState(false);
+  const [mostrarReguaSadt, setMostrarReguaSadt] = useState(false);
 
   // Justificativa clínica (11/08): o convênio exige um relatório à parte para
   // autorizar imagem. A IA escreve a partir da anamnese; sem anamnese, cai num
@@ -3341,6 +3423,56 @@ function TabExames({ patientId, patient, clinic }: { patientId: number; patient:
         <PrintExamModal text={printText} patientName={patientName} patient={patient} clinic={clinic} onClose={() => setPrintText(null)} fontSize={fontSize} lineHeight={lineHeight} />
       )}
 
+      {mostrarGuiaSadt && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.6)" }}>
+          <style>{`@media print { html, body { height: auto !important; overflow: visible !important; background: #fff !important; } body > *:not([data-print-portal]) { display: none !important; } @page { size: A4 portrait; margin: 0; } }`}</style>
+          {typeof document !== "undefined" && createPortal(
+            <div id="guia-sadt-print-portal" data-print-portal style={{ display: "none" }}>
+              {mostrarReguaSadt
+                ? <GuiaSadtDebugRegua />
+                : <GuiaSadtOverlay campos={GUIA_UNIMED_CARUARU_CAMPOS} valores={montarValoresGuiaSadt(patient, clinic, freeText)} />}
+            </div>,
+            document.body,
+          )}
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="px-5 pt-4 pb-3 border-b border-gray-200 dark:border-slate-700 flex items-center justify-between flex-shrink-0">
+              <h2 className="font-bold text-slate-900 dark:text-slate-50 text-sm">Guia SADT — Unimed Caruaru (piloto)</h2>
+              <button onClick={() => setMostrarGuiaSadt(false)} className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            {!GUIA_UNIMED_CARUARU_CALIBRADO && (
+              <div className="mx-5 mt-3 px-3 py-2.5 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700 text-xs text-amber-800 dark:text-amber-300">
+                ⚠️ <strong>Rascunho, não calibrado.</strong> As posições vieram de uma foto tirada em ângulo — não têm a precisão de milímetro que os campos da guia exigem. Antes de imprimir numa guia de verdade, meça com uma régua a distância do canto superior esquerdo da folha em branco até o começo de cada campo listado abaixo, em centímetros, e me passe os números para eu calibrar direito.
+              </div>
+            )}
+            <div className="px-5 py-3 flex items-center gap-2 flex-shrink-0">
+              <button
+                type="button"
+                onClick={() => setMostrarReguaSadt(v => !v)}
+                className="text-xs px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 font-semibold"
+              >
+                {mostrarReguaSadt ? "Ver dados posicionados" : "Ver régua (mm) para medir"}
+              </button>
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold text-xs"
+              >
+                <Printer className="w-3.5 h-3.5" /> Imprimir
+              </button>
+            </div>
+            <div className="flex-1 overflow-auto p-4 bg-slate-100 dark:bg-slate-900">
+              <div className="mx-auto shadow-lg" style={{ width: "210mm", transform: "scale(0.55)", transformOrigin: "top center" }}>
+                {mostrarReguaSadt
+                  ? <GuiaSadtDebugRegua />
+                  : <GuiaSadtOverlay campos={GUIA_UNIMED_CARUARU_CAMPOS} valores={montarValoresGuiaSadt(patient, clinic, freeText)} />}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Justificativa clínica — FOLHA SEPARADA, revisável antes de imprimir. */}
       {justifTexto !== null && (
         <PrintDocModal
@@ -3530,6 +3662,15 @@ function TabExames({ patientId, patient, clinic }: { patientId: number; patient:
               className="flex items-center gap-1.5 px-3 py-2 border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-400 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 text-xs font-semibold"
             >
               <Printer className="w-3.5 h-3.5" /> Imprimir
+            </button>
+            {/* Piloto Unimed Caruaru (09/09) — rascunho não calibrado, ver aviso no modal */}
+            <button
+              type="button"
+              onClick={() => { if (!freeText.trim()) { toast.error("Digite a solicitação antes de gerar a guia"); return; } setMostrarGuiaSadt(true); }}
+              className="flex items-center gap-1.5 px-3 py-2 border border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-400 rounded-lg hover:bg-amber-50 dark:hover:bg-amber-900/20 text-xs font-semibold"
+              title="Rascunho — posições ainda não calibradas com o Valth"
+            >
+              🧪 Guia Unimed (piloto)
             </button>
             <button
               type="button"
