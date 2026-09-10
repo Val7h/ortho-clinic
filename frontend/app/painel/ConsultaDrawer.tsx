@@ -2388,12 +2388,15 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
         patient_address: patientAddress || undefined,
         patient_phone: patientPhone || undefined,
       });
-      toast.success("Receita salva!");
+      // 10/09 (auditoria Valth) — salvar apagava a receita da tela. Se ele
+      // quisesse imprimir OU mandar por WhatsApp em seguida, o texto já tinha
+      // sumido, e só dava pra recuperar reabrindo pelo histórico. Agora o que
+      // foi escrito continua na tela — pronto pra imprimir ou enviar — e só
+      // some se ele mesmo apagar ou trocar de paciente.
+      toast.success("Receita salva! O texto continua aqui — pode imprimir ou enviar.");
       setPrescriptions((prev) => [newRx, ...prev]);
-      setMedications([emptyMed()]);
-      setInstructions("");
-      setFreeText("");
-      // A14: receita salva → limpa o rascunho persistido
+      // A14: receita salva → limpa o rascunho persistido (já está salvo "de
+      // verdade" no prontuário; o rascunho local perderia sentido)
       if (typeof window !== "undefined") localStorage.removeItem(rxDraftKey);
       // Restore patient defaults (not wipe them)
       if (patient) {
@@ -3388,12 +3391,11 @@ function TabExames({ patientId, patient, clinic }: { patientId: number; patient:
         free_text: freeText.trim(),
       });
       const patientName = patient?.name || "Paciente";
-      toast.success(`Solicitação salva para ${patientName}`);
+      // 10/09 (auditoria Valth) — salvar apagava o pedido da tela; pra
+      // imprimir em seguida só reabrindo pelo histórico salvo. Mantém o texto
+      // na tela, já pronto pra Imprimir ou pra gerar a guia do convênio.
+      toast.success(`Solicitação salva para ${patientName} — o texto continua aqui`);
       setExams((prev) => [newEx, ...prev]);
-      setFreeText("");
-      if (textareaRef.current) {
-        textareaRef.current.style.height = "auto";
-      }
     } catch {
       toast.error("Erro ao salvar solicitação");
     } finally {
