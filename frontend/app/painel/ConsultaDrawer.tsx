@@ -5082,6 +5082,7 @@ function TabLaudos({ patient, clinic }: { patient: any; clinic?: any }) {
   const [funcDetail, setFuncDetail] = useState("");
   const [pendingLaudoTemplate, setPendingLaudoTemplate] = useState<typeof LAUDO_TEMPLATES[0] | null>(null);
   const [printData, setPrintData] = useState<{ text: string; finalidade: string; cid: string; cidsSecundarios: string[]; funcCapacity: string; funcDetail: string; incapPercent: string } | null>(null);
+  const [salvandoLaudo, setSalvandoLaudo] = useState(false);
   const textRef = useRef<HTMLTextAreaElement>(null);
 
   const today = new Date();
@@ -5491,17 +5492,45 @@ function TabLaudos({ patient, clinic }: { patient: any; clinic?: any }) {
         </button>
         <button
           type="button"
-          onClick={() => {
+          disabled={salvandoLaudo}
+          onClick={async () => {
             if (!text.trim()) { toast.error("Escreva o laudo antes de imprimir"); return; }
             if (!finalidade) { toast.error("Selecione a finalidade do laudo antes de finalizar"); return; }
             if (hasPlaceholders) { toast.error("Preencha todos os campos { } antes de imprimir"); return; }
-            if (typeof window !== "undefined") localStorage.removeItem(draftKey);
-            toast.success("Laudo gerado — use Ctrl+P ou salve como PDF");
-            setPrintData({ text, finalidade, cid, cidsSecundarios: cidsSecundarios.filter(c => c.trim()), funcCapacity, funcDetail, incapPercent });
+            if (!patient?.id) { toast.error("Paciente inválido"); return; }
+            // 10/09 — auditoria (Valth): "Finalizar e Imprimir" abria o preview e
+            // apagava o rascunho local, mas NUNCA gravava o laudo no prontuário —
+            // só existia como PDF impresso. Um documento medicolegal (INSS,
+            // perícia, seguradora) sem registro no sistema é o tipo de falha que
+            // só aparece quando alguém precisa da cópia depois e ela não existe.
+            setSalvandoLaudo(true);
+            try {
+              const cidsTxt = cidsSecundarios.filter(c => c.trim());
+              const content = text.trim() +
+                (cid ? `\n\nCID-10: ${cid}` : "") +
+                (cidsTxt.length ? `\nCID-10 secundário(s): ${cidsTxt.join(", ")}` : "");
+              await reportsApi.create(patient.id, {
+                date: hojeISO(),
+                report_type: "laudo",
+                title: `Laudo — ${finalidade}`,
+                content,
+              });
+              if (typeof window !== "undefined") localStorage.removeItem(draftKey);
+              toast.success("Laudo salvo no prontuário — use Ctrl+P ou salve como PDF");
+              setPrintData({ text, finalidade, cid, cidsSecundarios: cidsTxt, funcCapacity, funcDetail, incapPercent });
+            } catch (err: any) {
+              toast.error(msgErro(err, "Erro ao salvar o laudo — o texto continua na tela, tente de novo"));
+            } finally {
+              setSalvandoLaudo(false);
+            }
           }}
-          className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold text-xs"
+          className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 font-semibold text-xs"
         >
-          <Printer className="w-3.5 h-3.5" /> Finalizar e Imprimir
+          {salvandoLaudo ? (
+            <><div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> Salvando...</>
+          ) : (
+            <><Printer className="w-3.5 h-3.5" /> Finalizar e Imprimir</>
+          )}
         </button>
       </div>
     </div>
