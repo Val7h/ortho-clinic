@@ -5983,10 +5983,27 @@ function DrawerCrono({ entry }: { entry: WaitingRoomEntry }) {
   );
 }
 
+// Última aba aberta em cada paciente (Valth 11/09: "ficar clicando pra aba de
+// anamnese e laudos aparecerem, sumirem"). A gaveta inteira remonta a cada
+// troca de paciente (o `key={patient_id}` no componente pai é proposital —
+// evita misturar dados de um paciente com outro), mas isso também zerava a
+// aba pra "Anamnese" toda vez, mesmo voltando a um paciente que ele já tinha
+// deixado em "Laudos". Num dia corrido, pulando entre pacientes, isso virava
+// reclicar a mesma aba dezenas de vezes. Guardado fora do componente para
+// sobreviver ao remonte — dura a sessão da página, sem persistir no disco.
+const ultimaAbaPorPaciente = new Map<number, DrawerTab>();
+
 export default function ConsultaDrawer({ entry, onClose, onStatusChange }: ConsultaDrawerProps) {
-  const [activeTab, setActiveTab] = useState<DrawerTab>("anamnese");
+  const [activeTab, setActiveTabRaw] = useState<DrawerTab>(() => ultimaAbaPorPaciente.get(entry.patient_id) ?? "anamnese");
+  const setActiveTab = (tab: DrawerTab) => {
+    ultimaAbaPorPaciente.set(entry.patient_id, tab);
+    setActiveTabRaw(tab);
+  };
   // Abas já abertas nesta consulta — continuam montadas (ver comentário no render).
-  const [visitadas, setVisitadas] = useState<Set<DrawerTab>>(() => new Set<DrawerTab>(["anamnese"]));
+  // Se ele já tinha ido em "Laudos" antes, a aba reabre lá E o conteúdo já
+  // vem pronto — sem isso, a aba certa abria vazia por uma fração de segundo
+  // até buscar de novo, o que também parecia "sumir e aparecer".
+  const [visitadas, setVisitadas] = useState<Set<DrawerTab>>(() => new Set<DrawerTab>(["anamnese", activeTab]));
   useEffect(() => {
     setVisitadas((v) => (v.has(activeTab) ? v : new Set(v).add(activeTab)));
   }, [activeTab]);
