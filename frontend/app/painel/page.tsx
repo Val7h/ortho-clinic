@@ -199,7 +199,14 @@ function PatientCard({ entry, onStatusChange, onRemove, onAddValue, onSelect, bu
           >
             {entry.patient_name}
           </p>
-          <div className="flex-shrink-0 flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
+          {/* 11/09 (Valth): "toda hora os nomes... retraem e alongam". O tempo
+              de espera muda de "9 min" pra "10 min" pra "1h 05min" — cada
+              virada de dígito reduzia o espaço que sobrava pro nome (flex-1),
+              recortando o truncate de um jeito diferente. Com 30 pacientes
+              isso pulsa o tempo todo. min-w reserva o pior caso (ex.: "23h
+              59min") de uma vez, então o nome nunca mais varia por causa do
+              relógio de outro card ou do próprio. */}
+          <div className="flex-shrink-0 flex items-center justify-end gap-1 text-xs text-slate-500 dark:text-slate-400 min-w-[92px]">
             <Clock className="w-3 h-3" />
             <span>{formatTime(entry.arrived_at)}</span>
             <span className={`ml-1 font-medium ${entry.status === 'waiting' && (entry.waited_minutes ?? 0) > 30 ? 'text-red-500 dark:text-red-400' : ''}`}>
@@ -222,19 +229,22 @@ function PatientCard({ entry, onStatusChange, onRemove, onAddValue, onSelect, bu
               {formatCentsToReais(entry.value_cents)}
             </span>
           )}
-          {/* Cronômetro: vivo em atendimento · congelado se suspenso · duração final no atendido */}
+          {/* Cronômetro: vivo em atendimento · congelado se suspenso · duração final no atendido.
+              Mesmo motivo do badge de espera acima: min-w trava a largura pra
+              o cronômetro rodando (a cada segundo!) não empurrar o texto do
+              motivo (flex-1) do lado. */}
           {entry.status === 'attending' && (
-            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold flex-shrink-0 bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 font-mono">
+            <span className="inline-flex items-center justify-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold flex-shrink-0 min-w-[64px] bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 font-mono">
               ⏱ {formatElapsed(cronoSec)}
             </span>
           )}
           {entry.status === 'suspended' && (
-            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold flex-shrink-0 bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 font-mono">
+            <span className="inline-flex items-center justify-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold flex-shrink-0 min-w-[64px] bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 font-mono">
               ⏸ {formatElapsed(cronoSec)}
             </span>
           )}
           {entry.status === 'attended' && cronoSec > 0 && (
-            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold flex-shrink-0 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-mono">
+            <span className="inline-flex items-center justify-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold flex-shrink-0 min-w-[100px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-mono">
               ⏱ durou {formatElapsed(cronoSec)}
             </span>
           )}
