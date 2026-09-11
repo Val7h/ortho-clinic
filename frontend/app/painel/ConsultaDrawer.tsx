@@ -2376,6 +2376,24 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
       validMeds = medications.filter((m) => m.name.trim());
       if (validMeds.length === 0) { toast.error("Adicione pelo menos um medicamento"); return; }
     }
+    // 11/09 — desde que Salvar parou de apagar a caixa (10/09), um segundo
+    // clique em Salvar (por hábito, ou achando que o primeiro não pegou) gera
+    // uma receita repetida no mesmo dia. Compara com o que já foi salvo hoje
+    // para este paciente e confirma antes de duplicar.
+    const hojeStr = hojeISO();
+    const conteudoIgual = (rx: any) => {
+      if ((rx.date || "").slice(0, 10) !== hojeStr) return false;
+      if (freeTextMode) return (rx.instructions || "").trim() === freeText.trim();
+      const medsRx = (rx.medications || []).map((m: any) => `${m.name}|${m.dose}|${m.frequency}|${m.duration}`.trim());
+      const medsAtual = validMeds.map((m) => `${m.name}|${m.dose}|${m.frequency}|${m.duration}`.trim());
+      return JSON.stringify(medsRx) === JSON.stringify(medsAtual);
+    };
+    if (prescriptions.some(conteudoIgual)) {
+      if (typeof window !== "undefined" &&
+          !window.confirm("Já existe uma receita idêntica salva hoje para este paciente. Salvar mesmo assim?")) {
+        return;
+      }
+    }
     setSaving(true);
     try {
       const newRx = await prescriptionsApi.create(patientId, {
@@ -3383,6 +3401,18 @@ function TabExames({ patientId, patient, clinic }: { patientId: number; patient:
   // Salvar
   const handleSave = async () => {
     if (!freeText.trim()) { toast.error("Digite a solicitação antes de salvar"); return; }
+    // 11/09 — mesmo cuidado da receita: agora que Salvar não apaga mais a
+    // caixa, um segundo clique duplicaria o pedido de exame no mesmo dia.
+    const hojeStr = hojeISO();
+    const jaExisteHoje = exams.some((ex: any) =>
+      (ex.date || "").slice(0, 10) === hojeStr && (ex.free_text || "").trim() === freeText.trim()
+    );
+    if (jaExisteHoje) {
+      if (typeof window !== "undefined" &&
+          !window.confirm("Já existe uma solicitação idêntica salva hoje para este paciente. Salvar mesmo assim?")) {
+        return;
+      }
+    }
     setSaving(true);
     try {
       const newEx = await examsApi.create(patientId, {
