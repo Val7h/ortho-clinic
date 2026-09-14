@@ -1752,7 +1752,12 @@ function FormularioRespondido({ patientId }: { patientId: number }) {
               {ROTULOS_FORM.map(([campo, rotulo]) => {
                 let v = a.responses?.[campo];
                 if (v === null || v === undefined || v === "") return null;
-                if (campo === "pain_location") v = REGIOES_FORM[v] || v;
+                // 14/09: pain_location agora pode trazer varias regioes
+                // separadas por vírgula (paciente poliarticular) — traduz
+                // cada uma e junta de um jeito legível pro médico.
+                if (campo === "pain_location") {
+                  v = String(v).split(",").map((cod: string) => REGIOES_FORM[cod.trim()] || cod.trim()).join(" + ");
+                }
                 if (campo === "symptom_duration") v = TEMPO_FORM[v] || v;
                 const alerta = campo === "allergies";
                 return (

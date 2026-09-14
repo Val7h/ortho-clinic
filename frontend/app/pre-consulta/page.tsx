@@ -370,19 +370,23 @@ const HTML_CONTENT = `<!DOCTYPE html>
       <div class="secao-titulo">Queixa</div>
 
       <div class="campo" id="c-regiao">
-        <label>Região do corpo afetada</label>
-        <select id="regiao_corpo">
-          <option value="">Selecione…</option>
-          <option value="joelho_dir">Joelho direito</option>
-          <option value="joelho_esq">Joelho esquerdo</option>
-          <option value="quadril">Quadril</option>
-          <option value="ombro">Ombro</option>
-          <option value="tornozelo">Tornozelo</option>
-          <option value="coluna">Coluna</option>
-          <option value="mao_punho">Mão / Punho</option>
-          <option value="outro">Outro</option>
-        </select>
-        <div class="erro-campo">Por favor, selecione a região.</div>
+        <label>Região do corpo afetada <span class="opt">(marque todas onde sente dor)</span></label>
+        <!-- 14/09 (Valth, relato da Rosilene): era uma lista de escolha única —
+             quem sentia dor em mais de um lugar (poliarticular) marcava um
+             segmento, ia marcar o outro, e o app "não aceitava" o segundo:
+             a lista simplesmente trocava a escolha, sem avisar nada. Agora
+             marca quantos precisar, igual ao campo de doenças abaixo. -->
+        <div class="check-group">
+          <label><input type="checkbox" name="regioes_corpo" value="joelho_dir" /> Joelho direito</label>
+          <label><input type="checkbox" name="regioes_corpo" value="joelho_esq" /> Joelho esquerdo</label>
+          <label><input type="checkbox" name="regioes_corpo" value="quadril" /> Quadril</label>
+          <label><input type="checkbox" name="regioes_corpo" value="ombro" /> Ombro</label>
+          <label><input type="checkbox" name="regioes_corpo" value="tornozelo" /> Tornozelo</label>
+          <label><input type="checkbox" name="regioes_corpo" value="coluna" /> Coluna</label>
+          <label><input type="checkbox" name="regioes_corpo" value="mao_punho" /> Mão / Punho</label>
+          <label><input type="checkbox" name="regioes_corpo" value="outro" /> Outro</label>
+        </div>
+        <div class="erro-campo">Por favor, marque ao menos uma região.</div>
       </div>
 
       <div class="campo" id="c-desc">
@@ -618,9 +622,13 @@ function validarCampo(idCampo, idInput) {
 
 async function enviar() {
   // Obrigatorios (Valth 19/08: CPF e nascimento SEMPRE, de todo paciente).
+  // 14/09: regiao_corpo virou check-group (varias regioes) — validarCampo
+  // le .value de um elemento so, que nao existe mais; confere direto aqui.
+  const regioesMarcadas = document.querySelectorAll('input[name="regioes_corpo"]:checked').length > 0;
+  document.getElementById('c-regiao').classList.toggle('invalido', !regioesMarcadas);
   const ok = validarCampo('c-nasc', 'nascimento') &
              validarCampo('c-cpf', 'cpf') &
-             validarCampo('c-regiao', 'regiao_corpo') &
+             (regioesMarcadas ? 1 : 0) &
              validarCampo('c-desc', 'descricao');
   if (!ok) {
     const inv = document.querySelector('.campo.invalido');
@@ -633,6 +641,7 @@ async function enviar() {
 
   const pagamento = document.querySelector('input[name="pagamento"]:checked');
   const doencas   = Array.from(document.querySelectorAll('input[name="doencas"]:checked')).map(i => i.value);
+  const regioes   = Array.from(document.querySelectorAll('input[name="regioes_corpo"]:checked')).map(i => i.value);
 
   // Identificação (nome/tel/unidade/data) vem do link do agendamento — sem re-perguntar.
   // Campos cortados da folha única vão vazios (backend trata todos como opcionais).
@@ -663,7 +672,7 @@ async function enviar() {
     cirurgias_anteriores: document.getElementById('cirurgias_anteriores').value,
     tabagismo:      '',
     alcool:         '',
-    regiao_corpo:   document.getElementById('regiao_corpo').value,
+    regiao_corpo:   regioes,
     descricao:      document.getElementById('descricao').value,
     tempo_sintomas: document.getElementById('tempo_sintomas').value,
     mecanismo:      '',

@@ -93,7 +93,10 @@ class PreConsultaPayload(BaseModel):
     alcool: Optional[str] = None
 
     # queixa
-    regiao_corpo: Optional[str] = None
+    # 14/09 (Valth, relato de paciente poliarticular): era um campo unico —
+    # quem sentia dor em mais de uma regiao so conseguia marcar uma. Agora
+    # aceita varias, mesmo padrao ja usado em doencas_cronicas.
+    regiao_corpo: Optional[list] = None
     descricao: Optional[str] = None
     tempo_sintomas: Optional[str] = None
     mecanismo: Optional[str] = None
@@ -448,7 +451,7 @@ def submit_pre_consulta(data: PreConsultaPayload, db: Session = Depends(get_db))
     # monta respostas da anamnese no formato do modelo existente
     responses = {
         "chief_complaint":     data.descricao,
-        "pain_location":       data.regiao_corpo,
+        "pain_location":       ", ".join(data.regiao_corpo) if data.regiao_corpo else None,
         "symptom_duration":    data.tempo_sintomas,
         "pain_scale":          data.eva,
         "aggravating_factors": data.piora,
