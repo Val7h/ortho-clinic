@@ -3151,48 +3151,84 @@ function PrintExamModal({ text, patientName, patient, clinic, onClose, fontSize 
   );
 }
 
-// ── Guia SADT posicionada (piloto Unimed Caruaru, 09/09) ────────────────────
-// Pedido do Valth (por voz, via Chief of Staff): fotografou 4 guias TISS em
-// branco (GEAP, Unimed Caruaru, Bradesco Saúde, SASSEPE) e quer os dados já
-// nos campos certos, sem escrever à mão. Layouts DIFERENTES entre si — cada
-// convênio precisa da própria calibração. Este é o piloto de UM: Unimed
-// Caruaru, que segue o padrão nacional TISS 3.02.00 (a GEAP usa o mesmo
-// layout — calibrando esta, a da GEAP fica muito perto de pronta também).
+// ── Guia SADT posicionada — Unimed Caruaru, GEAP, Bradesco Saúde ────────────
+// Pedido do Valth (por voz, via Chief of Staff, 09/09): fotografou 4 guias
+// TISS em branco (GEAP, Unimed Caruaru, Bradesco Saúde, SASSEPE) e quer os
+// dados já nos campos certos, sem escrever à mão. Layouts DIFERENTES entre
+// si — cada convênio precisa da própria calibração. SASSEPE não segue o
+// padrão TISS (numeração própria) e ainda não foi calibrada.
 //
 // Coordenadas em mm a partir do canto superior esquerdo da folha A4.
 //
-// 09/09, revisão 2: as posições abaixo NÃO vêm mais só da foto em ângulo.
-// Encontrei na internet um PDF vetorial oficial do mesmo layout nacional TISS
-// 3.02.00 (Planserv-BA) cuja SEQUÊNCIA de campos bate exatamente com a das
-// fotos do Valth (14-Nome do Contratado → 15-Nome do Profissional Solicitante
-// → 16-Conselho → 17-Número no Conselho → 18-UF, sem nada estranho no meio —
-// um outro PDF encontrado primeiro, do STJ, tinha um "15-Código CNES" fora de
-// ordem e foi descartado por não bater com a foto real). Desse PDF eu extraí
-// a posição X exata de cada legenda (com uma biblioteca de leitura de PDF,
-// não a olho) e a ordem vertical das seções. Isso é bem mais confiável que
-// uma foto tremida, mas ainda não é 100%: (1) a página desse PDF de origem
-// tem uma proporção ~2% diferente da A4 real, então escalei para compensar;
-// (2) o Y de cada valor (quão acima ou abaixo da legenda o texto deve ficar)
-// continua sendo minha estimativa, baseada no padrão visual das fotos —
-// dado de posição exata da LINHA de preenchimento (só a legenda embaixo dela)
-// não estava disponível nesse PDF de referência.
-// CALIBRADO continua false até o Valth confirmar com um teste de impressão
-// sobre a guia física em branco.
+// 15/09, revisão 3 — achado importante: ao calibrar GEAP e Bradesco com PDFs
+// oficiais REAIS (baixados e verificados: a Bradesco tem os 4 campos que só
+// ela tem — 89 a 92 — confirmando que não é modelo genérico; a GEAP bate
+// campo a campo com a sequência das fotos do Valth), consegui pela primeira
+// vez a posição EXATA da caixa de preenchimento, não só da legenda — lendo
+// os traços "|___|___|" do PDF como texto, não estimando a olho. Em AMBAS, a
+// caixa fica de 3 a 4mm ABAIXO da legenda, sempre. A calibração anterior da
+// Unimed Caruaru (revisão 2) tinha colocado o valor ACIMA da legenda —
+// direção invertida, um erro real. Corrigida aqui usando a mesma régua
+// (abaixo, não acima) sobre o mesmo PDF de referência (Planserv-BA).
+//
+// GEAP e Bradesco chegam então MAIS confiáveis que a Unimed Caruaru: a
+// posição X e a direção do Y vêm de caixa real medida, não de estimativa.
+// Ainda assim as três continuam CALIBRADO=false até o Valth confirmar com um
+// teste de impressão sobre a guia física em branco — inclusive a Unimed
+// Caruaru de novo, já que a direção mudou desde a folha de teste que ele
+// recebeu em 09/09.
 interface CampoGuiaSadt { numero: string; xMm: number; yMm: number; larguraMm: number; fonteMm?: number }
 
 const GUIA_UNIMED_CARUARU_CALIBRADO = false;
 const GUIA_UNIMED_CARUARU_CAMPOS: CampoGuiaSadt[] = [
-  { numero: "8-Nº da Carteira",          xMm: 4,   yMm: 18.4, larguraMm: 32 },
-  { numero: "10-Nome",                   xMm: 71.9, yMm: 18.4, larguraMm: 65 },
-  { numero: "13-Nome do Contratado",     xMm: 38.1, yMm: 31.5, larguraMm: 60 },
-  { numero: "15-Nome do Profissional Solicitante", xMm: 4,  yMm: 36.9, larguraMm: 40 },
-  { numero: "17-Número no Conselho",     xMm: 88.9, yMm: 36.9, larguraMm: 30 },
-  { numero: "18-UF",                     xMm: 131.2, yMm: 36.9, larguraMm: 10 },
-  { numero: "21-Data da Solicitação",    xMm: 38.1, yMm: 44.6, larguraMm: 25 },
-  { numero: "23-Indicação Clínica",      xMm: 71.9, yMm: 50.5, larguraMm: 110, fonteMm: 3 },
-  { numero: "36-Data (execução)",        xMm: 7,   yMm: 62.5, larguraMm: 20 },
-  { numero: "41-Descrição (exames)",     xMm: 33,  yMm: 62.5, larguraMm: 160, fonteMm: 3 },
+  { numero: "8-Nº da Carteira",          xMm: 4,   yMm: 24.9, larguraMm: 32 },
+  { numero: "10-Nome",                   xMm: 71.9, yMm: 24.9, larguraMm: 65 },
+  { numero: "13-Nome do Contratado",     xMm: 38.1, yMm: 38.0, larguraMm: 60 },
+  { numero: "15-Nome do Profissional Solicitante", xMm: 4,  yMm: 43.4, larguraMm: 40 },
+  { numero: "17-Número no Conselho",     xMm: 88.9, yMm: 43.4, larguraMm: 30 },
+  { numero: "18-UF",                     xMm: 131.2, yMm: 43.4, larguraMm: 10 },
+  { numero: "21-Data da Solicitação",    xMm: 38.1, yMm: 51.1, larguraMm: 25 },
+  { numero: "23-Indicação Clínica",      xMm: 71.9, yMm: 51.1, larguraMm: 110, fonteMm: 3 },
+  { numero: "41-Descrição (exames)",     xMm: 33,  yMm: 57.5, larguraMm: 160, fonteMm: 3 },
 ];
+
+// GEAP — PDF oficial baixado de cootrame.com.br/downloads/Geap/Guia_SP_SADT_GEAP.pdf,
+// posições em mm lidas direto do PDF (não estimadas).
+const GUIA_GEAP_CALIBRADO = false;
+const GUIA_GEAP_CAMPOS: CampoGuiaSadt[] = [
+  { numero: "8-Nº da Carteira",          xMm: 17.8, yMm: 40.1, larguraMm: 40 },
+  { numero: "10-Nome",                   xMm: 117.5, yMm: 40.0, larguraMm: 95 },
+  { numero: "13-Nome do Contratado",     xMm: 70,   yMm: 50.5, larguraMm: 95 },
+  { numero: "15-Nome do Profissional Solicitante", xMm: 17.4, yMm: 58.4, larguraMm: 80 },
+  { numero: "17-Número no Conselho",     xMm: 112.2, yMm: 58.4, larguraMm: 30 },
+  { numero: "18-UF",                     xMm: 167.5, yMm: 58.4, larguraMm: 10 },
+  { numero: "21-Data da Solicitação",    xMm: 33.3, yMm: 68.5, larguraMm: 25 },
+  { numero: "23-Indicação Clínica",      xMm: 67.7, yMm: 68.5, larguraMm: 130, fonteMm: 3 },
+  { numero: "41-Descrição (exames)",     xMm: 65,   yMm: 76.6, larguraMm: 130, fonteMm: 3 },
+];
+
+// Bradesco Saúde — PDF do gerador oficial (wwws.bradescosaude.com.br/PCBS-
+// GuiasReferenciados/pdftiss-sadt.do), confirmado pelos 4 campos exclusivos
+// dela (89-Nome Social, 90-Cobertura Especial, 91-Regime, 92-Saúde
+// Ocupacional). Posições em mm lidas direto do PDF.
+const GUIA_BRADESCO_CALIBRADO = false;
+const GUIA_BRADESCO_CAMPOS: CampoGuiaSadt[] = [
+  { numero: "8-Nº da Carteira",          xMm: 7.8,  yMm: 45.0, larguraMm: 45 },
+  { numero: "10-Nome",                   xMm: 7.6,  yMm: 51.9, larguraMm: 200 },
+  { numero: "13-Nome do Contratado",     xMm: 84.9, yMm: 62.2, larguraMm: 130 },
+  { numero: "15-Nome do Profissional Solicitante", xMm: 7.6, yMm: 68.7, larguraMm: 70 },
+  { numero: "17-Número no Conselho",     xMm: 101.0, yMm: 68.8, larguraMm: 30 },
+  { numero: "18-UF",                     xMm: 168.3, yMm: 68.8, larguraMm: 10 },
+  { numero: "21-Data da Solicitação",    xMm: 37.2, yMm: 78.4, larguraMm: 25 },
+  { numero: "23-Indicação Clínica",      xMm: 83.8, yMm: 78.4, larguraMm: 160, fonteMm: 3 },
+  { numero: "41-Descrição (exames)",     xMm: 82.1, yMm: 86.2, larguraMm: 160, fonteMm: 3 },
+];
+
+const GUIAS_SADT: Record<string, { rotulo: string; campos: CampoGuiaSadt[]; calibrado: boolean }> = {
+  unimed_caruaru: { rotulo: "Unimed Caruaru", campos: GUIA_UNIMED_CARUARU_CAMPOS, calibrado: GUIA_UNIMED_CARUARU_CALIBRADO },
+  geap:           { rotulo: "GEAP",           campos: GUIA_GEAP_CAMPOS,           calibrado: GUIA_GEAP_CALIBRADO },
+  bradesco:       { rotulo: "Bradesco Saúde", campos: GUIA_BRADESCO_CAMPOS,       calibrado: GUIA_BRADESCO_CALIBRADO },
+};
 
 // Ferramenta de conferência: uma régua em mm, alternável na tela, para o
 // Valth comparar contra a guia física em branco (sobrepondo contra a luz)
@@ -3265,6 +3301,9 @@ function TabExames({ patientId, patient, clinic }: { patientId: number; patient:
   const [printText, setPrintText] = useState<string | null>(null);
   const [mostrarGuiaSadt, setMostrarGuiaSadt] = useState(false);
   const [mostrarReguaSadt, setMostrarReguaSadt] = useState(false);
+  // Qual convênio calibrado usar na guia — sugere pelo convênio do paciente,
+  // cai pra Unimed Caruaru se não bater com nenhuma calibrada.
+  const [guiaSadtEscolhida, setGuiaSadtEscolhida] = useState<string>("unimed_caruaru");
 
   // Justificativa clínica (11/08): o convênio exige um relatório à parte para
   // autorizar imagem. A IA escreve a partir da anamnese; sem anamnese, cai num
@@ -3481,20 +3520,33 @@ function TabExames({ patientId, patient, clinic }: { patientId: number; patient:
             <div id="guia-sadt-print-portal" data-print-portal style={{ display: "none" }}>
               {mostrarReguaSadt
                 ? <GuiaSadtDebugRegua />
-                : <GuiaSadtOverlay campos={GUIA_UNIMED_CARUARU_CAMPOS} valores={montarValoresGuiaSadt(patient, clinic, freeText)} />}
+                : <GuiaSadtOverlay campos={GUIAS_SADT[guiaSadtEscolhida].campos} valores={montarValoresGuiaSadt(patient, clinic, freeText)} />}
             </div>,
             document.body,
           )}
           <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
             <div className="px-5 pt-4 pb-3 border-b border-gray-200 dark:border-slate-700 flex items-center justify-between flex-shrink-0">
-              <h2 className="font-bold text-slate-900 dark:text-slate-50 text-sm">Guia SADT — Unimed Caruaru (piloto)</h2>
+              <h2 className="font-bold text-slate-900 dark:text-slate-50 text-sm">Guia SADT (piloto)</h2>
               <button onClick={() => setMostrarGuiaSadt(false)} className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100">
                 <X className="w-4 h-4" />
               </button>
             </div>
-            {!GUIA_UNIMED_CARUARU_CALIBRADO && (
+            {/* Seletor de convênio — sugerido pelo cadastro do paciente, trocável aqui */}
+            <div className="px-5 pt-3 flex items-center gap-2 flex-shrink-0">
+              <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">Convênio:</label>
+              <select
+                value={guiaSadtEscolhida}
+                onChange={(e) => setGuiaSadtEscolhida(e.target.value)}
+                className="text-xs border border-slate-200 dark:border-slate-600 rounded px-2 py-1 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200"
+              >
+                {Object.entries(GUIAS_SADT).map(([chave, g]) => (
+                  <option key={chave} value={chave}>{g.rotulo}</option>
+                ))}
+              </select>
+            </div>
+            {!GUIAS_SADT[guiaSadtEscolhida].calibrado && (
               <div className="mx-5 mt-3 px-3 py-2.5 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700 text-xs text-amber-800 dark:text-amber-300">
-                ⚠️ <strong>Ainda não confirmado.</strong> Refiz esta versão a partir de um modelo oficial da guia TISS 3.02.00 encontrado na internet (cuja ordem de campos bate com a sua foto), não mais só a olho — bem mais confiável, mas ainda peço um teste antes de valer para valer: imprima esta folha numa comum e sobreponha à guia física em branco contra a luz da janela. Se algum campo estiver deslocado, me diga qual e para que lado, que eu ajusto na hora.
+                ⚠️ <strong>Ainda não confirmado.</strong> As posições da {GUIAS_SADT[guiaSadtEscolhida].rotulo} vêm de um modelo oficial da guia TISS encontrado na internet (a posição exata da caixa de preenchimento, não estimativa) — bem mais confiável, mas ainda peço um teste antes de valer para valer: imprima esta folha numa comum e sobreponha à guia física em branco contra a luz da janela. Se algum campo estiver deslocado, me diga qual, para que lado e de quanto, que eu ajusto na hora.
               </div>
             )}
             <div className="px-5 py-3 flex items-center gap-2 flex-shrink-0">
@@ -3517,7 +3569,7 @@ function TabExames({ patientId, patient, clinic }: { patientId: number; patient:
               <div className="mx-auto shadow-lg" style={{ width: "210mm", transform: "scale(0.55)", transformOrigin: "top center" }}>
                 {mostrarReguaSadt
                   ? <GuiaSadtDebugRegua />
-                  : <GuiaSadtOverlay campos={GUIA_UNIMED_CARUARU_CAMPOS} valores={montarValoresGuiaSadt(patient, clinic, freeText)} />}
+                  : <GuiaSadtOverlay campos={GUIAS_SADT[guiaSadtEscolhida].campos} valores={montarValoresGuiaSadt(patient, clinic, freeText)} />}
               </div>
             </div>
           </div>
@@ -3714,14 +3766,24 @@ function TabExames({ patientId, patient, clinic }: { patientId: number; patient:
             >
               <Printer className="w-3.5 h-3.5" /> Imprimir
             </button>
-            {/* Piloto Unimed Caruaru (09/09) — rascunho não calibrado, ver aviso no modal */}
+            {/* Guias SADT posicionadas (09-15/09) — rascunho, nenhuma calibrada
+                ainda com o Valth. Sugere o convênio pelo cadastro do paciente,
+                mas o médico escolhe outro no seletor dentro do modal. */}
             <button
               type="button"
-              onClick={() => { if (!freeText.trim()) { toast.error("Digite a solicitação antes de gerar a guia"); return; } setMostrarGuiaSadt(true); }}
+              onClick={() => {
+                if (!freeText.trim()) { toast.error("Digite a solicitação antes de gerar a guia"); return; }
+                const seg = normTxt(patient?.insurance || "");
+                const sugestao = seg.includes("geap") ? "geap"
+                  : seg.includes("bradesco") ? "bradesco"
+                  : "unimed_caruaru";
+                setGuiaSadtEscolhida(sugestao);
+                setMostrarGuiaSadt(true);
+              }}
               className="flex items-center gap-1.5 px-3 py-2 border border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-400 rounded-lg hover:bg-amber-50 dark:hover:bg-amber-900/20 text-xs font-semibold"
               title="Rascunho — posições ainda não calibradas com o Valth"
             >
-              🧪 Guia Unimed (piloto)
+              🧪 Guia do convênio (piloto)
             </button>
             <button
               type="button"
