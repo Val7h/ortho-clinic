@@ -225,7 +225,14 @@ async def gerar_laudo(
 
     payload = {
         "model": LAUDO_MODEL,
-        "max_tokens": 2000,
+        # 15/09 — Valth: "corta no meio, nao completa o laudo". Reproduzi com
+        # um caso poliarticular (5 segmentos, 6 conclusoes marcadas): a
+        # resposta parava literalmente em "atestando impedim" — a IA nao
+        # tinha terminado a frase quando bateu no teto de 2000 tokens, e o
+        # codigo devolvia esse texto cortado como se fosse um laudo pronto,
+        # sem avisar nada. 4096 da bastante folga (o caso que travou usaria
+        # uns 2000; o dobro cobre casos ainda mais extensos).
+        "max_tokens": 4096,
         "system": SYSTEM_PROMPT,
         "messages": [{"role": "user", "content": "\n".join(c for c in contexto if c is not None)}],
     }
@@ -306,8 +313,21 @@ async def gerar_laudo(
             "tente gerar de novo; se repetir, divida o ditado em duas partes.",
         )
 
-    blocks = resp.json().get("content", [])
+    resp_json = resp.json()
+    blocks = resp_json.get("content", [])
     texto = "".join(b.get("text", "") for b in blocks if b.get("type") == "text").strip()
     if not texto:
         raise HTTPException(502, "IA não retornou texto")
+    # 15/09 — Valth: "corta no meio, nao completa o laudo". Alem de aumentar o
+    # teto de tokens, agora checamos se a IA realmente TERMINOU (stop_reason
+    # "end_turn") ou se foi cortada de novo por bater no teto ("max_tokens").
+    # Antes disso o codigo devolvia o texto truncado como se fosse um laudo
+    # pronto, sem avisar ninguem — o medico so descobria lendo com atencao.
+    if resp_json.get("stop_reason") == "max_tokens":
+        raise HTTPException(
+            502,
+            "O laudo ficou incompleto (texto muito longo para a IA terminar de uma vez). "
+            "O seu ditado NÃO se perdeu — tente gerar de novo; se repetir, marque menos "
+            "conclusões de uma vez ou divida o ditado em duas partes.",
+        )
     return LaudoINSSOut(texto=texto, model=LAUDO_MODEL)
