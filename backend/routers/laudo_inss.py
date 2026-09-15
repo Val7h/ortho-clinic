@@ -156,6 +156,7 @@ class LaudoINSSIn(BaseModel):
 class LaudoINSSOut(BaseModel):
     texto: str
     model: str
+    debug_temp: Optional[str] = None
 
 
 _MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho",
@@ -330,4 +331,6 @@ async def gerar_laudo(
             "O seu ditado NÃO se perdeu — tente gerar de novo; se repetir, marque menos "
             "conclusões de uma vez ou divida o ditado em duas partes.",
         )
-    return LaudoINSSOut(texto=texto, model=LAUDO_MODEL)
+    _debug = f"stop_reason={resp_json.get('stop_reason')!r} usage={resp_json.get('usage')!r} n_blocks={len(blocks)} block_types={[b.get('type') for b in blocks]}"
+    logger.warning(f"DEBUG-TEMP laudo_inss {_debug}")
+    return LaudoINSSOut(texto=texto, model=LAUDO_MODEL, debug_temp=_debug)
