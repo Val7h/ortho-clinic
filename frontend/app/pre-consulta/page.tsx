@@ -529,15 +529,6 @@ function init() {
     if (t) t.textContent = 'Olá, ' + NOME.split(' ')[0] + '! Conte sobre sua queixa';
   }
 
-  const sel = document.getElementById('regiao_corpo');
-  for (const opt of sel.options) {
-    // opt.value vazio ("Selecione…") casaria com qualquer motivo — pular.
-    if (opt.value && MOTIVO.toLowerCase().includes(opt.value.replace('_',' '))) {
-      opt.selected = true;
-      break;
-    }
-  }
-
   aplicarCabecalho();
   initEva();
   initCep();
@@ -694,8 +685,12 @@ async function enviar() {
     });
 
     if (!res.ok) {
-      const { erro, token_expirado } = await res.json();
-      if (token_expirado) { mostrarExpirado(); return; }
+      if (res.status === 401) { mostrarExpirado(); return; }
+      let erro = 'Erro inesperado.';
+      try {
+        const body = await res.json();
+        erro = body.detail || body.erro || erro;
+      } catch {}
       alert('Erro ao enviar: ' + erro);
       btnProx.disabled = false;
       btnProx.textContent = '✓ Enviar formulário';
