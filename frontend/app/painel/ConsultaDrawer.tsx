@@ -3515,7 +3515,13 @@ function TabExames({ patientId, patient, clinic }: { patientId: number; patient:
 
       {mostrarGuiaSadt && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.6)" }}>
-          <style>{`@media print { html, body { height: auto !important; overflow: visible !important; background: #fff !important; } body > *:not([data-print-portal]) { display: none !important; } @page { size: A4 portrait; margin: 0; } }`}</style>
+          {/* 16/09 — Valth: imprimiu a guia do Unimed Caruaru (Adílio Manoel da
+              Silva) e saiu folha em branco. A regra @media print escondia todo
+              o resto da pagina, mas o próprio portal ficava com display:none
+              inline (pra nao aparecer atras do modal na tela) e nada mandava
+              ele voltar a aparecer na hora de imprimir — resultado: nada
+              visivel na folha. Faltava essa regra abaixo. */}
+          <style>{`@media print { html, body { height: auto !important; overflow: visible !important; background: #fff !important; } body > *:not([data-print-portal]) { display: none !important; } #guia-sadt-print-portal { display: block !important; } @page { size: A4 portrait; margin: 0; } }`}</style>
           {typeof document !== "undefined" && createPortal(
             <div id="guia-sadt-print-portal" data-print-portal style={{ display: "none" }}>
               {mostrarReguaSadt
