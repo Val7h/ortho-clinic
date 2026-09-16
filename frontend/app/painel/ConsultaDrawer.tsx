@@ -5197,6 +5197,24 @@ function TabLaudos({ patient, clinic }: { patient: any; clinic?: any }) {
   const [draftSaved, setDraftSaved] = useState(false);
   const [incapPercent, setIncapPercent] = useState("");
 
+  // 16/09 — Valth: ditou um laudo (Maria Ivanice) pelo chat, foi salvo no
+  // prontuário certinho, mas a aba Laudos DENTRO da consulta nunca buscava os
+  // laudos já salvos — só existia pra compor um novo, então ficava sempre
+  // vazia mesmo com F5. Quem precisa reimprimir um laudo no meio do
+  // atendimento (o caso real dele) não tinha como. Agora busca e lista.
+  const [laudosSalvos, setLaudosSalvos] = useState<any[]>([]);
+  const [carregandoSalvos, setCarregandoSalvos] = useState(true);
+  const [reimprimir, setReimprimir] = useState<any | null>(null);
+
+  useEffect(() => {
+    if (!patient?.id) return;
+    setCarregandoSalvos(true);
+    reportsApi.list(patient.id)
+      .then((r: any[]) => setLaudosSalvos(r || []))
+      .catch(() => toast.error("Erro ao carregar laudos salvos"))
+      .finally(() => setCarregandoSalvos(false));
+  }, [patient?.id]);
+
   // ── Laudo INSS por ditado (IA) ──────────────────────────────────────────
   const [ditado, setDitado] = useState("");
   const [inssConcl, setInssConcl] = useState<string[]>([]);
@@ -5380,10 +5398,74 @@ function TabLaudos({ patient, clinic }: { patient: any; clinic?: any }) {
     );
   }, [printData, patient, clinic]);
 
+  const reimprimirContent = useMemo(() => {
+    if (!reimprimir) return null;
+    const age = patient?.birth_date ? calcAge(patient.birth_date) : "";
+    return (
+      <div style={{ fontFamily: DOC_SERIF, color: "#1a1a1a", fontSize: "12.5px", lineHeight: 1.75 }}>
+        <TimbradoOficial clinic={clinic} />
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "3px 18px", margin: "0 0 20px", fontSize: "11.5px", padding: "10px 14px", background: "#f8f7f4", border: "1px solid #e3e0d8", borderRadius: "2px" }}>
+          <p style={{ margin: 0 }}><strong>Paciente:</strong> {patient?.name}</p>
+          <p style={{ margin: 0 }}><strong>Data:</strong> {formatDate(reimprimir.date)}</p>
+          {patient?.birth_date && <p style={{ margin: 0 }}><strong>Nascimento:</strong> {new Date(patient.birth_date + "T12:00:00").toLocaleDateString("pt-BR")}{age ? ` (${age})` : ""}</p>}
+          {patient?.cpf && <p style={{ margin: 0 }}><strong>CPF:</strong> {patient.cpf}</p>}
+        </div>
+        <div style={{ textAlign: "center", margin: "0 0 22px" }}>
+          <p style={{ fontFamily: DOC_SERIF, fontWeight: 700, fontSize: "17px", textTransform: "uppercase", letterSpacing: "7px", color: "#1a1a1a", margin: 0 }}>{reimprimir.title || "Laudo Médico"}</p>
+          <div style={{ width: "80px", borderTop: "1.5px solid #0F2D5E", margin: "10px auto 0" }} />
+        </div>
+        <div style={{ whiteSpace: "pre-wrap", textAlign: "justify", lineHeight: 1.85, fontSize: "12.5px", marginBottom: "20px", textJustify: "inter-word" as any }}>
+          {reimprimir.content}
+        </div>
+        <FechoOficial clinic={clinic} />
+      </div>
+    );
+  }, [reimprimir, patient, clinic]);
+
   return (
     <div className="px-5 pb-5 space-y-4">
       {printData && printContent && (
         <PrintDocModal title="Laudo Médico" content={printContent} onClose={() => setPrintData(null)} />
+      )}
+      {reimprimir && reimprimirContent && (
+        <PrintDocModal title={reimprimir.title || "Laudo Médico"} content={reimprimirContent} onClose={() => setReimprimir(null)} />
+      )}
+
+      {/* Laudos já salvos deste paciente — reimprimir sem reescrever */}
+      {!carregandoSalvos && laudosSalvos.length > 0 && (
+        <div className="border border-slate-200 dark:border-slate-700 rounded-xl p-3 space-y-2 bg-slate-50 dark:bg-slate-800/40">
+          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Laudos salvos deste paciente</p>
+          {laudosSalvos.map((r) => (
+            <div key={r.id} className="flex items-center justify-between gap-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2">
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-slate-800 dark:text-slate-100 truncate">{r.title || r.report_type}</p>
+                <p className="text-[11px] text-slate-400">{formatDate(r.date)}</p>
+              </div>
+              <div className="flex items-center gap-1 shrink-0">
+                <button type="button" onClick={() => setReimprimir(r)} className="p-1.5 text-slate-400 hover:text-blue-600 rounded-lg hover:bg-blue-50 dark:hover:bg-slate-700" title="Ver e imprimir">
+                  <Printer className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!window.confirm("Excluir este laudo salvo? Não tem como desfazer.")) return;
+                    try {
+                      await reportsApi.delete(patient.id, r.id);
+                      setLaudosSalvos((prev) => prev.filter((x) => x.id !== r.id));
+                      toast.success("Laudo excluído");
+                    } catch {
+                      toast.error("Erro ao excluir");
+                    }
+                  }}
+                  className="p-1.5 text-slate-400 hover:text-red-500 rounded-lg hover:bg-red-50 dark:hover:bg-slate-700"
+                  title="Excluir"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
       )}
 
       {/* Inline confirmation for template replacement */}
