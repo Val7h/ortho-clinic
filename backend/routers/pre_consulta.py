@@ -20,7 +20,7 @@ from typing import Optional, Union
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import HTMLResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
 
 from database import get_db
@@ -96,7 +96,23 @@ class PreConsultaPayload(BaseModel):
     # 14/09 (Valth, relato de paciente poliarticular): era um campo unico —
     # quem sentia dor em mais de uma regiao so conseguia marcar uma. Agora
     # aceita varias, mesmo padrao ja usado em doencas_cronicas.
-    regiao_corpo: Optional[list] = None
+    #
+    # 16/09: essa mudanca quebrou em producao, sem barulho nenhum. O bot da
+    # CTO (servidor separado, fora deste repo) manda regiao_corpo como
+    # STRING unica, do jeito antigo — a API passou a exigir lista e rejeitava
+    # com 422 toda submissao dele, silenciosamente (fire-and-forget: ninguem
+    # via o erro). Resultado: 4 pacientes reais juraram ter enviado o
+    # formulario e nada aparecia no prontuario. Aceitar os dois formatos
+    # aqui evita quebrar de novo se outro chamador antigo aparecer.
+    regiao_corpo: Optional[Union[str, list]] = None
+
+    @field_validator("regiao_corpo", mode="before")
+    @classmethod
+    def _regiao_corpo_para_lista(cls, v):
+        if isinstance(v, str):
+            return [v] if v.strip() else None
+        return v
+
     descricao: Optional[str] = None
     tempo_sintomas: Optional[str] = None
     mecanismo: Optional[str] = None
