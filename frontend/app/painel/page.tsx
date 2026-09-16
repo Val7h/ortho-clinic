@@ -127,6 +127,37 @@ function insuranceColor(name: string | null): string {
   return INSURANCE_COLORS[Math.abs(hash) % INSURANCE_COLORS.length];
 }
 
+// 16/09 (Valth): à tarde os pacientes do IP (Instituto Pernambuco) e da
+// Unimagem entram juntos na mesma sala de espera, e não dá pra saber de
+// qual clínica é cada um sem abrir o cadastro. Cores fixas e bem
+// diferentes (não o mesmo esquema do convênio, pra não confundir as duas
+// etiquetas) — sólido, não em hash, porque com só 2-3 clínicas de verdade
+// é melhor ele decorar "IP é azul" do que a cor mudar se o nome mudar de
+// tamanho.
+const CLINIC_COLORS = [
+  'bg-indigo-600 text-white',
+  'bg-pink-600 text-white',
+  'bg-amber-600 text-white',
+  'bg-cyan-600 text-white',
+  'bg-lime-700 text-white',
+];
+
+function clinicColor(clinicId: number | null, clinics: any[]): string {
+  if (clinicId == null) return 'bg-slate-400 text-white';
+  const idx = clinics.findIndex((c) => c.id === clinicId);
+  if (idx < 0) return 'bg-slate-400 text-white';
+  return CLINIC_COLORS[idx % CLINIC_COLORS.length];
+}
+
+// "Instituto Pernambuco (IP)" -> "IP" · "Clínica Unimagem" -> "Unimagem" —
+// nome curto o bastante pra caber na etiqueta pequena do card.
+function clinicLabel(name: string | undefined): string {
+  if (!name) return '?';
+  const sigla = name.match(/\(([^)]+)\)/);
+  if (sigla) return sigla[1];
+  return name.replace(/^Cl[ií]nica\s+/i, '').replace(/^Instituto\s+/i, '');
+}
+
 // ── Patient card ───────────────────────────────────────────────────────────
 
 interface PatientCardProps {
@@ -140,9 +171,13 @@ interface PatientCardProps {
   // Acabou de sair do filtro atual (mudou de status); continua visível e
   // sem clique por um instante para ninguém ocupar o lugar dele na tela.
   saindo?: boolean;
+  // 16/09 (Valth): à tarde entram pacientes do IP e da Unimagem juntos na
+  // mesma sala de espera, sem jeito de saber de qual clínica é cada um sem
+  // abrir o cadastro. Lista de clínicas só pra virar a etiqueta colorida.
+  clinics: any[];
 }
 
-function PatientCard({ entry, onStatusChange, onRemove, onAddValue, onSelect, busy, selected, saindo }: PatientCardProps) {
+function PatientCard({ entry, onStatusChange, onRemove, onAddValue, onSelect, busy, selected, saindo, clinics }: PatientCardProps) {
   const isAttended = entry.status === 'attended';
   const isAbsent = entry.status === 'absent';
   const isDimmed = isAttended || isAbsent;
@@ -221,6 +256,11 @@ function PatientCard({ entry, onStatusChange, onRemove, onAddValue, onSelect, bu
             parecia que só "o lado direito do cartão" funcionava. Agora só o
             grupo de botões segura o clique. */}
         <div className="flex items-center gap-1.5 mt-1.5">
+          {clinics.length > 1 && (
+            <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold flex-shrink-0 ${clinicColor(entry.clinic_id, clinics)}`}>
+              {clinicLabel(clinics.find((c) => c.id === entry.clinic_id)?.name)}
+            </span>
+          )}
           <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium flex-shrink-0 ${insuranceColor(entry.patient_insurance)}`}>
             {entry.patient_insurance ?? 'Particular'}
           </span>
@@ -802,6 +842,7 @@ export default function SalaDeEsperaPage() {
                       busy={busyIds.has(entry.id)}
                       selected={selectedEntry?.id === entry.id}
                       saindo={saindoIds.has(entry.id)}
+                      clinics={clinics}
                     />
                   ))}
                   {totalValueCents > 0 && (
