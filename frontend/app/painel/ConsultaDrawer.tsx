@@ -3920,6 +3920,9 @@ const SPECIALTY_OPTIONS = [
 ];
 
 const PHYSIO_MODALITY_OPTIONS = [
+  // 17/09 (Valth): pediu "fisioterapia motora" e a lista não tinha — é o
+  // pedido mais genérico/comum de todos, faltava justo ele.
+  "Fisioterapia motora",
   "Cinesioterapia / Fortalecimento", "Fisioterapia pós-operatória", "Hidroterapia",
   "Cadeias musculares / RPG", "Pilates terapêutico", "Eletroterapia / TENS",
   "Terapia manual", "Acupuntura", "Outro",
@@ -4263,6 +4266,27 @@ function TabEncaminhamentos({ patient, clinic, patientId }: { patient: any; clin
   const [printData, setPrintData] = useState<{ typeLabel: string; text: string; cid: string; colleagueName: string } | null>(null);
   const textRef = useRef<HTMLTextAreaElement>(null);
 
+  // 17/09 (Valth): pediu fisioterapia motora, clicou "Salvar e Imprimir" e
+  // depois não achou o pedido salvo em lugar nenhum. Motivo real: essa aba
+  // NUNCA gravava nada — "Salvar" só mostrava um toast de sucesso falso, e
+  // "Salvar e Imprimir" só abria a pré-visualização, sem chamar API alguma.
+  // Todo encaminhamento feito por aqui (fisioterapia, especialidade, colega,
+  // outro) se perdia assim que a aba fechava. Agora grava de verdade em
+  // reports (mesma tabela dos laudos/atestados, report_type="encaminhamento")
+  // e mostra os já salvos, pro médico ver se já pediu antes.
+  const [encaminhamentosSalvos, setEncaminhamentosSalvos] = useState<any[]>([]);
+  const [carregandoSalvos, setCarregandoSalvos] = useState(true);
+  const [reimprimir, setReimprimir] = useState<any | null>(null);
+
+  useEffect(() => {
+    if (!patient?.id) return;
+    setCarregandoSalvos(true);
+    reportsApi.list(patient.id)
+      .then((r: any[]) => setEncaminhamentosSalvos((r || []).filter((x: any) => x.report_type === "encaminhamento")))
+      .catch(() => toast.error("Erro ao carregar encaminhamentos salvos"))
+      .finally(() => setCarregandoSalvos(false));
+  }, [patient?.id]);
+
   const today = new Date();
   const dateStr = `${String(today.getDate()).padStart(2,"0")}/${String(today.getMonth()+1).padStart(2,"0")}/${today.getFullYear()}`;
   const cityState = clinic ? `${clinic.city}/${clinic.state}` : "_________";
@@ -4315,17 +4339,44 @@ function TabEncaminhamentos({ patient, clinic, patientId }: { patient: any; clin
     : refType === "outro" ? (outroDestino || "Outro")
     : REFERRAL_TYPES.find(r => r.value === refType)?.label ?? refType;
 
-  const handlePrint = () => {
+  const salvarNoProntuario = async () => {
+    const content = text.trim() + (cid ? `\n\nCID-10: ${cid}` : "");
+    const novo = await reportsApi.create(patient.id, {
+      date: hojeISO(),
+      report_type: "encaminhamento",
+      title: `Encaminhamento — ${typeLabel}`,
+      content,
+    });
+    setEncaminhamentosSalvos((prev) => [novo, ...prev]);
+    return novo;
+  };
+
+  const handlePrint = async () => {
     if (!text.trim()) { toast.error("Descreva o encaminhamento antes de imprimir"); return; }
-    setPrintData({ typeLabel, text, cid, colleagueName });
+    if (!patient?.id) { toast.error("Paciente inválido"); return; }
+    setSaving(true);
+    try {
+      await salvarNoProntuario();
+      if (typeof window !== "undefined") localStorage.removeItem(draftKey);
+      toast.success("Encaminhamento salvo no prontuário");
+      setPrintData({ typeLabel, text, cid, colleagueName });
+    } catch (err: any) {
+      toast.error(msgErro(err, "Erro ao salvar — o texto continua na tela, tente de novo"));
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleSave = async () => {
     if (!text.trim()) { toast.error("Descreva o encaminhamento antes de salvar"); return; }
+    if (!patient?.id) { toast.error("Paciente inválido"); return; }
     setSaving(true);
     try {
+      await salvarNoProntuario();
       toast.success("Encaminhamento registrado");
       if (typeof window !== "undefined") localStorage.removeItem(draftKey);
+    } catch (err: any) {
+      toast.error(msgErro(err, "Erro ao salvar"));
     } finally {
       setSaving(false);
     }
@@ -4373,10 +4424,70 @@ function TabEncaminhamentos({ patient, clinic, patientId }: { patient: any; clin
     </div>
   );
 
+  const reimprimirContent = useMemo(() => {
+    if (!reimprimir) return null;
+    return (
+      <div style={{ fontFamily: "Arial, Helvetica, sans-serif", color: "#1a1a1a", fontSize: "13px" }}>
+        <TimbradoOficial clinic={clinic} />
+        <p style={{ textAlign: "center", fontFamily: DOC_SERIF, fontSize: "13px", fontWeight: 700, letterSpacing: "3px", textTransform: "uppercase", color: "#0F2D5E", margin: "0 0 16px" }}>
+          Encaminhamento médico
+        </p>
+        <div style={{ border: "1px solid #ddd", borderRadius: "3px", padding: "9px 12px", marginBottom: "16px", fontSize: "12px", lineHeight: 1.7 }}>
+          <div><span style={{ color: "#666" }}>Paciente: </span><strong>{patient?.name}</strong></div>
+          <div><span style={{ color: "#666" }}>Data: </span>{formatDate(reimprimir.date)}</div>
+        </div>
+        <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.7, fontSize: "13px", minHeight: "80px" }}>
+          {reimprimir.content}
+        </div>
+        <FechoOficial clinic={clinic} />
+      </div>
+    );
+  }, [reimprimir, patient, clinic]);
+
   return (
     <div className="px-5 pb-5 space-y-4">
       {printData && printContent && (
         <PrintDocModal title="Encaminhamento" content={printContent} onClose={() => setPrintData(null)} />
+      )}
+      {reimprimir && reimprimirContent && (
+        <PrintDocModal title={reimprimir.title || "Encaminhamento"} content={reimprimirContent} onClose={() => setReimprimir(null)} />
+      )}
+
+      {/* Encaminhamentos já salvos deste paciente — pra saber se já pediu antes */}
+      {!carregandoSalvos && encaminhamentosSalvos.length > 0 && (
+        <div className="border border-slate-200 dark:border-slate-700 rounded-xl p-3 space-y-2 bg-slate-50 dark:bg-slate-800/40">
+          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Encaminhamentos salvos deste paciente</p>
+          {encaminhamentosSalvos.map((r) => (
+            <div key={r.id} className="flex items-center justify-between gap-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2">
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-slate-800 dark:text-slate-100 truncate">{r.title}</p>
+                <p className="text-[11px] text-slate-400">{formatDate(r.date)}</p>
+              </div>
+              <div className="flex items-center gap-1 shrink-0">
+                <button type="button" onClick={() => setReimprimir(r)} className="p-1.5 text-slate-400 hover:text-blue-600 rounded-lg hover:bg-blue-50 dark:hover:bg-slate-700" title="Ver e imprimir">
+                  <Printer className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!window.confirm("Excluir este encaminhamento salvo? Não tem como desfazer.")) return;
+                    try {
+                      await reportsApi.delete(patient.id, r.id);
+                      setEncaminhamentosSalvos((prev) => prev.filter((x) => x.id !== r.id));
+                      toast.success("Excluído");
+                    } catch {
+                      toast.error("Erro ao excluir");
+                    }
+                  }}
+                  className="p-1.5 text-slate-400 hover:text-red-500 rounded-lg hover:bg-red-50 dark:hover:bg-slate-700"
+                  title="Excluir"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
       )}
 
       {pendingRefTemplate && (
