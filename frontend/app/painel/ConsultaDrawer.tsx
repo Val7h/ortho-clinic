@@ -4943,6 +4943,23 @@ function TabAtestados({ patient, clinic }: { patient: any; clinic?: any }) {
 
   const [savingDoc, setSavingDoc] = useState(false);
 
+  // 17/09 (Valth): mesmo defeito já achado em Laudos e Encaminhamentos —
+  // salvava certo no banco, mas a tela não mostrava em lugar nenhum. Aqui
+  // nem existia lista alguma antes. Mesmo padrão: busca os já salvos e
+  // atualiza a lista local assim que um novo é salvo.
+  const [documentosSalvos, setDocumentosSalvos] = useState<any[]>([]);
+  const [carregandoSalvos, setCarregandoSalvos] = useState(true);
+  const [reimprimir, setReimprimir] = useState<any | null>(null);
+
+  useEffect(() => {
+    if (!patient?.id) return;
+    setCarregandoSalvos(true);
+    reportsApi.list(patient.id)
+      .then((r: any[]) => setDocumentosSalvos((r || []).filter((x: any) => x.report_type === "atestado" || x.report_type === "comparecimento")))
+      .catch(() => toast.error("Erro ao carregar documentos salvos"))
+      .finally(() => setCarregandoSalvos(false));
+  }, [patient?.id]);
+
   const salvarAtestado = async () => {
     if (!startDate || !days || Number(days) < 1) { toast.error("Informe os dias de afastamento"); return; }
     if (!patient?.id) { toast.error("Paciente inválido"); return; }
@@ -4959,7 +4976,8 @@ function TabAtestados({ patient, clinic }: { patient: any; clinic?: any }) {
         (cid ? `\nCID-10: ${cid}` : "") +
         (cidsLimpos.length ? `\nCID-10 secundário(s): ${cidsLimpos.join(", ")}` : "") +
         (obs ? `\nRestrições/Observações: ${obs}` : "");
-      await reportsApi.create(patient.id, { date: startDate, report_type: "atestado", title: `Atestado — ${typeLabel}`, content });
+      const novo = await reportsApi.create(patient.id, { date: startDate, report_type: "atestado", title: `Atestado — ${typeLabel}`, content });
+      setDocumentosSalvos((prev) => [novo, ...prev]);
       toast.success("Atestado salvo no prontuário");
     } catch {
       toast.error("Erro ao salvar atestado");
@@ -4980,7 +4998,8 @@ function TabAtestados({ patient, clinic }: { patient: any; clinic?: any }) {
         (horaEntrada ? `, das ${horaEntrada}` : "") +
         (horaSaida ? ` às ${horaSaida}` : "") +
         ` para atendimento médico.`;
-      await reportsApi.create(patient.id, { date: compDate, report_type: "comparecimento", title: "Declaração de Comparecimento", content });
+      const novo = await reportsApi.create(patient.id, { date: compDate, report_type: "comparecimento", title: "Declaração de Comparecimento", content });
+      setDocumentosSalvos((prev) => [novo, ...prev]);
       toast.success("Declaração salva no prontuário");
     } catch {
       toast.error("Erro ao salvar declaração");
@@ -5064,6 +5083,21 @@ function TabAtestados({ patient, clinic }: { patient: any; clinic?: any }) {
     );
   }, [compPrintData, patient, clinic, dateStr, horaEntrada, horaSaida]);
 
+  const reimprimirContent = useMemo(() => {
+    if (!reimprimir) return null;
+    return (
+      <div style={{ fontFamily: DOC_SERIF, color: "#1a1a1a", fontSize: "12.5px", lineHeight: 1.75 }}>
+        <TimbradoOficial clinic={clinic} />
+        <div style={{ textAlign: "center", margin: "0 0 22px" }}>
+          <p style={{ fontFamily: DOC_SERIF, fontWeight: 700, fontSize: "17px", textTransform: "uppercase", letterSpacing: "7px", color: "#1a1a1a", margin: 0 }}>{reimprimir.title}</p>
+          <div style={{ width: "80px", borderTop: `1.5px solid ${OM_NAVY}`, margin: "10px auto 0" }} />
+        </div>
+        <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.85, textAlign: "justify" }}>{reimprimir.content}</div>
+        <FechoOficial clinic={clinic} />
+      </div>
+    );
+  }, [reimprimir, clinic]);
+
   return (
     <div className="px-5 pb-5 space-y-4">
       {printData && printContent && (
@@ -5071,6 +5105,46 @@ function TabAtestados({ patient, clinic }: { patient: any; clinic?: any }) {
       )}
       {compPrintData && compPrintContent && (
         <PrintDocModal title="Declaração de Comparecimento" content={compPrintContent} onClose={() => setCompPrintData(null)} />
+      )}
+      {reimprimir && reimprimirContent && (
+        <PrintDocModal title={reimprimir.title} content={reimprimirContent} onClose={() => setReimprimir(null)} />
+      )}
+
+      {/* Atestados/declarações já salvos deste paciente */}
+      {!carregandoSalvos && documentosSalvos.length > 0 && (
+        <div className="border border-slate-200 dark:border-slate-700 rounded-xl p-3 space-y-2 bg-slate-50 dark:bg-slate-800/40">
+          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Documentos salvos deste paciente</p>
+          {documentosSalvos.map((r) => (
+            <div key={r.id} className="flex items-center justify-between gap-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2">
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-slate-800 dark:text-slate-100 truncate">{r.title}</p>
+                <p className="text-[11px] text-slate-400">{formatDate(r.date)}</p>
+              </div>
+              <div className="flex items-center gap-1 shrink-0">
+                <button type="button" onClick={() => setReimprimir(r)} className="p-1.5 text-slate-400 hover:text-blue-600 rounded-lg hover:bg-blue-50 dark:hover:bg-slate-700" title="Ver e imprimir">
+                  <Printer className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!window.confirm("Excluir este documento salvo? Não tem como desfazer.")) return;
+                    try {
+                      await reportsApi.delete(patient.id, r.id);
+                      setDocumentosSalvos((prev) => prev.filter((x) => x.id !== r.id));
+                      toast.success("Excluído");
+                    } catch {
+                      toast.error("Erro ao excluir");
+                    }
+                  }}
+                  className="p-1.5 text-slate-400 hover:text-red-500 rounded-lg hover:bg-red-50 dark:hover:bg-slate-700"
+                  title="Excluir"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
       )}
 
       {/* Tipo de documento */}
@@ -5807,12 +5881,18 @@ function TabLaudos({ patient, clinic }: { patient: any; clinic?: any }) {
               const content = text.trim() +
                 (cid ? `\n\nCID-10: ${cid}` : "") +
                 (cidsTxt.length ? `\nCID-10 secundário(s): ${cidsTxt.join(", ")}` : "");
-              await reportsApi.create(patient.id, {
+              const novoLaudo = await reportsApi.create(patient.id, {
                 date: hojeISO(),
                 report_type: "laudo",
                 title: `Laudo — ${finalidade}`,
                 content,
               });
+              // 17/09 (Valth): salvou, imprimiu, e o laudo não aparecia na
+              // lista "Laudos salvos" — porque essa lista só é buscada uma
+              // vez quando a aba abre; salvar um novo nunca atualizava o
+              // estado local. Ficava salvo de verdade no banco (conferido),
+              // só não aparecia na tela até fechar e abrir a aba de novo.
+              setLaudosSalvos((prev) => [novoLaudo, ...prev]);
               if (typeof window !== "undefined") localStorage.removeItem(draftKey);
               toast.success("Laudo salvo no prontuário — use Ctrl+P ou salve como PDF");
               setPrintData({ text, finalidade, cid, cidsSecundarios: cidsTxt, funcCapacity, funcDetail, incapPercent });
