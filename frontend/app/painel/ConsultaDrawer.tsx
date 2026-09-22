@@ -2416,6 +2416,35 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
     return ordem.filter((t) => grupos[t]?.length).map((t) => ({ tipo: t, meds: grupos[t]! }));
   };
 
+  // 22/09 (Valth): "eu gosto de escrever no texto livre" — a mesma separação
+  // automática, mas lendo o texto linha por linha (não tem campo separado
+  // por remédio aqui). Cada linha que contém o nome de um medicamento
+  // conhecido vai pro grupo do tipo dele; as demais seguem o tipo escolhido
+  // na tela. Linhas de "Orientações:" são tratadas à parte e repetidas em
+  // TODAS as folhas geradas, porque são orientação geral, não de um remédio
+  // específico.
+  const separarTextoLivrePorTipo = (texto: string): { tipo: PrescriptionType; texto: string }[] => {
+    const ordem: PrescriptionType[] = ["controle_especial", "antimicrobiano", "simples"];
+    const buckets: Partial<Record<PrescriptionType, string[]>> = {};
+    const orientacoes: string[] = [];
+    for (const linha of texto.split(/\r?\n/)) {
+      const trimmed = linha.trim();
+      if (!trimmed) continue;
+      // "orientação"/"orientações", com ou sem acento — \S* cobre os dois
+      // plurais (ções vs coes) sem tentar montar as duas grafias na mão.
+      if (/^orienta\S*\s*:/i.test(trimmed)) { orientacoes.push(linha); continue; }
+      const preset = ORTHO_MEDICATIONS.find((p) => trimmed.toLowerCase().includes(p.name.toLowerCase()));
+      const tipo = preset?.prescriptionType ?? rxType;
+      (buckets[tipo] ??= []).push(linha);
+    }
+    return ordem
+      .filter((t) => buckets[t]?.length)
+      .map((t) => ({
+        tipo: t,
+        texto: [buckets[t]!.join("\n"), orientacoes.length ? orientacoes.join("\n") : null].filter(Boolean).join("\n\n"),
+      }));
+  };
+
   const handleSave = async () => {
     // A16: bloqueia salvar ATB sem endereço/telefone obrigatórios (RDC 20/2011)
     if (atbFieldsMissing()) { toast.error("Antimicrobiano exige endereço e telefone do paciente (RDC 20/2011)"); return; }
@@ -2448,16 +2477,20 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
     try {
       // 22/09: se a receita mistura tipos (ex.: remédio simples + Tramadol),
       // salva uma receita SEPARADA por tipo — nunca mistura remédio comum
-      // com controlado no mesmo documento.
-      const grupos = freeTextMode ? null : agruparMedsPorTipo(validMeds);
+      // com controlado no mesmo documento. Vale tanto pro modo estruturado
+      // quanto pro texto livre (linha a linha, ver separarTextoLivrePorTipo).
+      const gruposMeds = freeTextMode ? null : agruparMedsPorTipo(validMeds);
+      const gruposTexto = freeTextMode ? separarTextoLivrePorTipo(freeText) : null;
+      const misturou = (gruposMeds && gruposMeds.length > 1) || (gruposTexto && gruposTexto.length > 1);
       const novas: any[] = [];
-      if (grupos && grupos.length > 1) {
+      if (misturou) {
+        const grupos = freeTextMode ? gruposTexto! : gruposMeds!;
         for (const g of grupos) {
           const nova = await prescriptionsApi.create(patientId, {
             date: hojeISO(),
             prescription_type: g.tipo,
-            medications: g.meds,
-            instructions,
+            medications: freeTextMode ? [] : (g as { meds: Medication[] }).meds,
+            instructions: freeTextMode ? (g as { texto: string }).texto : instructions,
             patient_address: patientAddress || undefined,
             patient_phone: patientPhone || undefined,
           });
@@ -2467,7 +2500,7 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
       } else {
         const nova = await prescriptionsApi.create(patientId, {
           date: hojeISO(),
-          prescription_type: grupos?.[0]?.tipo ?? rxType,
+          prescription_type: gruposMeds?.[0]?.tipo ?? rxType,
           medications: validMeds,
           instructions: freeTextMode ? freeText : instructions,
           // A16: persiste endereço/telefone (obrigatórios em ATB; úteis também na RCE).
@@ -2512,19 +2545,34 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
     }
     // 22/09: mesma separação automática, agora pra impressão — gera uma
     // folha por tipo e mostra uma de cada vez (a próxima aparece ao fechar
-    // a anterior).
-    const grupos = freeTextMode ? null : agruparMedsPorTipo(validMeds);
-    const folhas: PrintRxJob[] = grupos && grupos.length > 1
-      ? grupos.map((g) => ({
+    // a anterior). Vale pro texto livre também (linha a linha).
+    const gruposMeds = freeTextMode ? null : agruparMedsPorTipo(validMeds);
+    const gruposTexto = freeTextMode ? separarTextoLivrePorTipo(freeText) : null;
+    const misturou = (gruposMeds && gruposMeds.length > 1) || (gruposTexto && gruposTexto.length > 1);
+    let folhas: PrintRxJob[];
+    let labelGrupos = "";
+    if (misturou) {
+      if (freeTextMode) {
+        folhas = gruposTexto!.map((g) => ({
+          date: hojeISO(), medications: [], instructions: g.texto,
+          prescription_type: g.tipo, patientAddress: patientAddress || undefined, patientPhone: patientPhone || undefined,
+        }));
+        labelGrupos = gruposTexto!.map((g) => PRESCRIPTION_TYPE_LABELS[g.tipo]).join(" + ");
+      } else {
+        folhas = gruposMeds!.map((g) => ({
           date: hojeISO(), medications: g.meds, instructions,
           prescription_type: g.tipo, patientAddress: patientAddress || undefined, patientPhone: patientPhone || undefined,
-        }))
-      : [{
-          date: hojeISO(), medications: validMeds, instructions: freeTextMode ? freeText : instructions,
-          prescription_type: grupos?.[0]?.tipo ?? rxType, patientAddress: patientAddress || undefined, patientPhone: patientPhone || undefined,
-        }];
+        }));
+        labelGrupos = gruposMeds!.map((g) => PRESCRIPTION_TYPE_LABELS[g.tipo]).join(" + ");
+      }
+    } else {
+      folhas = [{
+        date: hojeISO(), medications: validMeds, instructions: freeTextMode ? freeText : instructions,
+        prescription_type: gruposMeds?.[0]?.tipo ?? rxType, patientAddress: patientAddress || undefined, patientPhone: patientPhone || undefined,
+      }];
+    }
     if (folhas.length > 1) {
-      toast(`Misturou tipos — gerando ${folhas.length} folhas separadas (${grupos!.map((g) => PRESCRIPTION_TYPE_LABELS[g.tipo]).join(" + ")})`, { icon: "📄", duration: 6000 });
+      toast(`Misturou tipos — gerando ${folhas.length} folhas separadas (${labelGrupos})`, { icon: "📄", duration: 6000 });
     }
     // M8: id incremental por documento gerado hoje (registra no coletor de lote)
     rxDocSeq.current += 1;
