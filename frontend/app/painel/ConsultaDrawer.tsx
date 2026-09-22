@@ -476,6 +476,22 @@ function AllergyBanner({ patient }: { patient: any }) {
 }
 
 // CID autocomplete inline
+// 22/09 (Valth): "alguns CIDs têm a descrição e outros não" — a busca só
+// tinha os ~80 códigos que eu tinha escolhido à mão (ORTHO_CIDS, com
+// apelidos tipo "joanete"/"esporão"). Qualquer outro código digitado ficava
+// sem descrição nenhuma. Agora carrega a tabela OFICIAL completa do DATASUS
+// (12.451 subcategorias, /public/cid10.json) como base de descrição — os
+// apelidos continuam só nos ortopédicos curados, e os demais códigos passam
+// a ter a descrição oficial em vez de nada.
+let cid10CompletoCache: { code: string; label: string }[] | null = null;
+function carregarCid10Completo(): Promise<{ code: string; label: string }[]> {
+  if (cid10CompletoCache) return Promise.resolve(cid10CompletoCache);
+  return fetch("/cid10.json")
+    .then((r) => r.json())
+    .then((d) => { cid10CompletoCache = d; return d; })
+    .catch(() => []);
+}
+
 function CidSearch({ value, onChange, autoFocus }: { value: string; onChange: (v: string) => void; autoFocus?: boolean }) {
   const [query, setQuery] = useState(value || "");
   const inputRef = useRef<HTMLInputElement>(null);
@@ -484,10 +500,22 @@ function CidSearch({ value, onChange, autoFocus }: { value: string; onChange: (v
   useEffect(() => { if (autoFocus) inputRef.current?.focus(); }, [autoFocus]);
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const [cid10Completo, setCid10Completo] = useState<{ code: string; label: string }[]>([]);
+  useEffect(() => { carregarCid10Completo().then(setCid10Completo); }, []);
 
-  const filtered = query.length >= 2
-    ? ORTHO_CIDS.filter((c) => cidMatches(c, query)).slice(0, 6)
-    : [];
+  const filtered = useMemo(() => {
+    if (query.length < 2) return [];
+    const codigosCurados = new Set(ORTHO_CIDS.map((c) => c.code));
+    const doCurado = ORTHO_CIDS.filter((c) => cidMatches(c, query));
+    // "principalmente ortopédicos" (pedido do Valth): entre os códigos da
+    // tabela oficial, prioriza capítulo M (musculoesquelético) e S/T
+    // (traumas/lesões) na frente dos demais.
+    const peso = (code: string) => (code[0] === "M" ? 0 : code[0] === "S" || code[0] === "T" ? 1 : 2);
+    const doOficial = cid10Completo
+      .filter((c) => !codigosCurados.has(c.code) && cidMatches(c, query))
+      .sort((a, b) => peso(a.code) - peso(b.code));
+    return [...doCurado, ...doOficial].slice(0, 8);
+  }, [query, cid10Completo]);
 
   useEffect(() => {
     function handle(e: MouseEvent) {
