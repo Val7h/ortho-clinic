@@ -2492,11 +2492,23 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
     } else {
       setFreeTextMode(false);
       setFreeText("");
-      setMedications(meds.length ? meds : [emptyMed()]);
-      setInstructions(tmpl.instructions || "");
+      // 22/09 (Valth): carregar um segundo modelo APAGAVA o primeiro — ele
+      // queria somar (Deracal + Along C na mesma receita), mas isso aqui
+      // sempre SUBSTITUÍA a lista inteira. Agora: se já tem algum
+      // medicamento de verdade digitado, o modelo novo é ACRESCENTADO no
+      // fim da lista, não troca o que já estava lá. Ids novos pra evitar
+      // colisão de key do React entre modelos diferentes.
+      const medsDoModelo = (meds.length ? meds : [emptyMed()]).map((m: any) => ({ ...emptyMed(), ...m, id: crypto.randomUUID() }));
+      const jaTemMedicamento = medications.some((m) => m.name.trim());
+      setMedications((prev) => jaTemMedicamento
+        ? [...prev.filter((m) => m.name.trim()), ...medsDoModelo]
+        : medsDoModelo);
+      setInstructions((prev) => (jaTemMedicamento && prev.trim() && tmpl.instructions)
+        ? `${prev}\n${tmpl.instructions}`
+        : (tmpl.instructions || prev));
     }
     setShowTemplateDropdown(false);
-    toast.success(`Modelo "${tmpl.name}" carregado`);
+    toast.success(`Modelo "${tmpl.name}" ${medications.some((m) => m.name.trim()) ? "acrescentado" : "carregado"}`);
   };
 
   const handleSaveTemplate = async () => {
