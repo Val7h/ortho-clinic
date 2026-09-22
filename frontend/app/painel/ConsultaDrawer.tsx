@@ -648,11 +648,25 @@ function DiagnosticosCids({ patientId, patient }: { patientId: number; patient: 
     setOpenList(false);
   };
 
-  const filtered = query.length >= 2
-    ? ORTHO_CIDS.filter(
-        c => !cids.some(x => x.startsWith(c.code)) && cidMatches(c, query)
-      ).slice(0, 8)
-    : [];
+  // 22/09 (Valth): "buscar pelo nome" — esse campo (Diagnósticos fixos, na
+  // Anamnese) é separado do CidSearch da receita/encaminhamento e tinha
+  // ficado de fora quando troquei o outro pra base completa do DATASUS.
+  // Mesmo ajuste aqui: apelidos curados primeiro, tabela oficial completa
+  // preenchendo o resto, M/S/T (ortopedia/trauma) na frente.
+  const [cid10Completo, setCid10Completo] = useState<{ code: string; label: string }[]>([]);
+  useEffect(() => { carregarCid10Completo().then(setCid10Completo); }, []);
+
+  const filtered = useMemo(() => {
+    if (query.length < 2) return [];
+    const codigosCurados = new Set(ORTHO_CIDS.map((c) => c.code));
+    const jaAdicionado = (code: string) => cids.some((x) => x.startsWith(code));
+    const doCurado = ORTHO_CIDS.filter((c) => !jaAdicionado(c.code) && cidMatches(c, query));
+    const peso = (code: string) => (code[0] === "M" ? 0 : code[0] === "S" || code[0] === "T" ? 1 : 2);
+    const doOficial = cid10Completo
+      .filter((c) => !codigosCurados.has(c.code) && !jaAdicionado(c.code) && cidMatches(c, query))
+      .sort((a, b) => peso(a.code) - peso(b.code));
+    return [...doCurado, ...doOficial].slice(0, 8);
+  }, [query, cids, cid10Completo]);
 
   const ofertas = ofertasParaCids(cids).filter(o => !dismissed.includes(o.prefix));
 
