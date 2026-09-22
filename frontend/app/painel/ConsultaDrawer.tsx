@@ -779,6 +779,13 @@ const sectionTitle = "text-xs font-bold text-slate-500 dark:text-slate-400 upper
 // Medication row
 interface Medication {
   id: string; name: string; dose: string; route: string; frequency: string; duration: string; instructions: string; quantity?: string;
+  // 22/09 (Valth): antes só existia UM tipo pra receita inteira. Se ele
+  // misturasse um remédio simples com um controlado, tudo virava a folha de
+  // controle especial — incluindo o remédio simples, o que não é como
+  // funciona na prática (têm que sair em papéis separados). Cada item agora
+  // guarda o PRÓPRIO tipo (preenchido quando reconhecido de um preset
+  // conhecido); undefined = segue o tipo geral escolhido na tela.
+  prescriptionType?: "simples" | "controle_especial" | "antimicrobiano";
 }
 const emptyMed = (): Medication => ({ id: typeof crypto !== "undefined" ? crypto.randomUUID() : String(Date.now() + Math.random()), name: "", dose: "", route: "oral", frequency: "", duration: "", instructions: "", quantity: "" });
 
@@ -2207,10 +2214,24 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
   const [saving, setSaving] = useState(false);
   const [prescriptions, setPrescriptions] = useState<any[]>([]);
   const [loadingRx, setLoadingRx] = useState(true);
-  const [printRx, setPrintRx] = useState<{
+  type PrintRxJob = {
     date: string; medications: Medication[]; instructions: string;
     prescription_type: PrescriptionType; patientAddress?: string; patientPhone?: string;
-  } | null>(null);
+  };
+  const [printRx, setPrintRx] = useState<PrintRxJob | null>(null);
+  // 22/09: quando a receita mistura tipos (simples + controlado), viram DUAS
+  // folhas — o médico precisa ver e imprimir as duas, uma de cada vez. A
+  // fila guarda as folhas seguintes; ao fechar a que está na tela, a próxima
+  // entra sozinha.
+  const [printRxQueue, setPrintRxQueue] = useState<PrintRxJob[]>([]);
+  const fecharPrintRx = () => {
+    setPrintRxQueue((fila) => {
+      if (fila.length === 0) { setPrintRx(null); return fila; }
+      const [proxima, ...resto] = fila;
+      setPrintRx(proxima);
+      return resto;
+    });
+  };
   // M8: id do documento a registrar no coletor de impressão em lote. Contador
   // incremental via useRef (NÃO Date.now(), que pode quebrar o build). Null quando
   // o preview vem do histórico (reimpressão) — aí não registra no coletor.
@@ -2341,7 +2362,15 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
   }, [freeText, freeTextMode]);
 
   const updateMed = (id: string, k: keyof Medication, v: string) => {
-    setMedications((ms) => ms.map((m) => (m.id === id ? { ...m, [k]: v } : m)));
+    // 22/09: se ele digitar o nome EXATO de um medicamento conhecido sem
+    // clicar na sugestão (ex: colou de outro lugar, ou já sabe o nome de
+    // cor), ainda assim marca o tipo certo nesse item — não fica dependendo
+    // só do clique na sugestão pra saber que é controlado.
+    const matchExato = k === "name" ? ORTHO_MEDICATIONS.find(p => p.name.toLowerCase() === v.trim().toLowerCase()) : undefined;
+    setMedications((ms) => ms.map((m) => (m.id === id ? {
+      ...m, [k]: v,
+      ...(matchExato ? { prescriptionType: matchExato.prescriptionType } : {}),
+    } : m)));
     // Trigger autocomplete suggestions when editing name
     if (k === "name") {
       if (v.trim().length >= 2) {
@@ -2358,6 +2387,7 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
     setMedications(ms => ms.map(m => m.id === medId ? {
       ...m, name: preset.name, dose: preset.dose, route: preset.route,
       frequency: preset.frequency, duration: preset.duration, instructions: preset.instructions,
+      prescriptionType: preset.prescriptionType,
     } : m));
     // Auto-select prescription type from preset
     if (preset.prescriptionType === "controle_especial" || preset.prescriptionType === "antimicrobiano") {
@@ -2370,6 +2400,21 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
   const isRCE = rxType === "controle_especial";
   // A16: endereço e telefone são obrigatórios na receita de antimicrobiano (RDC 20/2011)
   const atbFieldsMissing = () => isATB && (!patientAddress.trim() || !patientPhone.trim());
+
+  // 22/09 (Valth): "separar automaticamente em duas folhas quando misturar
+  // remédio simples com controlado". Cada item usa o PRÓPRIO tipo se
+  // reconhecido (ver Medication.prescriptionType); os que não foram
+  // reconhecidos seguem o tipo escolhido na tela (rxType) — assim continua
+  // funcionando como antes pra quem nunca mistura tipo nenhum.
+  const agruparMedsPorTipo = (meds: Medication[]): { tipo: PrescriptionType; meds: Medication[] }[] => {
+    const ordem: PrescriptionType[] = ["controle_especial", "antimicrobiano", "simples"];
+    const grupos: Partial<Record<PrescriptionType, Medication[]>> = {};
+    for (const m of meds) {
+      const tipo = m.prescriptionType ?? rxType;
+      (grupos[tipo] ??= []).push(m);
+    }
+    return ordem.filter((t) => grupos[t]?.length).map((t) => ({ tipo: t, meds: grupos[t]! }));
+  };
 
   const handleSave = async () => {
     // A16: bloqueia salvar ATB sem endereço/telefone obrigatórios (RDC 20/2011)
@@ -2401,23 +2446,44 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
     }
     setSaving(true);
     try {
-      const newRx = await prescriptionsApi.create(patientId, {
-        date: hojeISO(),
-        prescription_type: rxType,
-        medications: validMeds,
-        instructions: freeTextMode ? freeText : instructions,
-        // A16: persiste endereço/telefone (obrigatórios em ATB; úteis também na RCE).
-        // CONTRATO BACKEND: o create passa a gravar patient_address/patient_phone.
-        patient_address: patientAddress || undefined,
-        patient_phone: patientPhone || undefined,
-      });
-      // 10/09 (auditoria Valth) — salvar apagava a receita da tela. Se ele
-      // quisesse imprimir OU mandar por WhatsApp em seguida, o texto já tinha
-      // sumido, e só dava pra recuperar reabrindo pelo histórico. Agora o que
-      // foi escrito continua na tela — pronto pra imprimir ou enviar — e só
-      // some se ele mesmo apagar ou trocar de paciente.
-      toast.success("Receita salva! O texto continua aqui — pode imprimir ou enviar.");
-      setPrescriptions((prev) => [newRx, ...prev]);
+      // 22/09: se a receita mistura tipos (ex.: remédio simples + Tramadol),
+      // salva uma receita SEPARADA por tipo — nunca mistura remédio comum
+      // com controlado no mesmo documento.
+      const grupos = freeTextMode ? null : agruparMedsPorTipo(validMeds);
+      const novas: any[] = [];
+      if (grupos && grupos.length > 1) {
+        for (const g of grupos) {
+          const nova = await prescriptionsApi.create(patientId, {
+            date: hojeISO(),
+            prescription_type: g.tipo,
+            medications: g.meds,
+            instructions,
+            patient_address: patientAddress || undefined,
+            patient_phone: patientPhone || undefined,
+          });
+          novas.push(nova);
+        }
+        toast.success(`${grupos.length} receitas salvas (${grupos.map((g) => PRESCRIPTION_TYPE_LABELS[g.tipo]).join(" + ")}) — misturou tipos, então separei automaticamente`, { duration: 6000 });
+      } else {
+        const nova = await prescriptionsApi.create(patientId, {
+          date: hojeISO(),
+          prescription_type: grupos?.[0]?.tipo ?? rxType,
+          medications: validMeds,
+          instructions: freeTextMode ? freeText : instructions,
+          // A16: persiste endereço/telefone (obrigatórios em ATB; úteis também na RCE).
+          // CONTRATO BACKEND: o create passa a gravar patient_address/patient_phone.
+          patient_address: patientAddress || undefined,
+          patient_phone: patientPhone || undefined,
+        });
+        novas.push(nova);
+        // 10/09 (auditoria Valth) — salvar apagava a receita da tela. Se ele
+        // quisesse imprimir OU mandar por WhatsApp em seguida, o texto já tinha
+        // sumido, e só dava pra recuperar reabrindo pelo histórico. Agora o que
+        // foi escrito continua na tela — pronto pra imprimir ou enviar — e só
+        // some se ele mesmo apagar ou trocar de paciente.
+        toast.success("Receita salva! O texto continua aqui — pode imprimir ou enviar.");
+      }
+      setPrescriptions((prev) => [...novas, ...prev]);
       // A14: receita salva → limpa o rascunho persistido (já está salvo "de
       // verdade" no prontuário; o rascunho local perderia sentido)
       if (typeof window !== "undefined") localStorage.removeItem(rxDraftKey);
@@ -2444,17 +2510,27 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
       validMeds = medications.filter((m) => m.name.trim());
       if (validMeds.length === 0) { toast.error("Adicione pelo menos um medicamento para imprimir"); return; }
     }
+    // 22/09: mesma separação automática, agora pra impressão — gera uma
+    // folha por tipo e mostra uma de cada vez (a próxima aparece ao fechar
+    // a anterior).
+    const grupos = freeTextMode ? null : agruparMedsPorTipo(validMeds);
+    const folhas: PrintRxJob[] = grupos && grupos.length > 1
+      ? grupos.map((g) => ({
+          date: hojeISO(), medications: g.meds, instructions,
+          prescription_type: g.tipo, patientAddress: patientAddress || undefined, patientPhone: patientPhone || undefined,
+        }))
+      : [{
+          date: hojeISO(), medications: validMeds, instructions: freeTextMode ? freeText : instructions,
+          prescription_type: grupos?.[0]?.tipo ?? rxType, patientAddress: patientAddress || undefined, patientPhone: patientPhone || undefined,
+        }];
+    if (folhas.length > 1) {
+      toast(`Misturou tipos — gerando ${folhas.length} folhas separadas (${grupos!.map((g) => PRESCRIPTION_TYPE_LABELS[g.tipo]).join(" + ")})`, { icon: "📄", duration: 6000 });
+    }
     // M8: id incremental por documento gerado hoje (registra no coletor de lote)
     rxDocSeq.current += 1;
     setPrintRxCollectorId(`receita-${rxDocSeq.current}`);
-    setPrintRx({
-      date: hojeISO(),
-      medications: validMeds,
-      instructions: freeTextMode ? freeText : instructions,
-      prescription_type: rxType,
-      patientAddress: patientAddress || undefined,
-      patientPhone: patientPhone || undefined,
-    });
+    setPrintRx(folhas[0]);
+    setPrintRxQueue(folhas.slice(1));
   };
 
   const normTexto = (t: string) =>
@@ -2498,7 +2574,13 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
       // medicamento de verdade digitado, o modelo novo é ACRESCENTADO no
       // fim da lista, não troca o que já estava lá. Ids novos pra evitar
       // colisão de key do React entre modelos diferentes.
-      const medsDoModelo = (meds.length ? meds : [emptyMed()]).map((m: any) => ({ ...emptyMed(), ...m, id: crypto.randomUUID() }));
+      const medsDoModelo = (meds.length ? meds : [emptyMed()]).map((m: any) => {
+        const matchExato = ORTHO_MEDICATIONS.find(p => p.name.toLowerCase() === (m.name || "").trim().toLowerCase());
+        return {
+          ...emptyMed(), ...m, id: crypto.randomUUID(),
+          prescriptionType: m.prescriptionType ?? matchExato?.prescriptionType ?? tipoDoModelo ?? undefined,
+        };
+      });
       const jaTemMedicamento = medications.some((m) => m.name.trim());
       setMedications((prev) => jaTemMedicamento
         ? [...prev.filter((m) => m.name.trim()), ...medsDoModelo]
@@ -2608,7 +2690,7 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
 
   return (
     <div className="space-y-4 px-5 pb-6">
-      {printRx && <PrintModal rx={printRx} patient={patient} clinic={clinic} collectorId={printRxCollectorId} onClose={() => setPrintRx(null)} />}
+      {printRx && <PrintModal rx={printRx} patient={patient} clinic={clinic} collectorId={printRxCollectorId} onClose={fecharPrintRx} />}
 
       {/* ── Tipo de Receita ── */}
       <div>
@@ -3019,6 +3101,7 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
                       onClick={() => {
                         // M8: reimpressão do histórico NÃO registra no coletor de lote
                         setPrintRxCollectorId(null);
+                        setPrintRxQueue([]); // reimpressão avulsa nunca arrasta fila de outra receita
                         setPrintRx({
                           date: rx.date,
                           medications: rx.medications || [],
