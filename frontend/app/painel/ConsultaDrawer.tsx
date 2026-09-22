@@ -342,6 +342,35 @@ const ORTHO_MEDICATIONS: OrthoMedPreset[] = [
   { name: "Sulfato de Glicosamina 1500mg", dose: "1 sachê em 200ml de água", route: "oral", frequency: "1x/dia", duration: "90 dias", instructions: "Tomar preferencialmente pela manhã", prescriptionType: "simples" },
 ];
 
+// 22/09 (Valth): escreveu "TRAMADON RETARD 100MG" (nome comercial, dose
+// diferente) e a receita saiu como simples — o reconhecimento automático só
+// batia com o texto EXATO do preset ("Tramadol 50mg"), então nome comercial
+// ou dose diferente passava batido. Esses apelidos cobrem só os remédios que
+// JÁ são controle_especial no ORTHO_MEDICATIONS acima — isso aqui não decide
+// sozinho que um remédio novo é controlado, só reconhece os apelidos dos
+// que já são.
+const ALIASES_CONTROLADOS: { termos: string[]; presetName: string }[] = [
+  { termos: ["tramadol", "tramadon", "tramal", "sylador"], presetName: "Tramadol 50mg" },
+  { termos: ["codeina", "codeína", "codein"], presetName: "Codeína 30mg" },
+  { termos: ["clonazepam", "rivotril"], presetName: "Clonazepam 0,5mg" },
+];
+
+const normalizarTexto = (t: string) => (t || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+
+// Acha o preset certo mesmo com dose diferente ("Tramadol 100mg" bate com o
+// preset "Tramadol 50mg") ou nome comercial ("Tramadon" bate com Tramadol).
+function detectarPresetPorNomeOuApelido(textoLivreOuNome: string): OrthoMedPreset | undefined {
+  const norm = normalizarTexto(textoLivreOuNome);
+  if (!norm.trim()) return undefined;
+  const direto = ORTHO_MEDICATIONS.find((p) => {
+    const nomeBase = normalizarTexto(p.name).replace(/\s*\d.*$/, "").trim(); // corta a dose: "tramadol 50mg" -> "tramadol"
+    return nomeBase && norm.includes(nomeBase);
+  });
+  if (direto) return direto;
+  const alias = ALIASES_CONTROLADOS.find((a) => a.termos.some((t) => norm.includes(t)));
+  return alias ? ORTHO_MEDICATIONS.find((p) => p.name === alias.presetName) : undefined;
+}
+
 // ── Referral text templates ─────────────────────────────────────────────────────
 const REFERRAL_TEXT_TEMPLATES = [
   { type: "fisioterapia", name: "Gonartrose (fortalecimento)", text: "Paciente portador(a) de gonartrose (CID: M17.1). Solicito avaliação e início de programa de fortalecimento muscular de quadríceps e isquiotibiais, visando melhora funcional e alívio da dor." },
@@ -2362,11 +2391,11 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
   }, [freeText, freeTextMode]);
 
   const updateMed = (id: string, k: keyof Medication, v: string) => {
-    // 22/09: se ele digitar o nome EXATO de um medicamento conhecido sem
-    // clicar na sugestão (ex: colou de outro lugar, ou já sabe o nome de
-    // cor), ainda assim marca o tipo certo nesse item — não fica dependendo
-    // só do clique na sugestão pra saber que é controlado.
-    const matchExato = k === "name" ? ORTHO_MEDICATIONS.find(p => p.name.toLowerCase() === v.trim().toLowerCase()) : undefined;
+    // 22/09: se ele digitar o nome de um medicamento conhecido (ou apelido/
+    // nome comercial, ou dose diferente) sem clicar na sugestão, ainda
+    // assim marca o tipo certo nesse item — não fica dependendo só do
+    // clique na sugestão pra saber que é controlado.
+    const matchExato = k === "name" ? detectarPresetPorNomeOuApelido(v) : undefined;
     setMedications((ms) => ms.map((m) => (m.id === id ? {
       ...m, [k]: v,
       ...(matchExato ? { prescriptionType: matchExato.prescriptionType } : {}),
@@ -2433,7 +2462,7 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
       // "orientação"/"orientações", com ou sem acento — \S* cobre os dois
       // plurais (ções vs coes) sem tentar montar as duas grafias na mão.
       if (/^orienta\S*\s*:/i.test(trimmed)) { orientacoes.push(linha); continue; }
-      const preset = ORTHO_MEDICATIONS.find((p) => trimmed.toLowerCase().includes(p.name.toLowerCase()));
+      const preset = detectarPresetPorNomeOuApelido(trimmed);
       const tipo = preset?.prescriptionType ?? rxType;
       (buckets[tipo] ??= []).push(linha);
     }
@@ -2623,7 +2652,7 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
       // fim da lista, não troca o que já estava lá. Ids novos pra evitar
       // colisão de key do React entre modelos diferentes.
       const medsDoModelo = (meds.length ? meds : [emptyMed()]).map((m: any) => {
-        const matchExato = ORTHO_MEDICATIONS.find(p => p.name.toLowerCase() === (m.name || "").trim().toLowerCase());
+        const matchExato = detectarPresetPorNomeOuApelido(m.name || "");
         return {
           ...emptyMed(), ...m, id: crypto.randomUUID(),
           prescriptionType: m.prescriptionType ?? matchExato?.prescriptionType ?? tipoDoModelo ?? undefined,
