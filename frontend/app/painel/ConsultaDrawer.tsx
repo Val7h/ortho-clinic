@@ -2611,6 +2611,19 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
     const ordem: PrescriptionType[] = ["controle_especial", "antimicrobiano", "simples"];
     const buckets: Partial<Record<PrescriptionType, string[]>> = {};
     const orientacoes: string[] = [];
+    // 23/09 (Valth): receita da paciente Estelina Alves Pereira quebrou ao
+    // meio na impressão — um remédio MANIPULADO ficou numa folha e a linha
+    // "Forma de usar" (o modo de uso DAQUELE mesmo remédio) ficou sozinha em
+    // OUTRA. Causa: "Forma de usar" não batia com nenhum medicamento
+    // conhecido, então caía no tipo padrão da tela em vez de ficar junto do
+    // remédio ao qual pertence — se o remédio manipulado tinha sido
+    // detectado como controlado (por conter algo como "Tramadol" na
+    // fórmula), a instrução de uso ia pro grupo "simples" e virava outra
+    // folha. Agora uma linha sem remédio reconhecido HERDA o tipo da última
+    // linha de remédio vista acima dela — é instrução daquele remédio, não
+    // um item novo — só volta ao tipo padrão da tela se ainda não apareceu
+    // remédio nenhum.
+    let tipoAtual: PrescriptionType = rxType;
     for (const linha of texto.split(/\r?\n/)) {
       const trimmed = linha.trim();
       if (!trimmed) continue;
@@ -2618,8 +2631,8 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
       // plurais (ções vs coes) sem tentar montar as duas grafias na mão.
       if (/^orienta\S*\s*:/i.test(trimmed)) { orientacoes.push(linha); continue; }
       const preset = detectarPresetPorNomeOuApelido(trimmed);
-      const tipo = preset?.prescriptionType ?? rxType;
-      (buckets[tipo] ??= []).push(linha);
+      if (preset?.prescriptionType) tipoAtual = preset.prescriptionType;
+      (buckets[tipoAtual] ??= []).push(linha);
     }
     return ordem
       .filter((t) => buckets[t]?.length)
