@@ -2681,7 +2681,14 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
     // Modelo de TEXTO LIVRE = sem medicamentos estruturados, texto em instructions.
     if (meds.length === 0 && (tmpl.instructions || "").trim()) {
       setFreeTextMode(true);
-      setFreeText(tmpl.instructions || "");
+      // 23/09 (Valth): mesmo defeito já corrigido no modo estruturado em
+      // 22/09 (carregar um 2º modelo apagava o 1º), só que faltou aqui no
+      // texto livre — ele tentou colocar "SIMB" e depois "INCIT" em
+      // sequência pra imprimir os dois numa receita só, e o segundo modelo
+      // sempre SUBSTITUÍA o texto inteiro. Agora, se já tem texto digitado,
+      // o modelo novo é ACRESCENTADO (uma linha em branco entre os dois),
+      // não troca o que já estava lá.
+      setFreeText((prev) => (prev.trim() ? `${prev.trim()}\n${(tmpl.instructions || "").trim()}` : (tmpl.instructions || "")));
       setMedications([emptyMed()]);
       setInstructions("");
     } else {
