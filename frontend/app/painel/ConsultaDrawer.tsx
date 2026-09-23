@@ -1968,33 +1968,84 @@ function TabProntuario({ patientId, patient }: { patientId: number; patient?: an
         refBlocos.current = blocos;
         setTotalDias(blocos.length);
 
-        let texto = montarFolha(blocos);
         // A data entra sozinha: se ainda não há bloco de hoje, a folha já abre
-        // com o cabeçalho de hoje e o cursor embaixo dele.
-        if (!blocos.some(b => b.dataISO === todayISO)) {
+        // com o cabeçalho de hoje e o cursor embaixo dele. Um bloco vazio
+        // pra hoje entra na lista de blocos (não só no texto), pra sobreviver
+        // ao merge do rascunho logo abaixo mesmo se o rascunho não falar
+        // nada sobre hoje.
+        const blocosComHoje = blocos.map(b => ({ ...b }));
+        if (!blocosComHoje.some(b => b.dataISO === todayISO)) {
           // 23/09 (Valth): "você sempre coloca como base o retorno em vez de
           // primeira consulta" — o padrão era sempre "retorno", mesmo quando
           // o prontuário não tinha NENHUM registro anterior (paciente Ana
           // Cristina Gomes da Silva, hoje era a primeira vez dela). Sem
           // histórico nenhum só pode ser 1ª consulta; com histórico, mantém
           // "retorno" como já era.
-          const tipoInicial = blocos.length === 0 ? "primeira_consulta" : "retorno";
+          const tipoInicial = blocosComHoje.length === 0 ? "primeira_consulta" : "retorno";
           setConsultType(tipoInicial);
-          texto = (texto ? texto + "\n\n" : "") + cabecalhoFolha(todayISO, tipoLabel(tipoInicial)) + "\n";
+          blocosComHoje.push({ id: null, dataISO: todayISO, tipo: tipoLabel(tipoInicial), texto: "" });
         } else {
-          const daquiHoje = blocos.find(b => b.dataISO === todayISO);
+          const daquiHoje = blocosComHoje.find(b => b.dataISO === todayISO);
           if (daquiHoje?.tipo) {
             const v = CONSULT_TYPES.find(c => c.label === daquiHoje.tipo)?.value;
             if (v) setConsultType(v);
           }
         }
+        let texto = montarFolha(blocosComHoje);
 
         // Rascunho: o que ele estava escrevendo e não chegou a salvar.
+        //
+        // 23/09 (Valth): paciente Regene Bonfim do Nascimento — o que ele
+        // tinha escrito na consulta ANTERIOR (nunca chegou a ser salva de
+        // verdade no servidor, só ficou como rascunho local) apareceu hoje
+        // sob a data de HOJE. Causa: isto aqui pegava o rascunho salvo —
+        // que é a folha INTEIRA de uma sessão antiga — e SUBSTITUÍA a folha
+        // toda, cabeçalho de hoje incluso, por aquele texto velho. Como o
+        // rascunho não carrega nenhuma data própria (era um `localStorage`
+        // com string pura), o texto do dia antigo acabava embaixo do
+        // cabeçalho recém-gerado para hoje.
+        //
+        // Agora o rascunho é lido bloco a bloco (mesma função que separa a
+        // folha por dia ao salvar) e cada bloco entra com A DATA DELE — só
+        // é solto sob "hoje" o bloco que já era de hoje; um bloco de um dia
+        // que nunca virou registro de verdade entra como um bloco à parte,
+        // na data certa, e um bloco cujo dia já tem registro salvo no
+        // servidor é descartado (o servidor manda).
         try {
           const salvo = localStorage.getItem(rascunhoKey);
-          if (salvo && salvo.trim() && salvo !== texto) {
-            texto = salvo;
-            toast.success("Rascunho da anamnese restaurado", { icon: "📝" });
+          if (salvo && salvo.trim()) {
+            const blocosDraft = lerFolha(salvo).filter(bd => bd.texto.trim());
+            const combinados = blocosComHoje.map(b => ({ ...b }));
+            let hojeInserido = false;
+            let recuperouOutroDia = false;
+            for (const bd of blocosDraft) {
+              const existente = combinados.find(b => b.dataISO === bd.dataISO);
+              if (existente) {
+                if (!existente.texto.trim()) {
+                  // Era o cabeçalho vazio de hoje — sessão interrompida no
+                  // mesmo dia, restaura no lugar de sempre.
+                  existente.texto = bd.texto;
+                  existente.tipo = bd.tipo ?? existente.tipo;
+                  hojeInserido = existente.dataISO === todayISO;
+                }
+                // Se o existente já tem texto de verdade (veio do servidor),
+                // o rascunho daquele dia é descartado — dado real manda.
+              } else {
+                combinados.push(bd);
+                if (bd.dataISO !== todayISO) recuperouOutroDia = true;
+              }
+            }
+            if (hojeInserido || recuperouOutroDia) {
+              combinados.sort((a, b) => a.dataISO.localeCompare(b.dataISO));
+              texto = montarFolha(combinados);
+              if (recuperouOutroDia) {
+                const outros = blocosDraft.filter(bd => bd.dataISO !== todayISO && !blocos.some(b => b.dataISO === bd.dataISO));
+                const datasBR = outros.map(bd => cabecalhoFolha(bd.dataISO).replace(/^── |( ──)$/g, "")).join(", ");
+                toast(`Recuperei uma anamnese não salva do dia ${datasBR} — confira antes de continuar`, { icon: "⚠️", duration: 9000 });
+              } else {
+                toast.success("Rascunho da anamnese restaurado", { icon: "📝" });
+              }
+            }
           }
           // Rascunho do formato antigo (só o texto novo, sem cabeçalho).
           const antigo = localStorage.getItem(rascunhoKeyAntiga);
