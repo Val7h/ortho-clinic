@@ -2098,14 +2098,29 @@ function TabProntuario({ patientId, patient }: { patientId: number; patient?: an
   };
 
   // ── salvar: desmonta a folha e grava dia a dia ────────────────────────────
-  const handleSave = async () => {
+  //
+  // 23/09 (Valth): "corrija de vez pra nunca mais a gente perder nenhum
+  // documento". Três pacientes NO MESMO DIA (Regene, Rubens, José Roberto)
+  // tinham consulta anterior que nunca virou registro de verdade — só
+  // existiu, quando existiu, como rascunho local (`localStorage`), que é
+  // por-navegador e por-aparelho: troca de computador, cache limpo ou
+  // simplesmente nunca ter clicado "Salvar" apagava a consulta inteira sem
+  // deixar rastro nenhum no servidor.
+  //
+  // A causa raiz é estrutural: só existia UM jeito de a folha virar registro
+  // — o médico lembrar de clicar. Extrai-se aqui a gravação em `salvarFolha`
+  // (usada pelo botão) e chama-se ela também sozinha, em segundo plano,
+  // sempre que o médico para de digitar — silenciosa (sem toast de sucesso
+  // a cada letra) e sem mexer no cursor. A partir de agora, mesmo que ele
+  // nunca clique em nada, o que foi digitado já está no banco.
+  const salvarFolha = useCallback(async (opts?: { silencioso?: boolean }) => {
+    const silencioso = !!opts?.silencioso;
     const blocos = lerFolha(folha);
     if (!blocos.length) {
-      // Ele apagou os cabeçalhos: grava tudo como o registro de hoje.
-      if (!folha.trim()) { toast.error("A folha está vazia"); return; }
+      if (!folha.trim()) { if (!silencioso) toast.error("A folha está vazia"); return; }
       blocos.push({ id: null, dataISO: todayISO, tipo: tipoLabel(consultType), texto: folha.trim() });
     }
-    setSaving(true);
+    if (!silencioso) setSaving(true);
     const ref = refBlocos.current;
     const usados = new Set<number>();
     let criados = 0, atualizados = 0;
@@ -2136,6 +2151,13 @@ function TabProntuario({ patientId, patient }: { patientId: number; patient?: an
         }
       }
 
+      if (criados === 0 && atualizados === 0) {
+        // Nada mudou desde o último save (autosave rodou de novo em vão) —
+        // não recarrega nem mexe na tela.
+        if (!silencioso) toast.success("Folha salva");
+        return;
+      }
+
       const sumidos = ref.filter(r => r.id != null && !usados.has(r.id));
       // Recarrega do servidor: garante que a folha e os registros ficam iguais.
       const data = await evolutionApi.list(patientId);
@@ -2152,20 +2174,52 @@ function TabProntuario({ patientId, patient }: { patientId: number; patient?: an
 
       setSalvoAgora(true);
       setTimeout(() => setSalvoAgora(false), 2500);
-      const partes: string[] = [];
-      if (criados) partes.push(`${criados} novo${criados > 1 ? "s" : ""}`);
-      if (atualizados) partes.push(`${atualizados} corrigido${atualizados > 1 ? "s" : ""}`);
-      toast.success(partes.length ? `Folha salva — ${partes.join(", ")}` : "Folha salva");
-      for (const c of [...esvaziados, ...sumidos.map(r => cabecalhoFolha(r.dataISO))]) {
-        toast(`O dia ${c.replace(/──\s?/g, "").trim()} ficou sem texto — mantive o registro anterior.`,
-              { icon: "⚠️", duration: 7000 });
+      if (!silencioso) {
+        const partes: string[] = [];
+        if (criados) partes.push(`${criados} novo${criados > 1 ? "s" : ""}`);
+        if (atualizados) partes.push(`${atualizados} corrigido${atualizados > 1 ? "s" : ""}`);
+        toast.success(partes.length ? `Folha salva — ${partes.join(", ")}` : "Folha salva");
+        for (const c of [...esvaziados, ...sumidos.map(r => cabecalhoFolha(r.dataISO))]) {
+          toast(`O dia ${c.replace(/──\s?/g, "").trim()} ficou sem texto — mantive o registro anterior.`,
+                { icon: "⚠️", duration: 7000 });
+        }
       }
     } catch (err: any) {
-      toast.error(msgErro(err, "Erro ao salvar a folha — o texto continua aqui"));
+      // Autosave silencioso que falha não deve incomodar quem está
+      // atendendo — o rascunho local continua como rede de segurança.
+      if (!silencioso) toast.error(msgErro(err, "Erro ao salvar a folha — o texto continua aqui"));
     } finally {
-      setSaving(false);
+      if (!silencioso) setSaving(false);
     }
-  };
+  }, [folha, todayISO, consultType, patientId, rascunhoKey]);
+
+  const handleSave = () => salvarFolha({ silencioso: false });
+
+  // ── autosave no SERVIDOR (não só no navegador) ────────────────────────────
+  // Dispara ~7s depois que ele para de digitar. É a rede de segurança de
+  // verdade: o rascunho em localStorage protege contra fechar a aba sem
+  // querer NO MESMO aparelho; isto aqui protege contra nunca ter clicado
+  // "Salvar" — o caso real dos três pacientes de hoje.
+  useEffect(() => {
+    if (typeof window === "undefined" || loading || !folha.trim() || saving) return;
+    const t = setTimeout(() => { salvarFolha({ silencioso: true }); }, 7000);
+    return () => clearTimeout(t);
+  }, [folha, loading, saving, salvarFolha]);
+
+  // Rede de segurança extra: cobre a pequena janela (até 7s) entre uma
+  // digitação e o autosave rodar — se ele fechar a aba/atualizar bem nesse
+  // meio-tempo, o navegador avisa antes de deixar sair.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const haNaoSalvo = () => !loading && folha.trim() && folha !== montarFolha(refBlocos.current);
+    const handler = (e: BeforeUnloadEvent) => {
+      if (!haNaoSalvo()) return;
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [folha, loading]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && e.ctrlKey) {
