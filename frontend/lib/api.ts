@@ -580,6 +580,13 @@ export const chatApi = {
   // fila/agenda de hoje, então não dá pra mandar pra número arbitrário.
   sendWhatsApp: (patient_id: number | null, message: string, phone?: string | null) =>
     api.post<{ sent: boolean; demo: boolean; error?: string }>("/api/chat/send-whatsapp", { patient_id, message, phone }).then((r) => r.data),
+  // 23/09 (Valth): "quanto eu gastei hoje conversando com a secretária?" —
+  // estimativa de custo por dia (não é a fatura oficial, essa só existe no
+  // Console da Anthropic).
+  usage: (days: number = 7) =>
+    api.get<Array<{ date: string; calls: number; input_tokens: number; output_tokens: number; estimated_cost_usd: number }>>(
+      "/api/chat/usage", { params: { days } }
+    ).then((r) => r.data),
 };
 
 // ── Mensagens diretas (médico <-> secretária) ──────────────────────────────

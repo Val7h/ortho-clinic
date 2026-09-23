@@ -26,6 +26,7 @@ from models.clinic import Appointment, Clinic
 from models.organization import User
 from models.patient import Patient
 from models.queue import WaitingRoomEntry
+from models.chat_usage import ChatUsage
 from services.whatsapp import send_whatsapp, format_phone, DOCTOR_NAME
 
 logger = logging.getLogger(__name__)
@@ -502,6 +503,25 @@ async def chat(
         raise HTTPException(status_code=502, detail="Serviço de IA indisponível no momento")
 
     data = resp.json()
+
+    # 23/09 (Valth): registra o custo de cada chamada — nunca existiu log
+    # nenhum antes, então não havia como responder "quanto gastei hoje" sem
+    # abrir o Console da Anthropic. Falha ao gravar não deve derrubar a
+    # resposta pro médico — o chat continua funcionando mesmo se o log falhar.
+    try:
+        usage = data.get("usage") or {}
+        db.add(ChatUsage(
+            organization_id=current_user.organization_id,
+            user_id=current_user.id,
+            model=ANTHROPIC_MODEL,
+            input_tokens=int(usage.get("input_tokens") or 0),
+            output_tokens=int(usage.get("output_tokens") or 0),
+        ))
+        db.commit()
+    except Exception:
+        logger.exception("Falha ao registrar uso do chat IA")
+        db.rollback()
+
     content_blocks = data.get("content", [])
     reply_text = "".join(
         block.get("text", "") for block in content_blocks if block.get("type") == "text"
@@ -533,3 +553,64 @@ async def chat(
         raise HTTPException(status_code=502, detail="Resposta vazia do serviço de IA")
 
     return ChatResponse(reply=reply_text, draft=draft)
+
+
+# ── Estimativa de custo ──────────────────────────────────────────────────────
+#
+# Preço por 1 milhão de tokens (USD), cacheado nesta data — a Anthropic pode
+# mudar preço; isto é uma ESTIMATIVA, não a fatura oficial (essa só existe no
+# Console da Anthropic). Cobre só os modelos já usados neste chat.
+PRECO_USD_POR_MILHAO = {
+    "claude-opus-4-8":  {"input": 5.00, "output": 25.00},
+    "claude-haiku-4-5": {"input": 1.00, "output": 5.00},
+}
+
+
+class ChatUsageOut(BaseModel):
+    date: str
+    calls: int
+    input_tokens: int
+    output_tokens: int
+    estimated_cost_usd: float
+
+
+@router.get("/usage", response_model=List[ChatUsageOut])
+def chat_usage(
+    days: int = 7,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Gasto estimado do chat IA, agrupado por dia (últimos N dias)."""
+    if current_user.role == "secretary":
+        raise HTTPException(status_code=403, detail="Disponível apenas para o médico")
+
+    since = datetime.now(timezone.utc) - timedelta(days=max(days, 1))
+    rows = (
+        db.query(ChatUsage)
+        .filter(
+            ChatUsage.organization_id == current_user.organization_id,
+            ChatUsage.created_at >= since,
+        )
+        .all()
+    )
+
+    por_dia: dict[str, dict] = {}
+    for r in rows:
+        dia = r.created_at.astimezone().date().isoformat()
+        acc = por_dia.setdefault(dia, {"calls": 0, "input_tokens": 0, "output_tokens": 0, "cost": 0.0})
+        preco = PRECO_USD_POR_MILHAO.get(r.model, PRECO_USD_POR_MILHAO["claude-haiku-4-5"])
+        acc["calls"] += 1
+        acc["input_tokens"] += r.input_tokens
+        acc["output_tokens"] += r.output_tokens
+        acc["cost"] += (r.input_tokens / 1_000_000) * preco["input"] + (r.output_tokens / 1_000_000) * preco["output"]
+
+    return [
+        ChatUsageOut(
+            date=dia,
+            calls=v["calls"],
+            input_tokens=v["input_tokens"],
+            output_tokens=v["output_tokens"],
+            estimated_cost_usd=round(v["cost"], 4),
+        )
+        for dia, v in sorted(por_dia.items(), reverse=True)
+    ]
