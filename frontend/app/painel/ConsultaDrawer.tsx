@@ -4466,7 +4466,7 @@ function ConsultaPrintCenter({ docs, onRemove, onClose }: {
 
 // ── Tab: Encaminhamentos ───────────────────────────────────────────────────────
 
-function TabEncaminhamentos({ patient, clinic, patientId }: { patient: any; clinic?: any; patientId?: number }) {
+export function TabEncaminhamentos({ patient, clinic, patientId }: { patient: any; clinic?: any; patientId?: number }) {
   const [refType, setRefType] = useState("fisioterapia");
   const [specialty, setSpecialty] = useState("");
   const [specialtyOther, setSpecialtyOther] = useState("");
@@ -5116,7 +5116,7 @@ function calcReturnDate(startDate: string, days: string): string | null {
 
 // ── Tab: Atestados ────────────────────────────────────────────────────────────
 
-function TabAtestados({ patient, clinic }: { patient: any; clinic?: any }) {
+export function TabAtestados({ patient, clinic }: { patient: any; clinic?: any }) {
   const [docKind, setDocKind] = useState<"atestado" | "comparecimento">("atestado");
   const [cid, setCid] = useState("");
   // CIDs secundários (Valth 27/08). Mesmo padrão já usado no laudo desde 11/08.
@@ -5577,7 +5577,7 @@ function TabAtestados({ patient, clinic }: { patient: any; clinic?: any }) {
 
 // ── Tab: Laudos ───────────────────────────────────────────────────────────────
 
-function TabLaudos({ patient, clinic }: { patient: any; clinic?: any }) {
+export function TabLaudos({ patient, clinic }: { patient: any; clinic?: any }) {
   const [text, setText] = useState("");
   const [finalidade, setFinalidade] = useState("");
   const [cid, setCid] = useState("");
