@@ -6703,9 +6703,12 @@ export default function ConsultaDrawer({ entry, onClose, onStatusChange }: Consu
     setBusyStatus(true);
     try {
       await onStatusChange(entry.id, newStatus);
-      // S3: ao concluir o atendimento, fecha a gaveta — assim não fica parada no
-      // paciente já atendido. (Botão "chamar próximo" exigiria page.tsx, fora do escopo.)
-      if (newStatus === "attended") onClose();
+      // 23/09 (Valth): "quando eu boto finalizar consulta, a barra vai toda
+      // pra direita e os cards ficam grandes. Não precisa fazer isso." O
+      // fechamento automático (decisão S3 de antes) reflui a lista de volta
+      // pra largura cheia na hora — ele achou o salto brusco ruim. Agora
+      // finalizar só muda o status; quem fecha a gaveta é o X, como em
+      // qualquer outro status.
     } finally {
       setBusyStatus(false);
     }
