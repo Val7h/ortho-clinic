@@ -1933,7 +1933,7 @@ function TabProntuario({ patientId, patient }: { patientId: number; patient?: an
   const [folha, setFolha] = useState("");
   const [loading, setLoading] = useState(true);
   const [rascunhoSalvo, setRascunhoSalvo] = useState(false);
-  const [consultType, setConsultType] = useState("retorno");
+  const [consultType, setConsultType] = useState("primeira_consulta");
   const [saving, setSaving] = useState(false);
   const [salvoAgora, setSalvoAgora] = useState(false);
   const [busca, setBusca] = useState("");
@@ -1972,7 +1972,15 @@ function TabProntuario({ patientId, patient }: { patientId: number; patient?: an
         // A data entra sozinha: se ainda não há bloco de hoje, a folha já abre
         // com o cabeçalho de hoje e o cursor embaixo dele.
         if (!blocos.some(b => b.dataISO === todayISO)) {
-          texto = (texto ? texto + "\n\n" : "") + cabecalhoFolha(todayISO, tipoLabel(consultType)) + "\n";
+          // 23/09 (Valth): "você sempre coloca como base o retorno em vez de
+          // primeira consulta" — o padrão era sempre "retorno", mesmo quando
+          // o prontuário não tinha NENHUM registro anterior (paciente Ana
+          // Cristina Gomes da Silva, hoje era a primeira vez dela). Sem
+          // histórico nenhum só pode ser 1ª consulta; com histórico, mantém
+          // "retorno" como já era.
+          const tipoInicial = blocos.length === 0 ? "primeira_consulta" : "retorno";
+          setConsultType(tipoInicial);
+          texto = (texto ? texto + "\n\n" : "") + cabecalhoFolha(todayISO, tipoLabel(tipoInicial)) + "\n";
         } else {
           const daquiHoje = blocos.find(b => b.dataISO === todayISO);
           if (daquiHoje?.tipo) {
