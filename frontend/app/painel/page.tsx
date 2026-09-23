@@ -514,7 +514,23 @@ export default function SalaDeEsperaPage() {
   const attendedCount = countBy('attended');
   const absentCount = countBy('absent');
 
-  const filtered = filter === 'all' ? entries : entries.filter((e) => e.status === filter || saindoIds.has(e.id));
+  // 23/09 (Valth): "o em atendimento fica em outro lugar" — a ordem crua vinha
+  // por chegada, então quem estava em atendimento podia estar no meio ou no
+  // fim da lista, longe de quem ainda falta. Ele tinha que rolar/clicar lá em
+  // cima pra achar quem atende agora e depois voltar pra achar o próximo.
+  // Agora agrupa por prioridade (em atendimento → suspenso → aguardando →
+  // concluído/ausente) mantendo a ordem de chegada dentro de cada grupo, só
+  // no "Todos" — nos outros filtros já é um status só, não muda nada.
+  const STATUS_PRIORITY: Record<QueueStatus, number> = {
+    attending: 0,
+    suspended: 1,
+    waiting: 2,
+    attended: 3,
+    absent: 4,
+  };
+  const filtered = filter === 'all'
+    ? [...entries].sort((a, b) => STATUS_PRIORITY[a.status] - STATUS_PRIORITY[b.status])
+    : entries.filter((e) => e.status === filter || saindoIds.has(e.id));
 
   // "Total do dia" ignora pacientes ausentes (não compareceram → não gera receita)
   const totalValueCents = entries
@@ -665,7 +681,12 @@ export default function SalaDeEsperaPage() {
 
   const handleSelectEntry = (entry: WaitingRoomEntry) => {
     leftQueueWarnedRef.current = false;
-    setSelectedEntry((prev) => (prev && prev.id === entry.id ? null : entry));
+    // 23/09 (Valth): "o card fica expandindo, às vezes volta". Clicar de novo
+    // no MESMO paciente já selecionado fechava o painel (voltava a lista pra
+    // largura cheia) — fácil de fazer sem querer, principalmente no paciente
+    // que já está em atendimento. Agora só o X do painel fecha; reclicar no
+    // mesmo card não faz nada.
+    setSelectedEntry((prev) => (prev && prev.id === entry.id ? prev : entry));
   };
 
   const today = new Date().toLocaleDateString('pt-BR', {
