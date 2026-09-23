@@ -33,7 +33,10 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/chat", tags=["chat"], dependencies=[Depends(get_current_user)])
 
 ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
-ANTHROPIC_MODEL = "claude-opus-4-8"
+# 23/09 (Valth): chat da "secretária" é uso operacional (agenda/fila) durante
+# o atendimento — trocado de Opus pra Haiku pra baratear bem o custo por
+# mensagem sem perder qualidade nesse tipo de pergunta simples.
+ANTHROPIC_MODEL = "claude-haiku-4-5"
 MAX_HISTORY_MESSAGES = 40
 
 # Ferramenta que permite ao assistente propor uma mensagem de WhatsApp para um
