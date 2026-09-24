@@ -3631,6 +3631,33 @@ function montarValoresGuiaSadt(patient: any, clinic: any, examesTexto: string): 
 function TabExames({ patientId, patient, clinic }: { patientId: number; patient: any; clinic?: any }) {
   const [freeText, setFreeText] = useState("");
   const [saving, setSaving] = useState(false);
+
+  // 24/09 (auditoria): diferente de Receita (rascunho em localStorage) e
+  // Anamnese (autosave no servidor), o pedido de exame não tinha NENHUMA
+  // proteção — fechar a gaveta antes de clicar Salvar perdia o texto sem
+  // chance de recuperar. Mesmo padrão já usado em Laudos/Receita/Encaminhamentos.
+  const examDraftKey = `orthoclinic_exam_draft_${userScope()}_${patientId}`;
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const saved = localStorage.getItem(examDraftKey);
+      if (saved && saved.trim()) {
+        setFreeText(saved);
+        toast.success("Rascunho de solicitação de exame restaurado");
+      }
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [examDraftKey]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (typeof window === "undefined") return;
+      if (freeText.trim()) localStorage.setItem(examDraftKey, freeText);
+      else localStorage.removeItem(examDraftKey);
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [freeText, examDraftKey]);
   const [exams, setExams] = useState<any[]>([]);
   const [loadingEx, setLoadingEx] = useState(true);
   const [loadingError, setLoadingError] = useState(false);
@@ -3817,6 +3844,7 @@ function TabExames({ patientId, patient, clinic }: { patientId: number; patient:
       // na tela, já pronto pra Imprimir ou pra gerar a guia do convênio.
       toast.success(`Solicitação salva para ${patientName} — o texto continua aqui`);
       setExams((prev) => [newEx, ...prev]);
+      try { localStorage.removeItem(examDraftKey); } catch {}
     } catch {
       toast.error("Erro ao salvar solicitação");
     } finally {
@@ -5307,9 +5335,14 @@ export function TabAtestados({ patient, clinic }: { patient: any; clinic?: any }
       .finally(() => setCarregandoSalvos(false));
   }, [patient?.id]);
 
-  const salvarAtestado = async () => {
-    if (!startDate || !days || Number(days) < 1) { toast.error("Informe os dias de afastamento"); return; }
-    if (!patient?.id) { toast.error("Paciente inválido"); return; }
+  // 24/09 (Valth): auditoria achou que "Visualizar e Imprimir" nunca chamava
+  // isto aqui — só o botão separado "Salvar" gravava. Mesmo defeito já
+  // corrigido em Laudos e Encaminhamentos (17/09). Agora devolve true/false
+  // pro botão de imprimir saber se pode abrir o preview, e SALVA antes de
+  // imprimir — igual às outras abas.
+  const salvarAtestado = async (): Promise<boolean> => {
+    if (!startDate || !days || Number(days) < 1) { toast.error("Informe os dias de afastamento"); return false; }
+    if (!patient?.id) { toast.error("Paciente inválido"); return false; }
     setSavingDoc(true);
     try {
       const typeLabel = CERTIFICATE_TYPES.find(c => c.value === certType)?.label ?? certType;
@@ -5326,16 +5359,18 @@ export function TabAtestados({ patient, clinic }: { patient: any; clinic?: any }
       const novo = await reportsApi.create(patient.id, { date: startDate, report_type: "atestado", title: `Atestado — ${typeLabel}`, content });
       setDocumentosSalvos((prev) => [novo, ...prev]);
       toast.success("Atestado salvo no prontuário");
+      return true;
     } catch {
       toast.error("Erro ao salvar atestado");
+      return false;
     } finally {
       setSavingDoc(false);
     }
   };
 
-  const salvarComparecimento = async () => {
-    if (!compDate) { toast.error("Informe a data do comparecimento"); return; }
-    if (!patient?.id) { toast.error("Paciente inválido"); return; }
+  const salvarComparecimento = async (): Promise<boolean> => {
+    if (!compDate) { toast.error("Informe a data do comparecimento"); return false; }
+    if (!patient?.id) { toast.error("Paciente inválido"); return false; }
     setSavingDoc(true);
     try {
       const content =
@@ -5348,8 +5383,10 @@ export function TabAtestados({ patient, clinic }: { patient: any; clinic?: any }
       const novo = await reportsApi.create(patient.id, { date: compDate, report_type: "comparecimento", title: "Declaração de Comparecimento", content });
       setDocumentosSalvos((prev) => [novo, ...prev]);
       toast.success("Declaração salva no prontuário");
+      return true;
     } catch {
       toast.error("Erro ao salvar declaração");
+      return false;
     } finally {
       setSavingDoc(false);
     }
@@ -5535,9 +5572,10 @@ export function TabAtestados({ patient, clinic }: { patient: any; clinic?: any }
             </button>
             <button
               type="button"
-              disabled={!compDate}
-              onClick={() => {
+              disabled={!compDate || savingDoc}
+              onClick={async () => {
                 if (!compDate) { toast.error("Informe a data do comparecimento"); return; }
+                if (!(await salvarComparecimento())) return;
                 setCompPrintData({ compDate, horaEntrada, horaSaida, compAcompanhante });
               }}
               className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold text-xs disabled:opacity-50 disabled:cursor-not-allowed"
@@ -5687,14 +5725,15 @@ export function TabAtestados({ patient, clinic }: { patient: any; clinic?: any }
         </button>
         <button
           type="button"
-          disabled={!startDate || !days || Number(days) < 1}
-          onClick={() => {
+          disabled={!startDate || !days || Number(days) < 1 || savingDoc}
+          onClick={async () => {
             if (!startDate || !days || Number(days) < 1) { toast.error("Informe os dias de afastamento"); return; }
             // S10: CID é exigido para trabalho/geral (empresas com PCMSO e INSS).
             // Sem CID, confirma antes de imprimir.
             if ((certType === "trabalho" || certType === "geral") && !cid.trim()) {
               if (typeof window !== "undefined" && !window.confirm("Atestado para trabalho/INSS geralmente exige CID-10. Imprimir sem CID?")) return;
             }
+            if (!(await salvarAtestado())) return;
             setPrintData({ cid, cidsSecundarios: cidsSecundarios.filter(c => c.trim()), days, certType, obs, startDate, accompName, accompRel });
           }}
           className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold text-xs disabled:opacity-50 disabled:cursor-not-allowed"
