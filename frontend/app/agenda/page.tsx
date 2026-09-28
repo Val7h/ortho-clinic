@@ -118,6 +118,11 @@ function isTestName(name?: string): boolean {
 const STATUS_LABEL: Record<string, string> = {
   no_show: 'Faltou',
   pending: 'Pendente', confirmed: 'Confirmado',
+  // 28/09 (Valth): "tem 4 pessoas na sala de espera, só o Eraldo aparece
+  // diferente na agenda" — chegar na sala de espera virava o MESMO status
+  // "Confirmado" de quem só confirmou presença e nem saiu de casa ainda.
+  // "arrived" é um status próprio pra quem já está fisicamente aqui.
+  arrived: 'Chegou',
   cancelled: 'Cancelado', completed: 'Realizado',
   blocked: 'Bloqueado', pending_offline: 'Offline',
 };
@@ -132,6 +137,7 @@ interface DayAgg {
   total: number;          // sem cancelados e sem bloqueios
   pend: number;
   conf: number;
+  cheg: number;           // já chegou (na sala de espera/em atendimento)
   done: number;
   cancelled: number;
   faltas: number;
@@ -154,6 +160,7 @@ function aggregateDay(evts: ApptEvent[]): DayAgg {
     total: active.length,
     pend: active.filter(e => e.status === 'pending' || e.status === 'pending_offline').length,
     conf: active.filter(e => e.status === 'confirmed').length,
+    cheg: active.filter(e => e.status === 'arrived').length,
     done: active.filter(e => e.status === 'completed').length,
     cancelled: evts.filter(e => e.status === 'cancelled').length,
     faltas: faltas.length,
@@ -764,6 +771,7 @@ export default function AgendaPage() {
                         </span>
                         <span className="text-xs text-slate-500">
                           {gAgg.total} paciente{gAgg.total !== 1 ? 's' : ''}
+                          {gAgg.cheg > 0 && ` · ${gAgg.cheg} ${gAgg.cheg !== 1 ? 'já chegaram' : 'já chegou'}`}
                           {gAgg.conf > 0 && ` · ${gAgg.conf} confirmado${gAgg.conf !== 1 ? 's' : ''}`}
                           {gAgg.pend > 0 && ` · ${gAgg.pend} pendente${gAgg.pend !== 1 ? 's' : ''}`}
                         </span>
@@ -774,6 +782,7 @@ export default function AgendaPage() {
                           const done = e.status === 'completed';
                           const faltou = e.status === 'no_show';
                           const pend = e.status === 'pending' || e.status === 'pending_offline';
+                          const chegou = e.status === 'arrived';
                           return (
                             <div
                               key={e.id}
@@ -796,6 +805,7 @@ export default function AgendaPage() {
                               <p className="flex-1 min-w-0 text-sm font-semibold text-slate-800 dark:text-slate-100 truncate">
                                 {done && <span className="text-emerald-600 font-extrabold">✓ </span>}
                                 {faltou && <span className="text-red-500 font-extrabold">✗ </span>}
+                                {chegou && <span className="text-amber-600 font-extrabold" title="Já chegou">● </span>}
                                 {pend && <span>⏱ </span>}
                                 {e._isOffline && '⚠ '}
                                 {e.patient_name}
@@ -859,6 +869,7 @@ export default function AgendaPage() {
               const isToday = dIso === today;
               const empty = dAgg.total === 0 && dAgg.cancelled === 0;
               const stParts: string[] = [];
+              if (dAgg.cheg > 0) stParts.push(`● ${dAgg.cheg} já ${dAgg.cheg !== 1 ? 'chegaram' : 'chegou'}`);
               if (dAgg.conf > 0) stParts.push(`${dAgg.conf} confirmado${dAgg.conf !== 1 ? 's' : ''}`);
               if (dAgg.pend > 0) stParts.push(`${dAgg.pend} pendente${dAgg.pend !== 1 ? 's' : ''}`);
               if (dAgg.done > 0) stParts.push(`✓ ${dAgg.done} atendido${dAgg.done !== 1 ? 's' : ''}`);

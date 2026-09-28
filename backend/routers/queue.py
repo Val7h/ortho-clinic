@@ -886,14 +886,20 @@ def _sync_appointment_status(db: Session, entry: WaitingRoomEntry, novo_status: 
     """Espelha o status da fila no agendamento do dia (E7b).
 
     atendido → realizado (completed) · ausente → faltou (no_show) ·
-    em atendimento/aguardando → confirmado (o paciente está aqui).
+    em atendimento/aguardando/suspenso → chegou (arrived).
+
+    28/09 (Valth): antes, "aguardando"/"em atendimento" também virava
+    "confirmed" — o MESMO status de quem só confirmou presença pelo bot e
+    ainda nem chegou. Na Agenda os dois apareciam idênticos ("Confirmado"),
+    então não dava pra saber, olhando a agenda, quem já estava fisicamente
+    na sala. Agora tem um status próprio para "já chegou".
     """
     mapa = {
         "attended": "completed",
         "absent": "no_show",
-        "attending": "confirmed",
-        "waiting": "confirmed",
-        "suspended": "confirmed",
+        "attending": "arrived",
+        "waiting": "arrived",
+        "suspended": "arrived",
     }
     alvo = mapa.get(novo_status)
     if not alvo:

@@ -54,7 +54,9 @@ class Appointment(Base):
     patient_id = Column(Integer, ForeignKey("patients.id"), nullable=True)
     reason = Column(String(300), nullable=True)
     status = Column(String(20), default="pending")
-    # pending | confirmed | cancelled | completed | blocked
+    # pending | confirmed | arrived | cancelled | completed | blocked | no_show
+    # "arrived" (28/09): paciente já chegou e está na sala de espera/em
+    # atendimento — distinto de "confirmed" (só confirmou presença, ainda não chegou).
     queue_number = Column(Integer, nullable=True)   # para ordem de chegada
     confirmation_token = Column(String(64), nullable=True, unique=True, index=True)
     notes = Column(Text, nullable=True)
