@@ -125,7 +125,12 @@ def delete_physio(patient_id: int, doc_id: int, db: Session = Depends(get_db), c
 # Valth 02/08: secretária PODE reimprimir laudo/atestado já gerado pra entregar
 # no balcão). Criação/exclusão continuam exclusivas do médico (require_doctor
 # por endpoint).
-report_router = APIRouter(prefix="/patients/{patient_id}/reports", dependencies=[Depends(get_current_user)])
+report_router = APIRouter(
+    prefix="/patients/{patient_id}/reports",
+    # 28/09 (Valth): login de secretária conseguia criar/editar/excluir laudo,
+    # atestado e encaminhamento — documento médico-legal é exclusivo do médico.
+    dependencies=[Depends(require_doctor)],
+)
 
 @report_router.get("", response_model=List[MedicalReportOut])
 def list_reports(patient_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):

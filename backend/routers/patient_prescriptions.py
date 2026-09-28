@@ -15,13 +15,15 @@ from database import get_db
 from models.patient import Patient
 from models.patient_rx import PatientRx
 from models.organization import User
-from deps import get_current_user
+from deps import get_current_user, require_doctor
 from tzutil import today_br
 
 router = APIRouter(
     prefix="/patients/{patient_id}/prescriptions",
     tags=["patient-prescriptions"],
-    dependencies=[Depends(get_current_user)],
+    # 28/09 (Valth): login de secretária conseguia criar/editar receita —
+    # prescrever é ato exclusivo do médico.
+    dependencies=[Depends(require_doctor)],
 )
 
 

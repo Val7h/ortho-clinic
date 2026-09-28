@@ -7,11 +7,17 @@ from database import get_db
 from models.clinical_evolution import ClinicalEvolution
 from models.patient import Patient
 from routers.auth import get_current_user
+from deps import require_doctor
 
-router = APIRouter(prefix="/patients", tags=["clinical_evolutions"])
+# 28/09 (Valth): "entrei pelo login da Angélica (secretária da CTO) e consegui
+# abrir, editar e fechar qualquer consulta" — este router (prontuário/evolução
+# clínica) só exigia estar logado, não exigia ser médico. Secretária não pode
+# ler nem escrever anotação clínica; check-in/agenda continuam liberados pra
+# ela em outros routers, só isto aqui foi travado.
+router = APIRouter(prefix="/patients", tags=["clinical_evolutions"], dependencies=[Depends(require_doctor)])
 
 # Rotas sem o prefixo /patients (o adendo do prontuário chama PATCH /evolutions/{id})
-flat_router = APIRouter(tags=["clinical_evolutions"])
+flat_router = APIRouter(tags=["clinical_evolutions"], dependencies=[Depends(require_doctor)])
 
 
 class EvolutionCreate(BaseModel):

@@ -12,6 +12,7 @@ import { Card, CardContent, Badge, Button, Modal, useModal } from '@/components/
 import { patientsApi, waitingRoomApi, clinicApi, msgErro } from '@/lib/api';
 import toast from 'react-hot-toast';
 import ConsultaDrawer, { WaitingRoomEntry } from './ConsultaDrawer';
+import { useAuth } from '@/components/AuthProvider';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -175,9 +176,14 @@ interface PatientCardProps {
   // mesma sala de espera, sem jeito de saber de qual clínica é cada um sem
   // abrir o cadastro. Lista de clínicas só pra virar a etiqueta colorida.
   clinics: any[];
+  // 28/09 (Valth): login de secretária conseguia iniciar/suspender/finalizar
+  // qualquer consulta — o backend já trava isso agora, mas o botão continuava
+  // aparecendo clicável na tela dela, só falhando depois. Some com os botões
+  // de status pra quem não é médico.
+  isDoctor: boolean;
 }
 
-function PatientCard({ entry, onStatusChange, onRemove, onAddValue, onSelect, busy, selected, saindo, clinics }: PatientCardProps) {
+function PatientCard({ entry, onStatusChange, onRemove, onAddValue, onSelect, busy, selected, saindo, clinics, isDoctor }: PatientCardProps) {
   const isAttended = entry.status === 'attended';
   const isAbsent = entry.status === 'absent';
   const isDimmed = isAttended || isAbsent;
@@ -292,7 +298,9 @@ function PatientCard({ entry, onStatusChange, onRemove, onAddValue, onSelect, bu
             <span className="text-[10px] text-slate-400 truncate min-w-0 flex-1">{entry.reason}</span>
           )}
           <div className="ml-auto flex items-center gap-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-            {entry.status === 'waiting' && (
+            {/* 28/09: abrir/fechar/suspender/reabrir consulta é ato clínico —
+                escondido de quem não é médico (backend também trava). */}
+            {isDoctor && entry.status === 'waiting' && (
               <>
                 <button
                   onClick={() => { onStatusChange(entry.id, 'attending'); onSelect(entry); }}
@@ -310,7 +318,7 @@ function PatientCard({ entry, onStatusChange, onRemove, onAddValue, onSelect, bu
                 </button>
               </>
             )}
-            {entry.status === 'attending' && (
+            {isDoctor && entry.status === 'attending' && (
               <>
                 {/* Suspender: paciente saiu pra exame e volta no turno — cronômetro CONGELA */}
                 <button
@@ -330,7 +338,7 @@ function PatientCard({ entry, onStatusChange, onRemove, onAddValue, onSelect, bu
                 </button>
               </>
             )}
-            {entry.status === 'suspended' && (
+            {isDoctor && entry.status === 'suspended' && (
               <button
                 onClick={() => { onStatusChange(entry.id, 'attending'); onSelect(entry); }}
                 disabled={busy}
@@ -340,7 +348,7 @@ function PatientCard({ entry, onStatusChange, onRemove, onAddValue, onSelect, bu
                 <Play className="w-3 h-3" /> Continuar
               </button>
             )}
-            {entry.status === 'attended' && (
+            {isDoctor && entry.status === 'attended' && (
               <button
                 onClick={() => { onStatusChange(entry.id, 'attending'); onSelect(entry); }}
                 disabled={busy}
@@ -350,7 +358,7 @@ function PatientCard({ entry, onStatusChange, onRemove, onAddValue, onSelect, bu
                 <Play className="w-3 h-3" /> Reabrir
               </button>
             )}
-            {entry.status === 'absent' && (
+            {isDoctor && entry.status === 'absent' && (
               <button
                 onClick={() => onStatusChange(entry.id, 'waiting')}
                 disabled={busy}
@@ -398,6 +406,7 @@ function PatientCard({ entry, onStatusChange, onRemove, onAddValue, onSelect, bu
 // ── Main page ──────────────────────────────────────────────────────────────
 
 export default function SalaDeEsperaPage() {
+  const { isDoctor } = useAuth();
   const [entries, setEntries] = useState<WaitingRoomEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -680,6 +689,15 @@ export default function SalaDeEsperaPage() {
   };
 
   const handleSelectEntry = (entry: WaitingRoomEntry) => {
+    // 28/09 (Valth): "entrei pelo login da secretária e consegui abrir a
+    // consulta" — o painel de atendimento (anamnese, receita, laudos...) é
+    // acesso clínico; o backend já recusa cada aba pra quem não é médico,
+    // mas antes disso a gaveta nem deveria abrir pra não mostrar uma tela
+    // cheia de erro.
+    if (!isDoctor) {
+      toast.error('Acesso restrito ao médico');
+      return;
+    }
     leftQueueWarnedRef.current = false;
     // 23/09 (Valth): "o card fica expandindo, às vezes volta". Clicar de novo
     // no MESMO paciente já selecionado fechava o painel (voltava a lista pra
@@ -864,6 +882,7 @@ export default function SalaDeEsperaPage() {
                       selected={selectedEntry?.id === entry.id}
                       saindo={saindoIds.has(entry.id)}
                       clinics={clinics}
+                      isDoctor={isDoctor}
                     />
                   ))}
                   {totalValueCents > 0 && (

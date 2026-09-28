@@ -14,7 +14,7 @@ import json
 import logging
 
 from database import get_db
-from deps import get_current_user
+from deps import get_current_user, require_doctor
 from tzutil import today_br, now_br
 from models.queue import ClinicQueue, PrescriptionSignature, AnamnesisTemplate, WaitingRoomEntry
 from models.clinic import Appointment, Clinic, ClinicSchedule
@@ -1155,9 +1155,15 @@ async def update_waiting_status(
     entry_id: int,
     request: WaitingStatusUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_doctor),
 ):
-    """Atualiza o status de uma entrada na sala de espera."""
+    """Atualiza o status de uma entrada na sala de espera.
+
+    28/09 (Valth): login de secretária (Angélica, CTO) conseguia iniciar,
+    suspender, finalizar e reabrir QUALQUER consulta — só exigia estar
+    logado. Abrir/fechar atendimento é ato clínico, exclusivo do médico;
+    check-in continua liberado pra secretária em outro endpoint.
+    """
     valid_statuses = {"waiting", "attending", "suspended", "attended", "absent"}
     if request.status not in valid_statuses:
         raise HTTPException(
