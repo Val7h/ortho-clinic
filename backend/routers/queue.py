@@ -803,8 +803,16 @@ def _ensure_appointment_for_entry(db: Session, patient: Patient, clinic_id: Opti
     """Garante que o paciente que chegou APAREÇA NA AGENDA DO DIA (erro E5).
 
     Se já existe agendamento hoje (marcado pelo bot/secretária), reaproveita e
-    marca como confirmado (ele chegou). Se não existe — o caso de Palmares, em
-    que o paciente chega sem marcar —, cria o agendamento retroativo do dia.
+    marca como "chegou" (ele está aqui agora). Se não existe — o caso de
+    Palmares, em que o paciente chega sem marcar —, cria o agendamento
+    retroativo do dia, já como "chegou".
+
+    28/09 (Valth): isto aqui gravava "confirmed" no exato momento da chegada —
+    o MESMO status de quem só confirmou presença pelo bot e nem saiu de casa.
+    _sync_appointment_status (mais abaixo) só corrige pra "arrived" quando o
+    status da fila MUDA depois (ex.: "Iniciar atendimento"); no intervalo
+    inteiro entre chegar e ser chamado, a agenda mostrava "confirmado" como se
+    a pessoa não tivesse chegado ainda. Agora o check-in já grava certo.
     """
     hoje = today_br()
     existente = (
@@ -818,8 +826,8 @@ def _ensure_appointment_for_entry(db: Session, patient: Patient, clinic_id: Opti
         .first()
     )
     if existente:
-        if existente.status == "pending":
-            existente.status = "confirmed"  # chegou = confirmado
+        if existente.status in ("pending", "confirmed"):
+            existente.status = "arrived"  # chegou = está aqui agora
         if clinic_id and not existente.clinic_id:
             existente.clinic_id = clinic_id
         db.flush()
@@ -839,7 +847,7 @@ def _ensure_appointment_for_entry(db: Session, patient: Patient, clinic_id: Opti
         date=hoje,
         start_time=start,
         end_time=fim,
-        status="confirmed",
+        status="arrived",
         reason=reason or "Chegada sem agendamento",
         notes="Registrado automaticamente na chegada (paciente de balcão)",
     )

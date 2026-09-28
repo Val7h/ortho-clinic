@@ -463,7 +463,7 @@ def checkin_from_appointment(
         status="waiting",
     )
     db.add(entry)
-    a.status = "confirmed"  # chegou
+    a.status = "arrived"  # chegou — 28/09: era "confirmed", igual a quem nem chegou ainda
     db.commit()
     db.refresh(entry)
     return {"ok": True, "entry_id": entry.id, "patient_name": paciente.name}

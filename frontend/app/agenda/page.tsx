@@ -810,8 +810,11 @@ export default function AgendaPage() {
                                 {e._isOffline && '⚠ '}
                                 {e.patient_name}
                               </p>
-                              {/* E4/E7b (05/08): chegou → sala de espera; faltou → registra a falta */}
-                              {isHoje && !done && !faltou && (
+                              {/* E4/E7b (05/08): chegou → sala de espera; faltou → registra a falta.
+                                  28/09: uma vez "chegou" (já está na sala/em atendimento), os dois
+                                  botões somem — não faz sentido oferecer "Chegou" de novo nem
+                                  "Faltou" pra quem já está fisicamente aqui. */}
+                              {isHoje && !done && !faltou && !chegou && (
                                 <button
                                   onClick={ev => { ev.stopPropagation(); marcarChegada(e); }}
                                   className="flex-shrink-0 px-2 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold"
@@ -820,7 +823,7 @@ export default function AgendaPage() {
                                   Chegou
                                 </button>
                               )}
-                              {!done && !faltou && (
+                              {!done && !faltou && !chegou && (
                                 <button
                                   onClick={ev => { ev.stopPropagation(); marcarFalta(e); }}
                                   className="flex-shrink-0 px-2 py-1 rounded-lg border border-slate-300 dark:border-slate-600 text-slate-500 text-[11px] font-bold hover:bg-red-50 hover:text-red-600 hover:border-red-300"
