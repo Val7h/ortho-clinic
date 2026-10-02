@@ -4386,6 +4386,54 @@ const LAUDO_FINALIDADE_OPTIONS = [
 function PrintDocModal({ title, content, onClose, extraHeader }: { title: string; content: React.ReactNode; onClose: () => void; extraHeader?: React.ReactNode }) {
   // Registra este documento no coletor da consulta (impressão final em lote).
   useRegisterPrintDoc({ id: title, label: title, content });
+  const [gerandoPdf, setGerandoPdf] = useState(false);
+
+  // 02/10 (Valth): "queria exportar o arquivo em PDF para a paciente imprimir"
+  // (mandar por WhatsApp/e-mail). Fotografa o documento já montado (mesmo
+  // timbrado e assinatura da impressão) e grava num PDF A4. As libs são
+  // carregadas só no clique, pra não pesar a tela de atendimento.
+  const baixarPdf = async () => {
+    const fonte = document.getElementById("doc-print-portal");
+    if (!fonte) { toast.error("Documento não encontrado para exportar"); return; }
+    setGerandoPdf(true);
+    let folha: HTMLElement | null = null;
+    try {
+      const [{ default: html2canvas }, { jsPDF }] = await Promise.all([import("html2canvas"), import("jspdf")]);
+      folha = fonte.cloneNode(true) as HTMLElement;
+      Object.assign(folha.style, {
+        display: "block", position: "fixed", left: "-10000px", top: "0",
+        width: "794px", padding: "0", background: "#fff", boxSizing: "border-box",
+      });
+      document.body.appendChild(folha);
+      const canvas = await html2canvas(folha, { scale: 2, backgroundColor: "#ffffff", useCORS: true });
+
+      const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
+      const margem = 12;
+      const larguraUtil = 210 - margem * 2;
+      const alturaUtil = 297 - margem * 2;
+      const pxPorMm = canvas.width / larguraUtil;
+      const alturaPaginaPx = Math.floor(alturaUtil * pxPorMm);
+      for (let y = 0, pagina = 0; y < canvas.height; y += alturaPaginaPx, pagina++) {
+        const fatia = document.createElement("canvas");
+        fatia.width = canvas.width;
+        fatia.height = Math.min(alturaPaginaPx, canvas.height - y);
+        const ctx = fatia.getContext("2d")!;
+        ctx.fillStyle = "#fff";
+        ctx.fillRect(0, 0, fatia.width, fatia.height);
+        ctx.drawImage(canvas, 0, y, canvas.width, fatia.height, 0, 0, canvas.width, fatia.height);
+        if (pagina > 0) pdf.addPage();
+        pdf.addImage(fatia.toDataURL("image/jpeg", 0.95), "JPEG", margem, margem, larguraUtil, fatia.height / pxPorMm);
+      }
+      const nome = title.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-zA-Z0-9]+/g, "_").replace(/^_|_$/g, "");
+      pdf.save(`${nome || "documento"}.pdf`);
+      toast.success("PDF baixado");
+    } catch {
+      toast.error("Não consegui gerar o PDF — use Imprimir e escolha 'Salvar como PDF'");
+    } finally {
+      if (folha && folha.parentNode) folha.parentNode.removeChild(folha);
+      setGerandoPdf(false);
+    }
+  };
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.6)" }}>
       <style>{`
@@ -4409,6 +4457,9 @@ function PrintDocModal({ title, content, onClose, extraHeader }: { title: string
         <div className="no-print px-5 pt-4 pb-3 border-b border-gray-200 dark:border-slate-700 flex items-center justify-between flex-shrink-0">
           <h2 className="font-bold text-slate-900 dark:text-slate-50 text-sm">{title}</h2>
           <div className="flex items-center gap-2">
+            <button onClick={baixarPdf} disabled={gerandoPdf} className="flex items-center gap-2 px-3 py-1.5 border border-blue-600 text-blue-600 rounded-lg hover:bg-blue-50 font-semibold text-xs disabled:opacity-50">
+              <FileText className="w-3.5 h-3.5" /> {gerandoPdf ? "Gerando…" : "Baixar PDF"}
+            </button>
             <button onClick={() => window.print()} className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold text-xs">
               <Printer className="w-3.5 h-3.5" /> Imprimir
             </button>
