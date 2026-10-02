@@ -131,7 +131,8 @@ export default function NewPatientPage() {
         name: form.name.trim().toUpperCase(), // nome sempre em CAIXA ALTA
         insurance: pagamento === "particular" ? "Particular" : form.insurance,
       });
-      toast.success("Paciente cadastrado com sucesso!");
+      if ((patient as any)?.warning) toast((patient as any).warning, { icon: "⚠️", duration: 9000 });
+      else toast.success("Paciente cadastrado com sucesso!");
       router.push(`/pacientes/${patient.id}`);
     } catch (err: any) {
       toast.error(msgErro(err, "Erro ao salvar"));

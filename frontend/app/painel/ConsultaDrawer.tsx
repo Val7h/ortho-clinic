@@ -6908,6 +6908,22 @@ export default function ConsultaDrawer({ entry, onClose, onStatusChange }: Consu
   }, [entry.clinic_id, entry.patient_id, entry.patient_name]);
 
   const handleStatus = async (newStatus: QueueStatus) => {
+    // 02/10 (Valth): em 30/09, 9 atendimentos terminaram sem anamnese do dia
+    // e depois ninguém sabia se ele não escreveu ou se o texto se perdeu.
+    // Finalizar sem nada escrito hoje agora pede confirmação (não bloqueia).
+    if (newStatus === "attended") {
+      try {
+        const hoje = hojeISO();
+        const evs: any[] = await evolutionApi.list(entry.patient_id);
+        let temHoje = evs.some((e) => e.entry_date === hoje && (e.content || "").replace(/^\[[^\]]*\]\s*/, "").trim());
+        if (!temHoje) {
+          // Texto digitado há menos de 7s ainda não foi pro servidor — vale o rascunho local.
+          const rasc = localStorage.getItem(`orthoclinic_anamnese_folha_${userScope()}_${entry.patient_id}`) || "";
+          temHoje = lerFolha(rasc).some((b) => b.dataISO === hoje && b.texto.trim());
+        }
+        if (!temHoje && !window.confirm(`Nenhuma anamnese escrita hoje para ${entry.patient_name}. Finalizar a consulta mesmo assim?`)) return;
+      } catch {}
+    }
     setBusyStatus(true);
     try {
       await onStatusChange(entry.id, newStatus);

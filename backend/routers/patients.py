@@ -67,7 +67,19 @@ def list_patients(
     q = _org_filter(q, current_user)
     if search:
         term = f"%{search}%"
-        q = q.filter(or_(Patient.name.ilike(term), Patient.cpf.ilike(term), Patient.phone.ilike(term)))
+        conds = [Patient.name.ilike(term), Patient.cpf.ilike(term), Patient.phone.ilike(term)]
+        # 02/10: busca ignorava acento — "QUITERIA" não achava "Quitéria" e a
+        # secretária cadastrava de novo. No Postgres compara sem acento.
+        if db.bind is not None and db.bind.dialect.name == "postgresql":
+            com, sem = "áàâãäéèêëíìîïóòôõöúùûüçÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇ", "aaaaaeeeeiiiiooooouuuucAAAAAEEEEIIIIOOOOOUUUUC"
+            sem_acento = _normalize_name(search)
+            if sem_acento:
+                conds.append(func.translate(Patient.name, com, sem).ilike(f"%{sem_acento}%"))
+        # Telefone digitado com máscara/DDD/+55: compara pelos últimos 8 dígitos.
+        fone = _ultimos8(search)
+        if fone and len(re.sub(r"\D", "", search)) >= 8:
+            conds.append(Patient.phone.like(f"%{fone}%"))
+        q = q.filter(or_(*conds))
     patients = q.order_by(Patient.name).offset(skip).limit(limit).all()
 
     result = []
@@ -115,6 +127,34 @@ def _exigir_cadastro_completo(data, current_user: User) -> None:
         raise HTTPException(422, "CPF inválido — confira os números digitados.")
 
 
+def _ultimos8(fone: Optional[str]) -> str:
+    d = re.sub(r"\D", "", fone or "")
+    return d[-8:] if len(d) >= 8 else ""
+
+
+def _cadastro_esqueleto_do_bot(db: Session, data, current_user: User) -> Optional[Patient]:
+    """Cadastro já existente da MESMA pessoa: mesmo nome normalizado + mesmo
+    telefone (últimos 8 dígitos), sem CPF e com nascimento vazio ou igual.
+    É o formato do cadastro que o bot cria — só nome e telefone."""
+    nome = _normalize_name(data.name)
+    fone = _ultimos8(getattr(data, "phone", None))
+    if not nome or not fone:
+        return None
+    candidatos = _org_filter(
+        db.query(Patient).filter(Patient.active == True, Patient.phone.isnot(None)),
+        current_user,
+    ).filter(Patient.phone.like(f"%{fone}")).all()
+    for c in candidatos:
+        if _normalize_name(c.name) != nome:
+            continue
+        if (c.cpf or "").strip():
+            continue
+        if c.birthdate and getattr(data, "birthdate", None) and c.birthdate != data.birthdate:
+            continue
+        return c
+    return None
+
+
 def _arrumar_telefones(data) -> None:
     """Conserta o que da para consertar e recusa o que nao e telefone.
 
@@ -150,6 +190,34 @@ def create_patient(
         ).first()
         if existing:
             raise HTTPException(400, "CPF já cadastrado")
+
+    # 02/10 (Valth): o bot do WhatsApp cria o paciente só com NOME + TELEFONE
+    # ("confirmação de presença"). No balcão a secretária buscava "QUITERIA",
+    # não achava "Quitéria" (busca sensível a acento) e cadastrava de novo —
+    # 4 duplicados só em 30/09, com a marcação do bot presa num cadastro e o
+    # atendimento no outro. Se já existe cadastro ativo com o MESMO nome
+    # (sem acento/caixa) e o MESMO telefone, sem CPF e sem data de nascimento
+    # conflitante, ele é COMPLETADO com os dados novos em vez de duplicado.
+    esqueleto = _cadastro_esqueleto_do_bot(db, data, current_user)
+    if esqueleto is not None:
+        for campo, valor in data.model_dump(exclude_unset=True).items():
+            if valor in (None, "", []):
+                continue
+            atual = getattr(esqueleto, campo, None)
+            if campo == "name" or atual in (None, "", []):
+                setattr(esqueleto, campo, valor)
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+            raise HTTPException(400, "CPF já cadastrado")
+        db.refresh(esqueleto)
+        result = PatientOut.model_validate(esqueleto)
+        result.warning = (
+            f"Este paciente já tinha cadastro (id {esqueleto.id}, criado pela "
+            "confirmação do WhatsApp). Completei o cadastro existente em vez de criar outro."
+        )
+        return result
 
     # A19-back: dedup SOFT por (nome normalizado + data de nascimento) na org.
     # Cadastro rápido sem CPF não pega homônimos via constraint, então avisamos
