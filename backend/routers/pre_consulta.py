@@ -563,3 +563,51 @@ def confirmar_presenca(data: PreConsultaPayload, db: Session = Depends(get_db)):
         appointment_id=appointment_id,
         appointment_criado=appointment_criado,
     )
+
+
+# ── Reconciliação: quais formulários chegaram (03/10, pedido da whatsApp.ai) ──
+#
+# O bot passou a reenviar com fila e quer conferir sozinho, toda semana, se o
+# que ele enviou bate com o que temos. O token (agendamento_id) contém o
+# telefone do paciente, então a rota é protegida pelo MESMO segredo do
+# formulário: assinatura HMAC-SHA256(FORM_SECRET, "recebidos:<desde>:<ate>:<exp>"),
+# exp em milissegundos. Devolve só token + horário — nada clínico.
+
+class RecebidoOut(BaseModel):
+    token: str
+    filled_at: Optional[datetime] = None
+
+
+@router.get("/recebidos", response_model=list[RecebidoOut])
+def formularios_recebidos(
+    desde: date,
+    ate: date,
+    exp: str,
+    assinatura: str,
+    db: Session = Depends(get_db),
+):
+    if not FORM_SECRET:
+        raise HTTPException(500, "FORM_SECRET não configurado")
+    try:
+        exp_num = int(exp)
+    except ValueError:
+        raise HTTPException(400, "exp inválido")
+    if int(time.time() * 1000) > exp_num:
+        raise HTTPException(401, "token_expirado")
+    esperado = hmac.new(
+        FORM_SECRET.encode(), f"recebidos:{desde.isoformat()}:{ate.isoformat()}:{exp_num}".encode(), hashlib.sha256
+    ).hexdigest()
+    if not hmac.compare_digest(assinatura, esperado):
+        raise HTTPException(401, "token_invalido")
+    if (ate - desde).days > 92:
+        raise HTTPException(400, "intervalo máximo de 92 dias")
+
+    inicio = datetime.combine(desde, datetime.min.time(), tzinfo=timezone.utc)
+    fim = datetime.combine(ate, datetime.max.time(), tzinfo=timezone.utc)
+    linhas = (
+        db.query(Anamnesis.token, Anamnesis.filled_at)
+        .filter(Anamnesis.status == "filled", Anamnesis.filled_at >= inicio, Anamnesis.filled_at <= fim)
+        .order_by(Anamnesis.filled_at)
+        .all()
+    )
+    return [RecebidoOut(token=t, filled_at=f) for t, f in linhas if t]
