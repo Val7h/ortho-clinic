@@ -14,7 +14,7 @@ import shutil
 import time
 import unicodedata
 import uuid
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional, Union
 
@@ -131,6 +131,14 @@ class PreConsultaPayload(BaseModel):
     # gerado pelo servidor após gerar o PDF
     pdf_url: Optional[str] = None
 
+    # 03/10: reconstrução de formulário perdido a partir do PDF do bot (16 casos
+    # de jul/set). Em modo recuperado: só grava a anamnese — não cria cadastro,
+    # não sobrescreve dado atual do paciente (só preenche o que está vazio),
+    # não mexe em agenda — e marca a procedência. preenchido_em = horário
+    # ORIGINAL do preenchimento (ISO; sem fuso = horário de Recife).
+    recuperado: bool = False
+    preenchido_em: Optional[str] = None
+
 
 class PreConsultaOut(BaseModel):
     ok: bool
@@ -233,6 +241,55 @@ def _buscar_ou_criar_paciente(db: Session, data: PreConsultaPayload) -> tuple[Pa
     db.commit()
     db.refresh(patient)
     return patient, True
+
+
+_RECIFE = timezone(timedelta(hours=-3))
+
+# Colunas que _atualizar_paciente pode escrever.
+_CAMPOS_FORMULARIO = (
+    "cpf", "birthdate", "address_city", "address_state", "address_zip",
+    "address_neighborhood", "address_number", "address_complement", "address_street",
+    "occupation", "civil_status", "allergies", "current_medications",
+    "surgeries_history", "chronic_conditions", "insurance", "gender",
+)
+
+
+def _buscar_paciente_existente(db: Session, data: "PreConsultaPayload") -> Optional[Patient]:
+    """Mesma busca do formulário (CPF, depois telefone, na org da unidade), mas
+    sem criar nem alterar nada — usada na recuperação."""
+    org_id = _org_da_unidade(db, data.unidade)
+
+    def no_escopo(q):
+        return q.filter(Patient.organization_id == org_id) if org_id else q
+
+    if data.cpf:
+        p = no_escopo(db.query(Patient).filter(Patient.cpf == data.cpf)).first()
+        if p:
+            return p
+    if data.telefone:
+        tel = data.telefone.replace("+", "").replace(" ", "")
+        return no_escopo(db.query(Patient).filter(Patient.phone.like(f"%{tel[-9:]}%"))).first()
+    return None
+
+
+def _preencher_so_vazios(patient: Patient, data: "PreConsultaPayload") -> None:
+    """Aplica o formulário, mas devolve o valor ATUAL onde já havia algo: um
+    formulário de julho não pode trocar alergia/remédio/convênio de hoje."""
+    antes = {c: getattr(patient, c, None) for c in _CAMPOS_FORMULARIO}
+    _atualizar_paciente(patient, data)
+    for c, v in antes.items():
+        if v not in (None, "", []):
+            setattr(patient, c, v)
+
+
+def _instante_original(valor: Optional[str]) -> Optional[datetime]:
+    if not valor:
+        return None
+    try:
+        dt = datetime.fromisoformat(valor.strip().replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return dt if dt.tzinfo else dt.replace(tzinfo=_RECIFE)
 
 
 def _atualizar_paciente(patient: Patient, data: PreConsultaPayload) -> None:
@@ -462,7 +519,16 @@ async def upload_exame(
 def submit_pre_consulta(data: PreConsultaPayload, db: Session = Depends(get_db)):
     _validar_token(data.agendamento_id, data.exp, data.token)
 
-    patient, criado = _buscar_ou_criar_paciente(db, data)
+    if data.recuperado:
+        patient = _buscar_paciente_existente(db, data)
+        if not patient:
+            raise HTTPException(404, "paciente_nao_encontrado — recuperação não cria cadastro")
+        _preencher_so_vazios(patient, data)
+        db.commit()
+        db.refresh(patient)
+        criado = False
+    else:
+        patient, criado = _buscar_ou_criar_paciente(db, data)
 
     # monta respostas da anamnese no formato do modelo existente
     responses = {
@@ -489,12 +555,22 @@ def submit_pre_consulta(data: PreConsultaPayload, db: Session = Depends(get_db))
         ),
     }
 
+    quando = datetime.now(timezone.utc)
+    if data.recuperado:
+        quando = _instante_original(data.preenchido_em) or quando
+        responses["origem"] = "recuperado_pdf"
+        responses["additional_notes"] = (
+            f"RECUPERADO DO PDF em {datetime.now(timezone.utc).astimezone(_RECIFE).strftime('%d/%m/%Y')} "
+            "(o envio original não chegou ao OrthoClinic). Nascimento e CPF não recuperáveis. | "
+            + responses["additional_notes"]
+        )
+
     # idempotente: se já existe anamnese para este agendamento, atualiza
     anamnesis = db.query(Anamnesis).filter(Anamnesis.token == data.agendamento_id).first()
     if anamnesis:
         anamnesis.responses = responses
         anamnesis.status = "filled"
-        anamnesis.filled_at = datetime.now(timezone.utc)
+        anamnesis.filled_at = quando
         anamnesis.patient_id = patient.id
     else:
         anamnesis = Anamnesis(
@@ -502,7 +578,7 @@ def submit_pre_consulta(data: PreConsultaPayload, db: Session = Depends(get_db))
             token=data.agendamento_id,
             responses=responses,
             status="filled",
-            filled_at=datetime.now(timezone.utc),
+            filled_at=quando,
         )
         db.add(anamnesis)
     db.commit()
@@ -511,7 +587,11 @@ def submit_pre_consulta(data: PreConsultaPayload, db: Session = Depends(get_db))
     # ── Agendamento automático (pedido do Dr. Valth, 09/07/2026): a pré-consulta já
     # deixa o paciente na agenda do dia certo, como "pending" — a secretária só revisa
     # e confirma/completa, não precisa criar o agendamento do zero. ──────────────────
-    appointment_id, appointment_criado = _criar_agendamento_se_possivel(db, data, patient)
+    # Em recuperação NÃO: a consulta já passou e não se cria agenda retroativa.
+    if data.recuperado:
+        appointment_id, appointment_criado = None, False
+    else:
+        appointment_id, appointment_criado = _criar_agendamento_se_possivel(db, data, patient)
 
     return PreConsultaOut(
         ok=True,
