@@ -73,6 +73,16 @@ def test_recuperado_idempotente():
     assert db.query(Anamnesis).count() == 1
 
 
+def test_criar_cadastro_so_com_flag_e_sem_agenda():
+    db = _db()
+    r = pc.submit_pre_consulta(_payload(telefone="5581777776666", agendamento_id="5581777776666-2",
+                                        nome="Ciclana", criar_cadastro_se_nao_existir=True), db)
+    assert r.criado is True and r.appointment_id is None
+    assert db.query(Patient).count() == 2 and db.query(Appointment).count() == 0
+    a = db.query(Anamnesis).filter(Anamnesis.token == "5581777776666-2").one()
+    assert a.responses["origem"] == "recuperado_pdf"
+
+
 if __name__ == "__main__":
     for n, f in list(globals().items()):
         if n.startswith("test_"):

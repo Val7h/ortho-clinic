@@ -138,6 +138,9 @@ class PreConsultaPayload(BaseModel):
     # ORIGINAL do preenchimento (ISO; sem fuso = horário de Recife).
     recuperado: bool = False
     preenchido_em: Optional[str] = None
+    # Só no modo recuperado: o paciente marcou durante a queda de 26-29/07 e o
+    # cadastro nunca foi criado. Cria o cadastro (nunca agenda).
+    criar_cadastro_se_nao_existir: bool = False
 
 
 class PreConsultaOut(BaseModel):
@@ -521,12 +524,15 @@ def submit_pre_consulta(data: PreConsultaPayload, db: Session = Depends(get_db))
 
     if data.recuperado:
         patient = _buscar_paciente_existente(db, data)
-        if not patient:
+        if patient:
+            _preencher_so_vazios(patient, data)
+            db.commit()
+            db.refresh(patient)
+            criado = False
+        elif data.criar_cadastro_se_nao_existir:
+            patient, criado = _buscar_ou_criar_paciente(db, data)
+        else:
             raise HTTPException(404, "paciente_nao_encontrado — recuperação não cria cadastro")
-        _preencher_so_vazios(patient, data)
-        db.commit()
-        db.refresh(patient)
-        criado = False
     else:
         patient, criado = _buscar_ou_criar_paciente(db, data)
 
