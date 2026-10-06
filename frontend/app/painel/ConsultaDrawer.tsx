@@ -8,7 +8,7 @@ import {
   Plus, Trash2, Printer, ChevronDown, ChevronUp, Save,
   Send, ClipboardCheck, Award, Camera, FileSearch2, Upload, ImageIcon, ZoomIn, ZoomOut,
   Pencil, Download, MessageSquare,
-  Search,
+  Search, FolderOpen,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { anamnesisApi, api, patientsApi, consultationsApi, prescriptionsApi, prescriptionTemplatesApi, examsApi, evolutionApi, clinicApi, chatApi, reportsApi, leafletsApi, waitingRoomApi, remindersApi, msgErro } from "@/lib/api";
@@ -44,7 +44,7 @@ interface ConsultaDrawerProps {
   onStatusChange: (entryId: number, status: QueueStatus) => void;
 }
 
-type DrawerTab = "anamnese" | "exames" | "receitas" | "encaminhamentos" | "procedimentos" | "atestados" | "laudos" | "fotos";
+type DrawerTab = "anamnese" | "exames" | "receitas" | "encaminhamentos" | "procedimentos" | "atestados" | "laudos" | "fotos" | "documentos";
 
 // ── Coletor de documentos da consulta ────────────────────────────────────────
 // Cada modal de impressão (PrintDocModal / PrintModal) registra seu documento
@@ -6372,6 +6372,144 @@ interface PatientDocument {
   notes?: string | null;
 }
 
+// ── Tab: Documentos ───────────────────────────────────────────────────────────
+// 06/10 (Valth): laudo de outro médico, exame trazido pelo paciente etc. ficavam
+// escondidos no cadastro do paciente. Aqui ficam à mão DURANTE a consulta
+// (tudo que não é foto — as fotos têm aba própria).
+
+const DOC_CATEGORIAS: Record<string, string> = {
+  report: "Laudo / Relatório",
+  exam: "Exame de Imagem",
+  lab: "Laboratório",
+  prescription: "Receita (externa)",
+  referral: "Encaminhamento",
+  consent: "Termo",
+  other: "Outro",
+};
+
+function TabDocumentos({ patientId }: { patientId: number }) {
+  const [docs, setDocs] = useState<PatientDocument[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [erro, setErro] = useState(false);
+  const [enviando, setEnviando] = useState(false);
+  const [categoria, setCategoria] = useState("report");
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const headers = (): Record<string, string> => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("ortho_token") : null;
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  };
+
+  const carregar = useCallback(async () => {
+    setLoading(true);
+    setErro(false);
+    try {
+      const res = await fetch(`${API_URL}/patients/${patientId}/documents?limit=200`, { headers: headers() });
+      if (!res.ok) throw new Error("falhou");
+      const data = await res.json();
+      const lista: PatientDocument[] = Array.isArray(data) ? data : (data.items ?? []);
+      setDocs(lista.filter((d) => d.category !== "photo"));
+    } catch {
+      setErro(true);
+    } finally {
+      setLoading(false);
+    }
+  }, [patientId]);
+
+  useEffect(() => { carregar(); }, [carregar]);
+
+  // arquivo guardado no servidor vem como "/uploads/..." — completa com o endereço da API
+  const urlDoArquivo = (u: string) => (u.startsWith("/") ? `${API_URL}${u}` : u);
+
+  const enviar = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    const arquivos = Array.from(files);
+    const grandes = arquivos.filter((f) => f.size > 20 * 1024 * 1024);
+    if (grandes.length) {
+      toast.error(`${grandes.map((f) => f.name).join(", ")} passa de 20MB.`);
+      return;
+    }
+    setEnviando(true);
+    let ok = 0;
+    const falhas: string[] = [];
+    for (const f of arquivos) {
+      const fd = new FormData();
+      fd.append("file", f);
+      fd.append("title", f.name || "Documento");
+      fd.append("category", categoria);
+      fd.append("date", hojeISO());
+      try {
+        const res = await fetch(`${API_URL}/patients/${patientId}/documents/upload`, { method: "POST", headers: headers(), body: fd });
+        if (res.ok) ok++; else falhas.push(f.name);
+      } catch { falhas.push(f.name); }
+    }
+    setEnviando(false);
+    if (fileRef.current) fileRef.current.value = "";
+    if (ok) { toast.success(`${ok} documento${ok > 1 ? "s" : ""} salvo${ok > 1 ? "s" : ""}`); carregar(); }
+    if (falhas.length) toast.error(`Falha ao enviar: ${falhas.join(", ")}`);
+  };
+
+  const formatarData = (s: string) => {
+    try { return new Date(s + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" }); }
+    catch { return s; }
+  };
+
+  return (
+    <div className="px-5 pb-5 space-y-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <select
+          value={categoria}
+          onChange={(e) => setCategoria(e.target.value)}
+          className="text-xs border border-slate-300 dark:border-slate-600 rounded-lg px-2 py-1.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200"
+          aria-label="Tipo do documento a enviar"
+        >
+          {Object.entries(DOC_CATEGORIAS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+        </select>
+        <button
+          onClick={() => fileRef.current?.click()}
+          disabled={enviando}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-brand-600 text-white rounded-lg hover:bg-brand-700 disabled:opacity-50"
+        >
+          <Upload className="w-3.5 h-3.5" /> {enviando ? "Enviando…" : "Adicionar documento"}
+        </button>
+        <input ref={fileRef} type="file" multiple accept="application/pdf,image/*,.docx" className="hidden" onChange={(e) => enviar(e.target.files)} />
+      </div>
+
+      {loading ? (
+        <p className="text-xs text-slate-500">Carregando documentos…</p>
+      ) : erro ? (
+        <p className="text-xs text-red-600">
+          Não consegui carregar os documentos. <button className="underline" onClick={carregar}>Tentar de novo</button>
+        </p>
+      ) : docs.length === 0 ? (
+        <p className="text-xs text-slate-500">Nenhum documento guardado para este paciente.</p>
+      ) : (
+        <ul className="divide-y divide-slate-100 dark:divide-slate-700 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
+          {docs.map((d) => (
+            <li key={d.id}>
+              <a
+                href={urlDoArquivo(d.file_url)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-800"
+              >
+                <FileText className="w-4 h-4 text-slate-400 shrink-0" />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-xs font-semibold text-slate-800 dark:text-slate-100 truncate">{d.title || "Documento"}</span>
+                  <span className="block text-[11px] text-slate-500 dark:text-slate-400">
+                    {DOC_CATEGORIAS[d.category || "other"] || "Outro"} · {formatarData(d.date)}
+                  </span>
+                </span>
+                <span className="text-[11px] font-semibold text-brand-600 shrink-0">Abrir</span>
+              </a>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 function TabFotos({ patientId }: { patientId: number }) {
   const [photos, setPhotos] = useState<PatientDocument[]>([]);
   const [loading, setLoading] = useState(true);
@@ -6800,6 +6938,7 @@ export default function ConsultaDrawer({ entry, onClose, onStatusChange }: Consu
     { key: "atestados",       render: () => <TabAtestados patient={patient} clinic={clinic} /> },
     { key: "laudos",          render: () => <TabLaudos patient={patient} clinic={clinic} /> },
     { key: "fotos",           render: () => <TabFotos patientId={entry.patient_id} /> },
+    { key: "documentos",      render: () => <TabDocumentos patientId={entry.patient_id} /> },
   ];
   const [patient, setPatient] = useState<any>(null);
   const [loadingPatient, setLoadingPatient] = useState(true);
@@ -6949,6 +7088,7 @@ export default function ConsultaDrawer({ entry, onClose, onStatusChange }: Consu
     { key: "atestados",       label: "Atestados",         icon: <Award className="w-3.5 h-3.5" /> },
     { key: "laudos",          label: "Laudos",            icon: <FileSearch2 className="w-3.5 h-3.5" /> },
     { key: "fotos",           label: "Fotos",             icon: <Camera className="w-3.5 h-3.5" /> },
+    { key: "documentos",      label: "Documentos",        icon: <FolderOpen className="w-3.5 h-3.5" /> },
   ];
 
   return (
