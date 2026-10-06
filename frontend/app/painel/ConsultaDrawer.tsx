@@ -327,7 +327,8 @@ const ORTHO_MEDICATIONS: OrthoMedPreset[] = [
   { name: "Paracetamol 750mg", dose: "1 comprimido", route: "oral", frequency: "6/6h", duration: "5 dias", instructions: "Conforme necessidade — máx. 4 comprimidos/dia", prescriptionType: "simples" },
   { name: "Dipirona 500mg", dose: "2 comprimidos", route: "oral", frequency: "6/6h", duration: "3 dias", instructions: "Conforme necessidade de dor ou febre", prescriptionType: "simples" },
   { name: "Gabapentina 300mg", dose: "1 cápsula", route: "oral", frequency: "8/8h", duration: "30 dias", instructions: "Aumentar dose gradualmente conforme orientação", prescriptionType: "simples" },
-  { name: "Pregabalina 75mg", dose: "1 cápsula", route: "oral", frequency: "12/12h", duration: "30 dias", instructions: "Pode causar sonolência e tontura", prescriptionType: "simples" },
+  // 06/10 (Valth): pregabalina é Lista C1 (Portaria 344/98) — exige RCE, inclusive dentro de fórmula manipulada.
+  { name: "Pregabalina 75mg", dose: "1 cápsula", route: "oral", frequency: "12/12h", duration: "30 dias", instructions: "Pode causar sonolência e tontura — Controle Especial (receita branca, 2 vias)", prescriptionType: "controle_especial" },
   { name: "Alopurinol 300mg", dose: "1 comprimido", route: "oral", frequency: "1x/dia", duration: "30 dias", instructions: "Tomar após refeição principal — manter hidratação", prescriptionType: "simples" },
   { name: "Colchicina 0,5mg", dose: "1 comprimido", route: "oral", frequency: "12/12h", duration: "5 dias", instructions: "Suspender se diarreia ou dor abdominal intensa", prescriptionType: "simples" },
   { name: "Condroitina + Glucosamina", dose: "1 comprimido", route: "oral", frequency: "1x/dia", duration: "90 dias", instructions: "Tomar após refeição", prescriptionType: "simples" },
@@ -353,6 +354,7 @@ const ALIASES_CONTROLADOS: { termos: string[]; presetName: string }[] = [
   { termos: ["tramadol", "tramadon", "tramal", "sylador"], presetName: "Tramadol 50mg" },
   { termos: ["codeina", "codeína", "codein"], presetName: "Codeína 30mg" },
   { termos: ["clonazepam", "rivotril"], presetName: "Clonazepam 0,5mg" },
+  { termos: ["pregabalina", "lyrica", "prebictal"], presetName: "Pregabalina 75mg" },
 ];
 
 const normalizarTexto = (t: string) => (t || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
@@ -362,13 +364,19 @@ const normalizarTexto = (t: string) => (t || "").normalize("NFD").replace(/[̀-�
 function detectarPresetPorNomeOuApelido(textoLivreOuNome: string): OrthoMedPreset | undefined {
   const norm = normalizarTexto(textoLivreOuNome);
   if (!norm.trim()) return undefined;
-  const direto = ORTHO_MEDICATIONS.find((p) => {
+  // 06/10 (Valth, Graciele): numa fórmula manipulada ("DEFLAZACORTE + PREGABALINA +
+  // DULOXETINA + CICLOBENZAPRINA") o primeiro remédio simples da lista ganhava e a
+  // fórmula toda saía como receita simples. Se QUALQUER componente é controlado,
+  // a linha inteira é controlada — o controlado vence.
+  const achados = ORTHO_MEDICATIONS.filter((p) => {
     const nomeBase = normalizarTexto(p.name).replace(/\s*\d.*$/, "").trim(); // corta a dose: "tramadol 50mg" -> "tramadol"
     return nomeBase && norm.includes(nomeBase);
   });
-  if (direto) return direto;
+  const controladoDireto = achados.find((p) => p.prescriptionType === "controle_especial");
+  if (controladoDireto) return controladoDireto;
   const alias = ALIASES_CONTROLADOS.find((a) => a.termos.some((t) => norm.includes(t)));
-  return alias ? ORTHO_MEDICATIONS.find((p) => p.name === alias.presetName) : undefined;
+  if (alias) return ORTHO_MEDICATIONS.find((p) => p.name === alias.presetName);
+  return achados[0];
 }
 
 // ── Referral text templates ─────────────────────────────────────────────────────
@@ -2624,16 +2632,28 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
     // um item novo — só volta ao tipo padrão da tela se ainda não apareceu
     // remédio nenhum.
     let tipoAtual: PrescriptionType = rxType;
+    // 06/10 (Valth, Graciele): "USO ORAL" é título do remédio que vem DEPOIS;
+    // como não reconhece remédio, caía no tipo da tela (RCE) e ficava sozinho
+    // numa folha de Controle Especial, enquanto a fórmula ia para outra.
+    // Agora o título espera e entra na mesma folha da próxima linha de remédio.
+    let titulosPendentes: string[] = [];
     for (const linha of texto.split(/\r?\n/)) {
       const trimmed = linha.trim();
       if (!trimmed) continue;
       // "orientação"/"orientações", com ou sem acento — \S* cobre os dois
       // plurais (ções vs coes) sem tentar montar as duas grafias na mão.
       if (/^orienta\S*\s*:/i.test(trimmed)) { orientacoes.push(linha); continue; }
+      if (/^uso\s+\S+(\s+\S+)?\s*:?$/i.test(trimmed) && !detectarPresetPorNomeOuApelido(trimmed)) {
+        titulosPendentes.push(linha);
+        continue;
+      }
       const preset = detectarPresetPorNomeOuApelido(trimmed);
       if (preset?.prescriptionType) tipoAtual = preset.prescriptionType;
+      if (titulosPendentes.length) { (buckets[tipoAtual] ??= []).push(...titulosPendentes); titulosPendentes = []; }
       (buckets[tipoAtual] ??= []).push(linha);
     }
+    // título sem remédio depois dele: fica no tipo atual, como antes
+    if (titulosPendentes.length) (buckets[tipoAtual] ??= []).push(...titulosPendentes);
     return ordem
       .filter((t) => buckets[t]?.length)
       .map((t) => ({
