@@ -226,6 +226,14 @@ export const prescriptionTemplatesApi = {
     api.delete(`/prescription-templates/${id}`),
 };
 
+// ── Modelos de Encaminhamento (06/10) ─────────────────────────────────────
+export const referralTemplatesApi = {
+  list: () => api.get("/referral-templates").then((r) => r.data),
+  create: (data: { name: string; content: string; ref_type: string; modality?: string; cid?: string }) =>
+    api.post("/referral-templates", data).then((r) => r.data),
+  delete: (id: number) => api.delete(`/referral-templates/${id}`),
+};
+
 // ── Exames ────────────────────────────────────────────────────────────────
 export const examsApi = {
   list: (patientId: number) =>

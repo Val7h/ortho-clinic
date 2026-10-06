@@ -11,7 +11,7 @@ import {
   Search, FolderOpen,
 } from "lucide-react";
 import toast from "react-hot-toast";
-import { anamnesisApi, api, patientsApi, consultationsApi, prescriptionsApi, prescriptionTemplatesApi, examsApi, evolutionApi, clinicApi, chatApi, reportsApi, leafletsApi, waitingRoomApi, remindersApi, msgErro } from "@/lib/api";
+import { anamnesisApi, api, patientsApi, consultationsApi, prescriptionsApi, prescriptionTemplatesApi, referralTemplatesApi, examsApi, evolutionApi, clinicApi, chatApi, reportsApi, leafletsApi, waitingRoomApi, remindersApi, msgErro } from "@/lib/api";
 import { formatDate, calcAge, hojeISO } from "@/lib/utils";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -4738,6 +4738,55 @@ export function TabEncaminhamentos({ patient, clinic, patientId }: { patient: an
   const cityState = clinic ? `${clinic.city}/${clinic.state}` : "_________";
   const draftKey = `orthoclinic_ref_draft_${patient?.id || 0}`;
 
+  // 06/10 (Valth): modelos de encaminhamento que ELE monta e salva (ficam no
+  // banco, valem para qualquer paciente e qualquer computador).
+  const [meusModelos, setMeusModelos] = useState<any[]>([]);
+  const [nomeNovoModelo, setNomeNovoModelo] = useState<string | null>(null); // null = campo fechado
+  useEffect(() => {
+    referralTemplatesApi.list().then((l: any[]) => setMeusModelos(l || [])).catch(() => {});
+  }, []);
+
+  const salvarComoModelo = async () => {
+    const nome = (nomeNovoModelo || "").trim();
+    if (!nome) { toast.error("Dê um nome ao modelo"); return; }
+    if (!text.trim()) { toast.error("Escreva o texto do encaminhamento antes de salvar como modelo"); return; }
+    try {
+      const salvo = await referralTemplatesApi.create({
+        name: nome, content: text.trim(), ref_type: refType,
+        modality: refType === "fisioterapia" ? physioModality : refType === "especialidade" ? resolvedSpecialtyDoModelo() : "",
+        cid,
+      });
+      setMeusModelos((l) => [...l.filter((m) => m.id !== salvo.id), salvo].sort((a, b) => a.name.localeCompare(b.name)));
+      setNomeNovoModelo(null);
+      toast.success(`Modelo "${nome}" salvo`);
+    } catch (err: any) {
+      toast.error(msgErro(err, "Não consegui salvar o modelo"));
+    }
+  };
+  const resolvedSpecialtyDoModelo = () => (specialty === "Outra" ? specialtyOther : specialty);
+
+  const aplicarModelo = (m: any) => {
+    if (text.trim() && text.trim() !== m.content && !window.confirm("Substituir o texto atual pelo modelo?")) return;
+    setText(m.content);
+    if (m.cid) setCid(m.cid);
+    if (m.ref_type === "fisioterapia" && m.modality) setPhysioModality(m.modality);
+    if (m.ref_type === "especialidade" && m.modality) {
+      if (SPECIALTY_OPTIONS.includes(m.modality)) setSpecialty(m.modality);
+      else { setSpecialty("Outra"); setSpecialtyOther(m.modality); }
+    }
+    setTimeout(autoResizeRef, 0);
+    textRef.current?.focus();
+  };
+
+  const apagarModelo = async (m: any) => {
+    if (!window.confirm(`Apagar o modelo "${m.name}"?`)) return;
+    try {
+      await referralTemplatesApi.delete(m.id);
+      setMeusModelos((l) => l.filter((x) => x.id !== m.id));
+      toast.success("Modelo apagado");
+    } catch { toast.error("Erro ao apagar o modelo"); }
+  };
+
   // Restore draft on mount
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -5033,6 +5082,36 @@ export function TabEncaminhamentos({ patient, clinic, patientId }: { patient: an
           </div>
         </div>
       )}
+
+      {/* Meus modelos (salvos por mim) + botão para salvar o texto atual */}
+      <div>
+        <p className="text-[11px] text-slate-400 mb-1 font-semibold uppercase tracking-wide">Meus modelos salvos</p>
+        <div className="flex flex-wrap items-center gap-1.5">
+          {meusModelos.filter((m) => m.ref_type === refType).map((m) => (
+            <span key={m.id} className="inline-flex items-center rounded border border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 text-[11px] text-emerald-800 dark:text-emerald-300">
+              <button type="button" onClick={() => aplicarModelo(m)} className="px-2 py-0.5 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 rounded-l">{m.name}</button>
+              <button type="button" onClick={() => apagarModelo(m)} title="Apagar este modelo" className="px-1.5 py-0.5 text-emerald-700/60 hover:text-red-600 rounded-r">×</button>
+            </span>
+          ))}
+          {meusModelos.filter((m) => m.ref_type === refType).length === 0 && nomeNovoModelo === null && (
+            <span className="text-[11px] text-slate-400">Nenhum ainda neste tipo.</span>
+          )}
+          {nomeNovoModelo === null ? (
+            <button type="button" onClick={() => setNomeNovoModelo("")} disabled={!text.trim()}
+              className="text-[11px] px-2 py-0.5 rounded border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40">
+              + Salvar o texto atual como modelo
+            </button>
+          ) : (
+            <span className="inline-flex items-center gap-1">
+              <input autoFocus className="text-[11px] px-2 py-0.5 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 w-56" placeholder="Nome do modelo (ex.: Fisioterapia — hérnia lombar)"
+                value={nomeNovoModelo} onChange={(e) => setNomeNovoModelo(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") salvarComoModelo(); if (e.key === "Escape") setNomeNovoModelo(null); }} />
+              <button type="button" onClick={salvarComoModelo} className="text-[11px] px-2 py-0.5 rounded bg-emerald-600 text-white font-semibold hover:bg-emerald-700">Salvar modelo</button>
+              <button type="button" onClick={() => setNomeNovoModelo(null)} className="text-[11px] px-1.5 py-0.5 text-slate-500 hover:text-slate-700">Cancelar</button>
+            </span>
+          )}
+        </div>
+      </div>
 
       <div>
         <label className={lbl}>Resumo clínico / Conduta Solicitada</label>
