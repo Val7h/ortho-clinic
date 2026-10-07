@@ -1357,7 +1357,7 @@ function PrintModal({ rx, patient, clinic, onClose, collectorId }: {
       {type === "simples" && <SimplesSheet />}
       {type === "controle_especial" && viaLabels.map((label, idx) => (
         <div key={idx}>
-          <div className={idx < vias - 1 ? "rx-via rx-via-break" : "rx-via"}>
+          <div className={idx < vias - 1 ? "rx-via-break" : ""}>
             <RCESheet viaLabel={label} viaIndex={idx} />
           </div>
           {idx < vias - 1 && (
@@ -1372,7 +1372,7 @@ function PrintModal({ rx, patient, clinic, onClose, collectorId }: {
           dois, e uma folha só é uma folha só pra conferir e manter. */}
       {type === "antimicrobiano" && viaLabels.map((label, idx) => (
         <div key={idx}>
-          <div className={idx < vias - 1 ? "rx-via rx-via-break" : "rx-via"}>
+          <div className={idx < vias - 1 ? "rx-via-break" : ""}>
             <RCESheet viaLabel={label} viaIndex={idx} />
           </div>
           {idx < vias - 1 && (
@@ -1411,15 +1411,6 @@ function PrintModal({ rx, patient, clinic, onClose, collectorId }: {
           #rx-print-portal { display: block !important; position: static !important; width: 100% !important; background: #fff !important; }
           @page { size: A4 portrait; margin: 10mm 12mm; }
           .rx-via-break { page-break-after: always; break-after: page; margin-bottom: 0 !important; }
-          /* 07/10 (Valth): a folha de Controle Especial saía com data/hora e
-             endereço do site do Chrome e sem encher a página. Cada via agora é
-             uma página A4 com margem ZERO no @page (sem margem, o navegador não
-             tem onde imprimir cabeçalho/rodapé) e o respiro vem do padding da
-             própria via. Página nomeada: só vale para as vias RCE/ATB, a receita
-             simples não muda. */
-          @page rce { size: A4 portrait; margin: 0; }
-          .rx-via { page: rce; padding: 10mm 12mm; box-sizing: border-box; }
-          .rx-via > div { min-height: 270mm !important; }
           .rx-cut-line { display: none !important; }
         }
         .rx-cut-line { display: none; }
@@ -4645,10 +4636,6 @@ function ConsultaPrintCenter({ docs, onRemove, onClose }: {
           body > *:not([data-print-portal]) { display: none !important; }
           #pc-print-portal { display: block !important; position: static !important; width: 100% !important; background: #fff !important; }
           .pc-doc { page-break-after: always; }
-          /* mesmas vias da receita controlada no "Imprimir selecionados" */
-          @page rce { size: A4 portrait; margin: 0; }
-          .rx-via { page: rce; padding: 10mm 12mm; box-sizing: border-box; }
-          .rx-via > div { min-height: 270mm !important; }
           .pc-doc:last-child { page-break-after: auto; }
           /* 2 vias de RCE/ATB quebram de página tambem na impressão em lote (M9) */
           .rx-via-break { page-break-after: always; }
