@@ -10,6 +10,7 @@ import NavBar from '@/components/NavBar';
 import { PageWithSidebar } from '@/components/PageWithSidebar';
 import { Card, CardContent, Badge, Button, Modal, useModal } from '@/components/ui';
 import { patientsApi, waitingRoomApi, clinicApi, msgErro } from '@/lib/api';
+import { serverNow } from '@/lib/servertime';
 import toast from 'react-hot-toast';
 import ConsultaDrawer, { WaitingRoomEntry } from './ConsultaDrawer';
 import { useAuth } from '@/components/AuthProvider';
@@ -189,10 +190,10 @@ function PatientCard({ entry, onStatusChange, onRemove, onAddValue, onSelect, bu
   const isDimmed = isAttended || isAbsent;
 
   // Cronômetro ao vivo enquanto está EM ATENDIMENTO (1s); congelado se suspenso
-  const [nowMs, setNowMs] = useState(Date.now());
+  const [nowMs, setNowMs] = useState(serverNow());
   useEffect(() => {
     if (entry.status !== 'attending' || !entry.segment_started_at) return;
-    const t = setInterval(() => setNowMs(Date.now()), 1000);
+    const t = setInterval(() => setNowMs(serverNow()), 1000);
     return () => clearInterval(t);
   }, [entry.status, entry.segment_started_at]);
   const cronoSec = elapsedSeconds(entry, nowMs);
@@ -489,7 +490,7 @@ export default function SalaDeEsperaPage() {
           // (attending) o cronômetro congela — não faz sentido "alarmar" durante o atendimento.
           if (e.status !== 'waiting') return e;
           const arrived = new Date(e.arrived_at);
-          const waited = Math.floor((Date.now() - arrived.getTime()) / 60_000);
+          const waited = Math.floor((serverNow() - arrived.getTime()) / 60_000);
           return { ...e, waited_minutes: waited };
         })
       );

@@ -11,6 +11,7 @@ import {
   Search, FolderOpen,
 } from "lucide-react";
 import toast from "react-hot-toast";
+import { serverNow } from "@/lib/servertime";
 import { anamnesisApi, api, patientsApi, consultationsApi, prescriptionsApi, prescriptionTemplatesApi, referralTemplatesApi, examsApi, evolutionApi, clinicApi, chatApi, reportsApi, leafletsApi, waitingRoomApi, remindersApi, msgErro } from "@/lib/api";
 import { formatDate, calcAge, hojeISO } from "@/lib/utils";
 
@@ -6975,10 +6976,10 @@ function TabFotos({ patientId }: { patientId: number }) {
 // Cronômetro da consulta no cabeçalho do drawer: soma o tempo acumulado
 // (active_seconds) + o trecho atual ao vivo; congela quando suspenso.
 function DrawerCrono({ entry }: { entry: WaitingRoomEntry }) {
-  const [nowMs, setNowMs] = useState(Date.now());
+  const [nowMs, setNowMs] = useState(serverNow());
   useEffect(() => {
     if (entry.status !== "attending" || !entry.segment_started_at) return;
-    const t = setInterval(() => setNowMs(Date.now()), 1000);
+    const t = setInterval(() => setNowMs(serverNow()), 1000);
     return () => clearInterval(t);
   }, [entry.status, entry.segment_started_at]);
   const base = entry.active_seconds ?? 0;

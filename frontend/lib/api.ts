@@ -46,6 +46,8 @@ const ROTAS_DE_IA = [
   '/chat',                       // assistente da clínica
 ];
 
+import { atualizarRelogioDoServidor } from "./servertime";
+
 export const api = axios.create({
   baseURL: API_URL,
   headers: { "Content-Type": "application/json" },
@@ -90,7 +92,10 @@ function isPublicPath(path: string): boolean {
 }
 
 api.interceptors.response.use(
-  function(r) { return r; },
+  function(r) {
+    try { atualizarRelogioDoServidor((r.headers as any)?.date); } catch {}
+    return r;
+  },
   function(err) {
     if (err && err.response && err.response.status === 401 && typeof window !== "undefined") {
       if (!isPublicPath(window.location.pathname)) {
