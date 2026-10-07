@@ -4569,7 +4569,8 @@ function TimbradoOficial({ clinic }: { clinic?: any }) {
         <p style={{ fontSize: "9.5px", color: "#777", margin: "3px 0 0", letterSpacing: "0.5px" }}>{crmComTeot(clinic)}</p>
         {clinic && (
           <p style={{ fontSize: "9px", color: "#999", margin: "4px 0 0" }}>
-            {clinic.name}{clinic.city ? ` · ${clinic.city} – ${clinic.state}` : ""}{clinic.phone ? ` · ${clinic.phone}` : ""}
+            {/* 07/10 (Valth): a cidade e a data ficam SÓ no fecho do documento; no alto, sem cidade. */}
+            {clinic.name}{clinic.phone ? ` · ${clinic.phone}` : ""}
           </p>
         )}
       </div>
