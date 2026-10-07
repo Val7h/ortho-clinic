@@ -2182,7 +2182,17 @@ function TabProntuario({ patientId, patient, clinic }: { patientId: number; pati
       });
       refBlocos.current = novos;
       setTotalDias(novos.length);
-      setFolha(montarFolha(novos));
+      // 07/10 (Valth): o texto de HOJE saía gravado com a data da consulta
+      // ANTERIOR (José Alan, Verônica, Salvina). Causa: ao abrir um paciente
+      // com texto antigo recuperado do rascunho, o autosave (7 s depois) grava
+      // o dia antigo, recarrega a folha SÓ com os registros do servidor — e o
+      // cabeçalho vazio de hoje some. O cursor fica no fim, que agora é o
+      // bloco do dia antigo, e tudo o que ele digita depois cai nele. Por
+      // isso, ao remontar a folha, o cabeçalho de hoje volta (vazio, se for o caso).
+      const paraFolha = novos.some(b => b.dataISO === todayISO)
+        ? novos
+        : [...novos, { id: null, dataISO: todayISO, tipo: tipoLabel(consultType), texto: "" }];
+      setFolha(montarFolha(paraFolha));
       try { localStorage.removeItem(rascunhoKey); } catch {}
 
       setSalvoAgora(true);
