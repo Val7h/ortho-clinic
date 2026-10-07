@@ -9,6 +9,7 @@ if not _secret or "dev-secret" in _secret or len(_secret) < 32:
 
 from database import init_db, migrate_db
 import models.user_settings  # noqa: F401 — garante que UserSession seja registrado antes do mapper
+import models.stored_file  # noqa: F401 — tabela dos arquivos enviados (anexos), criada no startup
 from routers import patients, consultations, dashboard
 from routers.documents import include_all
 from routers.memed import router as memed_router
@@ -92,6 +93,30 @@ attach_public_api_middleware(app)
 app.add_middleware(AuditContextMiddleware)
 
 os.makedirs("uploads/photos", exist_ok=True)
+
+
+# 07/10/2026 (Valth): anexos sumiam a cada publicação porque o disco do Render
+# é apagado. Os arquivos agora também ficam no banco (services/storage.py); esta
+# rota serve do banco primeiro e só então do disco (arquivos antigos/locais).
+@app.get("/uploads/{folder}/{filename}", include_in_schema=False)
+def servir_upload(folder: str, filename: str):
+    from fastapi import HTTPException
+    from fastapi.responses import FileResponse, Response
+    from services.storage import ler_do_banco
+
+    for parte in (folder, filename):
+        if not parte or parte in (".", "..") or "/" in parte or "\\" in parte:
+            raise HTTPException(404, "Arquivo não encontrado")
+    achado = ler_do_banco(f"{folder}/{filename}")
+    if achado:
+        conteudo, mime = achado
+        return Response(content=conteudo, media_type=mime, headers={"Cache-Control": "private, max-age=3600"})
+    caminho = os.path.join("uploads", folder, filename)
+    if os.path.isfile(caminho):
+        return FileResponse(caminho)
+    raise HTTPException(404, "Arquivo não encontrado")
+
+
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 # Rotas do frontend que colidem com handlers da API.
