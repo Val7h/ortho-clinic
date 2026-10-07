@@ -611,7 +611,7 @@ function ofertasParaCids(cids: string[]): { prefix: string; nome: string; opcoes
   return Object.keys(found).map(k => found[k]);
 }
 
-function DiagnosticosCids({ patientId, patient }: { patientId: number; patient: any }) {
+function DiagnosticosCids({ patientId, patient, clinic }: { patientId: number; patient: any; clinic?: any }) {
   const [cids, setCids] = useState<string[]>(Array.isArray(patient?.cids) ? patient.cids : []);
   const [query, setQuery] = useState("");
   const [openList, setOpenList] = useState(false);
@@ -690,7 +690,8 @@ function DiagnosticosCids({ patientId, patient }: { patientId: number; patient: 
   };
 
   const linkFolheto = (leaflet: any) =>
-    `${window.location.origin}/folheto-publico/${leaflet.id}?nome=${encodeURIComponent(patient?.name ?? "")}`;
+    `${window.location.origin}/folheto-publico/${leaflet.id}?nome=${encodeURIComponent(patient?.name ?? "")}` +
+    (clinic ? `&clinica=${encodeURIComponent(clinic.name ?? "")}&cidade=${encodeURIComponent(clinic.city ?? "")}&uf=${encodeURIComponent(clinic.state ?? "")}&fone=${encodeURIComponent(clinic.phone ?? "")}` : "");
 
   const enviarFolheto = async (leaflet: any | null) => {
     if (!pickerFor) return;
@@ -1941,7 +1942,7 @@ function lerFolha(folha: string): BlocoFolha[] {
   return blocos;
 }
 
-function TabProntuario({ patientId, patient }: { patientId: number; patient?: any }) {
+function TabProntuario({ patientId, patient, clinic }: { patientId: number; patient?: any; clinic?: any }) {
   const [folha, setFolha] = useState("");
   const [loading, setLoading] = useState(true);
   const [rascunhoSalvo, setRascunhoSalvo] = useState(false);
@@ -2280,7 +2281,7 @@ function TabProntuario({ patientId, patient }: { patientId: number; patient?: an
   return (
     <div className="flex flex-col h-full">
       <div className="px-5 flex-shrink-0">
-        <DiagnosticosCids patientId={patientId} patient={patient} />
+        <DiagnosticosCids patientId={patientId} patient={patient} clinic={clinic} />
       </div>
 
       <FormularioRespondido patientId={patientId} />
@@ -7069,7 +7070,7 @@ export default function ConsultaDrawer({ entry, onClose, onStatusChange }: Consu
   }, [activeTab]);
 
   const ABAS_DO_ATENDIMENTO: Array<{ key: DrawerTab; render: () => JSX.Element }> = [
-    { key: "anamnese",        render: () => <TabProntuario patientId={entry.patient_id} patient={patient} /> },
+    { key: "anamnese",        render: () => <TabProntuario patientId={entry.patient_id} patient={patient} clinic={clinic} /> },
     { key: "exames",          render: () => <TabExames patientId={entry.patient_id} patient={patient} clinic={clinic} /> },
     { key: "receitas",        render: () => <TabReceita patientId={entry.patient_id} patient={patient} clinic={clinic} /> },
     { key: "encaminhamentos", render: () => <TabEncaminhamentos patient={patient} clinic={clinic} patientId={entry.patient_id} /> },

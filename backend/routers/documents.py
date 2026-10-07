@@ -245,9 +245,19 @@ public_leaflet_router = APIRouter()
 
 
 @public_leaflet_router.get("/folheto-publico/{leaflet_id}", response_class=HTMLResponse)
-def view_leaflet_public(leaflet_id: int, nome: str = "", db: Session = Depends(get_db)):
-    """`?nome=Maria` personaliza o folheto com o nome do paciente (02/08)."""
+def view_leaflet_public(
+    leaflet_id: int, nome: str = "", clinica: str = "", cidade: str = "", uf: str = "", fone: str = "",
+    db: Session = Depends(get_db),
+):
+    """`?nome=Maria` personaliza o folheto com o nome do paciente (02/08).
+
+    07/10 (Valth): o folheto impresso saía SEM o papel timbrado dele e com o
+    CRM da Paraíba até em Caruaru. Agora sai com o mesmo timbrado dos demais
+    documentos (logo, nome, CREMEPE/CRM-PB conforme o estado, clínica e
+    telefone — SEM a cidade no alto) e fecha com cidade/data e assinatura.
+    `?clinica=&cidade=&uf=&fone=` vêm da clínica em que ele está atendendo."""
     import html as _html
+    from datetime import datetime as _dt, timedelta as _td, timezone as _tz
 
     obj = db.query(TreatmentLeaflet).filter(
         TreatmentLeaflet.id == leaflet_id, TreatmentLeaflet.active == True
@@ -258,6 +268,35 @@ def view_leaflet_public(leaflet_id: int, nome: str = "", db: Session = Depends(g
     linha_nome = (
         f'<p class="paciente">Preparado para <b>{nome_seguro}</b></p>' if nome_seguro else ""
     )
+    e = lambda s, n=80: _html.escape((s or "").strip())[:n]
+    clinica_s, cidade_s, uf_s, fone_s = e(clinica), e(cidade), e(uf, 2).upper(), e(fone, 30)
+    # sem clínica informada (link antigo enviado por WhatsApp) mostra os dois registros
+    reg_curto = {"PE": "CREMEPE 16.551", "PB": "CRM-PB 6326"}.get(uf_s, "CREMEPE 16.551 · CRM-PB 6326")
+    registro = f"{reg_curto} · TEOT 15090"
+    linha_clinica = " · ".join(x for x in (clinica_s, fone_s) if x)
+    meses = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto",
+             "setembro", "outubro", "novembro", "dezembro"]
+    hoje = _dt.now(_tz.utc) - _td(hours=3)
+    data_ext = f"{'1º' if hoje.day == 1 else hoje.day} de {meses[hoje.month - 1]} de {hoje.year}"
+    local = f"{cidade_s} – {uf_s}, " if cidade_s else ""
+    logo = (
+        '<svg width="46" height="46" viewBox="0 0 100 100" style="display:block;margin:0 auto">'
+        '<circle cx="50" cy="50" r="44" fill="none" stroke="#142A4D" stroke-width="7"/>'
+        '<circle cx="50" cy="50" r="33" fill="none" stroke="#3FB3A0" stroke-width="6"/>'
+        '<circle cx="50" cy="50" r="23" fill="none" stroke="#142A4D" stroke-width="3.5"/>'
+        '<circle cx="6" cy="50" r="4.5" fill="#142A4D"/><circle cx="94" cy="50" r="4.5" fill="#142A4D"/>'
+        '<path d="M42 30 h16 v12 h12 v16 h-12 v12 h-16 v-12 h-12 v-16 h12 z" fill="#3FB3A0"/></svg>'
+    )
+    timbrado = f"""<div class="timbrado">{logo}
+<p class="wm"><span style="color:#142A4D">ORTHO</span><span style="color:#3FB3A0">MEDIC</span></p>
+<p class="dr">Dr. Valth Menezes Guimarães</p>
+<p class="esp">Ortopedia e Traumatologia</p>
+<p class="reg">{registro}</p>
+{f'<p class="cli">{linha_clinica}</p>' if linha_clinica else ''}
+</div><div class="filete1"></div><div class="filete2"></div>"""
+    fecho = f"""<div class="fecho"><p class="local">{local}{data_ext}.</p>
+<div class="ass"><div class="linha"><p class="n">Dr. Valth Menezes Guimarães</p>
+<p class="t">Ortopedista e Traumatologista</p><p class="r">{reg_curto}</p></div></div></div>"""
     return HTMLResponse(f"""<!doctype html>
 <html lang="pt-BR"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -271,13 +310,33 @@ def view_leaflet_public(leaflet_id: int, nome: str = "", db: Session = Depends(g
   header p.paciente {{ font-size: 14px; color: #1e293b; margin-top: 8px; }}
   .content img, .content embed {{ max-width: 100%; }}
   footer {{ margin-top: 32px; font-size: 12px; color: #94a3b8; text-align: center; }}
+  .timbrado {{ text-align:center; padding-bottom:10px; }}
+  .timbrado p {{ margin:0; }}
+  .timbrado .wm {{ font-size:12px; font-weight:700; letter-spacing:4px; margin:6px 0 8px; }}
+  .timbrado .dr {{ font-size:18px; font-weight:700; letter-spacing:1px; color:#0F2D5E; }}
+  .timbrado .esp {{ font-size:10px; text-transform:uppercase; letter-spacing:3px; color:#555; margin-top:3px; }}
+  .timbrado .reg {{ font-size:9.5px; color:#777; letter-spacing:.5px; margin-top:3px; }}
+  .timbrado .cli {{ font-size:9px; color:#999; margin-top:4px; }}
+  .filete1 {{ border-top:2.5px solid #142A4D; margin-bottom:2px; }}
+  .filete2 {{ border-top:1px solid #3FB3A0; margin-bottom:18px; }}
+  .fecho {{ page-break-inside:avoid; break-inside:avoid; }}
+  .fecho .local {{ font-size:12.5px; text-align:right; font-style:italic; margin:30px 0 44px; }}
+  .fecho .ass {{ display:flex; justify-content:center; }}
+  .fecho .linha {{ text-align:center; width:310px; border-top:1px solid #1a1a1a; padding-top:9px; }}
+  .fecho .linha p {{ margin:0; }}
+  .fecho .n {{ font-size:13.5px; font-weight:700; letter-spacing:.5px; }}
+  .fecho .t {{ font-size:10.5px; color:#444; text-transform:uppercase; letter-spacing:1.5px; margin-top:2px; }}
+  .fecho .r {{ font-size:10.5px; color:#444; letter-spacing:.5px; margin-top:2px; }}
+  @page {{ margin: 14mm; }}
   @media print {{ body {{ background: #fff; }} .wrap {{ padding: 0; max-width: none; }} }}
 </style></head><body><div class="wrap">
+{timbrado}
 <header><h1>{obj.title}</h1>
-<p>Material informativo — Dr. Valth Menezes Guimarães · Ortopedia e Traumatologia · CRM-PB 6326</p>
+<p>Material informativo — Ortopedia e Traumatologia</p>
 {linha_nome}</header>
 <div class="content">{obj.content_html}</div>
 <footer>Este material é educativo e não substitui a avaliação médica individual.</footer>
+{fecho}
 </div></body></html>""")
 
 
