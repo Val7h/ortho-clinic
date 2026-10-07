@@ -2244,6 +2244,22 @@ function TabProntuario({ patientId, patient, clinic }: { patientId: number; pati
     return () => window.removeEventListener("beforeunload", handler);
   }, [folha, loading]);
 
+  // 07/10 (Valth, pelo celular): "falta colocar a data de hoje para escrever
+  // abaixo". Se a folha não tem o cabeçalho de HOJE (apagado sem querer, folha
+  // que abriu vazia, texto antigo recuperado), ao tocar na caixa o cabeçalho
+  // entra no fim e o cursor vai para baixo dele — não depende de ele digitar a
+  // linha com os traços.
+  const garantirCabecalhoDeHoje = () => {
+    if (loading) return;
+    if (lerFolha(folha).some((b) => b.dataISO === todayISO)) return;
+    const cab = cabecalhoFolha(todayISO, tipoLabel(consultType));
+    setFolha((folha.trim() ? folha.trimEnd() + "\n\n" : "") + cab + "\n");
+    setTimeout(() => {
+      const ta = textareaRef.current;
+      if (ta) { ta.setSelectionRange(ta.value.length, ta.value.length); ta.scrollTop = ta.scrollHeight; }
+    }, 40);
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && e.ctrlKey) {
       e.preventDefault();
@@ -2355,6 +2371,7 @@ function TabProntuario({ patientId, patient, clinic }: { patientId: number; pati
             value={folha}
             onChange={(e) => setFolha(e.target.value)}
             onKeyDown={handleKeyDown}
+            onFocus={garantirCabecalhoDeHoje}
           />
         )}
       </div>
