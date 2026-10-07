@@ -2721,7 +2721,7 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
       } else {
         const nova = await prescriptionsApi.create(patientId, {
           date: hojeISO(),
-          prescription_type: gruposMeds?.[0]?.tipo ?? rxType,
+          prescription_type: gruposMeds?.[0]?.tipo ?? gruposTexto?.[0]?.tipo ?? rxType,
           medications: validMeds,
           instructions: freeTextMode ? freeText : instructions,
           // A16: persiste endereço/telefone (obrigatórios em ATB; úteis também na RCE).
@@ -2789,7 +2789,7 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
     } else {
       folhas = [{
         date: hojeISO(), medications: validMeds, instructions: freeTextMode ? freeText : instructions,
-        prescription_type: gruposMeds?.[0]?.tipo ?? rxType, patientAddress: patientAddress || undefined, patientPhone: patientPhone || undefined,
+        prescription_type: gruposMeds?.[0]?.tipo ?? gruposTexto?.[0]?.tipo ?? rxType, patientAddress: patientAddress || undefined, patientPhone: patientPhone || undefined,
       }];
     }
     if (folhas.length > 1) {
@@ -4702,13 +4702,43 @@ function ConsultaPrintCenter({ docs, onRemove, onClose }: {
 
 // ── Tab: Encaminhamentos ───────────────────────────────────────────────────────
 
+// 07/10 (Valth): pedido de fisioterapia/procedimento com DOIS (ou mais) diagnósticos.
+// Cada CID a mais é uma linha com o mesmo buscador; na saída tudo vira "A; B".
+function juntarCids(principal: string, extras: string[]): string {
+  return [principal, ...extras].map((c) => (c || "").trim()).filter(Boolean).join("; ");
+}
+
+function CidExtras({ valores, onChange }: { valores: string[]; onChange: (v: string[]) => void }) {
+  return (
+    <div className="mt-2 space-y-2">
+      {valores.map((c, i) => (
+        <div key={i} className="flex items-center gap-2">
+          <div className="flex-1">
+            <CidSearch value={c} autoFocus={c === "" && i === valores.length - 1} onChange={(v) => onChange(valores.map((x, idx) => (idx === i ? v : x)))} />
+          </div>
+          <button type="button" onClick={() => onChange(valores.filter((_, idx) => idx !== i))}
+            className="p-2 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 flex-shrink-0" title="Remover este CID">
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      ))}
+      <button type="button" onClick={() => onChange([...valores, ""])}
+        className="flex items-center gap-1.5 text-[11px] text-blue-600 hover:text-blue-700 font-semibold">
+        <Plus className="w-3.5 h-3.5" /> Adicionar outro CID
+      </button>
+    </div>
+  );
+}
+
 export function TabEncaminhamentos({ patient, clinic, patientId }: { patient: any; clinic?: any; patientId?: number }) {
   const [refType, setRefType] = useState("fisioterapia");
   const [specialty, setSpecialty] = useState("");
   const [specialtyOther, setSpecialtyOther] = useState("");
   const [physioModality, setPhysioModality] = useState("");
   const [colleagueName, setColleagueName] = useState("");
-  const [cid, setCid] = useState("");
+  const [cidPrincipal, setCid] = useState("");
+  const [cidsExtras, setCidsExtras] = useState<string[]>([]);
+  const cid = juntarCids(cidPrincipal, cidsExtras); // o que vai para texto, impressão e modelo
   const [text, setText] = useState("");
   const [outroDestino, setOutroDestino] = useState("");
   const [saving, setSaving] = useState(false);
@@ -4772,7 +4802,7 @@ export function TabEncaminhamentos({ patient, clinic, patientId }: { patient: an
   const aplicarModelo = (m: any) => {
     if (text.trim() && text.trim() !== m.content && !window.confirm("Substituir o texto atual pelo modelo?")) return;
     setText(m.content);
-    if (m.cid) setCid(m.cid);
+    if (m.cid) { setCid(m.cid); setCidsExtras([]); } // o modelo guarda todos os CIDs juntos ("A; B")
     if (m.ref_type === "fisioterapia" && m.modality) setPhysioModality(m.modality);
     if (m.ref_type === "especialidade" && m.modality) {
       if (SPECIALTY_OPTIONS.includes(m.modality)) setSpecialty(m.modality);
@@ -4803,7 +4833,8 @@ export function TabEncaminhamentos({ patient, clinic, patientId }: { patient: an
         if (p.specialtyOther) setSpecialtyOther(p.specialtyOther);
         if (p.physioModality) setPhysioModality(p.physioModality);
         if (p.colleagueName) setColleagueName(p.colleagueName);
-        if (p.cid) setCid(p.cid);
+        if (p.cidPrincipal ?? p.cid) setCid(p.cidPrincipal ?? p.cid);
+        if (Array.isArray(p.cidsExtras)) setCidsExtras(p.cidsExtras);
         if (p.text) { setText(p.text); toast.success("Rascunho de encaminhamento restaurado"); }
         if (p.outroDestino) setOutroDestino(p.outroDestino);
       }
@@ -4814,11 +4845,11 @@ export function TabEncaminhamentos({ patient, clinic, patientId }: { patient: an
   useEffect(() => {
     const timer = setTimeout(() => {
       if (typeof window !== "undefined") {
-        localStorage.setItem(draftKey, JSON.stringify({ refType, specialty, specialtyOther, physioModality, colleagueName, cid, text, outroDestino }));
+        localStorage.setItem(draftKey, JSON.stringify({ refType, specialty, specialtyOther, physioModality, colleagueName, cidPrincipal, cidsExtras, text, outroDestino }));
       }
     }, 1000);
     return () => clearTimeout(timer);
-  }, [refType, specialty, specialtyOther, physioModality, colleagueName, cid, text, outroDestino, draftKey]);
+  }, [refType, specialty, specialtyOther, physioModality, colleagueName, cidPrincipal, cidsExtras, text, outroDestino, draftKey]);
 
   const autoResizeRef = useCallback(() => {
     const ta = textRef.current;
@@ -5062,7 +5093,8 @@ export function TabEncaminhamentos({ patient, clinic, patientId }: { patient: an
       {/* CID */}
       <div>
         <label className={lbl}>CID-10 / Hipótese Diagnóstica</label>
-        <CidSearch value={cid} onChange={setCid} />
+        <CidSearch value={cidPrincipal} onChange={setCid} />
+        <CidExtras valores={cidsExtras} onChange={setCidsExtras} />
       </div>
 
       {/* Templates de texto rápidos */}
@@ -5156,7 +5188,9 @@ function primeiraLinha(texto: string): string {
 
 function TabProcedimentos({ patientId, patient, clinic }: { patientId: number; patient: any; clinic?: any }) {
   const [text, setText] = useState("");
-  const [cid, setCid] = useState("");
+  const [cidPrincipal, setCid] = useState("");
+  const [cidsExtras, setCidsExtras] = useState<string[]>([]);
+  const cid = juntarCids(cidPrincipal, cidsExtras);
   const [duration, setDuration] = useState("");
   const [saving, setSaving] = useState(false);
   // Repetição do procedimento (11/08). 0 = não repete.
@@ -5223,7 +5257,7 @@ function TabProcedimentos({ patientId, patient, clinic }: { patientId: number; p
       }
       toast.success("Procedimento registrado!");
       setText("");
-      setCid("");
+      setCid(""); setCidsExtras([]);
       setDuration("");
       setActiveTemplateName(null);
       setRepetirMeses(0);
@@ -5320,7 +5354,8 @@ function TabProcedimentos({ patientId, patient, clinic }: { patientId: number; p
       {/* CID */}
       <div>
         <label className={lbl}>CID-10 / Indicação</label>
-        <CidSearch value={cid} onChange={setCid} />
+        <CidSearch value={cidPrincipal} onChange={setCid} />
+        <CidExtras valores={cidsExtras} onChange={setCidsExtras} />
       </div>
 
       {/* Hora + Duração */}
