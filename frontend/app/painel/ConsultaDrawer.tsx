@@ -337,6 +337,9 @@ const ORTHO_MEDICATIONS: OrthoMedPreset[] = [
   { name: "Duloxetina 30mg", dose: "1 cápsula", route: "oral", frequency: "1x/dia", duration: "30 dias", instructions: "Tomar pela manhã — titulação gradual", prescriptionType: "simples" },
   { name: "Vitamina D3 7000UI", dose: "1 comprimido", route: "oral", frequency: "1x/semana", duration: "60 dias", instructions: "Tomar junto com refeição", prescriptionType: "simples" },
   { name: "Prednisona 40mg (desmame 7d)", dose: "1 comprimido (40mg)", route: "oral", frequency: "1x/dia (esquema de desmame — ver orientações)", duration: "7 dias", instructions: "Esquema: Dias 1-3: 2 comprimidos pela manhã / Dias 4-6: 1 comprimido pela manhã / Dia 7: 1/2 comprimido pela manhã. NÃO suspender abruptamente.", prescriptionType: "simples" },
+  // 07/10 (Valth): Coxeto é prescrito por ele em receita de Controle Especial (22/09 e 07/10).
+  // Escrito em texto livre como "COXETO 90MG", saía como receita simples.
+  { name: "Coxeto 90mg", dose: "1 comprimido", route: "oral", frequency: "1x/dia", duration: "14 dias", instructions: "Controle Especial (receita branca, 2 vias)", prescriptionType: "controle_especial" },
   { name: "Etoricoxib 90mg", dose: "1 comprimido", route: "oral", frequency: "1x/dia", duration: "5 dias", instructions: "Tomar após refeição principal — evitar em insuficiência renal", prescriptionType: "simples" },
   { name: "Tizanidina 4mg", dose: "1 comprimido", route: "oral", frequency: "8/8h", duration: "7 dias", instructions: "Pode causar hipotensão — não associar com ciprofloxacino", prescriptionType: "simples" },
   { name: "Clonazepam 0,5mg", dose: "1/2 comprimido", route: "oral", frequency: "1x/dia (à noite)", duration: "30 dias", instructions: "Usar à noite para dor neuropática — Notificação B2 (receita amarela)", prescriptionType: "controle_especial" },
