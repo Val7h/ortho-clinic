@@ -1806,38 +1806,44 @@ function FormularioRespondido({ patientId }: { patientId: number }) {
   const [dados, setDados] = useState<any[] | null>(null);
   const [carregando, setCarregando] = useState(false);
 
-  useEffect(() => { setAberto(false); setDados(null); }, [patientId]);
+  // 08/10 (Valth): o botão ficava verde "respondido" em todos, e ao abrir
+  // não havia nada. Agora carrega logo e só fica verde se houver resposta.
+  useEffect(() => {
+    let vivo = true;
+    setAberto(false); setDados(null); setCarregando(true);
+    anamnesisApi.list(patientId)
+      .then((d: any) => { if (vivo) setDados(d || []); })
+      .catch(() => { if (vivo) setDados(null); })
+      .finally(() => { if (vivo) setCarregando(false); });
+    return () => { vivo = false; };
+  }, [patientId]);
 
-  const abrir = async () => {
-    if (aberto) { setAberto(false); return; }
-    setAberto(true);
-    if (dados) return;
-    setCarregando(true);
-    try {
-      setDados(await anamnesisApi.list(patientId));
-    } catch (e: any) {
-      toast.error(msgErro(e, "Não consegui carregar o formulário"));
-      setAberto(false);
-    } finally {
-      setCarregando(false);
-    }
-  };
+  const abrir = () => setAberto((v) => !v);
 
   const respondido = (dados || []).filter((a: any) => a?.responses && Object.keys(a.responses).length);
+  const temResposta = respondido.length > 0;
+  const cor = carregando || dados === null
+    ? "border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 text-slate-600 dark:text-slate-300"
+    : temResposta
+      ? "border-teal-300 dark:border-teal-800 bg-teal-50 dark:bg-teal-900/20 text-teal-800 dark:text-teal-300 hover:bg-teal-100 dark:hover:bg-teal-900/40"
+      : "border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/40";
+  const rotulo = carregando ? "Formulário de pré-consulta…"
+    : dados === null ? "Formulário de pré-consulta (não carregou)"
+    : temResposta ? "Formulário respondido pelo paciente"
+    : "Formulário NÃO respondido pelo paciente";
 
   return (
     <div className="px-5 pb-2 flex-shrink-0">
       <button
         type="button"
         onClick={abrir}
-        className="w-full flex items-center justify-between gap-2 rounded-lg border border-teal-300 dark:border-teal-800 bg-teal-50 dark:bg-teal-900/20 px-3 py-2 hover:bg-teal-100 dark:hover:bg-teal-900/40 transition-colors"
+        className={`w-full flex items-center justify-between gap-2 rounded-lg border px-3 py-2 transition-colors ${cor}`}
       >
-        <span className="flex items-center gap-2 text-[13px] font-semibold text-teal-800 dark:text-teal-300">
+        <span className="flex items-center gap-2 text-[13px] font-semibold">
           <ClipboardCheck className="w-4 h-4" />
-          Formulário respondido pelo paciente
+          {rotulo}
         </span>
-        {aberto ? <ChevronUp className="w-4 h-4 text-teal-700 dark:text-teal-400" />
-                : <ChevronDown className="w-4 h-4 text-teal-700 dark:text-teal-400" />}
+        {aberto ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
       </button>
 
       {aberto && (
