@@ -699,7 +699,9 @@ function DiagnosticosCids({ patientId, patient, clinic }: { patientId: number; p
     setSending(true);
     try {
       const treat = pickerFor.opcoes.join(" / ");
-      const text = leaflet
+      const text = leaflet && !treat
+        ? `Olá, {nome}! Aqui é do consultório do {doctor}. O doutor separou este material informativo para você ler com calma:\n${linkFolheto(leaflet)}\n\nQualquer dúvida, é só responder por aqui.`
+        : leaflet
         ? `Olá, {nome}! Aqui é do consultório do {doctor}. Na sua consulta conversamos sobre opções de tratamento (${treat}). O doutor separou este material informativo para você ler com calma:\n${linkFolheto(leaflet)}\n\nQualquer dúvida, é só responder por aqui.`
         : `Olá, {nome}! Aqui é do consultório do {doctor}. Na sua consulta conversamos sobre opções de tratamento (${treat}). Se quiser conversar melhor ou agendar uma avaliação, é só responder por aqui.`;
       await api.post("/whatsapp/send", { patient_id: patientId, message_type: "folheto", custom_text: text });
@@ -725,9 +727,20 @@ function DiagnosticosCids({ patientId, patient, clinic }: { patientId: number; p
     <div className="mb-4 space-y-2">
       {/* Campo fixo de CIDs */}
       <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5">
-        <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5">
-          Diagnósticos (CID)
-        </p>
+        <div className="flex items-center justify-between gap-2 mb-1.5">
+          <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+            Diagnósticos (CID)
+          </p>
+          {/* 07/10 (Valth): folheto sempre disponível, sem depender de o CID ter oferta */}
+          <button
+            type="button"
+            onClick={() => abrirPicker({ prefix: "", nome: "todos os folhetos", opcoes: [] })}
+            className="px-2.5 py-1 rounded-full border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 text-[11px] font-bold hover:bg-blue-50 dark:hover:bg-blue-900/30"
+            title="Abrir a lista de folhetos para imprimir ou enviar por WhatsApp"
+          >
+            📄 Folhetos
+          </button>
+        </div>
         <div className="flex flex-wrap items-center gap-1.5">
           {cids.map((c, i) => (
             <span key={c} className="inline-flex items-center gap-1 bg-blue-50 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 rounded-full px-2.5 py-0.5 text-xs font-semibold">
@@ -839,6 +852,7 @@ function DiagnosticosCids({ patientId, patient, clinic }: { patientId: number; p
                 </div>
               ))}
             </div>
+            {pickerFor.opcoes.length > 0 && (
             <div className="px-4 pb-4 pt-2 border-t border-slate-100 dark:border-slate-800">
               <button
                 disabled={sending}
@@ -848,6 +862,7 @@ function DiagnosticosCids({ patientId, patient, clinic }: { patientId: number; p
                 Enviar só a mensagem, sem folheto
               </button>
             </div>
+            )}
           </div>
         </div>
       )}
