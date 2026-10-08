@@ -4623,9 +4623,10 @@ function OrthoMedicLogo({ size = 46 }: { size?: number }) {
   );
 }
 
-function dataExtensoHoje(): string {
+// 08/10 (Valth): laudo salvo com data futura (ex.: 15/10) sai com a data DELE na reimpressão.
+function dataExtensoHoje(dataISO?: string): string {
   const MESES = ["janeiro","fevereiro","março","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"];
-  const h = new Date();
+  const h = dataISO && /^\d{4}-\d{2}-\d{2}/.test(dataISO) ? new Date(dataISO.slice(0, 10) + "T12:00:00") : new Date();
   return `${h.getDate() === 1 ? "1º" : h.getDate()} de ${MESES[h.getMonth()]} de ${h.getFullYear()}`;
 }
 
@@ -4659,10 +4660,10 @@ function TimbradoOficial({ clinic }: { clinic?: any }) {
 }
 
 // Local/data por extenso + bloco de assinatura (nunca quebra de página).
-function FechoOficial({ clinic }: { clinic?: any }) {
+function FechoOficial({ clinic, dataISO }: { clinic?: any; dataISO?: string }) {
   return (
     <div style={{ pageBreakInside: "avoid", breakInside: "avoid" } as any}>
-      <p style={{ fontFamily: DOC_SERIF, fontSize: "12.5px", color: "#1a1a1a", margin: "30px 0 44px", textAlign: "right", fontStyle: "italic" }}>{cidadeUf(clinic)}, {dataExtensoHoje()}.</p>
+      <p style={{ fontFamily: DOC_SERIF, fontSize: "12.5px", color: "#1a1a1a", margin: "30px 0 44px", textAlign: "right", fontStyle: "italic" }}>{cidadeUf(clinic)}, {dataExtensoHoje(dataISO)}.</p>
       <div style={{ display: "flex", justifyContent: "center" }}>
         <div style={{ textAlign: "center", width: "310px" }}>
           <div style={{ borderTop: "1px solid #1a1a1a", paddingTop: "9px" }}>
@@ -5048,7 +5049,7 @@ export function TabEncaminhamentos({ patient, clinic, patientId }: { patient: an
         <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.7, fontSize: "13px", minHeight: "80px" }}>
           {reimprimir.content}
         </div>
-        <FechoOficial clinic={clinic} />
+        <FechoOficial clinic={clinic} dataISO={reimprimir.date} />
       </div>
     );
   }, [reimprimir, patient, clinic]);
@@ -6256,7 +6257,7 @@ export function TabLaudos({ patient, clinic }: { patient: any; clinic?: any }) {
         <div style={{ whiteSpace: "pre-wrap", textAlign: "justify", lineHeight: 1.85, fontSize: "12.5px", marginBottom: "20px", textJustify: "inter-word" as any }}>
           {reimprimir.content}
         </div>
-        <FechoOficial clinic={clinic} />
+        <FechoOficial clinic={clinic} dataISO={reimprimir.date} />
       </div>
     );
   }, [reimprimir, patient, clinic]);
