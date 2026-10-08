@@ -3739,6 +3739,9 @@ function TabExames({ patientId, patient, clinic }: { patientId: number; patient:
   // Modelos de solicitação
   const [examTemplates, setExamTemplates] = useState<ExamTemplate[]>(() => loadExamTemplates());
   const [confirmDeleteExamTemplateId, setConfirmDeleteExamTemplateId] = useState<string | null>(null);
+  // 08/10 (Valth): muitos modelos salvos — busca por nome ou conteúdo, sem acento.
+  const [buscaModeloExame, setBuscaModeloExame] = useState("");
+  const [mostrarRapidosExame, setMostrarRapidosExame] = useState(false);
 
   // Controle de fonte
   const [fontSize, setFontSize] = useState<12 | 14 | 16>(() => loadExamFontSize());
@@ -4074,9 +4077,15 @@ function TabExames({ patientId, patient, clinic }: { patientId: number; patient:
 
       {/* ── Seção: Modelos ── */}
       <div className="px-5 pt-1 pb-3 border-b border-slate-100 dark:border-slate-800">
-        <p className={sectionTitle + " mb-2"}>Modelos Rápidos</p>
-        {/* Built-in quick templates */}
-        <div className="flex flex-wrap gap-1 mb-2">
+        <p className={sectionTitle + " mb-2"}>
+          Meus modelos salvos
+          <button type="button" onClick={() => setMostrarRapidosExame((v) => !v)}
+            className="ml-2 normal-case font-normal text-[10px] text-slate-400 hover:text-slate-600 underline">
+            {mostrarRapidosExame ? "esconder modelos rápidos" : "mostrar modelos rápidos"}
+          </button>
+        </p>
+        {/* Built-in quick templates — 08/10: Valth não usa; ficam escondidos */}
+        <div className={`flex flex-wrap gap-1 mb-2 ${mostrarRapidosExame ? "" : "hidden"}`}>
           {EXAM_QUICK_TEMPLATES.map((tpl) => (
             <button
               key={tpl.name}
@@ -4097,8 +4106,27 @@ function TabExames({ patientId, patient, clinic }: { patientId: number; patient:
         </div>
         {/* User saved templates */}
         {examTemplates.length > 0 && (
+          <div className="mb-1.5 flex items-center gap-2">
+            <input
+              type="search"
+              value={buscaModeloExame}
+              onChange={(e) => setBuscaModeloExame(e.target.value)}
+              placeholder={`🔍 Buscar nos meus ${examTemplates.length} modelos salvos (ex.: joelho, RNM, ombro)`}
+              className="flex-1 text-xs px-2.5 py-1.5 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100"
+            />
+          </div>
+        )}
+        {examTemplates.length > 0 && (() => {
+          const semAcento = (s: string) => (s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+          const palavras = semAcento(buscaModeloExame).split(/\s+/).filter(Boolean);
+          const achados = examTemplates.filter((tpl) => {
+            const alvo = semAcento(tpl.name + " " + (tpl.content || ""));
+            return palavras.every((p) => alvo.includes(p));
+          });
+          if (achados.length === 0) return <p className="text-[11px] text-slate-400">Nenhum modelo salvo com “{buscaModeloExame}”.</p>;
+          return (
           <div className="flex flex-wrap gap-1.5">
-            {examTemplates.map((tpl) => (
+            {achados.map((tpl) => (
               <div key={tpl.id} className="flex items-center gap-0.5">
                 {confirmDeleteExamTemplateId === tpl.id ? (
                   <div className="flex items-center gap-1 border border-red-300 rounded px-2 py-0.5">
@@ -4129,7 +4157,8 @@ function TabExames({ patientId, patient, clinic }: { patientId: number; patient:
               </div>
             ))}
           </div>
-        )}
+          );
+        })()}
       </div>
 
       {/* ── Seção: Solicitação ── */}
