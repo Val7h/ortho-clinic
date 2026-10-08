@@ -182,14 +182,23 @@ def create_patient(
     current_user: User = Depends(get_current_user),
 ):
     _arrumar_telefones(data)
+    # 08/10 (Sandra, CTO): "NARILUCE DA SILVA  BEZERRA" (letra trocada + espaço
+    # duplo) não aparecia ao buscar "Mariluce"; no 2º cadastro só vinha "CPF já
+    # cadastrado", sem dizer em nome de quem. Espaço duplo some e o aviso nomeia.
+    if data.name:
+        data.name = re.sub(r"\s+", " ", data.name).strip()
     _exigir_cadastro_completo(data, current_user)
     if data.cpf:
-        existing = db.query(Patient).filter(
-            Patient.cpf == data.cpf,
-            Patient.organization_id == current_user.organization_id,
-        ).first()
+        digitos = re.sub(r"\D", "", data.cpf)
+        existing = next((p for p in _org_filter(
+            db.query(Patient).filter(Patient.cpf.isnot(None)), current_user,
+        ).all() if re.sub(r"\D", "", p.cpf or "") == digitos), None) if digitos else None
         if existing:
-            raise HTTPException(400, "CPF já cadastrado")
+            raise HTTPException(
+                400,
+                f"CPF já cadastrado: {existing.name} (código {existing.id}). "
+                "Busque por esse nome — se estiver escrito errado, corrija o nome nesse cadastro.",
+            )
 
     # 02/10 (Valth): o bot do WhatsApp cria o paciente só com NOME + TELEFONE
     # ("confirmação de presença"). No balcão a secretária buscava "QUITERIA",
