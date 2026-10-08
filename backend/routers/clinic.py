@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import or_
+from sqlalchemy import or_, func
 from typing import List, Optional
 from datetime import date, datetime, timedelta
 from datetime import date as _date  # alias p/ anotações em classes com campo "date"
@@ -922,14 +922,12 @@ def search_patients_for_appointment(
 ):
     """Autocomplete de pacientes para o formulário de agendamento."""
     term = f"%{q}%"
-    query = db.query(Patient).filter(
-        Patient.active == True,
-        or_(
-            Patient.name.ilike(term),
-            Patient.cpf.ilike(term),
-            Patient.phone.ilike(term),
-        )
-    )
+    conds = [Patient.name.ilike(term), Patient.cpf.ilike(term), Patient.phone.ilike(term)]
+    # 08/10 (Valth): CPF com ou sem pontos — o banco guarda dos dois jeitos.
+    dig = "".join(ch for ch in q if ch.isdigit())
+    if len(dig) >= 6 and db.bind is not None and db.bind.dialect.name == "postgresql":
+        conds.append(func.regexp_replace(Patient.cpf, r"\D", "", "g").like(f"%{dig}%"))
+    query = db.query(Patient).filter(Patient.active == True, or_(*conds))
     if current_user.role != "superadmin":
         query = query.filter(Patient.organization_id == current_user.organization_id)
     patients = query.order_by(Patient.name).limit(limit).all()

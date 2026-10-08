@@ -75,6 +75,13 @@ def list_patients(
             sem_acento = _normalize_name(search)
             if sem_acento:
                 conds.append(func.translate(Patient.name, com, sem).ilike(f"%{sem_acento}%"))
+                # 08/10: nome salvo com espaço duplo não casava com a busca do nome inteiro.
+                conds.append(func.regexp_replace(func.translate(Patient.name, com, sem), r"\s+", " ", "g")
+                             .ilike("%" + re.sub(r"\s+", " ", sem_acento).strip() + "%"))
+            # 08/10 (Valth): buscar pelo CPF com ou sem pontos — o banco guarda dos dois jeitos.
+            dig = re.sub(r"\D", "", search)
+            if len(dig) >= 6:
+                conds.append(func.regexp_replace(Patient.cpf, r"\D", "", "g").like(f"%{dig}%"))
         # Telefone digitado com máscara/DDD/+55: compara pelos últimos 8 dígitos.
         fone = _ultimos8(search)
         if fone and len(re.sub(r"\D", "", search)) >= 8:
