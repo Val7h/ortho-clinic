@@ -197,6 +197,9 @@ def _buscar_ou_criar_paciente(db: Session, data: PreConsultaPayload) -> tuple[Pa
     org_id = _org_da_unidade(db, data.unidade)
 
     def no_escopo(q):
+        # 09/10 (Valth): cadastro unificado (active=False) não recebe mais
+        # marcação — a consulta da Fatima caiu no cadastro antigo dela.
+        q = q.filter(Patient.active == True)
         return q.filter(Patient.organization_id == org_id) if org_id else q
 
     if data.cpf:
@@ -263,6 +266,9 @@ def _buscar_paciente_existente(db: Session, data: "PreConsultaPayload") -> Optio
     org_id = _org_da_unidade(db, data.unidade)
 
     def no_escopo(q):
+        # 09/10 (Valth): cadastro unificado (active=False) não recebe mais
+        # marcação — a consulta da Fatima caiu no cadastro antigo dela.
+        q = q.filter(Patient.active == True)
         return q.filter(Patient.organization_id == org_id) if org_id else q
 
     if data.cpf:
