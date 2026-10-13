@@ -106,11 +106,27 @@ def create_prescription(
     except (ValueError, TypeError):
         rx_date = today_br()
 
+    # 13/10 (Valth): a mesma receita aparecia gravada 2x com segundos de
+    # diferença (Julio, Fatima, José Francisco). Igual (tipo + texto +
+    # remédios) para o mesmo paciente nos últimos 3 minutos = devolve a que já existe.
+    from datetime import timedelta, timezone
+    meds_novos = [m.model_dump() for m in data.medications]
+    limite = datetime.now(timezone.utc) - timedelta(minutes=3)
+    for antiga in (
+        db.query(PatientRx)
+        .filter(PatientRx.patient_id == patient_id, PatientRx.date == rx_date, PatientRx.created_at >= limite)
+        .all()
+    ):
+        if ((antiga.instructions or "").strip() == (data.instructions or "").strip()
+                and (antiga.prescription_type or "simples") == (data.prescription_type or "simples")
+                and (antiga.medications or []) == meds_novos):
+            return antiga
+
     rx = PatientRx(
         patient_id=patient_id,
         date=rx_date,
         prescription_type=data.prescription_type or "simples",
-        medications=[m.model_dump() for m in data.medications],
+        medications=meds_novos,
         instructions=data.instructions or "",
         memed_id=data.memed_id,
         # A16-back: persistir dados exigidos na receita de antimicrobiano.

@@ -355,10 +355,11 @@ const ORTHO_MEDICATIONS: OrthoMedPreset[] = [
 // sozinho que um remédio novo é controlado, só reconhece os apelidos dos
 // que já são.
 const ALIASES_CONTROLADOS: { termos: string[]; presetName: string }[] = [
-  { termos: ["tramadol", "tramadon", "tramal", "sylador"], presetName: "Tramadol 50mg" },
-  { termos: ["codeina", "codeína", "codein"], presetName: "Codeína 30mg" },
+  // 13/10 (Valth): "TROL PAR" (tramadol + paracetamol) saiu como receita simples.
+  { termos: ["tramadol", "tramadon", "tramal", "sylador", "trol par", "trolpar", "ultracet", "paratram"], presetName: "Tramadol 50mg" },
+  { termos: ["codeina", "codeína", "codein", "tylex"], presetName: "Codeína 30mg" },
   { termos: ["clonazepam", "rivotril"], presetName: "Clonazepam 0,5mg" },
-  { termos: ["pregabalina", "lyrica", "prebictal"], presetName: "Pregabalina 75mg" },
+  { termos: ["pregabalina", "lyrica", "prebictal", "insit", "dorene"], presetName: "Pregabalina 75mg" },
 ];
 
 const normalizarTexto = (t: string) => (t || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
