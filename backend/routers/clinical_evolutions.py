@@ -61,6 +61,15 @@ def create_evolution(
 ):
     if not data.content.strip():
         raise HTTPException(status_code=422, detail="Conteúdo não pode ser vazio")
+    # 14/10 (Valth): dois salvamentos simultâneos gravaram a mesma anamnese 2x
+    # (Cícero e Maria Aparecida). Mesmo paciente + mesmo dia + mesmo texto = devolve o que já existe.
+    ja = db.query(ClinicalEvolution).filter(
+        ClinicalEvolution.patient_id == patient_id,
+        ClinicalEvolution.entry_date == data.entry_date,
+        ClinicalEvolution.content == data.content.strip(),
+    ).first()
+    if ja:
+        return ja
     ev = ClinicalEvolution(
         patient_id=patient_id,
         entry_date=data.entry_date,

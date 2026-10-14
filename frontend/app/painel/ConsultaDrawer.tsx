@@ -2156,7 +2156,17 @@ function TabProntuario({ patientId, patient, clinic }: { patientId: number; pati
   // sempre que o médico para de digitar — silenciosa (sem toast de sucesso
   // a cada letra) e sem mexer no cursor. A partir de agora, mesmo que ele
   // nunca clique em nada, o que foi digitado já está no banco.
+  // 14/10: dois salvamentos ao mesmo tempo (autosave + sair do campo) criavam
+  // o registro do dia DUAS vezes. Agora um espera o outro terminar.
+  const salvandoAgoraRef = useRef<Promise<void> | null>(null);
   const salvarFolha = useCallback(async (opts?: { silencioso?: boolean }) => {
+    while (salvandoAgoraRef.current) { try { await salvandoAgoraRef.current; } catch {} }
+    let liberar: () => void = () => {};
+    salvandoAgoraRef.current = new Promise<void>((r) => { liberar = r; });
+    try { await salvarFolhaDeVerdade(opts); } finally { salvandoAgoraRef.current = null; liberar(); }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [folha, todayISO, consultType, patientId, rascunhoKey]);
+  const salvarFolhaDeVerdade = async (opts?: { silencioso?: boolean }) => {
     const silencioso = !!opts?.silencioso;
     const blocos = lerFolha(folha);
     if (!blocos.length) {
@@ -2244,7 +2254,7 @@ function TabProntuario({ patientId, patient, clinic }: { patientId: number; pati
     } finally {
       if (!silencioso) setSaving(false);
     }
-  }, [folha, todayISO, consultType, patientId, rascunhoKey]);
+  };
 
   const handleSave = () => salvarFolha({ silencioso: false });
 
