@@ -6694,6 +6694,21 @@ function TabDocumentos({ patientId, patient }: { patientId: number; patient?: an
   // descesse na rolagem" — a aba nova não abria no computador dele. Agora o
   // documento abre por cima da tela, sem depender de aba nova.
   const [aberto, setAberto] = useState<{ url: string; titulo: string } | null>(null);
+  // 14/10 (Valth): o "voltar" do navegador, com um documento aberto, saía do
+  // atendimento e caía em outra página. Agora abrir o documento marca um passo
+  // no histórico: voltar só fecha o documento e deixa tudo onde estava.
+  const docAberto = !!aberto;
+  useEffect(() => {
+    if (!docAberto) return;
+    window.history.pushState({ orthoDoc: 1 }, "");
+    const aoVoltar = () => setAberto(null);
+    window.addEventListener("popstate", aoVoltar);
+    return () => window.removeEventListener("popstate", aoVoltar);
+  }, [docAberto]);
+  const fecharDoc = () => {
+    if ((window.history.state as any)?.orthoDoc) window.history.back(); // o popstate fecha
+    else setAberto(null);
+  };
   // 14/10 (Valth): enviar o pacote do pedido de procedimento pelo WhatsApp,
   // escolhendo o instrumentador (Digo, Weslley...) conforme o procedimento.
   const [marcados, setMarcados] = useState<number[]>([]);
@@ -6936,12 +6951,12 @@ function TabDocumentos({ patientId, patient }: { patientId: number; patient?: an
         document.body
       )}
       {aberto && typeof document !== "undefined" && createPortal(
-        <div className="fixed inset-0 z-[200] bg-black/70 flex flex-col p-2 sm:p-6" onClick={() => setAberto(null)}>
+        <div className="fixed inset-0 z-[200] bg-black/70 flex flex-col p-2 sm:p-6" onClick={fecharDoc}>
           <div className="flex items-center justify-between gap-2 bg-white dark:bg-slate-900 rounded-t-lg px-3 py-2" onClick={(e) => e.stopPropagation()}>
             <p className="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate">{aberto.titulo}</p>
             <div className="flex items-center gap-2 shrink-0">
               <a href={aberto.url} target="_blank" rel="noopener noreferrer" className="text-xs text-brand-600 underline">abrir em outra aba</a>
-              <button type="button" onClick={() => setAberto(null)} className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800" title="Fechar"><X className="w-5 h-5" /></button>
+              <button type="button" onClick={fecharDoc} className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800" title="Fechar"><X className="w-5 h-5" /></button>
             </div>
           </div>
           {/\.(png|jpe?g|webp|gif)(\?|$)/i.test(aberto.url) ? (
