@@ -34,8 +34,10 @@ def buscar(q: str = Query(..., min_length=3), db: Session = Depends(get_db), cur
     """Procura por marca ou princípio ativo (até 40 apresentações)."""
     termo = f"%{q.strip().lower()}%"
     rows = db.execute(text(
-        "select produto, substancia, apresentacao, laboratorio, tipo_receita, notificacao, lista344, pmc_pe "
+        "select produto, substancia, apresentacao, laboratorio, tipo_receita, notificacao, lista344, pmc_pe, classe "
         "from medicamentos where lower(produto) like :t or lower(substancia) like :t "
-        "order by produto, apresentacao limit 40"), {"t": termo}).fetchall()
+        # marca que COMEÇA com o que ele digitou vem primeiro (como na Memed)
+        "order by (lower(produto) like :ini) desc, produto, apresentacao limit 60"),
+        {"t": termo, "ini": f"{q.strip().lower()}%"}).fetchall()
     return [dict(zip(["produto", "substancia", "apresentacao", "laboratorio", "tipo_receita",
-                      "notificacao", "lista344", "preco_maximo_pe"], r)) for r in rows]
+                      "notificacao", "lista344", "preco_maximo_pe", "classe"], r)) for r in rows]

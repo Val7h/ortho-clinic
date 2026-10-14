@@ -1,5 +1,6 @@
 "use client";
 import { controladoCitado, exigeNotificacao, carregarTermosDaBase } from "@/lib/medicamentosOrtopedia";
+import TabPrescricao, { type JobImpressao } from "./TabPrescricao";
 
 import { useEffect, useState, useRef, useCallback, useMemo, createContext, useContext } from "react";
 import { createPortal } from "react-dom";
@@ -46,7 +47,7 @@ interface ConsultaDrawerProps {
   onStatusChange: (entryId: number, status: QueueStatus) => void;
 }
 
-type DrawerTab = "anamnese" | "exames" | "receitas" | "encaminhamentos" | "procedimentos" | "atestados" | "laudos" | "fotos" | "documentos";
+type DrawerTab = "anamnese" | "exames" | "prescricao" | "receitas" | "encaminhamentos" | "procedimentos" | "atestados" | "laudos" | "fotos" | "documentos";
 
 // ── Coletor de documentos da consulta ────────────────────────────────────────
 // Cada modal de impressão (PrintDocModal / PrintModal) registra seu documento
@@ -2453,7 +2454,7 @@ const RX_TYPE_OPTIONS: { value: PrescriptionType; label: string; activeClass: st
   { value: "antimicrobiano",    label: "Antimicrobiano (ATB)",       activeClass: "border-blue-600 bg-blue-600 text-white" },
 ];
 
-function TabReceita({ patientId, patient, clinic }: { patientId: number; patient: any; clinic?: any }) {
+function TabReceita({ patientId, patient, clinic, rxExterna }: { patientId: number; patient: any; clinic?: any; rxExterna?: { seq: number; jobs: JobImpressao[] } | null }) {
   const [rxType, setRxType] = useState<PrescriptionType>("simples");
   // 11/08: a lista de modelos cresceu e achar o certo virou rolagem. Busca por
   // nome e pelo conteúdo (medicamento), que é como ele lembra do modelo.
@@ -2540,6 +2541,17 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
 
   // Track patient id to avoid overwriting manually edited address on re-render
   const patientIdRef = useRef<number | null>(null);
+
+  // 13/10: a aba Prescrição (estilo Memed) salva e manda imprimir aqui, no mesmo papel.
+  useEffect(() => {
+    if (!rxExterna || !rxExterna.jobs.length) return;
+    prescriptionsApi.list(patientId).then(setPrescriptions).catch(() => {});
+    setPrintRxCollectorId(null);
+    const [primeira, ...resto] = rxExterna.jobs;
+    setPrintRx(primeira as any);
+    setPrintRxQueue(resto as any);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rxExterna?.seq]);
 
   useEffect(() => {
     prescriptionsApi.list(patientId)
@@ -7150,6 +7162,7 @@ function DrawerCrono({ entry }: { entry: WaitingRoomEntry }) {
 const ultimaAbaPorPaciente = new Map<number, DrawerTab>();
 
 export default function ConsultaDrawer({ entry, onClose, onStatusChange }: ConsultaDrawerProps) {
+  const [rxExterna, setRxExterna] = useState<{ seq: number; jobs: JobImpressao[] } | null>(null);
   // 13/10: base oficial de medicamentos — reconhece qualquer marca controlada.
   useEffect(() => { carregarTermosDaBase(medicamentosApi.termos); }, []);
   const [activeTab, setActiveTabRaw] = useState<DrawerTab>(() => ultimaAbaPorPaciente.get(entry.patient_id) ?? "anamnese");
@@ -7169,7 +7182,8 @@ export default function ConsultaDrawer({ entry, onClose, onStatusChange }: Consu
   const ABAS_DO_ATENDIMENTO: Array<{ key: DrawerTab; render: () => JSX.Element }> = [
     { key: "anamnese",        render: () => <TabProntuario patientId={entry.patient_id} patient={patient} clinic={clinic} /> },
     { key: "exames",          render: () => <TabExames patientId={entry.patient_id} patient={patient} clinic={clinic} /> },
-    { key: "receitas",        render: () => <TabReceita patientId={entry.patient_id} patient={patient} clinic={clinic} /> },
+    { key: "prescricao",      render: () => <TabPrescricao patientId={entry.patient_id} patient={patient} onImprimir={(jobs) => { setRxExterna((v) => ({ seq: (v?.seq || 0) + 1, jobs })); setActiveTab("receitas"); }} /> },
+    { key: "receitas",        render: () => <TabReceita patientId={entry.patient_id} patient={patient} clinic={clinic} rxExterna={rxExterna} /> },
     { key: "encaminhamentos", render: () => <TabEncaminhamentos patient={patient} clinic={clinic} patientId={entry.patient_id} /> },
     { key: "procedimentos",   render: () => <TabProcedimentos patientId={entry.patient_id} patient={patient} clinic={clinic} /> },
     { key: "atestados",       render: () => <TabAtestados patient={patient} clinic={clinic} /> },
@@ -7319,6 +7333,7 @@ export default function ConsultaDrawer({ entry, onClose, onStatusChange }: Consu
   const tabs: { key: DrawerTab; label: string; icon: React.ReactNode }[] = [
     { key: "anamnese",        label: "Anamnese",         icon: <ClipboardList className="w-3.5 h-3.5" /> },
     { key: "exames",          label: "Exames",            icon: <FlaskConical className="w-3.5 h-3.5" /> },
+    { key: "prescricao",      label: "Prescrição",        icon: <Pill className="w-3.5 h-3.5" /> },
     { key: "receitas",        label: "Receitas",          icon: <FileText className="w-3.5 h-3.5" /> },
     { key: "encaminhamentos", label: "Encaminh.",         icon: <Send className="w-3.5 h-3.5" /> },
     { key: "procedimentos",   label: "Procedimentos",     icon: <ClipboardCheck className="w-3.5 h-3.5" /> },
