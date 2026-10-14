@@ -2494,9 +2494,40 @@ function TabReceita({ patientId, patient, clinic, rxExterna }: { patientId: numb
   // fila guarda as folhas seguintes; ao fechar a que está na tela, a próxima
   // entra sozinha.
   const [printRxQueue, setPrintRxQueue] = useState<PrintRxJob[]>([]);
+  // 14/10 (Valth): depois de IMPRIMIR, a receita ficava na caixa e a próxima
+  // tinha de ser apagada à mão. Agora, impressa a última folha e fechada a
+  // pré-visualização, a caixa esvazia — desde que a receita já esteja salva
+  // no prontuário (impressa sem salvar, continua na tela, com aviso).
+  const impressoRef = useRef(false);
+  useEffect(() => {
+    if (!printRx) return;
+    const marcar = () => { impressoRef.current = true; };
+    window.addEventListener("afterprint", marcar);
+    return () => window.removeEventListener("afterprint", marcar);
+  }, [printRx]);
+  const limparDepoisDeImprimir = () => {
+    const doEditor = !!printRxCollectorId;
+    const imprimiu = impressoRef.current;
+    impressoRef.current = false;
+    if (!doEditor || !imprimiu) return;
+    const hojeStr = hojeISO();
+    const meds = medications.filter((m) => m.name.trim());
+    if (!freeText.trim() && meds.length === 0) return;
+    const doDia = prescriptions.filter((rx) => (rx.date || "").slice(0, 10) === hojeStr);
+    const salva = freeTextMode
+      ? doDia.some((rx) => freeText.includes((rx.instructions || "").trim()) && (rx.instructions || "").trim())
+      : doDia.some((rx) => (rx.medications || []).some((m: any) => meds.some((x) => x.name.trim() === (m.name || "").trim())));
+    if (!salva) {
+      toast("A receita foi impressa mas NÃO está salva no prontuário — clique em Salvar Receita.", { icon: "⚠️", duration: 8000 });
+      return;
+    }
+    setFreeText(""); setMedications([emptyMed()]); setInstructions("");
+    try { localStorage.removeItem(rxDraftKey); } catch {}
+    toast.success("Receita impressa — caixa liberada para a próxima.");
+  };
   const fecharPrintRx = () => {
     setPrintRxQueue((fila) => {
-      if (fila.length === 0) { setPrintRx(null); return fila; }
+      if (fila.length === 0) { setPrintRx(null); setTimeout(limparDepoisDeImprimir, 0); return fila; }
       const [proxima, ...resto] = fila;
       setPrintRx(proxima);
       return resto;
