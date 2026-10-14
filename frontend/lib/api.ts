@@ -212,6 +212,12 @@ export const consultationsApi = {
 };
 
 // ── Receitas ──────────────────────────────────────────────────────────────
+// 13/10/2026: base oficial de medicamentos (CMED/Anvisa x Portaria 344).
+export const medicamentosApi = {
+  termos: () => api.get("/medicamentos/termos").then((r) => r.data as any[]),
+  busca: (q: string) => api.get("/medicamentos/busca", { params: { q } }).then((r) => r.data as any[]),
+};
+
 export const prescriptionsApi = {
   list: (patientId: number) =>
     api.get(`/patients/${patientId}/prescriptions`).then((r) => r.data),

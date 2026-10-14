@@ -16,7 +16,7 @@
 // - Carisoprodol pronto (Torsilax, Tandrilax, Mioflex): receita SIMPLES —
 //   RDC 999/2025 pôs a substância na B1, mas o Adendo libera o remédio pronto.
 
-export type TipoReceita = "simples" | "controle_especial";
+export type TipoReceita = "simples" | "controle_especial" | "antimicrobiano";
 
 export interface MedicamentoCatalogo {
   principio: string;
@@ -62,7 +62,7 @@ export const MEDICAMENTOS_ORTOPEDIA: MedicamentoCatalogo[] = [
   { principio: "Meloxicam", grupo: "anti-inflamatório", tipo: "simples", marcas: ["meloxicam", "movatec"] },
   { principio: "Piroxicam", grupo: "anti-inflamatório", tipo: "simples", marcas: ["piroxicam", "feldene"] },
   { principio: "Tenoxicam", grupo: "anti-inflamatório", tipo: "simples", marcas: ["tenoxicam", "tilatil"] },
-  { principio: "Celecoxibe", grupo: "anti-inflamatório", tipo: "simples", marcas: ["celecoxibe", "celebra"] },
+  { principio: "Celecoxibe", grupo: "anti-inflamatório", tipo: "controle_especial", marcas: ["celecoxibe", "celebra"] },
   { principio: "Etodolaco", grupo: "anti-inflamatório", tipo: "simples", marcas: ["etodolaco", "larc"] },
 
   // ── Analgésicos ──
@@ -94,18 +94,47 @@ function contemTermo(texto: string, termo: string): boolean {
   return new RegExp(`(^|[^a-z0-9])${esc}([^a-z0-9]|$)`).test(texto);
 }
 
-/** Todos os remédios do catálogo citados no texto (marca ou princípio). */
-export function remediosCitados(texto: string): MedicamentoCatalogo[] {
-  const t = semAcento(texto);
-  return MEDICAMENTOS_ORTOPEDIA.filter((m) => m.marcas.some((marca) => contemTermo(t, marca)));
+// ── Base oficial (13/10/2026): CMED/Anvisa x Portaria 344, guardada no banco ──
+// O app baixa a lista de termos (marca ou princípio -> tipo de receita) uma vez
+// por sessão. Enquanto não chega, vale o catálogo fixo acima.
+let TERMOS_BASE: MedicamentoCatalogo[] = [];
+let carregando: Promise<void> | null = null;
+export function carregarTermosDaBase(buscar: () => Promise<any[]>): Promise<void> {
+  if (!carregando) {
+    carregando = buscar()
+      .then((rows) => {
+        TERMOS_BASE = (rows || []).map((r: any) => ({
+          principio: r.principio || r.termo,
+          grupo: "dor crônica" as const,
+          tipo: (r.tipo === "notificacao" ? "controle_especial" : r.tipo) as TipoReceita,
+          notificacao: r.notificacao === "A" || r.notificacao === "B" ? r.notificacao : undefined,
+          marcas: [semAcento(r.termo)],
+        }));
+      })
+      .catch(() => { carregando = null; });
+  }
+  return carregando;
 }
 
-/** O controlado vence: se qualquer remédio citado é controlado, devolve ele. */
+/** Todos os remédios citados no texto (marca ou princípio), catálogo fixo + base oficial. */
+export function remediosCitados(texto: string): MedicamentoCatalogo[] {
+  const t = semAcento(texto);
+  return [...MEDICAMENTOS_ORTOPEDIA, ...TERMOS_BASE].filter((m) => m.marcas.some((marca) => contemTermo(t, marca)));
+}
+
+/** O controlado vence: controle especial > antimicrobiano > simples. */
 export function controladoCitado(texto: string): MedicamentoCatalogo | undefined {
-  return remediosCitados(texto).find((m) => m.tipo === "controle_especial");
+  const achados = remediosCitados(texto);
+  return achados.find((m) => m.tipo === "controle_especial") ?? achados.find((m) => m.tipo === "antimicrobiano");
 }
 
 /** Remédios que exigem talão de NOTIFICAÇÃO (A = amarelo; B = azul). */
 export function exigeNotificacao(texto: string): MedicamentoCatalogo[] {
-  return remediosCitados(texto).filter((m) => m.notificacao === "A" || m.notificacao === "B");
+  const vistos = new Set<string>();
+  return remediosCitados(texto).filter((m) => {
+    if (m.notificacao !== "A" && m.notificacao !== "B") return false;
+    const k = m.principio + m.notificacao;
+    if (vistos.has(k)) return false;
+    vistos.add(k); return true;
+  });
 }

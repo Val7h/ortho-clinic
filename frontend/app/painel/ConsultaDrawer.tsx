@@ -1,5 +1,5 @@
 "use client";
-import { controladoCitado, exigeNotificacao } from "@/lib/medicamentosOrtopedia";
+import { controladoCitado, exigeNotificacao, carregarTermosDaBase } from "@/lib/medicamentosOrtopedia";
 
 import { useEffect, useState, useRef, useCallback, useMemo, createContext, useContext } from "react";
 import { createPortal } from "react-dom";
@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { serverNow } from "@/lib/servertime";
-import { anamnesisApi, api, patientsApi, consultationsApi, prescriptionsApi, prescriptionTemplatesApi, referralTemplatesApi, examsApi, evolutionApi, clinicApi, chatApi, reportsApi, leafletsApi, waitingRoomApi, remindersApi, msgErro } from "@/lib/api";
+import { anamnesisApi, api, patientsApi, consultationsApi, prescriptionsApi, prescriptionTemplatesApi, referralTemplatesApi, examsApi, evolutionApi, clinicApi, chatApi, reportsApi, leafletsApi, waitingRoomApi, remindersApi, medicamentosApi, msgErro } from "@/lib/api";
 import { formatDate, calcAge, hojeISO } from "@/lib/utils";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -386,7 +386,7 @@ function detectarPresetPorNomeOuApelido(textoLivreOuNome: string): OrthoMedPrese
   // Lusanda, Neurontin…) — se algum controlado aparece, a linha é controlada.
   const doCatalogo = controladoCitado(textoLivreOuNome);
   if (doCatalogo) {
-    return { name: doCatalogo.principio, dose: "", route: "oral", frequency: "", duration: "", instructions: "", prescriptionType: "controle_especial" };
+    return { name: doCatalogo.principio, dose: "", route: "oral", frequency: "", duration: "", instructions: "", prescriptionType: doCatalogo.tipo === "antimicrobiano" ? "antimicrobiano" : "controle_especial" };
   }
   return achados[0];
 }
@@ -7150,6 +7150,8 @@ function DrawerCrono({ entry }: { entry: WaitingRoomEntry }) {
 const ultimaAbaPorPaciente = new Map<number, DrawerTab>();
 
 export default function ConsultaDrawer({ entry, onClose, onStatusChange }: ConsultaDrawerProps) {
+  // 13/10: base oficial de medicamentos — reconhece qualquer marca controlada.
+  useEffect(() => { carregarTermosDaBase(medicamentosApi.termos); }, []);
   const [activeTab, setActiveTabRaw] = useState<DrawerTab>(() => ultimaAbaPorPaciente.get(entry.patient_id) ?? "anamnese");
   const setActiveTab = (tab: DrawerTab) => {
     ultimaAbaPorPaciente.set(entry.patient_id, tab);
