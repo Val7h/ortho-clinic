@@ -6641,6 +6641,10 @@ function TabDocumentos({ patientId }: { patientId: number }) {
   const [enviando, setEnviando] = useState(false);
   const [categoria, setCategoria] = useState("report");
   const fileRef = useRef<HTMLInputElement>(null);
+  // 14/10 (Valth): "quando eu vou clicar, não estão abrindo e é como se a página
+  // descesse na rolagem" — a aba nova não abria no computador dele. Agora o
+  // documento abre por cima da tela, sem depender de aba nova.
+  const [aberto, setAberto] = useState<{ url: string; titulo: string } | null>(null);
 
   const headers = (): Record<string, string> => {
     const token = typeof window !== "undefined" ? localStorage.getItem("ortho_token") : null;
@@ -6738,6 +6742,7 @@ function TabDocumentos({ patientId }: { patientId: number }) {
                 href={urlDoArquivo(d.file_url)}
                 target="_blank"
                 rel="noopener noreferrer"
+                onClick={(e) => { e.preventDefault(); setAberto({ url: urlDoArquivo(d.file_url), titulo: d.title || "Documento" }); }}
                 className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-800"
               >
                 <FileText className="w-4 h-4 text-slate-400 shrink-0" />
@@ -6752,6 +6757,25 @@ function TabDocumentos({ patientId }: { patientId: number }) {
             </li>
           ))}
         </ul>
+      )}
+      {aberto && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 z-[200] bg-black/70 flex flex-col p-2 sm:p-6" onClick={() => setAberto(null)}>
+          <div className="flex items-center justify-between gap-2 bg-white dark:bg-slate-900 rounded-t-lg px-3 py-2" onClick={(e) => e.stopPropagation()}>
+            <p className="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate">{aberto.titulo}</p>
+            <div className="flex items-center gap-2 shrink-0">
+              <a href={aberto.url} target="_blank" rel="noopener noreferrer" className="text-xs text-brand-600 underline">abrir em outra aba</a>
+              <button type="button" onClick={() => setAberto(null)} className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800" title="Fechar"><X className="w-5 h-5" /></button>
+            </div>
+          </div>
+          {/\.(png|jpe?g|webp|gif)(\?|$)/i.test(aberto.url) ? (
+            <div className="flex-1 overflow-auto bg-white rounded-b-lg flex items-start justify-center" onClick={(e) => e.stopPropagation()}>
+              <img src={aberto.url} alt={aberto.titulo} className="max-w-full" />
+            </div>
+          ) : (
+            <iframe src={aberto.url} title={aberto.titulo} className="flex-1 w-full bg-white rounded-b-lg" onClick={(e) => e.stopPropagation()} />
+          )}
+        </div>,
+        document.body
       )}
     </div>
   );
