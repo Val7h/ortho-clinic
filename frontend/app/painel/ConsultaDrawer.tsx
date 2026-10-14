@@ -1997,6 +1997,7 @@ function TabProntuario({ patientId, patient, clinic }: { patientId: number; pati
     let vivo = true;
     setLoading(true);
     setFolha("");
+    folhaDoPacienteRef.current = null; // 14/10: até carregar, nada é salvo
     evolutionApi
       .list(patientId)
       .then((data) => {
@@ -2100,6 +2101,7 @@ function TabProntuario({ patientId, patient, clinic }: { patientId: number; pati
         } catch {}
 
         setFolha(texto);
+        folhaDoPacienteRef.current = patientId;
         setTimeout(() => {
           const ta = textareaRef.current;
           if (!ta) return;
@@ -2159,6 +2161,9 @@ function TabProntuario({ patientId, patient, clinic }: { patientId: number; pati
   // 14/10: dois salvamentos ao mesmo tempo (autosave + sair do campo) criavam
   // o registro do dia DUAS vezes. Agora um espera o outro terminar.
   const salvandoAgoraRef = useRef<Promise<void> | null>(null);
+  // 14/10 (Valth): o texto da Maria Aparecida apareceu gravado no prontuário do
+  // Cícero. A folha na tela só pode ser salva no paciente de quem ela foi carregada.
+  const folhaDoPacienteRef = useRef<number | null>(null);
   const salvarFolha = useCallback(async (opts?: { silencioso?: boolean }) => {
     while (salvandoAgoraRef.current) { try { await salvandoAgoraRef.current; } catch {} }
     let liberar: () => void = () => {};
@@ -2168,6 +2173,7 @@ function TabProntuario({ patientId, patient, clinic }: { patientId: number; pati
   }, [folha, todayISO, consultType, patientId, rascunhoKey]);
   const salvarFolhaDeVerdade = async (opts?: { silencioso?: boolean }) => {
     const silencioso = !!opts?.silencioso;
+    if (folhaDoPacienteRef.current !== patientId) return; // folha ainda é de outro paciente
     const blocos = lerFolha(folha);
     if (!blocos.length) {
       if (!folha.trim()) { if (!silencioso) toast.error("A folha está vazia"); return; }
