@@ -7576,7 +7576,8 @@ export default function ConsultaDrawer({ entry, onClose, onStatusChange }: Consu
       <div className="flex-1 overflow-y-auto relative">
         {/* Prontuário só editável com a consulta INICIADA (Valth 02/08):
             garante que todo registro aconteça com o cronômetro rodando. */}
-        {!loadingPatient && entry.status !== "attending" && (
+        {/* 14/10: só LER documentos (exames anexados) não precisa da consulta aberta. */}
+        {!loadingPatient && entry.status !== "attending" && activeTab !== "documentos" && (
           <div className="absolute inset-0 z-30 bg-white/75 dark:bg-slate-950/75 backdrop-blur-[2px] flex items-start justify-center pt-20">
             <div className="text-center px-6 max-w-sm">
               <p className="text-3xl mb-2">
@@ -7601,7 +7602,7 @@ export default function ConsultaDrawer({ entry, onClose, onStatusChange }: Consu
         ) : (
           // E9 (05/08): pb-32 garante espaço abaixo do último botão (Salvar),
           // que ficava embaixo dos botões flutuantes do chat/IA.
-          <div className={`pt-4 pb-32 ${entry.status !== "attending" ? "pointer-events-none select-none opacity-50" : ""}`}>
+          <div className={`pt-4 pb-32 ${entry.status !== "attending" && activeTab !== "documentos" ? "pointer-events-none select-none opacity-50" : ""}`}>
             {/* 10/08 — a aba que sai de cena fica ESCONDIDA, não desmontada.
                 Antes, ir em Exames e voltar apagava a anamnese que ele tinha
                 acabado de escrever: trocar de aba destruía o componente e o
