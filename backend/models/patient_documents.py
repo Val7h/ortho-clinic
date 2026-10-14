@@ -23,6 +23,9 @@ DOCUMENT_CATEGORIES = {
     "report":       "Laudo / Relatório",
     "consent":      "Termo de Consentimento",
     "photo":        "Foto Clínica",
+    # 14/10 (Valth): pacote do pedido de procedimento enviado ao instrumentador.
+    "identity":     "Documento pessoal (RG/CPF)",
+    "insurance_card": "Carteirinha do plano",
     "other":        "Outro",
 }
 

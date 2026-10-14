@@ -6631,10 +6631,12 @@ const DOC_CATEGORIAS: Record<string, string> = {
   prescription: "Receita (externa)",
   referral: "Encaminhamento",
   consent: "Termo",
+  identity: "Documento pessoal (RG/CPF)",
+  insurance_card: "Carteirinha do plano",
   other: "Outro",
 };
 
-function TabDocumentos({ patientId }: { patientId: number }) {
+function TabDocumentos({ patientId, patient }: { patientId: number; patient?: any }) {
   const [docs, setDocs] = useState<PatientDocument[]>([]);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState(false);
@@ -6645,6 +6647,65 @@ function TabDocumentos({ patientId }: { patientId: number }) {
   // descesse na rolagem" — a aba nova não abria no computador dele. Agora o
   // documento abre por cima da tela, sem depender de aba nova.
   const [aberto, setAberto] = useState<{ url: string; titulo: string } | null>(null);
+  // 14/10 (Valth): enviar o pacote do pedido de procedimento pelo WhatsApp,
+  // escolhendo o instrumentador (Digo, Weslley...) conforme o procedimento.
+  const [marcados, setMarcados] = useState<number[]>([]);
+  const [envioAberto, setEnvioAberto] = useState(false);
+  const [contatos, setContatos] = useState<any[]>([]);
+  const [contatoId, setContatoId] = useState<number | null>(null);
+  const [mensagemEnvio, setMensagemEnvio] = useState("");
+  const [procedimentoEnvio, setProcedimentoEnvio] = useState("");
+  const [mandarContato, setMandarContato] = useState(true);
+  const [enviandoZap, setEnviandoZap] = useState(false);
+  const [novoContato, setNovoContato] = useState<{ nome: string; telefone: string; funcao: string } | null>(null);
+  useEffect(() => { setMarcados([]); }, [patientId]);
+  const montarMensagem = (proc: string) => {
+    const nasc = patient?.birthdate ? new Date(patient.birthdate + "T12:00:00") : null;
+    const idade = nasc ? Math.floor((Date.now() - nasc.getTime()) / 31557600000) : null;
+    return [
+      "*Pedido de procedimento — Dr. Valth*",
+      `Paciente: *${(patient?.name || "").toUpperCase()}*`,
+      nasc ? `Nascimento: ${nasc.toLocaleDateString("pt-BR")}${idade !== null ? ` (${idade} anos)` : ""}` : "",
+      patient?.cpf ? `CPF: ${patient.cpf}` : "",
+      `Convênio: ${patient?.insurance || "Particular"}${patient?.insurance_number ? ` — carteirinha ${patient.insurance_number}` : ""}`,
+      `Procedimento: ${proc || "____"}`,
+      "Seguem documentos e exames.",
+    ].filter(Boolean).join("\n");
+  };
+  const abrirEnvio = async () => {
+    setEnvioAberto(true);
+    setMensagemEnvio(montarMensagem(procedimentoEnvio));
+    try {
+      const res = await fetch(`${API_URL}/contatos-envio`, { headers: headers() });
+      if (res.ok) { const l = await res.json(); setContatos(l); if (!contatoId && l[0]) setContatoId(l[0].id); }
+    } catch {}
+  };
+  const salvarNovoContato = async () => {
+    if (!novoContato?.nome.trim() || !novoContato.telefone.trim()) return;
+    const res = await fetch(`${API_URL}/contatos-envio`, { method: "POST", headers: { ...headers(), "Content-Type": "application/json" }, body: JSON.stringify(novoContato) });
+    if (!res.ok) { toast.error((await res.json().catch(() => ({})))?.detail || "Não consegui salvar o contato"); return; }
+    const c = await res.json();
+    setContatos((v) => [...v, c].sort((a, b) => a.nome.localeCompare(b.nome)));
+    setContatoId(c.id); setNovoContato(null);
+  };
+  const enviarZap = async () => {
+    if (!contatoId) { toast.error("Escolha para quem enviar."); return; }
+    const dest = contatos.find((c) => c.id === contatoId);
+    if (!window.confirm(`Enviar ${marcados.length} documento(s)${mandarContato ? " + contato do paciente" : ""} para ${dest?.nome} pelo seu WhatsApp?`)) return;
+    setEnviandoZap(true);
+    try {
+      const res = await fetch(`${API_URL}/patients/${patientId}/enviar-whatsapp`, {
+        method: "POST", headers: { ...headers(), "Content-Type": "application/json" },
+        body: JSON.stringify({ contato_id: contatoId, mensagem: mensagemEnvio, document_ids: marcados, enviar_contato_paciente: mandarContato }),
+      });
+      const r = await res.json().catch(() => ({}));
+      if (!res.ok) { toast.error(r?.detail || "Falha no envio"); return; }
+      const falhas = (r.documentos || []).filter((d: any) => !d.ok);
+      if (falhas.length) toast.error(`Não foram: ${falhas.map((d: any) => d.titulo || d.id).join(", ")}`);
+      toast.success(`Enviado para ${r.destinatario}: mensagem + ${(r.documentos || []).length - falhas.length} documento(s)${r.contato_paciente ? " + contato" : ""}`);
+      setEnvioAberto(false); setMarcados([]);
+    } catch { toast.error("Falha no envio"); } finally { setEnviandoZap(false); }
+  };
 
   const headers = (): Record<string, string> => {
     const token = typeof window !== "undefined" ? localStorage.getItem("ortho_token") : null;
@@ -6737,13 +6798,16 @@ function TabDocumentos({ patientId }: { patientId: number }) {
       ) : (
         <ul className="divide-y divide-slate-100 dark:divide-slate-700 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
           {docs.map((d) => (
-            <li key={d.id}>
+            <li key={d.id} className="flex items-center">
+              <input type="checkbox" className="ml-3 w-4 h-4 shrink-0 accent-green-600" title="Marcar para enviar pelo WhatsApp"
+                checked={marcados.includes(d.id)}
+                onChange={(e) => setMarcados((v) => e.target.checked ? [...v, d.id] : v.filter((x) => x !== d.id))} />
               <a
                 href={urlDoArquivo(d.file_url)}
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={(e) => { e.preventDefault(); setAberto({ url: urlDoArquivo(d.file_url), titulo: d.title || "Documento" }); }}
-                className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-800"
+                className="flex-1 min-w-0 flex items-center gap-3 px-3 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-800"
               >
                 <FileText className="w-4 h-4 text-slate-400 shrink-0" />
                 <span className="min-w-0 flex-1">
@@ -6757,6 +6821,72 @@ function TabDocumentos({ patientId }: { patientId: number }) {
             </li>
           ))}
         </ul>
+      )}
+      {docs.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <button type="button" onClick={() => setMarcados(marcados.length === docs.length ? [] : docs.map((d) => d.id))}
+            className="text-[11px] text-slate-500 underline">{marcados.length === docs.length ? "desmarcar todos" : "marcar todos"}</button>
+          <button type="button" onClick={abrirEnvio} disabled={marcados.length === 0}
+            className="ml-auto flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-40">
+            <Send className="w-3.5 h-3.5" /> Enviar pelo WhatsApp ({marcados.length})
+          </button>
+        </div>
+      )}
+      {envioAberto && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 z-[200] bg-black/60 flex items-center justify-center p-3" onClick={() => !enviandoZap && setEnvioAberto(false)}>
+          <div className="w-full max-w-lg bg-white dark:bg-slate-900 rounded-xl p-4 space-y-3 max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-bold text-slate-800 dark:text-slate-100">Enviar pelo WhatsApp</p>
+              <button type="button" onClick={() => setEnvioAberto(false)} className="p-1"><X className="w-4 h-4" /></button>
+            </div>
+            <div>
+              <label className="text-[11px] font-semibold text-slate-500 uppercase">Para quem</label>
+              <select value={contatoId ?? ""} onChange={(e) => setContatoId(Number(e.target.value))}
+                className="w-full mt-1 text-sm border border-slate-300 dark:border-slate-600 rounded-lg px-2 py-2 bg-white dark:bg-slate-800">
+                {contatos.map((c) => <option key={c.id} value={c.id}>{c.nome}{c.funcao ? ` — ${c.funcao}` : ""}</option>)}
+              </select>
+              {novoContato ? (
+                <div className="mt-2 grid grid-cols-3 gap-1.5">
+                  <input placeholder="Nome" value={novoContato.nome} onChange={(e) => setNovoContato({ ...novoContato, nome: e.target.value })} className="text-xs border rounded px-2 py-1" />
+                  <input placeholder="(81) 99999-9999" value={novoContato.telefone} onChange={(e) => setNovoContato({ ...novoContato, telefone: e.target.value })} className="text-xs border rounded px-2 py-1" />
+                  <input placeholder="Função" value={novoContato.funcao} onChange={(e) => setNovoContato({ ...novoContato, funcao: e.target.value })} className="text-xs border rounded px-2 py-1" />
+                  <div className="col-span-3 flex gap-2 justify-end">
+                    <button type="button" onClick={() => setNovoContato(null)} className="text-xs text-slate-500">Cancelar</button>
+                    <button type="button" onClick={salvarNovoContato} className="text-xs px-2 py-1 rounded bg-slate-700 text-white">Salvar contato</button>
+                  </div>
+                </div>
+              ) : (
+                <button type="button" onClick={() => setNovoContato({ nome: "", telefone: "", funcao: "Instrumentador" })} className="mt-1 text-[11px] text-brand-600 underline">+ novo contato</button>
+              )}
+            </div>
+            <div>
+              <label className="text-[11px] font-semibold text-slate-500 uppercase">Procedimento</label>
+              <input value={procedimentoEnvio} onChange={(e) => { setProcedimentoEnvio(e.target.value); setMensagemEnvio(montarMensagem(e.target.value)); }}
+                placeholder="ex.: bloqueio dos ombros e dos joelhos" className="w-full mt-1 text-sm border border-slate-300 dark:border-slate-600 rounded-lg px-2 py-1.5 bg-white dark:bg-slate-800" />
+            </div>
+            <div>
+              <label className="text-[11px] font-semibold text-slate-500 uppercase">Mensagem</label>
+              <textarea value={mensagemEnvio} onChange={(e) => setMensagemEnvio(e.target.value)} rows={7}
+                className="w-full mt-1 text-xs border border-slate-300 dark:border-slate-600 rounded-lg px-2 py-1.5 bg-white dark:bg-slate-800 font-mono" />
+            </div>
+            <div className="text-xs text-slate-600 dark:text-slate-300 space-y-0.5">
+              <p className="font-semibold">Documentos ({marcados.length}):</p>
+              {docs.filter((d) => marcados.includes(d.id)).map((d) => <p key={d.id}>• {d.title}</p>)}
+            </div>
+            <label className="flex items-center gap-2 text-xs text-slate-700 dark:text-slate-200">
+              <input type="checkbox" checked={mandarContato} onChange={(e) => setMandarContato(e.target.checked)} /> Mandar também o contato do paciente
+            </label>
+            <div className="flex justify-end gap-2 pt-1">
+              <button type="button" onClick={() => setEnvioAberto(false)} className="px-3 py-1.5 text-xs border rounded-lg">Cancelar</button>
+              <button type="button" onClick={enviarZap} disabled={enviandoZap}
+                className="px-4 py-1.5 text-xs font-semibold rounded-lg bg-green-600 text-white hover:bg-green-700 disabled:opacity-50">
+                {enviandoZap ? "Enviando…" : "Enviar"}
+              </button>
+            </div>
+            <p className="text-[10px] text-slate-400">Sai do seu WhatsApp pessoal.</p>
+          </div>
+        </div>,
+        document.body
       )}
       {aberto && typeof document !== "undefined" && createPortal(
         <div className="fixed inset-0 z-[200] bg-black/70 flex flex-col p-2 sm:p-6" onClick={() => setAberto(null)}>
@@ -7213,7 +7343,7 @@ export default function ConsultaDrawer({ entry, onClose, onStatusChange }: Consu
     { key: "atestados",       render: () => <TabAtestados patient={patient} clinic={clinic} /> },
     { key: "laudos",          render: () => <TabLaudos patient={patient} clinic={clinic} /> },
     { key: "fotos",           render: () => <TabFotos patientId={entry.patient_id} /> },
-    { key: "documentos",      render: () => <TabDocumentos patientId={entry.patient_id} /> },
+    { key: "documentos",      render: () => <TabDocumentos patientId={entry.patient_id} patient={patient} /> },
   ];
   const [patient, setPatient] = useState<any>(null);
   const [loadingPatient, setLoadingPatient] = useState(true);

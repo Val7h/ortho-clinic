@@ -33,6 +33,7 @@ from routers.prescription_templates import router as prescription_templates_rout
 from routers.exam_templates import router as exam_templates_router
 from routers.referral_templates import router as referral_templates_router
 from routers.medicamentos import router as medicamentos_router
+from routers.envio_documentos import router as envio_documentos_router
 from routers.procedure_reminders import router as procedure_reminders_router
 from routers.chat import router as chat_router
 from routers.messages import router as messages_router
@@ -199,6 +200,7 @@ app.include_router(prescription_templates_router)
 app.include_router(exam_templates_router)
 app.include_router(referral_templates_router)
 app.include_router(medicamentos_router)
+app.include_router(envio_documentos_router)
 app.include_router(procedure_reminders_router)
 app.include_router(chat_router)
 app.include_router(messages_router)
