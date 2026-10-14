@@ -1,5 +1,5 @@
 "use client";
-import { controladoCitado, exigeNotificacaoA } from "@/lib/medicamentosOrtopedia";
+import { controladoCitado, exigeNotificacao } from "@/lib/medicamentosOrtopedia";
 
 import { useEffect, useState, useRef, useCallback, useMemo, createContext, useContext } from "react";
 import { createPortal } from "react-dom";
@@ -319,8 +319,8 @@ const ORTHO_MEDICATIONS: OrthoMedPreset[] = [
   { name: "Diclofenaco Potássico 50mg", dose: "1 comprimido", route: "oral", frequency: "8/8h", duration: "5 dias", instructions: "Tomar após refeições", prescriptionType: "simples" },
   { name: "Meloxicam 15mg", dose: "1 comprimido", route: "oral", frequency: "1x/dia", duration: "7 dias", instructions: "Tomar após refeição principal", prescriptionType: "simples" },
   { name: "Cetoprofeno 100mg", dose: "1 comprimido", route: "oral", frequency: "12/12h", duration: "5 dias", instructions: "Tomar após refeições", prescriptionType: "simples" },
-  { name: "Tramadol 50mg", dose: "1 cápsula", route: "oral", frequency: "8/8h", duration: "5 dias", instructions: "Pode causar sonolência — Notificação B (receita amarela SESA)", prescriptionType: "controle_especial" },
-  { name: "Codeína 30mg", dose: "1 comprimido", route: "oral", frequency: "6/6h", duration: "3 dias", instructions: "Conforme necessidade — Notificação B (receita amarela SESA)", prescriptionType: "controle_especial" },
+  { name: "Tramadol 50mg", dose: "1 cápsula", route: "oral", frequency: "8/8h", duration: "5 dias", instructions: "Pode causar sonolência — Receita de Controle Especial (branca, 2 vias)", prescriptionType: "controle_especial" },
+  { name: "Codeína 30mg", dose: "1 comprimido", route: "oral", frequency: "6/6h", duration: "3 dias", instructions: "Conforme necessidade — Receita de Controle Especial (branca, 2 vias) quando associada ao paracetamol", prescriptionType: "controle_especial" },
   { name: "Ciclobenzaprina 5mg", dose: "1 comprimido", route: "oral", frequency: "8/8h", duration: "7 dias", instructions: "Pode causar sonolência — evitar dirigir", prescriptionType: "simples" },
   { name: "Omeprazol 20mg", dose: "1 cápsula", route: "oral", frequency: "1x/dia", duration: "30 dias", instructions: "Tomar 30 min antes do café", prescriptionType: "simples" },
   { name: "Prednisolona 20mg", dose: "1 comprimido", route: "oral", frequency: "1x/dia", duration: "5 dias", instructions: "Tomar pela manhã após refeição", prescriptionType: "simples" },
@@ -344,7 +344,7 @@ const ORTHO_MEDICATIONS: OrthoMedPreset[] = [
   { name: "Coxeto 90mg", dose: "1 comprimido", route: "oral", frequency: "1x/dia", duration: "14 dias", instructions: "Controle Especial (receita branca, 2 vias)", prescriptionType: "controle_especial" },
   { name: "Etoricoxib 90mg", dose: "1 comprimido", route: "oral", frequency: "1x/dia", duration: "5 dias", instructions: "Tomar após refeição principal — evitar em insuficiência renal", prescriptionType: "simples" },
   { name: "Tizanidina 4mg", dose: "1 comprimido", route: "oral", frequency: "8/8h", duration: "7 dias", instructions: "Pode causar hipotensão — não associar com ciprofloxacino", prescriptionType: "simples" },
-  { name: "Clonazepam 0,5mg", dose: "1/2 comprimido", route: "oral", frequency: "1x/dia (à noite)", duration: "30 dias", instructions: "Usar à noite para dor neuropática — Notificação B2 (receita amarela)", prescriptionType: "controle_especial" },
+  { name: "Clonazepam 0,5mg", dose: "1/2 comprimido", route: "oral", frequency: "1x/dia (à noite)", duration: "30 dias", instructions: "Usar à noite — exige Notificação de Receita B (talão AZUL)", prescriptionType: "controle_especial" },
   { name: "Sulfato de Glicosamina 1500mg", dose: "1 sachê em 200ml de água", route: "oral", frequency: "1x/dia", duration: "90 dias", instructions: "Tomar preferencialmente pela manhã", prescriptionType: "simples" },
 ];
 
@@ -2753,9 +2753,12 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
     }
     // 13/10: opioide forte (morfina, oxicodona, metadona, tapentadol, fentanil)
     // exige o talão amarelo (Notificação A) — o sistema não imprime notificação.
-    const forteA = exigeNotificacaoA(freeTextMode ? freeText : validMeds.map((m) => m.name).join(" ; "));
-    if (forteA.length) {
-      toast(`${forteA.map((m) => m.principio).join(", ")}: exige Notificação de Receita A (talão amarelo). A receita impressa aqui não vale sozinha.`, { icon: "⚠️", duration: 9000 });
+    const comNotificacao = exigeNotificacao(freeTextMode ? freeText : validMeds.map((m) => m.name).join(" ; "));
+    for (const m of comNotificacao) {
+      toast(m.notificacao === "A"
+        ? `${m.principio}: exige Notificação de Receita A (talão AMARELO). A receita impressa aqui não vale sozinha.`
+        : `${m.principio}: exige Notificação de Receita B (talão AZUL). A receita impressa aqui não vale sozinha.`,
+        { icon: "⚠️", duration: 9000 });
     }
     setSaving(true);
     try {

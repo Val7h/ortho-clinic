@@ -8,8 +8,9 @@
 // - Só entra marca conferida. A pesquisa automática inventou marcas e errou
 //   classificação (disse que dipirona é controlada) — nada daquilo entrou cru.
 // - "controle_especial" = receita branca em 2 vias (é o que o OrthoClinic imprime).
-// - notificacao "A" = opioide forte: exige o talão amarelo (Notificação A) da
-//   Vigilância; o sistema avisa, porque não imprime notificação.
+// - notificacao "A" = opioide forte: talão AMARELO (Notificação A).
+//   notificacao "B" = benzodiazepínico (Rivotril etc.): talão AZUL (Notificação B).
+//   O sistema não imprime notificação — só avisa na hora de salvar.
 // - Etoricoxibe (Coxeto/Arcoxia) e buprenorfina (Lusanda) em 2 vias: regra do
 //   próprio Valth (07/10/2026).
 // - Carisoprodol pronto (Torsilax, Tandrilax, Mioflex): receita SIMPLES —
@@ -29,6 +30,7 @@ export const MEDICAMENTOS_ORTOPEDIA: MedicamentoCatalogo[] = [
   // ── Opioides ──
   { principio: "Tramadol", grupo: "opioide", tipo: "controle_especial", marcas: ["tramadol", "tramal", "tramadon", "sylador"] },
   { principio: "Tramadol + paracetamol", grupo: "opioide", tipo: "controle_especial", marcas: ["trol par", "trolpar", "ultracet", "paratram"] },
+  { principio: "Tramadol + diclofenaco", grupo: "opioide", tipo: "controle_especial", marcas: ["adorlan"] },
   { principio: "Codeína + paracetamol", grupo: "opioide", tipo: "controle_especial", marcas: ["codeina", "codein", "tylex"] },
   { principio: "Buprenorfina (adesivo)", grupo: "opioide", tipo: "controle_especial", marcas: ["buprenorfina", "lusanda", "restiva"] },
   { principio: "Morfina", grupo: "opioide", tipo: "controle_especial", notificacao: "A", marcas: ["morfina", "dimorf"] },
@@ -61,6 +63,7 @@ export const MEDICAMENTOS_ORTOPEDIA: MedicamentoCatalogo[] = [
   { principio: "Piroxicam", grupo: "anti-inflamatório", tipo: "simples", marcas: ["piroxicam", "feldene"] },
   { principio: "Tenoxicam", grupo: "anti-inflamatório", tipo: "simples", marcas: ["tenoxicam", "tilatil"] },
   { principio: "Celecoxibe", grupo: "anti-inflamatório", tipo: "simples", marcas: ["celecoxibe", "celebra"] },
+  { principio: "Etodolaco", grupo: "anti-inflamatório", tipo: "simples", marcas: ["etodolaco", "larc"] },
 
   // ── Analgésicos ──
   { principio: "Dipirona", grupo: "analgésico", tipo: "simples", marcas: ["dipirona", "novalgina", "anador"] },
@@ -102,7 +105,7 @@ export function controladoCitado(texto: string): MedicamentoCatalogo | undefined
   return remediosCitados(texto).find((m) => m.tipo === "controle_especial");
 }
 
-/** Opioides fortes que exigem o talão amarelo (Notificação A). */
-export function exigeNotificacaoA(texto: string): MedicamentoCatalogo[] {
-  return remediosCitados(texto).filter((m) => m.notificacao === "A");
+/** Remédios que exigem talão de NOTIFICAÇÃO (A = amarelo; B = azul). */
+export function exigeNotificacao(texto: string): MedicamentoCatalogo[] {
+  return remediosCitados(texto).filter((m) => m.notificacao === "A" || m.notificacao === "B");
 }
