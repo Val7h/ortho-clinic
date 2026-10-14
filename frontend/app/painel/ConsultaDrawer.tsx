@@ -1,4 +1,5 @@
 "use client";
+import { controladoCitado, exigeNotificacaoA } from "@/lib/medicamentosOrtopedia";
 
 import { useEffect, useState, useRef, useCallback, useMemo, createContext, useContext } from "react";
 import { createPortal } from "react-dom";
@@ -359,7 +360,7 @@ const ALIASES_CONTROLADOS: { termos: string[]; presetName: string }[] = [
   { termos: ["tramadol", "tramadon", "tramal", "sylador", "trol par", "trolpar", "ultracet", "paratram"], presetName: "Tramadol 50mg" },
   { termos: ["codeina", "codeína", "codein", "tylex"], presetName: "Codeína 30mg" },
   { termos: ["clonazepam", "rivotril"], presetName: "Clonazepam 0,5mg" },
-  { termos: ["pregabalina", "lyrica", "prebictal", "insit", "dorene"], presetName: "Pregabalina 75mg" },
+  { termos: ["pregabalina", "lyrica", "prebictal", "insit"], presetName: "Pregabalina 75mg" },
 ];
 
 const normalizarTexto = (t: string) => (t || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
@@ -381,6 +382,12 @@ function detectarPresetPorNomeOuApelido(textoLivreOuNome: string): OrthoMedPrese
   if (controladoDireto) return controladoDireto;
   const alias = ALIASES_CONTROLADOS.find((a) => a.termos.some((t) => norm.includes(t)));
   if (alias) return ORTHO_MEDICATIONS.find((p) => p.name === alias.presetName);
+  // 13/10 (Valth): catálogo de nomes comerciais da ortopedia (Cymbi, Velija,
+  // Lusanda, Neurontin…) — se algum controlado aparece, a linha é controlada.
+  const doCatalogo = controladoCitado(textoLivreOuNome);
+  if (doCatalogo) {
+    return { name: doCatalogo.principio, dose: "", route: "oral", frequency: "", duration: "", instructions: "", prescriptionType: "controle_especial" };
+  }
   return achados[0];
 }
 
@@ -2743,6 +2750,12 @@ function TabReceita({ patientId, patient, clinic }: { patientId: number; patient
           !window.confirm("Já existe uma receita idêntica salva hoje para este paciente. Salvar mesmo assim?")) {
         return;
       }
+    }
+    // 13/10: opioide forte (morfina, oxicodona, metadona, tapentadol, fentanil)
+    // exige o talão amarelo (Notificação A) — o sistema não imprime notificação.
+    const forteA = exigeNotificacaoA(freeTextMode ? freeText : validMeds.map((m) => m.name).join(" ; "));
+    if (forteA.length) {
+      toast(`${forteA.map((m) => m.principio).join(", ")}: exige Notificação de Receita A (talão amarelo). A receita impressa aqui não vale sozinha.`, { icon: "⚠️", duration: 9000 });
     }
     setSaving(true);
     try {
