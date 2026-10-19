@@ -3549,8 +3549,9 @@ function TabReceita({ patientId, patient, clinic, rxExterna }: { patientId: numb
 // ── Tab: Exames ────────────────────────────────────────────────────────────────
 
 // Modal de impressão de pedido de exame
-function PrintExamModal({ text, patientName, patient, clinic, onClose, fontSize = 14, lineHeight = "normal" }: {
+function PrintExamModal({ text, patientName, patient, clinic, onClose, fontSize = 14, lineHeight = "normal", dataISO }: {
   text: string;
+  dataISO?: string; // 19/10 (Valth): pedido salvo com data futura imprime com a data dele
   patientName: string;
   patient?: any;
   clinic?: any;
@@ -3594,7 +3595,7 @@ function PrintExamModal({ text, patientName, patient, clinic, onClose, fontSize 
         Trazer os exames na consulta de retorno.
       </div>
 
-      <FechoOficial clinic={clinic} />
+      <FechoOficial clinic={clinic} dataISO={dataISO} />
     </div>
   );
 
@@ -3825,6 +3826,7 @@ function TabExames({ patientId, patient, clinic }: { patientId: number; patient:
 
   // Impressão
   const [printText, setPrintText] = useState<string | null>(null);
+  const [printDataISO, setPrintDataISO] = useState<string | undefined>(undefined);
   const [mostrarGuiaSadt, setMostrarGuiaSadt] = useState(false);
   const [mostrarReguaSadt, setMostrarReguaSadt] = useState(false);
   // Qual convênio calibrado usar na guia — sugere pelo convênio do paciente,
@@ -4037,7 +4039,7 @@ function TabExames({ patientId, patient, clinic }: { patientId: number; patient:
   return (
     <div className="space-y-0 pb-6">
       {printText !== null && (
-        <PrintExamModal text={printText} patientName={patientName} patient={patient} clinic={clinic} onClose={() => setPrintText(null)} fontSize={fontSize} lineHeight={lineHeight} />
+        <PrintExamModal text={printText} dataISO={printDataISO} patientName={patientName} patient={patient} clinic={clinic} onClose={() => { setPrintText(null); setPrintDataISO(undefined); }} fontSize={fontSize} lineHeight={lineHeight} />
       )}
 
       {mostrarGuiaSadt && (
@@ -4432,7 +4434,7 @@ function TabExames({ patientId, patient, clinic }: { patientId: number; patient:
                     </button>
                     <button
                       type="button"
-                      onClick={() => setPrintText(ex.free_text || ex.exams?.map((e: any) => `SOLICITO: ${e.name}${e.laterality ? ` — ${e.laterality}` : ""}`).join("\n") || "")}
+                      onClick={() => { setPrintDataISO((ex.date || "").slice(0, 10) || undefined); setPrintText(ex.free_text || ex.exams?.map((e: any) => `SOLICITO: ${e.name}${e.laterality ? ` — ${e.laterality}` : ""}`).join("\n") || ""); }}
                       className="p-1 text-slate-400 hover:text-blue-600"
                       title="Imprimir"
                     >
