@@ -56,6 +56,19 @@ export function TeamChatWidget() {
   const escolhaManualRef = useRef(false);
   // Destaque do botão quando chega mensagem e o chat está fechado.
   const [chamando, setChamando] = useState(false);
+  // 20/10 (Valth): RECADO OSTENSIVO. Mensagem da equipe que começa com 📣 abre
+  // uma janela grande no meio da tela, com bipe repetido, e só fecha quando a
+  // pessoa responde (OK ou texto). O chat comum passava despercebido.
+  const [aviso, setAviso] = useState<{ fromId: number; text: string } | null>(null);
+  const [avisoResposta, setAvisoResposta] = useState("");
+  const [avisoEnviando, setAvisoEnviando] = useState(false);
+  // Bipe repetido enquanto o recado não for respondido.
+  useEffect(() => {
+    if (!aviso) return;
+    tocarAviso();
+    const id = setInterval(tocarAviso, 4000);
+    return () => clearInterval(id);
+  }, [aviso]);
 
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [dmByContact, setDmByContact] = useState<Record<number, DirectMessageOut[]>>({});
@@ -93,6 +106,14 @@ export function TeamChatWidget() {
       // ao chat e estava numa pessoa offline, tendo que procurar a ativa. Agora
       // a escolha inicial prioriza quem está online (e com mensagem não lida).
       setTab((prev) => (prev ?? escolherMelhorContato(list, onlineIdsRef.current)));
+      // Recado 📣 que chegou com a tela fechada: abre ao entrar no sistema.
+      for (const c of list) {
+        if (((c as { unread_count?: number }).unread_count ?? 0) <= 0) continue;
+        messagesApi.conversation(c.id).then((msgs) => {
+          const r = [...msgs].reverse().find((m) => m.sender_id === c.id && !m.read && (m.content || "").startsWith("📣"));
+          if (r) setAviso((cur) => cur ?? { fromId: c.id, text: r.content });
+        }).catch(() => {});
+      }
       // A21: badge nasce com as não-lidas anteriores ao login (o backend
       // manda unread_count por contato). Não sobrescreve contagens que já
       // subiram via WS enquanto a lista carregava.
@@ -235,6 +256,9 @@ export function TeamChatWidget() {
           if (existing.some((m) => m.id === msg.id)) return prev;
           return { ...prev, [otherId]: [...existing, msg] };
         });
+        if (msg.sender_id !== user.id && (msg.content || "").startsWith("📣")) {
+          setAviso({ fromId: msg.sender_id, text: msg.content });
+        }
         if (msg.sender_id !== user.id) {
           const convOpen = openRef.current && tabRef.current === otherId;
           if (convOpen) {
@@ -309,6 +333,23 @@ export function TeamChatWidget() {
 
   if (!user || contacts.length === 0) return null;
 
+  const responderAviso = async () => {
+    if (!aviso || avisoEnviando) return;
+    setAvisoEnviando(true);
+    const extra = avisoResposta.trim();
+    try {
+      await messagesApi.send(aviso.fromId, extra ? `✅ OK — ${extra}` : "✅ OK, recebido!");
+      messagesApi.markRead(aviso.fromId).catch(() => {});
+      setUnreadByContact((prev) => ({ ...prev, [aviso.fromId]: 0 }));
+      setAviso(null); setAvisoResposta("");
+    } catch {
+      setDmError("Não foi possível enviar a resposta. Tente de novo.");
+    } finally {
+      setAvisoEnviando(false);
+    }
+  };
+  const remetenteAviso = aviso ? contacts.find((c) => c.id === aviso.fromId) : null;
+
   const totalUnread = Object.values(unreadByContact).reduce((a, b) => a + b, 0);
   const activeContact = contacts.find((c) => c.id === tab) || null;
   const activeOnline = activeContact ? onlineIds.has(activeContact.id) : false;
@@ -323,6 +364,22 @@ export function TeamChatWidget() {
 
   return (
     <>
+      {aviso && (
+        <div className="fixed inset-0 z-[400] bg-black/70 flex items-center justify-center p-4">
+          <div className="w-full max-w-xl bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border-4 border-amber-400 animate-[pulse_2s_ease-in-out_3] p-6 space-y-4">
+            <p className="text-2xl font-extrabold text-slate-900 dark:text-white text-center">📣 Recado de {remetenteAviso?.name || "Dr. Valth"}</p>
+            <div className="text-base text-slate-800 dark:text-slate-100 whitespace-pre-wrap leading-relaxed max-h-[50vh] overflow-y-auto">{aviso.text.replace(/^📣\s*/, "")}</div>
+            <textarea value={avisoResposta} onChange={(e) => setAvisoResposta(e.target.value)} rows={3}
+              placeholder="Quer responder? Escreva aqui (opcional)…"
+              className="w-full px-3 py-2 border-2 border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-50 text-sm" />
+            {dmError && <p className="text-xs text-red-600">{dmError}</p>}
+            <button type="button" onClick={responderAviso} disabled={avisoEnviando}
+              className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-lg font-bold disabled:opacity-50">
+              {avisoEnviando ? "Enviando…" : avisoResposta.trim() ? "Responder e fechar" : "OK, recebi! 👍"}
+            </button>
+          </div>
+        </div>
+      )}
       {!open && (
         <button
           onClick={() => { setOpen(true); setChamando(false); }}
