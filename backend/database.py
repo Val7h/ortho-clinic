@@ -42,6 +42,29 @@ def init_db():
         logging.getLogger(__name__).warning("Could not register webhook hooks: %s", _e)
 
 
+VERSOES_EVOLUCAO_SQL = [
+    """CREATE TABLE IF NOT EXISTS clinical_evolution_versions (
+        id SERIAL PRIMARY KEY, evolution_id INTEGER NOT NULL, patient_id INTEGER NOT NULL,
+        entry_date DATE, content TEXT, operacao VARCHAR(10), organization_id INTEGER,
+        gravado_em TIMESTAMPTZ DEFAULT now())""",
+    "CREATE INDEX IF NOT EXISTS ix_cev_evolution ON clinical_evolution_versions (evolution_id)",
+    "CREATE INDEX IF NOT EXISTS ix_cev_patient ON clinical_evolution_versions (patient_id)",
+    """CREATE OR REPLACE FUNCTION guarda_versao_evolucao() RETURNS trigger AS $$
+    BEGIN
+        IF TG_OP = 'DELETE' OR NEW.content IS DISTINCT FROM OLD.content THEN
+            INSERT INTO clinical_evolution_versions
+                (evolution_id, patient_id, entry_date, content, operacao, organization_id)
+            VALUES (OLD.id, OLD.patient_id, OLD.entry_date, OLD.content, TG_OP, OLD.organization_id);
+        END IF;
+        IF TG_OP = 'DELETE' THEN RETURN OLD; END IF;
+        RETURN NEW;
+    END $$ LANGUAGE plpgsql""",
+    "DROP TRIGGER IF EXISTS trg_versao_evolucao ON clinical_evolutions",
+    """CREATE TRIGGER trg_versao_evolucao BEFORE UPDATE OR DELETE ON clinical_evolutions
+        FOR EACH ROW EXECUTE FUNCTION guarda_versao_evolucao()""",
+]
+
+
 def migrate_db():
     """Adiciona colunas para multi-tenant sem quebrar dados existentes."""
     inspector = inspect(engine)
@@ -687,6 +710,16 @@ def migrate_db():
             _cols = [c["name"] for c in inspector.get_columns(_t)]
             if "organization_id" not in _cols:
                 migrations.append(f"ALTER TABLE {_t} ADD COLUMN organization_id INTEGER DEFAULT 1")
+
+    # 21/10 (Valth): histórico de versões da anamnese. Gatilho no banco guarda
+    # o texto ANTERIOR a cada alteração/exclusão — pega a tela, a API e SQL direto.
+    if "clinical_evolutions" in existing_tables and engine.dialect.name == "postgresql":
+        with engine.begin() as conn:
+            for sql in VERSOES_EVOLUCAO_SQL:
+                try:
+                    conn.execute(text(sql))
+                except Exception as e:
+                    print(f"! Versões da anamnese: {e}")
 
     if not migrations:
         return

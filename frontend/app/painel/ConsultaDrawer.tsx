@@ -1071,23 +1071,18 @@ function textoReceitaFormatado(texto: string): React.ReactNode {
   return partes.length ? partes : texto;
 }
 
-function PrintModal({ rx, patient, clinic, onClose, collectorId }: {
-  rx: {
-    date: string;
-    medications: Medication[];
-    instructions: string;
-    prescription_type: PrescriptionType;
-    patientAddress?: string;
-    patientPhone?: string;
-  };
-  patient: any;
-  clinic?: any;
-  onClose: () => void;
-  // M8: id único do documento no coletor de impressão em lote. Quando null,
-  // o modal NÃO registra nada (ex.: reimpressão a partir do histórico), evitando
-  // que uma receita antiga sobreponha/apague a receita gerada hoje.
-  collectorId?: string | null;
-}) {
+// 21/10: as folhas da receita saíram de dentro do PrintModal para o pacote
+// "Tudo de hoje" usar exatamente o mesmo papel.
+type RxImpressao = {
+  date: string;
+  medications: Medication[];
+  instructions: string;
+  prescription_type: PrescriptionType;
+  patientAddress?: string;
+  patientPhone?: string;
+};
+
+function RxSheets({ rx, patient, clinic }: { rx: RxImpressao; patient: any; clinic?: any }) {
   // Tamanho e alinhamento que o medico escolheu na aba Receita (preferencia
   // dele, guardada no navegador). Lido a cada render para valer ja na proxima
   // impressao, sem precisar recarregar a pagina.
@@ -1381,7 +1376,7 @@ function PrintModal({ rx, patient, clinic, onClose, collectorId }: {
       {type === "simples" && <SimplesSheet />}
       {type === "controle_especial" && viaLabels.map((label, idx) => (
         <div key={idx}>
-          <div className={idx < vias - 1 ? "rx-via-break" : ""}>
+          <div className={idx < vias - 1 ? "rx-via rx-via-break" : "rx-via"}>
             <RCESheet viaLabel={label} viaIndex={idx} />
           </div>
           {idx < vias - 1 && (
@@ -1396,7 +1391,7 @@ function PrintModal({ rx, patient, clinic, onClose, collectorId }: {
           dois, e uma folha só é uma folha só pra conferir e manter. */}
       {type === "antimicrobiano" && viaLabels.map((label, idx) => (
         <div key={idx}>
-          <div className={idx < vias - 1 ? "rx-via-break" : ""}>
+          <div className={idx < vias - 1 ? "rx-via rx-via-break" : "rx-via"}>
             <RCESheet viaLabel={label} viaIndex={idx} />
           </div>
           {idx < vias - 1 && (
@@ -1408,6 +1403,34 @@ function PrintModal({ rx, patient, clinic, onClose, collectorId }: {
       ))}
     </>
   );
+
+  return sheetsBody;
+}
+
+function PrintModal({ rx, patient, clinic, onClose, collectorId }: {
+  rx: {
+    date: string;
+    medications: Medication[];
+    instructions: string;
+    prescription_type: PrescriptionType;
+    patientAddress?: string;
+    patientPhone?: string;
+  };
+  patient: any;
+  clinic?: any;
+  onClose: () => void;
+  // M8: id único do documento no coletor de impressão em lote. Quando null,
+  // o modal NÃO registra nada (ex.: reimpressão a partir do histórico), evitando
+  // que uma receita antiga sobreponha/apague a receita gerada hoje.
+  collectorId?: string | null;
+}) {
+  const type = normalizePrescriptionType(rx.prescription_type);
+  const labelMap: Record<PrescriptionType, string> = {
+    simples: "Receita Simples — 1 via",
+    controle_especial: "Controle Especial (RCE) — 2 vias",
+    antimicrobiano: "Antimicrobiano (ATB) — 2 vias",
+  };
+  const sheetsBody = <RxSheets rx={rx} patient={patient} clinic={clinic} />;
 
   // Registra a receita no coletor da consulta (impressão final em lote).
   // M8: id ÚNICO por documento (collectorId incremental do TabReceita), para que
@@ -1935,6 +1958,20 @@ interface BlocoFolha {
   dataISO: string;
   tipo: string | null;
   texto: string;
+  // Texto exato que veio do servidor (21/10): vai junto no PATCH para o
+  // servidor recusar (409) se o registro mudou por fora desde então.
+  raw?: string;
+}
+
+// 21/10 (Valth): a tela aberta apagava o que entrou por fora (Marinaldo,
+// Lígia, Cleonice). No 409, junta: texto atual do servidor + as linhas que o
+// médico ACRESCENTOU nesta tela (as que não estavam no texto que ela leu).
+// Melhor repetir uma linha do que perder uma.
+function juntarAnamnese(servidor: string, base: string, minha: string): string {
+  const naBase = new Set(base.split("\n").map(l => l.trim()).filter(Boolean));
+  const noServidor = new Set(servidor.split("\n").map(l => l.trim()).filter(Boolean));
+  const novas = minha.split("\n").filter(l => l.trim() && !naBase.has(l.trim()) && !noServidor.has(l.trim()));
+  return novas.length ? `${servidor.trimEnd()}\n${novas.join("\n")}` : servidor;
 }
 
 function montarFolha(blocos: BlocoFolha[]): string {
@@ -2007,7 +2044,7 @@ function TabProntuario({ patientId, patient, clinic }: { patientId: number; pati
           .sort((a, b) => a.entry_date.localeCompare(b.entry_date) || (a.id - b.id));
         const blocos: BlocoFolha[] = evs.map(ev => {
           const { tipo, texto } = separarTipo(ev.content);
-          return { id: ev.id, dataISO: ev.entry_date, tipo, texto };
+          return { id: ev.id, dataISO: ev.entry_date, tipo, texto, raw: ev.content };
         });
         refBlocos.current = blocos;
         setTotalDias(blocos.length);
@@ -2201,7 +2238,16 @@ function TabProntuario({ patientId, patient, clinic }: { patientId: number; pati
           }
           const antes = naMesmaPosicao.tipo ? `[${naMesmaPosicao.tipo.toUpperCase()}]\n${naMesmaPosicao.texto}` : naMesmaPosicao.texto;
           if (antes !== conteudo) {
-            await evolutionApi.update(naMesmaPosicao.id!, { content: conteudo });
+            try {
+              await evolutionApi.update(naMesmaPosicao.id!, { content: conteudo, base_content: naMesmaPosicao.raw });
+            } catch (e: any) {
+              const atual = e?.response?.status === 409 ? e.response.data?.detail?.content_atual : undefined;
+              if (typeof atual !== "string") throw e;
+              const juntado = juntarAnamnese(atual, naMesmaPosicao.raw ?? antes, conteudo);
+              if (juntado !== atual) await evolutionApi.update(naMesmaPosicao.id!, { content: juntado, base_content: atual });
+              toast("A anamnese foi mudada em outro lugar enquanto o senhor escrevia. Juntei o seu texto ao texto novo — confira.",
+                    { icon: "⚠️", duration: 10000 });
+            }
             atualizados++;
           }
         } else if (b.texto) {
@@ -2224,7 +2270,7 @@ function TabProntuario({ patientId, patient, clinic }: { patientId: number; pati
         .sort((a, b) => a.entry_date.localeCompare(b.entry_date) || (a.id - b.id));
       const novos: BlocoFolha[] = evs.map(ev => {
         const { tipo, texto } = separarTipo(ev.content);
-        return { id: ev.id, dataISO: ev.entry_date, tipo, texto };
+        return { id: ev.id, dataISO: ev.entry_date, tipo, texto, raw: ev.content };
       });
       refBlocos.current = novos;
       setTotalDias(novos.length);
@@ -3549,15 +3595,9 @@ function TabReceita({ patientId, patient, clinic, rxExterna }: { patientId: numb
 // ── Tab: Exames ────────────────────────────────────────────────────────────────
 
 // Modal de impressão de pedido de exame
-function PrintExamModal({ text, patientName, patient, clinic, onClose, fontSize = 14, lineHeight = "normal", dataISO }: {
-  text: string;
-  dataISO?: string; // 19/10 (Valth): pedido salvo com data futura imprime com a data dele
-  patientName: string;
-  patient?: any;
-  clinic?: any;
-  onClose: () => void;
-  fontSize?: 12 | 14 | 16;
-  lineHeight?: "normal" | "relaxed";
+function ExamSheet({ text, patientName, patient, clinic, fontSize = 14, lineHeight = "normal", dataISO }: {
+  text: string; patientName: string; patient?: any; clinic?: any;
+  fontSize?: 12 | 14 | 16; lineHeight?: "normal" | "relaxed"; dataISO?: string;
 }) {
   const nasc = patient?.birth_date || patient?.birthdate || patient?.date_of_birth || null;
   const cids: string[] = Array.isArray(patient?.cids) ? patient.cids.filter(Boolean) : [];
@@ -3598,6 +3638,21 @@ function PrintExamModal({ text, patientName, patient, clinic, onClose, fontSize 
       <FechoOficial clinic={clinic} dataISO={dataISO} />
     </div>
   );
+
+  return folha;
+}
+
+function PrintExamModal({ text, patientName, patient, clinic, onClose, fontSize = 14, lineHeight = "normal", dataISO }: {
+  text: string;
+  dataISO?: string; // 19/10 (Valth): pedido salvo com data futura imprime com a data dele
+  patientName: string;
+  patient?: any;
+  clinic?: any;
+  onClose: () => void;
+  fontSize?: 12 | 14 | 16;
+  lineHeight?: "normal" | "relaxed";
+}) {
+  const folha = <ExamSheet text={text} patientName={patientName} patient={patient} clinic={clinic} fontSize={fontSize} lineHeight={lineHeight} dataISO={dataISO} />;
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.6)" }}>
@@ -7337,6 +7392,256 @@ function TabFotos({ patientId }: { patientId: number }) {
 
 // Cronômetro da consulta no cabeçalho do drawer: soma o tempo acumulado
 // (active_seconds) + o trecho atual ao vivo; congela quando suspenso.
+// ── "Tudo de hoje": um pacote só com tudo o que o paciente leva (21/10) ────────
+// Valth: "gostei quando você juntou tudo num arquivo só para imprimir" e, no
+// mesmo dia, a impressora de Caruaru falhou e as guias e a receita foram para
+// o celular da Neide. Lê do SERVIDOR tudo o que tem data de hoje — inclusive o
+// que não foi gerado nesta tela (guia SP/SADT, pedido feito por fora) — e
+// imprime de uma vez ou manda num PDF só para a secretária da cidade.
+type ItemPacote =
+  | { id: string; tipo: "receita"; label: string; rx: RxImpressao }
+  | { id: string; tipo: "exame"; label: string; texto: string; dataISO: string }
+  | { id: string; tipo: "relatorio"; label: string; reportType: string; titulo: string; conteudo: string; dataISO: string }
+  | { id: string; tipo: "guia"; label: string; docId: number };
+
+const RX_LABEL: Record<string, string> = {
+  simples: "Receita simples",
+  controle_especial: "Receita de controle especial (2 vias)",
+  antimicrobiano: "Receita de antimicrobiano (2 vias)",
+};
+
+function ReportSheet({ item, patient, clinic }: { item: Extract<ItemPacote, { tipo: "relatorio" }>; patient: any; clinic?: any }) {
+  if (item.reportType === "encaminhamento") {
+    return (
+      <div style={{ fontFamily: "Arial, Helvetica, sans-serif", color: "#1a1a1a", fontSize: "13px" }}>
+        <TimbradoOficial clinic={clinic} />
+        <p style={{ textAlign: "center", fontFamily: DOC_SERIF, fontSize: "13px", fontWeight: 700, letterSpacing: "3px", textTransform: "uppercase", color: "#0F2D5E", margin: "0 0 16px" }}>
+          Encaminhamento médico
+        </p>
+        <div style={{ border: "1px solid #ddd", borderRadius: "3px", padding: "9px 12px", marginBottom: "16px", fontSize: "12px", lineHeight: 1.7 }}>
+          <div><span style={{ color: "#666" }}>Paciente: </span><strong>{patient?.name}</strong></div>
+          <div><span style={{ color: "#666" }}>Data: </span>{formatDate(item.dataISO)}</div>
+        </div>
+        <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.7, fontSize: "13px", minHeight: "80px" }}>{item.conteudo}</div>
+        <FechoOficial clinic={clinic} dataISO={item.dataISO} />
+      </div>
+    );
+  }
+  if (item.reportType === "laudo" || item.reportType === "laudo_medico") {
+    const age = patient?.birth_date ? calcAge(patient.birth_date) : "";
+    return (
+      <div style={{ fontFamily: DOC_SERIF, color: "#1a1a1a", fontSize: "12.5px", lineHeight: 1.75 }}>
+        <TimbradoOficial clinic={clinic} />
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "3px 18px", margin: "0 0 20px", fontSize: "11.5px", padding: "10px 14px", background: "#f8f7f4", border: "1px solid #e3e0d8", borderRadius: "2px" }}>
+          <p style={{ margin: 0 }}><strong>Paciente:</strong> {patient?.name}</p>
+          <p style={{ margin: 0 }}><strong>Data:</strong> {formatDate(item.dataISO)}</p>
+          {patient?.birth_date && <p style={{ margin: 0 }}><strong>Nascimento:</strong> {new Date(patient.birth_date + "T12:00:00").toLocaleDateString("pt-BR")}{age ? ` (${age})` : ""}</p>}
+          {patient?.cpf && <p style={{ margin: 0 }}><strong>CPF:</strong> {patient.cpf}</p>}
+        </div>
+        <div style={{ textAlign: "center", margin: "0 0 22px" }}>
+          <p style={{ fontFamily: DOC_SERIF, fontWeight: 700, fontSize: "17px", textTransform: "uppercase", letterSpacing: "7px", color: "#1a1a1a", margin: 0 }}>{item.titulo || "Laudo Médico"}</p>
+          <div style={{ width: "80px", borderTop: "1.5px solid #0F2D5E", margin: "10px auto 0" }} />
+        </div>
+        <div style={{ whiteSpace: "pre-wrap", textAlign: "justify", lineHeight: 1.85, fontSize: "12.5px", marginBottom: "20px", textJustify: "inter-word" as any }}>{item.conteudo}</div>
+        <FechoOficial clinic={clinic} dataISO={item.dataISO} />
+      </div>
+    );
+  }
+  return (
+    <div style={{ fontFamily: DOC_SERIF, color: "#1a1a1a", fontSize: "12.5px", lineHeight: 1.75 }}>
+      <TimbradoOficial clinic={clinic} />
+      <div style={{ textAlign: "center", margin: "0 0 22px" }}>
+        <p style={{ fontFamily: DOC_SERIF, fontWeight: 700, fontSize: "17px", textTransform: "uppercase", letterSpacing: "7px", color: "#1a1a1a", margin: 0 }}>{item.titulo}</p>
+        <div style={{ width: "80px", borderTop: `1.5px solid ${OM_NAVY}`, margin: "10px auto 0" }} />
+      </div>
+      <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.85, textAlign: "justify" }}>{item.conteudo}</div>
+      <FechoOficial clinic={clinic} dataISO={item.dataISO} />
+    </div>
+  );
+}
+
+function PacoteDoDia({ patientId, patient, clinic, onClose }: { patientId: number; patient: any; clinic?: any; onClose: () => void }) {
+  const hoje = hojeISO();
+  const [itens, setItens] = useState<ItemPacote[] | null>(null);
+  const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
+  const [paginas, setPaginas] = useState<Record<number, string[]>>({});
+  const [enviando, setEnviando] = useState(false);
+
+  useEffect(() => {
+    let vivo = true;
+    const doDia = (d: any) => String(d || "").slice(0, 10) === hoje;
+    Promise.all([
+      prescriptionsApi.list(patientId).catch(() => []),
+      examsApi.list(patientId).catch(() => []),
+      reportsApi.list(patientId).catch(() => []),
+      api.get(`/patients/${patientId}/documents`).then((r) => r.data).catch(() => []),
+    ]).then(([rxs, exs, rels, docs]: any[]) => {
+      if (!vivo) return;
+      const lista: ItemPacote[] = [];
+      for (const r of (rxs || []).filter((r: any) => doDia(r.date) && RX_LABEL[r.prescription_type])) {
+        lista.push({ id: `rx${r.id}`, tipo: "receita", label: RX_LABEL[r.prescription_type], rx: {
+          date: String(r.date).slice(0, 10), medications: r.medications || [], instructions: r.instructions || "",
+          prescription_type: normalizePrescriptionType(r.prescription_type),
+          patientAddress: r.patient_address || undefined, patientPhone: r.patient_phone || undefined,
+        } });
+      }
+      for (const e of (exs || []).filter((e: any) => doDia(e.date) && (e.free_text || "").trim())) {
+        const primeira = (e.free_text as string).split("\n").map((l) => l.trim()).filter((l) => l && !/^SOLICITO/i.test(l))[0] || "";
+        lista.push({ id: `ex${e.id}`, tipo: "exame", label: `Pedido de exame — ${primeira}`.slice(0, 90), texto: e.free_text, dataISO: String(e.date).slice(0, 10) });
+      }
+      for (const r of (rels || []).filter((r: any) => doDia(r.date))) {
+        lista.push({ id: `re${r.id}`, tipo: "relatorio", label: r.title || r.report_type, reportType: r.report_type, titulo: r.title || "", conteudo: r.content || "", dataISO: String(r.date).slice(0, 10) });
+      }
+      for (const d of (Array.isArray(docs) ? docs : []).filter((d: any) =>
+        (doDia(d.date) || doDia(d.created_at)) && (d.mime_type || "").includes("pdf") && ["referral", "report", "other"].includes(d.category))) {
+        lista.push({ id: `dc${d.id}`, tipo: "guia", label: d.title, docId: d.id });
+      }
+      setItens(lista);
+      setSelecionados(new Set(lista.map((i) => i.id)));
+      for (const g of lista) {
+        if (g.tipo !== "guia") continue;
+        api.get(`/patients/${patientId}/documents/${g.docId}/paginas`)
+          .then((r) => { if (vivo) setPaginas((p) => ({ ...p, [g.docId]: r.data.paginas || [] })); })
+          .catch(() => { if (vivo) setPaginas((p) => ({ ...p, [g.docId]: [] })); });
+      }
+    });
+    return () => { vivo = false; };
+  }, [patientId, hoje]);
+
+  const escolhidos = (itens || []).filter((i) => selecionados.has(i.id));
+  const guiasCarregando = escolhidos.some((i) => i.tipo === "guia" && paginas[i.docId] === undefined);
+  const alternar = (id: string) => setSelecionados((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+
+  const folha = (i: ItemPacote) => {
+    if (i.tipo === "receita") return <RxSheets rx={i.rx} patient={patient} clinic={clinic} />;
+    if (i.tipo === "exame") return <ExamSheet text={i.texto} patientName={patient?.name || ""} patient={patient} clinic={clinic} dataISO={i.dataISO} fontSize={loadExamFontSize()} lineHeight={loadExamLineHeight()} />;
+    if (i.tipo === "relatorio") return <ReportSheet item={i} patient={patient} clinic={clinic} />;
+    const pgs = paginas[i.docId] || [];
+    return <>{pgs.map((src, k) => <img key={k} src={src} alt="" style={{ width: "210mm", height: "297mm", display: "block" }} />)}</>;
+  };
+
+  // Mesma fotografia do "Baixar PDF" do laudo, uma folha por documento (cada
+  // via da receita de 2 vias na sua folha); a guia entra como página inteira
+  // porque ela já tem a margem de impressão embutida.
+  const montarPdf = async (): Promise<Blob> => {
+    const [{ default: html2canvas }, { jsPDF }] = await Promise.all([import("html2canvas"), import("jspdf")]);
+    const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
+    let primeira = true;
+    const novaPagina = () => { if (!primeira) pdf.addPage(); primeira = false; };
+    const margem = 12, larguraUtil = 210 - margem * 2, alturaUtil = 297 - margem * 2;
+    for (const i of escolhidos) {
+      if (i.tipo === "guia") {
+        for (const src of paginas[i.docId] || []) { novaPagina(); pdf.addImage(src, "PNG", 0, 0, 210, 297); }
+        continue;
+      }
+      const fonte = document.querySelector(`#pd-print-portal [data-pd="${i.id}"]`) as HTMLElement | null;
+      if (!fonte) continue;
+      const vias = Array.from(fonte.querySelectorAll(".rx-via")) as HTMLElement[];
+      const partes = i.tipo === "receita" && vias.length ? vias : [fonte];
+      for (const parte of partes) {
+        const clone = parte.cloneNode(true) as HTMLElement;
+        Object.assign(clone.style, { display: "block", position: "fixed", left: "-10000px", top: "0", width: "794px", background: "#fff", boxSizing: "border-box" });
+        clone.querySelectorAll(".rx-cut-line").forEach((n) => n.remove());
+        document.body.appendChild(clone);
+        try {
+          const canvas = await html2canvas(clone, { scale: 2, backgroundColor: "#ffffff", useCORS: true });
+          const pxPorMm = canvas.width / larguraUtil;
+          const alturaPaginaPx = Math.floor(alturaUtil * pxPorMm);
+          for (let y = 0; y < canvas.height - 4; y += alturaPaginaPx) {
+            const fatia = document.createElement("canvas");
+            fatia.width = canvas.width;
+            fatia.height = Math.min(alturaPaginaPx, canvas.height - y);
+            const ctx = fatia.getContext("2d")!;
+            ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, fatia.width, fatia.height);
+            ctx.drawImage(canvas, 0, y, canvas.width, fatia.height, 0, 0, canvas.width, fatia.height);
+            novaPagina();
+            pdf.addImage(fatia.toDataURL("image/jpeg", 0.92), "JPEG", margem, margem, larguraUtil, fatia.height / pxPorMm);
+          }
+        } finally { clone.remove(); }
+      }
+    }
+    return pdf.output("blob");
+  };
+
+  const mandarSecretaria = async () => {
+    if (!escolhidos.length) return;
+    setEnviando(true);
+    try {
+      const blob = await montarPdf();
+      const fd = new FormData();
+      fd.append("arquivo", blob, "documentos.pdf");
+      const r = await api.post(`/patients/${patientId}/enviar-secretaria`, fd, { headers: { "Content-Type": "multipart/form-data" } });
+      toast.success(`Enviado para ${r.data.secretaria} pelo WhatsApp da clínica`);
+    } catch (e: any) {
+      toast.error(msgErro(e, "Não consegui mandar para a secretária"));
+    } finally {
+      setEnviando(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[210] flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.6)" }}>
+      <style>{`
+        @media print {
+          html, body { height: auto !important; overflow: visible !important; background: #fff !important; }
+          body > *:not([data-print-portal]) { display: none !important; }
+          #pd-print-portal { display: block !important; position: static !important; width: 100% !important; background: #fff !important; }
+          @page { size: A4 portrait; margin: 10mm 12mm; }
+          @page guia { size: A4 portrait; margin: 0; }
+          .pd-guia { page: guia; }
+          .pd-doc { page-break-after: always; break-after: page; }
+          .pd-doc:last-child { page-break-after: auto; break-after: auto; }
+          .rx-via-break { page-break-after: always; break-after: page; }
+          .rx-cut-line { display: none !important; }
+        }
+      `}</style>
+      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden">
+        <div className="no-print px-5 pt-4 pb-3 border-b border-gray-200 dark:border-slate-700 flex items-center justify-between flex-shrink-0">
+          <div>
+            <h2 className="font-bold text-slate-900 dark:text-slate-50 text-sm">Tudo de hoje</h2>
+            <p className="text-xs text-slate-500 mt-0.5">Receitas, pedidos, laudos e guias com a data de hoje — sai tudo de uma vez</p>
+          </div>
+          <button onClick={onClose} className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700"><X className="w-4 h-4" /></button>
+        </div>
+        <div className="no-print flex-1 overflow-y-auto p-4 space-y-2">
+          {itens === null ? (
+            <p className="text-sm text-slate-400 text-center py-6">Carregando…</p>
+          ) : itens.length === 0 ? (
+            <p className="text-sm text-slate-400 italic text-center py-6">Nenhum documento com a data de hoje.</p>
+          ) : itens.map((i) => (
+            <label key={i.id} className="flex items-center gap-2 px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg cursor-pointer select-none">
+              <input type="checkbox" checked={selecionados.has(i.id)} onChange={() => alternar(i.id)} className="w-4 h-4 rounded accent-blue-600" />
+              <span className="text-sm text-slate-700 dark:text-slate-200 flex-1">{i.label}</span>
+              {i.tipo === "guia" && paginas[i.docId] === undefined && <span className="text-[10px] text-slate-400">carregando…</span>}
+            </label>
+          ))}
+        </div>
+        {!!itens?.length && (
+          <div className="no-print px-4 py-3 border-t border-slate-200 dark:border-slate-700 flex flex-wrap items-center justify-end gap-2 flex-shrink-0">
+            <span className="text-xs text-slate-500 mr-auto">{escolhidos.length} de {itens.length}</span>
+            <button onClick={mandarSecretaria} disabled={!escolhidos.length || enviando || guiasCarregando}
+              className="flex items-center gap-2 px-3 py-2 border border-green-600 text-green-700 rounded-lg hover:bg-green-50 font-semibold text-sm disabled:opacity-40">
+              <Send className="w-4 h-4" /> {enviando ? "Enviando…" : "Mandar para a secretária"}
+            </button>
+            <button onClick={() => window.print()} disabled={!escolhidos.length || guiasCarregando}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold text-sm disabled:opacity-40">
+              <Printer className="w-4 h-4" /> Imprimir
+            </button>
+          </div>
+        )}
+        {typeof document !== "undefined" && createPortal(
+          <div id="pd-print-portal" data-print-portal style={{ display: "none" }}>
+            {escolhidos.map((i) => (
+              <div key={i.id} data-pd={i.id} className={`pd-doc${i.tipo === "guia" ? " pd-guia" : ""}`}>{folha(i)}</div>
+            ))}
+          </div>,
+          document.body,
+        )}
+      </div>
+    </div>
+  );
+}
+
 function DrawerCrono({ entry }: { entry: WaitingRoomEntry }) {
   const [nowMs, setNowMs] = useState(serverNow());
   useEffect(() => {
@@ -7417,6 +7722,7 @@ export default function ConsultaDrawer({ entry, onClose, onStatusChange }: Consu
   // Coletor de documentos da consulta (impressão final em lote).
   const [collectedDocs, setCollectedDocs] = useState<CollectedDoc[]>([]);
   const [printCenterOpen, setPrintCenterOpen] = useState(false);
+  const [pacoteAberto, setPacoteAberto] = useState(false);
   const addDoc = useCallback((doc: CollectedDoc) => {
     setCollectedDocs((prev) => [...prev.filter((d) => d.id !== doc.id), doc]);
   }, []);
@@ -7566,6 +7872,9 @@ export default function ConsultaDrawer({ entry, onClose, onStatusChange }: Consu
     <div className="flex flex-col h-full bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-700 overflow-hidden">
       {printCenterOpen && (
         <ConsultaPrintCenter docs={collectedDocs} onRemove={removeDoc} onClose={() => setPrintCenterOpen(false)} />
+      )}
+      {pacoteAberto && (
+        <PacoteDoDia patientId={entry.patient_id} patient={patient} clinic={clinic} onClose={() => setPacoteAberto(false)} />
       )}
       {/* ── Header ── */}
       <div className="flex-shrink-0 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 px-5 pt-4 pb-3 space-y-3">
@@ -7733,11 +8042,19 @@ export default function ConsultaDrawer({ entry, onClose, onStatusChange }: Consu
             {entry.status === "attending" ? "Em Atendimento" : entry.status === "suspended" ? "Suspenso" : entry.status === "waiting" ? "Aguardando" : entry.status === "attended" ? "Atendido" : "Ausente"}
           </span>
 
+          {/* 21/10: tudo o que tem data de hoje (inclusive o que entrou por fora) */}
+          <button
+            onClick={() => setPacoteAberto(true)}
+            className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700"
+            title="Juntar receitas, pedidos, laudos e guias de hoje para imprimir ou mandar para a secretária"
+          >
+            <Printer className="w-3.5 h-3.5" /> Tudo de hoje
+          </button>
           {/* Impressão final em lote — só aparece quando há documentos gerados */}
           {collectedDocs.length > 0 && (
             <button
               onClick={() => setPrintCenterOpen(true)}
-              className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 dark:bg-slate-200 text-white dark:text-slate-900 text-xs font-semibold hover:bg-slate-900 dark:hover:bg-white"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 dark:bg-slate-200 text-white dark:text-slate-900 text-xs font-semibold hover:bg-slate-900 dark:hover:bg-white"
               title="Imprimir todos os documentos gerados no atendimento de uma vez"
             >
               <Printer className="w-3.5 h-3.5" /> Imprimir documentos ({collectedDocs.length})

@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 from datetime import date, datetime
 from pydantic import BaseModel
 from database import get_db
@@ -27,6 +27,11 @@ class EvolutionCreate(BaseModel):
 
 class EvolutionUpdate(BaseModel):
     content: str
+    # 21/10 (Valth): a tela aberta gravava por cima do que entrou por fora
+    # (Marinaldo, Lígia, Cleonice). A tela manda o texto que ela leu do
+    # servidor; se o registro mudou desde então, devolve 409 com o texto atual
+    # para a tela juntar as duas versões em vez de apagar uma.
+    base_content: Optional[str] = None
 
 
 class EvolutionOut(BaseModel):
@@ -105,10 +110,34 @@ def update_evolution(
     ev = q.first()
     if not ev:
         raise HTTPException(status_code=404, detail="Evolução não encontrada")
+    if data.base_content is not None and (ev.content or "").strip() != data.base_content.strip():
+        raise HTTPException(status_code=409, detail={
+            "msg": "A anamnese foi alterada em outro lugar desde que a tela abriu.",
+            "content_atual": ev.content,
+        })
     ev.content = data.content.strip()
     db.commit()
     db.refresh(ev)
     return ev
+
+
+@router.get("/{patient_id}/evolutions/{evolution_id}/versions")
+def list_versions(
+    patient_id: int,
+    evolution_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Versões anteriores de um registro (gravadas pelo gatilho do banco a cada
+    alteração ou exclusão — vale para a tela, para a API e para SQL direto)."""
+    from sqlalchemy import text
+    q = "select v.id, v.content, v.operacao, v.gravado_em from clinical_evolution_versions v "         "join patients p on p.id = v.patient_id where v.evolution_id = :e and v.patient_id = :p"
+    params = {"e": evolution_id, "p": patient_id}
+    if current_user.role != "superadmin":
+        q += " and p.organization_id = :o"
+        params["o"] = current_user.organization_id
+    rows = db.execute(text(q + " order by v.id desc"), params).fetchall()
+    return [{"id": r[0], "content": r[1], "operacao": r[2], "gravado_em": r[3]} for r in rows]
 
 
 @router.delete("/{patient_id}/evolutions/{evolution_id}", status_code=204)

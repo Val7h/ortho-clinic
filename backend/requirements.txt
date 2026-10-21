@@ -10,6 +10,7 @@ python-multipart==0.0.12
 python-dotenv==1.0.1
 aiofiles==24.1.0
 reportlab==4.2.4
+pymupdf==1.24.10               # páginas da guia SP/SADT no pacote do dia (21/10)
 Pillow==10.4.0
 httpx==0.27.2
 python-jose[cryptography]==3.3.0

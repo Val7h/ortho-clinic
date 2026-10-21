@@ -270,7 +270,7 @@ export const evolutionApi = {
     api.get(`/patients/${patientId}/evolutions`).then((r) => r.data),
   create: (patientId: number, data: { entry_date: string; content: string }) =>
     api.post(`/patients/${patientId}/evolutions`, data).then((r) => r.data),
-  update: (id: number, data: { content: string }) =>
+  update: (id: number, data: { content: string; base_content?: string }) =>
     api.patch(`/evolutions/${id}`, data).then((r) => r.data),
 };
 
