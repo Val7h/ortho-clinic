@@ -79,13 +79,27 @@ def _chave(tel: str) -> Optional[str]:
 
 
 def _paciente_do_telefone(db: Session, tel: str) -> List[int]:
+    """Telefone, telefone 2 e de contato do cadastro + telefone do agendamento
+    (a mãe que marca pelo celular dela entra por aqui). Se o número serve a mais
+    de um paciente, desempata por quem está na sala de espera de hoje ou tem
+    agendamento de 7 dias atrás a 7 dias à frente; senão devolve todos (pendente)."""
     k = _chave(tel)
     if not k:
         return []
-    ids = []
-    for pid, fone in db.execute(text("select id, phone from patients where active = true and phone is not null and organization_id = 1")).fetchall():
-        if _chave(fone) == k:
-            ids.append(pid)
+    fontes = db.execute(text(
+        "select id, unnest(array[phone, phone2, emergency_phone]) from patients "
+        "where active = true and organization_id = 1 "
+        "union all select a.patient_id, a.patient_phone from appointments a join patients p on p.id = a.patient_id "
+        "where p.active = true and p.organization_id = 1 and a.patient_phone is not null")).fetchall()
+    ids = sorted({pid for pid, fone in fontes if fone and _chave(fone) == k})
+    if len(ids) > 1:
+        perto = db.execute(text(
+            "select patient_id from waiting_room_entries where patient_id = any(:ids) and entry_date = (now() at time zone 'America/Sao_Paulo')::date "
+            "union select patient_id from appointments where patient_id = any(:ids) "
+            "and date between (now() at time zone 'America/Sao_Paulo')::date - 7 and (now() at time zone 'America/Sao_Paulo')::date + 7"), {"ids": ids}).fetchall()
+        perto = sorted({r[0] for r in perto})
+        if len(perto) == 1:
+            return perto
     return ids
 
 
@@ -111,14 +125,19 @@ def importar_midias(lote: LoteIn, apikey: str = Header(""), db: Session = Depend
     _garantir_tabela(db)
     resumo = {"anexadas": 0, "pendentes": 0, "ja_vistas": 0, "ignoradas": 0}
     for m in lote.midias:
-        if db.execute(text("select 1 from whatsapp_midias_importadas where message_id = :i"), {"i": m.message_id}).first():
+        # Anexada ou ignorada não volta; pendente (sem paciente ainda) tenta de novo
+        # a cada ciclo enquanto estiver na janela de 48 h — o cadastro pode chegar depois.
+        if db.execute(text("select 1 from whatsapp_midias_importadas where message_id = :i "
+                           "and situacao in ('anexada', 'ignorada') or (message_id = :i and situacao like 'tipo%')"),
+                      {"i": m.message_id}).first():
             resumo["ja_vistas"] += 1
             continue
         tel = re.sub(r"\D", "", m.telefone)
 
         def marcar(situacao: str, pid=None, did=None):
             db.execute(text("insert into whatsapp_midias_importadas(message_id,instancia,telefone,patient_id,document_id,situacao) "
-                            "values (:i,:n,:t,:p,:d,:s) on conflict do nothing"),
+                            "values (:i,:n,:t,:p,:d,:s) on conflict (message_id) do update set "
+                            "patient_id = excluded.patient_id, document_id = excluded.document_id, situacao = excluded.situacao"),
                        {"i": m.message_id, "n": m.instancia, "t": tel, "p": pid, "d": did, "s": situacao})
             db.commit()
 
