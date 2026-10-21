@@ -760,6 +760,11 @@ def _build_entry_out(entry: WaitingRoomEntry, patient: Patient, now: datetime) -
 
 # ── Fila ↔ Agenda ↔ Caixa (correções 05/08, erros E3/E5/E11 do Valth) ─────────
 
+# Secretária que só trabalha numa clínica (users.id -> clinics.id). Valth 21/10/2026:
+# Neide (Dijaneide) = Unimagem; Secretaria IP e Fabiely = Instituto Pernambuco.
+SECRETARIA_CLINICA = {2: 7, 12: 6, 15: 6}
+
+
 def _infer_clinic_id(db: Session, current_user: User) -> Optional[int]:
     """Descobre EM QUAL CLÍNICA o médico está agora, pela grade fixa da semana.
 
@@ -768,6 +773,12 @@ def _infer_clinic_id(db: Session, current_user: User) -> Optional[int]:
     ter=Mário Bento, qua manhã=IP / qua tarde=Unimagem, qui=CTO/Artro.
     Regra: turno que contém a hora atual; se nenhum, o turno mais próximo do dia.
     """
+    # 21/10/2026 (Valth): na quarta, IP (manhã) e Unimagem (tarde) se sobrepõem — a
+    # secretária do IP ainda cadastra depois do meio-dia e o paciente saía como Unimagem
+    # (Robson, Arivonaldo). Quem cadastra manda: secretária fixa de uma clínica = a clínica dela.
+    if current_user.id in SECRETARIA_CLINICA:
+        return SECRETARIA_CLINICA[current_user.id]
+
     agora = now_br()
     dow = agora.weekday()  # 0=Seg
     hhmm = agora.strftime("%H:%M")
