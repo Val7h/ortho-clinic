@@ -7464,7 +7464,8 @@ function PacoteDoDia({ patientId, patient, clinic, onClose }: { patientId: numbe
   const hoje = hojeISO();
   const [itens, setItens] = useState<ItemPacote[] | null>(null);
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
-  const [paginas, setPaginas] = useState<Record<number, string[]>>({});
+  // Guia da Unimed é DEITADA (297 x 210 mm); cada guia guarda o tamanho da folha.
+  const [paginas, setPaginas] = useState<Record<number, { imgs: string[]; deitada: boolean }>>({});
   const [enviando, setEnviando] = useState(false);
 
   useEffect(() => {
@@ -7501,8 +7502,8 @@ function PacoteDoDia({ patientId, patient, clinic, onClose }: { patientId: numbe
       for (const g of lista) {
         if (g.tipo !== "guia") continue;
         api.get(`/patients/${patientId}/documents/${g.docId}/paginas`)
-          .then((r) => { if (vivo) setPaginas((p) => ({ ...p, [g.docId]: r.data.paginas || [] })); })
-          .catch(() => { if (vivo) setPaginas((p) => ({ ...p, [g.docId]: [] })); });
+          .then((r) => { if (vivo) setPaginas((p) => ({ ...p, [g.docId]: { imgs: r.data.paginas || [], deitada: (r.data.largura_mm || 0) > (r.data.altura_mm || 0) } })); })
+          .catch(() => { if (vivo) setPaginas((p) => ({ ...p, [g.docId]: { imgs: [], deitada: false } })); });
       }
     });
     return () => { vivo = false; };
@@ -7516,8 +7517,9 @@ function PacoteDoDia({ patientId, patient, clinic, onClose }: { patientId: numbe
     if (i.tipo === "receita") return <RxSheets rx={i.rx} patient={patient} clinic={clinic} />;
     if (i.tipo === "exame") return <ExamSheet text={i.texto} patientName={patient?.name || ""} patient={patient} clinic={clinic} dataISO={i.dataISO} fontSize={loadExamFontSize()} lineHeight={loadExamLineHeight()} />;
     if (i.tipo === "relatorio") return <ReportSheet item={i} patient={patient} clinic={clinic} />;
-    const pgs = paginas[i.docId] || [];
-    return <>{pgs.map((src, k) => <img key={k} src={src} alt="" style={{ width: "210mm", height: "297mm", display: "block" }} />)}</>;
+    const g = paginas[i.docId];
+    const [w, h] = g?.deitada ? ["297mm", "210mm"] : ["210mm", "297mm"];
+    return <>{(g?.imgs || []).map((src, k) => <img key={k} src={src} alt="" style={{ width: w, height: h, display: "block" }} />)}</>;
   };
 
   // Mesma fotografia do "Baixar PDF" do laudo, uma folha por documento (cada
@@ -7527,11 +7529,18 @@ function PacoteDoDia({ patientId, patient, clinic, onClose }: { patientId: numbe
     const [{ default: html2canvas }, { jsPDF }] = await Promise.all([import("html2canvas"), import("jspdf")]);
     const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
     let primeira = true;
-    const novaPagina = () => { if (!primeira) pdf.addPage(); primeira = false; };
+    const novaPagina = () => { if (!primeira) pdf.addPage("a4", "portrait"); primeira = false; };
     const margem = 12, larguraUtil = 210 - margem * 2, alturaUtil = 297 - margem * 2;
     for (const i of escolhidos) {
       if (i.tipo === "guia") {
-        for (const src of paginas[i.docId] || []) { novaPagina(); pdf.addImage(src, "PNG", 0, 0, 210, 297); }
+        const g = paginas[i.docId];
+        for (const src of g?.imgs || []) {
+          if (primeira) {
+            if (g.deitada) { pdf.deletePage(1); pdf.addPage("a4", "landscape"); }
+            primeira = false;
+          } else pdf.addPage("a4", g.deitada ? "landscape" : "portrait");
+          pdf.addImage(src, "PNG", 0, 0, g.deitada ? 297 : 210, g.deitada ? 210 : 297);
+        }
         continue;
       }
       const fonte = document.querySelector(`#pd-print-portal [data-pd="${i.id}"]`) as HTMLElement | null;
@@ -7588,7 +7597,9 @@ function PacoteDoDia({ patientId, patient, clinic, onClose }: { patientId: numbe
           #pd-print-portal { display: block !important; position: static !important; width: 100% !important; background: #fff !important; }
           @page { size: A4 portrait; margin: 10mm 12mm; }
           @page guia { size: A4 portrait; margin: 0; }
+          @page guiadeitada { size: A4 landscape; margin: 0; }
           .pd-guia { page: guia; }
+          .pd-guia-deitada { page: guiadeitada; }
           .pd-doc { page-break-after: always; break-after: page; }
           .pd-doc:last-child { page-break-after: auto; break-after: auto; }
           .rx-via-break { page-break-after: always; break-after: page; }
@@ -7632,7 +7643,7 @@ function PacoteDoDia({ patientId, patient, clinic, onClose }: { patientId: numbe
         {typeof document !== "undefined" && createPortal(
           <div id="pd-print-portal" data-print-portal style={{ display: "none" }}>
             {escolhidos.map((i) => (
-              <div key={i.id} data-pd={i.id} className={`pd-doc${i.tipo === "guia" ? " pd-guia" : ""}`}>{folha(i)}</div>
+              <div key={i.id} data-pd={i.id} className={`pd-doc${i.tipo === "guia" ? (paginas[i.docId]?.deitada ? " pd-guia-deitada" : " pd-guia") : ""}`}>{folha(i)}</div>
             ))}
           </div>,
           document.body,
