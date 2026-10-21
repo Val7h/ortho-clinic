@@ -40,6 +40,7 @@ export interface JobImpressao {
 }
 
 const semAcento = (t: string) => (t || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+const reais = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const hojeISO = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
 
 // "25 MG COM CT BL ..." -> { dose: "25MG", forma: "COM" }
@@ -139,23 +140,39 @@ export default function TabPrescricao({ patientId, patient, onImprimir }: {
     return () => clearTimeout(t);
   }, [q]);
 
-  // agrupa caixas diferentes da mesma apresentação (CMED repete por tamanho de caixa)
+  // agrupa caixas diferentes da mesma apresentação (CMED repete por tamanho de caixa).
+  // 21/10/2026 (Valth): "o Torxis existe com 7 e com 14 comprimidos e você mostra só uma".
+  // Antes ficava só a 1ª caixa da lista — em ordem de texto "X 14" vem antes de "X 7",
+  // então aparecia sempre a de 14 (R$ 173,26). Agora o grupo guarda TODAS as caixas,
+  // cada uma com o seu preço, e ele escolhe clicando na caixa.
   const grupos = useMemo(() => {
     const m = new Map<string, any>();
     for (const r of resultados) {
       const { dose, forma } = resumirApresentacao(r.apresentacao);
       const k = `${r.produto}|${dose}|${forma}`;
-      if (!m.has(k)) m.set(k, { ...r, dose, forma });
+      if (!m.has(k)) m.set(k, { ...r, dose, forma, labs: new Set<string>(), caixas: [] as { n: number; min: number; max: number }[] });
+      const g = m.get(k);
+      g.labs.add(r.laboratorio);
+      const n = parseInt(((r.apresentacao || "").toUpperCase().match(/X\s*(\d+)\s*$/) || [])[1] || "0", 10);
+      const v = parseFloat(String(r.preco_maximo_pe || "").replace(/\./g, "").replace(",", "."));
+      if (!n) continue;
+      const c = g.caixas.find((x: any) => x.n === n);
+      if (!c) g.caixas.push({ n, min: v, max: v });
+      else if (!isNaN(v)) { c.min = isNaN(c.min) ? v : Math.min(c.min, v); c.max = isNaN(c.max) ? v : Math.max(c.max, v); }
     }
-    return Array.from(m.values()).slice(0, 25);
+    const lista = Array.from(m.values());
+    for (const g of lista) g.caixas.sort((a: any, b: any) => a.n - b.n);
+    return lista.slice(0, 25);
   }, [resultados]);
 
-  const adicionar = (r: any) => {
+  const adicionar = (r: any, caixa?: { n: number }) => {
     const nome = `${r.produto}${r.dose ? " " + r.dose : ""}`.toUpperCase();
+    const unid = r.forma === "CÁPSULA" ? "CÁPS" : "CP";
     const item: ItemRx = {
       uid: Math.random().toString(36).slice(2), nome, substancia: (r.substancia || "").toLowerCase(),
       via: viaDaForma(r.forma, r.apresentacao), tipo: r.tipo_receita, notificacao: r.notificacao, classe: r.classe,
-      quantidade: r.forma === "INJ" ? "1 FA" : r.forma === "ADESIVO" ? "4 ADESIVOS" : "1 CX",
+      quantidade: r.forma === "INJ" ? "1 FA" : r.forma === "ADESIVO" ? "4 ADESIVOS"
+        : caixa && (r.forma === "COMPRIMIDO" || r.forma === "CÁPSULA") ? `1 CX (${caixa.n} ${unid})` : "1 CX",
       posologia: posologiasPara(r.forma)[0],
     };
     setItens((v) => [...v, item]); guardarRecente(item); setRecentes(lerRecentes());
@@ -231,7 +248,19 @@ export default function TabPrescricao({ patientId, patient, onImprimir }: {
                     <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">{r.produto} {r.dose} <span className="font-normal text-slate-500">· {r.forma.toLowerCase()}</span></span>
                     <span className={`text-[10px] font-semibold rounded px-1.5 py-0.5 ${rt.cls}`}>{rt.txt}</span>
                   </div>
-                  <p className="text-[11px] text-slate-500">{(r.substancia || "").toLowerCase()} · {r.laboratorio}{r.preco_maximo_pe ? ` · até R$ ${r.preco_maximo_pe}` : ""}</p>
+                  <p className="text-[11px] text-slate-500">{(r.substancia || "").toLowerCase()} · {r.labs.size > 1 ? `${r.labs.size} laboratórios` : r.laboratorio}</p>
+                  {r.caixas.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {r.caixas.map((c: any) => (
+                        <span key={c.n} role="button" tabIndex={0}
+                          onClick={(e) => { e.stopPropagation(); adicionar(r, c); }}
+                          title="Preço máximo ao consumidor (PMC) em Pernambuco"
+                          className="text-[11px] rounded border border-teal-300 dark:border-teal-700 px-1.5 py-0.5 text-teal-800 dark:text-teal-200 hover:bg-teal-100 dark:hover:bg-teal-900/40">
+                          {c.n} {r.forma === "CÁPSULA" ? "cáps" : r.forma === "COMPRIMIDO" ? "cp" : "un"}{isNaN(c.min) ? "" : ` · R$ ${reais(c.min)}${c.max > c.min + 0.005 ? `–${reais(c.max)}` : ""}`}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </button>
               );
             })}
