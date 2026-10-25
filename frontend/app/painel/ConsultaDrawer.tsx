@@ -1135,8 +1135,11 @@ function RxSheets({ rx, patient, clinic }: { rx: RxImpressao; patient: any; clin
       {/* 1 · IDENTIFICAÇÃO DO EMITENTE */}
       <div style={{ border: "1px solid #999", padding: "8px 10px", marginBottom: "8px" }}>
         <p style={{ fontWeight: 700, fontSize: "8.5px", color: "#555", textTransform: "uppercase", letterSpacing: "0.5px", margin: "0 0 4px 0" }}>Identificação do Emitente</p>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-          <div>
+        {/* 25/10 (Valth): logotipo oficial dele À ESQUERDA do emitente (o mesmo do Marketing;
+            nunca editar a logo, só tamanho), texto deslocado para a direita. */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "14px" }}>
+          <img src="/logo-dr-valth.png" alt="Dr. Valth Guimarães — Ortopedia e Traumatologia" style={{ height: "58px", width: "auto", flexShrink: 0 }} />
+          <div style={{ flex: 1 }}>
             <p style={{ fontWeight: 700, fontSize: "14px", margin: "0 0 1px 0", color: headerColor }}>Dr. Valth Menezes Guimarães</p>
             <p style={{ fontSize: "10.5px", color: "#333", margin: "0" }}>Ortopedia e Traumatologia · {crmComTeot(clinic)}</p>
             <p style={{ fontSize: "10.5px", color: "#333", margin: "1px 0 0 0" }}>
@@ -1146,8 +1149,8 @@ function RxSheets({ rx, patient, clinic }: { rx: RxImpressao; patient: any; clin
           </div>
           <div style={{ textAlign: "right", minWidth: "120px" }}>
             <p style={{ fontWeight: 700, fontSize: "9px", color: headerColor, textTransform: "uppercase", margin: "0" }}>Receituário de</p>
-            <p style={{ fontWeight: 700, fontSize: "11px", color: headerColor, textTransform: "uppercase", margin: "0" }}>Controle Especial</p>
-            <p style={{ fontSize: "9px", color: "#666", margin: "3px 0 0 0" }}>Portaria SVS/MS 344/98</p>
+            <p style={{ fontWeight: 700, fontSize: "11px", color: headerColor, textTransform: "uppercase", margin: "0" }}>{isATB ? "Antimicrobiano" : "Controle Especial"}</p>
+            <p style={{ fontSize: "9px", color: "#666", margin: "3px 0 0 0" }}>{isATB ? "RDC ANVISA 20/2011" : "Portaria SVS/MS 344/98"}</p>
           </div>
         </div>
       </div>
@@ -1198,7 +1201,7 @@ function RxSheets({ rx, patient, clinic }: { rx: RxImpressao; patient: any; clin
             {clinic?.city ? `${clinic.city} – ${clinic.state}` : "______________"}, {dateStr}
           </p>
           <p style={{ fontSize: "9.5px", color: "#666", margin: 0 }}>
-            Validade: 30 dias a partir da emissão · Uso restrito conforme Portaria 344/98
+            {isATB ? "Validade: 10 dias a partir da emissão · RDC ANVISA 20/2011" : "Validade: 30 dias a partir da emissão · Uso restrito conforme Portaria 344/98"}
           </p>
         </div>
         <div style={{ textAlign: "center", width: "230px", flexShrink: 0 }}>
