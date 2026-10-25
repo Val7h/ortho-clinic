@@ -1091,7 +1091,7 @@ function RxSheets({ rx, patient, clinic }: { rx: RxImpressao; patient: any; clin
   const isRCE = type === "controle_especial";
   const isATB = type === "antimicrobiano";
   const vias = (isRCE || isATB) ? 2 : 1;
-  const headerColor = isRCE ? "#5c3a00" : isATB ? "#003580" : "#0F2D5E";
+  const headerColor = (isRCE || isATB) ? "#003580" : "#0F2D5E"; // 25/10 (Valth): controle especial no mesmo azul do antimicrobiano
   const viaLabels = (isRCE || isATB) ? ["1ª VIA — FARMÁCIA", "2ª VIA — PACIENTE"] : ["VIA ÚNICA"];
 
   const dateStr = (() => {
