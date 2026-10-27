@@ -1114,6 +1114,13 @@ function RxSheets({ rx, patient, clinic }: { rx: RxImpressao; patient: any; clin
     </div>
   );
 
+  // 27/10 (Valth, receita do Josuel em Palmares): prescrição longa esticava a via
+  // além da A4 — a 1ª via vazava para a 2ª folha e saíam 3 folhas tortas. Agora
+  // as linhas em branco repetidas viram uma só e, se ainda for longa, a letra e o
+  // entrelinha encolhem para cada via caber numa folha.
+  const textoRce = (rx.instructions || "").replace(/\n{3,}/g, "\n\n").trim();
+  const linhasRce = textoRce.split("\n").length;
+  const rceLonga = linhasRce > 16;
   const RCESheet = ({ viaLabel, viaIndex }: { viaLabel: string; viaIndex: number }) => (
     <div style={{
       background: "white",
@@ -1121,11 +1128,13 @@ function RxSheets({ rx, patient, clinic }: { rx: RxImpressao; patient: any; clin
       padding: "16px 18px",
       fontSize: "12px",
       color: "#111",
-      minHeight: "252mm",            // ocupa a A4 inteira (E1)
+      minHeight: "248mm",            // ocupa a A4 inteira (E1), com folga para não vazar
       display: "flex",
       flexDirection: "column",
       boxSizing: "border-box",
-    }}>
+      breakInside: "avoid",
+      pageBreakInside: "avoid",
+    } as React.CSSProperties}>
       {/* Faixa da via — exigência: dizeres em DESTAQUE em cada via */}
       <div style={{
         background: headerColor, color: "white", textAlign: "center",
@@ -1174,7 +1183,7 @@ function RxSheets({ rx, patient, clinic }: { rx: RxImpressao; patient: any; clin
       </div>
 
       {/* 3 · PRESCRIÇÃO — área grande, ocupa o corpo da folha */}
-      <div style={{ border: "1px solid #999", padding: "10px", marginBottom: "8px", flex: 1, minHeight: "90mm" }}>
+      <div style={{ border: "1px solid #999", padding: "10px", marginBottom: "8px", flex: 1, minHeight: rceLonga ? "60mm" : "90mm" }}>
         <p style={{ fontWeight: 700, fontSize: "8.5px", color: "#555", textTransform: "uppercase", letterSpacing: "0.5px", margin: "0 0 8px 0" }}>Prescrição</p>
         {rx.medications.length > 0 ? (
           <>
@@ -1190,7 +1199,7 @@ function RxSheets({ rx, patient, clinic }: { rx: RxImpressao; patient: any; clin
             )}
           </>
         ) : (
-          <p style={{ whiteSpace: "pre-wrap", fontSize: `${fmtReceita.tamanho ?? 12.5}px`, textAlign: fmtReceita.justificar ? "justify" : "left", margin: 0, lineHeight: 1.7 }}>{textoReceitaFormatado(rx.instructions)}</p>
+          <p style={{ whiteSpace: "pre-wrap", fontSize: rceLonga ? `${Math.min(fmtReceita.tamanho ?? 12.5, 11)}px` : `${fmtReceita.tamanho ?? 12.5}px`, textAlign: fmtReceita.justificar ? "justify" : "left", margin: 0, lineHeight: rceLonga ? 1.35 : 1.7 }}>{textoReceitaFormatado(textoRce)}</p>
         )}
       </div>
 
@@ -4842,6 +4851,9 @@ function ConsultaPrintCenter({ docs, onRemove, onClose }: {
           html, body { height: auto !important; overflow: visible !important; background: #fff !important; }
           body > *:not([data-print-portal]) { display: none !important; }
           #pc-print-portal { display: block !important; position: static !important; width: 100% !important; background: #fff !important; }
+          /* 27/10: sem @page aqui a impressora usava o papel e a margem dela (Carta em
+             Palmares?) e a via de 2 folhas não cabia. Mesma A4 da janela da receita. */
+          @page { size: A4 portrait; margin: 10mm 12mm; }
           .pc-doc { page-break-after: always; }
           .pc-doc:last-child { page-break-after: auto; }
           /* 2 vias de RCE/ATB quebram de página tambem na impressão em lote (M9) */
