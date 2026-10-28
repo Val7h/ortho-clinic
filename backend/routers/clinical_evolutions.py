@@ -121,6 +121,30 @@ def update_evolution(
     return ev
 
 
+@router.get("/{patient_id}/visitas-anteriores")
+def visitas_anteriores(
+    patient_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """28/10 (Valth, Ana Paula Firmino): a tela marcava "1ª Consulta" só porque a
+    consulta de 26/08 não tinha anamnese salva. Conta as vindas ANTERIORES a hoje
+    (agenda atendida/chegou e sala de espera) e devolve a data da última."""
+    from sqlalchemy import text
+    hoje = "(now() at time zone 'America/Recife')::date"
+    q = (
+        "select max(d) from ("
+        f" select date as d from appointments where patient_id = :p and date < {hoje}"
+        "   and status in ('completed','arrived','attended','in_progress')"
+        " union all"
+        f" select entry_date from waiting_room_entries where patient_id = :p and entry_date < {hoje}"
+        "   and status in ('attended','attending')"
+        ") x"
+    )
+    ultima = db.execute(text(q), {"p": patient_id}).scalar()
+    return {"tem_visita_anterior": ultima is not None, "ultima_visita": ultima.isoformat() if ultima else None}
+
+
 @router.get("/{patient_id}/evolutions/{evolution_id}/versions")
 def list_versions(
     patient_id: int,

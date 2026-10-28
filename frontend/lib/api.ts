@@ -272,6 +272,8 @@ export const evolutionApi = {
     api.post(`/patients/${patientId}/evolutions`, data).then((r) => r.data),
   update: (id: number, data: { content: string; base_content?: string }) =>
     api.patch(`/evolutions/${id}`, data).then((r) => r.data),
+  visitasAnteriores: (patientId: number): Promise<{ tem_visita_anterior: boolean; ultima_visita: string | null }> =>
+    api.get(`/patients/${patientId}/visitas-anteriores`).then((r) => r.data),
 };
 
 // ── Fisioterapia ──────────────────────────────────────────────────────────

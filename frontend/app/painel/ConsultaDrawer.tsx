@@ -2050,9 +2050,13 @@ function TabProntuario({ patientId, patient, clinic }: { patientId: number; pati
     setLoading(true);
     setFolha("");
     folhaDoPacienteRef.current = null; // 14/10: até carregar, nada é salvo
-    evolutionApi
-      .list(patientId)
-      .then((data) => {
+    // 28/10 (Valth, Ana Paula Firmino): "1ª Consulta" só quando o paciente
+    // NUNCA veio — consulta passada sem anamnese salva também conta como vinda.
+    Promise.all([
+      evolutionApi.list(patientId),
+      evolutionApi.visitasAnteriores(patientId).catch(() => ({ tem_visita_anterior: false, ultima_visita: null })),
+    ])
+      .then(([data, visitas]) => {
         if (!vivo) return;
         const evs = (data as Evolution[])
           .slice()
@@ -2077,7 +2081,7 @@ function TabProntuario({ patientId, patient, clinic }: { patientId: number; pati
           // Cristina Gomes da Silva, hoje era a primeira vez dela). Sem
           // histórico nenhum só pode ser 1ª consulta; com histórico, mantém
           // "retorno" como já era.
-          const tipoInicial = blocosComHoje.length === 0 ? "primeira_consulta" : "retorno";
+          const tipoInicial = blocosComHoje.length === 0 && !visitas.tem_visita_anterior ? "primeira_consulta" : "retorno";
           setConsultType(tipoInicial);
           blocosComHoje.push({ id: null, dataISO: todayISO, tipo: tipoLabel(tipoInicial), texto: "" });
         } else {
