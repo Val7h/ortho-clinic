@@ -7508,7 +7508,10 @@ function PacoteDoDia({ patientId, patient, clinic, onClose }: { patientId: numbe
           patientAddress: r.patient_address || undefined, patientPhone: r.patient_phone || undefined,
         } });
       }
-      for (const e of (exs || []).filter((e: any) => doDia(e.date) && (e.free_text || "").trim())) {
+      // 28/10 (Valth): exame pedido em guia do convênio fica TAMBÉM no histórico da
+      // aba Exames (marcado "Solicitado em guia SP/SADT"). Esse registro é só
+      // histórico — o papel que sai é a guia, que já entra pelos Documentos.
+      for (const e of (exs || []).filter((e: any) => doDia(e.date) && (e.free_text || "").trim() && !/Solicitado em guia SP\/SADT/i.test(e.free_text))) {
         const primeira = (e.free_text as string).split("\n").map((l) => l.trim()).filter((l) => l && !/^SOLICITO/i.test(l))[0] || "";
         lista.push({ id: `ex${e.id}`, tipo: "exame", label: `Pedido de exame — ${primeira}`.slice(0, 90), texto: e.free_text, dataISO: String(e.date).slice(0, 10) });
       }
