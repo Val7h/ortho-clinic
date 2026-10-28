@@ -54,6 +54,7 @@ export function TeamChatWidget() {
   const [tab, setTab] = useState<number | null>(null);
   // Depois que ELE escolhe uma conversa, o app nunca mais troca sozinho.
   const escolhaManualRef = useRef(false);
+  const presencaInicialRef = useRef(false);
   // Destaque do botão quando chega mensagem e o chat está fechado.
   const [chamando, setChamando] = useState(false);
   // 20/10 (Valth): RECADO OSTENSIVO. Mensagem da equipe que começa com 📣 abre
@@ -105,7 +106,14 @@ export function TeamChatWidget() {
       // 11/08: antes caía sempre no PRIMEIRO da lista alfabética — ele voltava
       // ao chat e estava numa pessoa offline, tendo que procurar a ativa. Agora
       // a escolha inicial prioriza quem está online (e com mensagem não lida).
-      setTab((prev) => (prev ?? escolherMelhorContato(list, onlineIdsRef.current)));
+      // 28/10 (Valth): a cada recarga da tela voltava para a Angélica (1ª da
+      // lista) e ele tinha de clicar de novo na Dijaneide. Agora a última
+      // conversa escolhida fica guardada e é reaberta.
+      let salvo: number | null = null;
+      try { salvo = Number(localStorage.getItem(`orthoclinic_chat_tab_${user.id}`)) || null; } catch { /* sem storage */ }
+      if (salvo !== null && list.some((c) => c.id === salvo)) escolhaManualRef.current = true;
+      else salvo = null;
+      setTab((prev) => (prev ?? salvo ?? escolherMelhorContato(list, onlineIdsRef.current)));
       // Recado 📣 que chegou com a tela fechada: abre ao entrar no sistema.
       for (const c of list) {
         if (((c as { unread_count?: number }).unread_count ?? 0) <= 0) continue;
@@ -136,7 +144,21 @@ export function TeamChatWidget() {
     let cancelled = false;
     const refresh = () => {
       messagesApi.presence()
-        .then((r) => { if (!cancelled) setOnlineIds(new Set(r.online_user_ids)); })
+        .then((r) => {
+          if (cancelled) return;
+          const on = new Set(r.online_user_ids);
+          setOnlineIds(on);
+          // A lista de contatos chega antes da presença: sem escolha dele, troca
+          // para quem está online assim que a presença chegar.
+          if (!escolhaManualRef.current && !presencaInicialRef.current) {
+            presencaInicialRef.current = true;
+            setContacts((lista) => {
+              const melhor = escolherMelhorContato(lista, on);
+              if (melhor !== null) setTab(melhor);
+              return lista;
+            });
+          }
+        })
         .catch(() => {});
     };
     refresh();
@@ -446,7 +468,10 @@ export function TeamChatWidget() {
               {contacts.map((c) => (
                 <button
                   key={c.id}
-                  onClick={() => { escolhaManualRef.current = true; setTab(c.id); }}
+                  onClick={() => {
+                    escolhaManualRef.current = true; setTab(c.id);
+                    try { if (user) localStorage.setItem(`orthoclinic_chat_tab_${user.id}`, String(c.id)); } catch { /* sem storage */ }
+                  }}
                   className={`relative px-3 py-1.5 rounded-t-lg text-xs font-medium whitespace-nowrap inline-flex items-center gap-1.5 ${
                     tab === c.id
                       ? "bg-slate-50 dark:bg-slate-950 text-slate-700 dark:text-slate-200 border-x border-t border-slate-200 dark:border-slate-800"
