@@ -7489,6 +7489,18 @@ function PacoteDoDia({ patientId, patient, clinic, onClose }: { patientId: numbe
   // Guia da Unimed é DEITADA (297 x 210 mm); cada guia guarda o tamanho da folha.
   const [paginas, setPaginas] = useState<Record<number, { imgs: string[]; deitada: boolean }>>({});
   const [enviando, setEnviando] = useState(false);
+  // 28/10 (Valth): "estou confuso com o que eu já imprimi". O que já saiu (impresso
+  // ou mandado à secretária) fica guardado por paciente+dia e abre DESMARCADO,
+  // no fim da lista, com "✓ já impresso". O resto abre marcado, em cima.
+  const chaveImpressos = `orthoclinic_impressos_${patientId}_${hoje}`;
+  const [impressos, setImpressos] = useState<Set<string>>(() => {
+    try { return new Set(JSON.parse(localStorage.getItem(chaveImpressos) || "[]")); } catch { return new Set(); }
+  });
+  const marcarImpressos = (ids: string[]) => setImpressos((prev) => {
+    const n = new Set(prev); ids.forEach((id) => n.add(id));
+    try { localStorage.setItem(chaveImpressos, JSON.stringify(Array.from(n))); } catch {}
+    return n;
+  });
 
   useEffect(() => {
     let vivo = true;
@@ -7522,8 +7534,11 @@ function PacoteDoDia({ patientId, patient, clinic, onClose }: { patientId: numbe
         (doDia(d.date) || doDia(d.created_at)) && (d.mime_type || "").includes("pdf") && ["referral", "report", "other"].includes(d.category))) {
         lista.push({ id: `dc${d.id}`, tipo: "guia", label: d.title, docId: d.id });
       }
+      let jaSaiu: Set<string> = new Set();
+      try { jaSaiu = new Set(JSON.parse(localStorage.getItem(chaveImpressos) || "[]")); } catch {}
+      lista.sort((a, b) => Number(jaSaiu.has(a.id)) - Number(jaSaiu.has(b.id)));
       setItens(lista);
-      setSelecionados(new Set(lista.map((i) => i.id)));
+      setSelecionados(new Set(lista.filter((i) => !jaSaiu.has(i.id)).map((i) => i.id)));
       for (const g of lista) {
         if (g.tipo !== "guia") continue;
         api.get(`/patients/${patientId}/documents/${g.docId}/paginas`)
@@ -7605,6 +7620,7 @@ function PacoteDoDia({ patientId, patient, clinic, onClose }: { patientId: numbe
       const fd = new FormData();
       fd.append("arquivo", blob, "documentos.pdf");
       const r = await api.post(`/patients/${patientId}/enviar-secretaria`, fd, { headers: { "Content-Type": "multipart/form-data" } });
+      marcarImpressos(escolhidos.map((i) => i.id));
       toast.success(`Enviado para ${r.data.secretaria} pelo WhatsApp da clínica`);
     } catch (e: any) {
       toast.error(msgErro(e, "Não consegui mandar para a secretária"));
@@ -7647,19 +7663,20 @@ function PacoteDoDia({ patientId, patient, clinic, onClose }: { patientId: numbe
           ) : itens.map((i) => (
             <label key={i.id} className="flex items-center gap-2 px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg cursor-pointer select-none">
               <input type="checkbox" checked={selecionados.has(i.id)} onChange={() => alternar(i.id)} className="w-4 h-4 rounded accent-blue-600" />
-              <span className="text-sm text-slate-700 dark:text-slate-200 flex-1">{i.label}</span>
+              <span className={`text-sm flex-1 ${impressos.has(i.id) ? "text-slate-400 line-through" : "text-slate-700 dark:text-slate-200"}`}>{i.label}</span>
+              {impressos.has(i.id) && <span className="text-[10px] font-semibold text-green-600 whitespace-nowrap">✓ já impresso</span>}
               {i.tipo === "guia" && paginas[i.docId] === undefined && <span className="text-[10px] text-slate-400">carregando…</span>}
             </label>
           ))}
         </div>
         {!!itens?.length && (
           <div className="no-print px-4 py-3 border-t border-slate-200 dark:border-slate-700 flex flex-wrap items-center justify-end gap-2 flex-shrink-0">
-            <span className="text-xs text-slate-500 mr-auto">{escolhidos.length} de {itens.length}</span>
+            <span className="text-xs text-slate-500 mr-auto">{escolhidos.length} de {itens.length}{impressos.size ? ` · ${itens.filter((i) => impressos.has(i.id)).length} já impresso(s)` : ""}</span>
             <button onClick={mandarSecretaria} disabled={!escolhidos.length || enviando || guiasCarregando}
               className="flex items-center gap-2 px-3 py-2 border border-green-600 text-green-700 rounded-lg hover:bg-green-50 font-semibold text-sm disabled:opacity-40">
               <Send className="w-4 h-4" /> {enviando ? "Enviando…" : "Mandar para a secretária"}
             </button>
-            <button onClick={() => window.print()} disabled={!escolhidos.length || guiasCarregando}
+            <button onClick={() => { const ids = escolhidos.map((i) => i.id); window.print(); marcarImpressos(ids); }} disabled={!escolhidos.length || guiasCarregando}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold text-sm disabled:opacity-40">
               <Printer className="w-4 h-4" /> Imprimir
             </button>
