@@ -33,19 +33,19 @@
  * ═══════════════════════════════════════════════════════════════════════════ */
 :root {
   /* ── Background ─────────────────────────────────── */
-  --oc-bg-base:       #F1F5F9; /* slate-100 */
-  --oc-bg-subtle:     #F8FAFC; /* slate-50  */
-  --oc-bg-muted:      #E2E8F0; /* slate-200 */
+  --oc-bg-base:       #F4EFE4; /* slate-100 */
+  --oc-bg-subtle:     #FAF7F0; /* slate-50  */
+  --oc-bg-muted:      #E6DFCF; /* slate-200 */
 
   /* ── Surface (cards, modals, popovers) ───────────── */
-  --oc-surface:       #FFFFFF;
-  --oc-surface-raised:#F8FAFC; /* slate-50  */
-  --oc-surface-inset: #F1F5F9; /* slate-100 */
+  --oc-surface:       #FDFCF8;
+  --oc-surface-raised:#FAF7F0; /* slate-50  */
+  --oc-surface-inset: #F4EFE4; /* slate-100 */
   --oc-surface-overlay:rgba(255,255,255,0.9);
 
   /* ── Border / Dividers ───────────────────────────── */
-  --oc-border:        #E2E8F0; /* slate-200 */
-  --oc-border-strong: #CBD5E1; /* slate-300 */
+  --oc-border:        #E6DFCF; /* slate-200 */
+  --oc-border-strong: #D3C9B4; /* slate-300 */
   --oc-border-subtle: rgba(226,232,240,0.6);
 
   /* ── Text ────────────────────────────────────────── */
@@ -67,11 +67,11 @@
   --oc-brand-text:    #1A4A9A; /* brand-500 */
 
   /* ── Accent (secondary interactive) ─────────────── */
-  --oc-accent:        #06B6D4; /* accent-500 */
-  --oc-accent-hover:  #0891B2; /* accent-600 */
-  --oc-accent-subtle: #F0FFFE; /* accent-50  */
-  --oc-accent-muted:  #CFFAFE; /* accent-100 */
-  --oc-accent-text:   #0E7490; /* accent-700 */
+  --oc-accent:        #B8914A; /* accent-500 */
+  --oc-accent-hover:  #9A773A; /* accent-600 */
+  --oc-accent-subtle: #FBF6EA; /* accent-50  */
+  --oc-accent-muted:  #F5E9CC; /* accent-100 */
+  --oc-accent-text:   #7B5E2D; /* accent-700 */
 
   /* ── Status: success ─────────────────────────────── */
   --oc-ok:            #16A34A; /* success-600 */
@@ -165,11 +165,11 @@
   --oc-brand-muted:     rgba(26,74,154,0.25);
   --oc-brand-text:      #7096D8; /* brand-300 */
 
-  --oc-accent:          #22D3EE; /* accent-400 */
-  --oc-accent-hover:    #67E8F9; /* accent-300 */
+  --oc-accent:          #CFA95F; /* accent-400 */
+  --oc-accent-hover:    #E0C07A; /* accent-300 */
   --oc-accent-subtle:   rgba(6,182,212,0.12);
   --oc-accent-muted:    rgba(6,182,212,0.20);
-  --oc-accent-text:     #67E8F9; /* accent-300 */
+  --oc-accent-text:     #E0C07A; /* accent-300 */
 
   --oc-ok:              #4ADE80; /* success-400 */
   --oc-ok-hover:        #86EFAC; /* success-300 */
@@ -612,3 +612,8 @@
   clip: auto !important;
   white-space: normal !important;
 }
+
+
+/* Tema A "Clássico clínico" (Valth 03/11/2026): títulos com serifa; o resto continua Inter. */
+h1, h2, .font-serif { font-family: var(--font-serif), Georgia, serif; letter-spacing: 0; }
+body { background-color: var(--oc-bg-base); }

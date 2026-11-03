@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Inter } from "next/font/google";
+import { Inter, Source_Serif_4 } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "react-hot-toast";
 import { AuthProvider } from "@/components/AuthProvider";
@@ -32,6 +32,9 @@ const inter = Inter({
   // Only the weights actually used in the design system
   weight: ["400", "500", "600", "700", "800"],
 });
+
+// Tema A (03/11/2026): títulos e nome do paciente com serifa.
+const serif = Source_Serif_4({ subsets: ["latin"], display: "swap", variable: "--font-serif", weight: ["500", "600"] });
 
 export const metadata: Metadata = {
   title: "OrthoClinic",
@@ -78,7 +81,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
      * suppressHydrationWarning — next-themes injects .dark class server→client;
      *                           without this React warns about className mismatch.
      */
-    <html lang="pt-BR" dir="ltr" className={inter.variable} suppressHydrationWarning>
+    <html lang="pt-BR" dir="ltr" className={`${inter.variable} ${serif.variable}`} suppressHydrationWarning>
       <body suppressHydrationWarning>
         {/*
          * Skip-to-content link (WCAG 2.4.1 — Bypass Blocks).

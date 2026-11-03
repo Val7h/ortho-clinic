@@ -7930,7 +7930,7 @@ export default function ConsultaDrawer({ entry, onClose, onStatusChange }: Consu
         <PacoteDoDia patientId={entry.patient_id} patient={patient} clinic={clinic} onClose={() => setPacoteAberto(false)} />
       )}
       {/* ── Header ── */}
-      <div className="flex-shrink-0 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 px-5 pt-4 pb-3 space-y-3">
+      <div className="flex-shrink-0 bg-white dark:bg-slate-900 border-t-4 border-t-brand-600 border-b-2 border-b-accent-400 dark:border-b-accent-700 px-5 pt-4 pb-3 space-y-3">
         {/* Top row: name + close */}
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">

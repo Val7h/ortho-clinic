@@ -23,18 +23,18 @@ const config: Config = {
           800: "#071530",
           900: "#030B1C",
         },
-        // Accent — refined teal/medical cyan (trust + clarity)
+        // Accent — dourado (filete do tema A, Valth 03/11/2026)
         accent: {
-          50:  "#F0FFFE",
-          100: "#CFFAFE",
-          200: "#A5F3FC",
-          300: "#67E8F9",
-          400: "#22D3EE",
-          500: "#06B6D4",  // main accent
-          600: "#0891B2",
-          700: "#0E7490",
-          800: "#155E75",
-          900: "#164E63",
+          50:  "#FBF6EA",
+          100: "#F5E9CC",
+          200: "#ECD6A3",
+          300: "#E0C07A",
+          400: "#CFA95F",
+          500: "#B8914A",  // main accent
+          600: "#9A773A",
+          700: "#7B5E2D",
+          800: "#5C4622",
+          900: "#3F3017",
         },
         // Success — medical green (positive outcomes)
         success: {
@@ -69,23 +69,24 @@ const config: Config = {
           600: "#DC2626",
           700: "#B91C1C",
         },
-        // Neutral — cool slate (clinical, professional)
+        // Neutral — marfim/pedra quente (tema A "Clássico clínico", Valth 03/11/2026)
         slate: {
-          25:  "#FBFCFD",
-          50:  "#F8FAFC",
-          100: "#F1F5F9",
-          150: "#E8EEF5",
-          200: "#E2E8F0",
-          300: "#CBD5E1",
-          400: "#94A3B8",
-          500: "#64748B",
-          600: "#475569",
-          700: "#334155",
-          800: "#1E293B",
-          900: "#0F172A",
+          25:  "#FDFCF8",
+          50:  "#FAF7F0",
+          100: "#F4EFE4",
+          150: "#EEE7D8",
+          200: "#E6DFCF",
+          300: "#D3C9B4",
+          400: "#A69B85",
+          500: "#7A705E",
+          600: "#5C5345",
+          700: "#433C32",
+          800: "#2A2620",
+          900: "#1C1A16",
         },
       },
       fontFamily: {
+        serif: ["var(--font-serif)", "Georgia", "serif"],
         sans: [
           "ui-sans-serif",
           "system-ui",
