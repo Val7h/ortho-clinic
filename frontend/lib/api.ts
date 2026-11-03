@@ -296,6 +296,17 @@ export const reportsApi = {
     api.delete(`/patients/${patientId}/reports/${id}`),
 };
 
+// ── Impressora da clínica (fila de impressão remota, 03/11/2026) ──────────────
+export type PrintJobKind = "receita" | "exame" | "laudo" | "encaminhamento";
+export const printJobsApi = {
+  create: (data: { kind: PrintJobKind; ref_id: number; clinic_id: number; opcoes?: Record<string, any> }) =>
+    api.post("/print-jobs", data).then((r) => r.data),
+  pending: (clinicId: number) =>
+    api.get("/print-jobs/pending", { params: { clinic_id: clinicId } }).then((r) => r.data),
+  done: (jobId: number) =>
+    api.post(`/print-jobs/${jobId}/done`).then((r) => r.data),
+};
+
 // ── Confirmação de agendamento (público, sem auth) ────────────────────────────
 export const confirmApi = {
   get: (token: string) => api.get(`/confirmar/${token}`).then((r) => r.data),

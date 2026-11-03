@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { serverNow } from "@/lib/servertime";
-import { anamnesisApi, api, patientsApi, consultationsApi, prescriptionsApi, prescriptionTemplatesApi, referralTemplatesApi, examsApi, evolutionApi, clinicApi, chatApi, reportsApi, leafletsApi, waitingRoomApi, remindersApi, medicamentosApi, msgErro } from "@/lib/api";
+import { anamnesisApi, api, patientsApi, consultationsApi, prescriptionsApi, prescriptionTemplatesApi, referralTemplatesApi, examsApi, evolutionApi, clinicApi, chatApi, reportsApi, leafletsApi, waitingRoomApi, remindersApi, medicamentosApi, printJobsApi, msgErro } from "@/lib/api";
 import { formatDate, calcAge, hojeISO } from "@/lib/utils";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -1004,7 +1004,7 @@ function MedRowInline({ med, index, total, onChange, onRemove, allergyWarning, s
 type PrescriptionType = "simples" | "controle_especial" | "antimicrobiano";
 
 // Alias de compatibilidade com valores antigos do banco
-function normalizePrescriptionType(t: string): PrescriptionType {
+export function normalizePrescriptionType(t: string): PrescriptionType {
   if (t === "especial_azul") return "controle_especial";
   if (t === "especial_amarelo") return "controle_especial";
   if (t === "simples" || t === "controle_especial" || t === "antimicrobiano") return t as PrescriptionType;
@@ -1028,7 +1028,7 @@ const PRESCRIPTION_TYPE_LABELS: Record<PrescriptionType, string> = {
 //
 // Tamanho e alinhamento são preferência do médico: ele ajusta uma vez e vale
 // para toda receita. Ficam no navegador dele, não no prontuário do paciente.
-interface FormatoReceita { tamanho: number | null; justificar: boolean }
+export interface FormatoReceita { tamanho: number | null; justificar: boolean }
 const FORMATO_RECEITA_PADRAO: FormatoReceita = { tamanho: null, justificar: false };
 
 function chaveFormatoReceita(): string {
@@ -1076,7 +1076,7 @@ function textoReceitaFormatado(texto: string): React.ReactNode {
 
 // 21/10: as folhas da receita saíram de dentro do PrintModal para o pacote
 // "Tudo de hoje" usar exatamente o mesmo papel.
-type RxImpressao = {
+export type RxImpressao = {
   date: string;
   medications: Medication[];
   instructions: string;
@@ -1085,11 +1085,12 @@ type RxImpressao = {
   patientPhone?: string;
 };
 
-function RxSheets({ rx, patient, clinic }: { rx: RxImpressao; patient: any; clinic?: any }) {
+export function RxSheets({ rx, patient, clinic, formato }: { rx: RxImpressao; patient: any; clinic?: any; formato?: FormatoReceita }) {
   // Tamanho e alinhamento que o medico escolheu na aba Receita (preferencia
   // dele, guardada no navegador). Lido a cada render para valer ja na proxima
-  // impressao, sem precisar recarregar a pagina.
-  const fmtReceita = lerFormatoReceita();
+  // impressao, sem precisar recarregar a pagina. 03/11: na impressora da
+  // clinica (/impressora) a preferencia chega junto com o pedido (formato).
+  const fmtReceita = formato ?? lerFormatoReceita();
   const type = normalizePrescriptionType(rx.prescription_type);
   const isRCE = type === "controle_especial";
   const isATB = type === "antimicrobiano";
@@ -3583,6 +3584,7 @@ function TabReceita({ patientId, patient, clinic, rxExterna }: { patientId: numb
                     >
                       <Printer className="w-3.5 h-3.5" />
                     </button>
+                    <BotaoImpressoraClinica kind="receita" refId={rx.id} clinic={clinic} />
                   </div>
                 </div>
                 <div className="space-y-0.5">
@@ -3614,7 +3616,7 @@ function TabReceita({ patientId, patient, clinic, rxExterna }: { patientId: numb
 // ── Tab: Exames ────────────────────────────────────────────────────────────────
 
 // Modal de impressão de pedido de exame
-function ExamSheet({ text, patientName, patient, clinic, fontSize = 14, lineHeight = "normal", dataISO }: {
+export function ExamSheet({ text, patientName, patient, clinic, fontSize = 14, lineHeight = "normal", dataISO }: {
   text: string; patientName: string; patient?: any; clinic?: any;
   fontSize?: 12 | 14 | 16; lineHeight?: "normal" | "relaxed"; dataISO?: string;
 }) {
@@ -4514,6 +4516,9 @@ function TabExames({ patientId, patient, clinic }: { patientId: number; patient:
                     >
                       <Printer className="w-3.5 h-3.5" />
                     </button>
+                    {!/Solicitado em guia SP\/SADT/i.test(ex.free_text || "") && (
+                      <BotaoImpressoraClinica kind="exame" refId={ex.id} clinic={clinic} />
+                    )}
                   </div>
                 </div>
                 {expandedExamId === ex.id && (ex.free_text || ex.exams?.length > 0) && (
@@ -4826,6 +4831,51 @@ function FechoOficial({ clinic, dataISO }: { clinic?: any; dataISO?: string }) {
         </div>
       </div>
     </div>
+  );
+}
+
+// ── Impressora da clínica (03/11/2026) ───────────────────────────────────────
+// Valth: documento pronto sai SOZINHO na impressora da clínica do atendimento.
+// Põe o documento JÁ SALVO na fila da clínica; o computador de lá, com a página
+// /impressora aberta, imprime sem ninguém clicar. Leva junto a preferência de
+// papel do médico (tamanho da letra), que mora no navegador dele.
+function opcoesDePapel() {
+  return { exam_font: loadExamFontSize(), exam_line: loadExamLineHeight(), rx_formato: lerFormatoReceita() };
+}
+
+async function enviarParaImpressoraDaClinica(kind: "receita" | "exame" | "laudo" | "encaminhamento", refId: number, clinicId: number) {
+  return printJobsApi.create({ kind, ref_id: refId, clinic_id: clinicId, opcoes: opcoesDePapel() });
+}
+
+function BotaoImpressoraClinica({ kind, refId, clinic, grande = false }: {
+  kind: "receita" | "exame" | "laudo" | "encaminhamento"; refId?: number | null; clinic?: any; grande?: boolean;
+}) {
+  const [enviando, setEnviando] = useState(false);
+  if (!clinic?.id || !refId) return null;
+  const enviar = async () => {
+    setEnviando(true);
+    try {
+      const r = await enviarParaImpressoraDaClinica(kind, refId, clinic.id);
+      toast.success(r?.ja_estava_na_fila
+        ? `Já estava na fila da impressora — ${clinic.name || "clínica"}`
+        : `Enviado para a impressora — ${clinic.name || "clínica"}`);
+    } catch (e: any) {
+      toast.error(msgErro(e, "Não consegui mandar para a impressora da clínica"));
+    } finally {
+      setEnviando(false);
+    }
+  };
+  return (
+    <button
+      type="button"
+      onClick={enviar}
+      disabled={enviando}
+      className={`${grande ? "p-1.5" : "p-1"} flex items-center gap-0.5 text-slate-400 hover:text-emerald-600 rounded-lg disabled:opacity-40`}
+      title={`Enviar para impressora da clínica (${clinic.name || "clínica do atendimento"})`}
+    >
+      <Printer className={grande ? "w-4 h-4" : "w-3.5 h-3.5"} />
+      <span className="text-[9px] font-semibold leading-none">{enviando ? "…" : "clínica"}</span>
+    </button>
   );
 }
 
@@ -5232,6 +5282,7 @@ export function TabEncaminhamentos({ patient, clinic, patientId }: { patient: an
                 <button type="button" onClick={() => setReimprimir(r)} className="p-1.5 text-slate-400 hover:text-blue-600 rounded-lg hover:bg-blue-50 dark:hover:bg-slate-700" title="Ver e imprimir">
                   <Printer className="w-4 h-4" />
                 </button>
+                <BotaoImpressoraClinica kind="encaminhamento" refId={r.id} clinic={clinic} grande />
                 <button
                   type="button"
                   onClick={async () => {
@@ -5932,6 +5983,7 @@ export function TabAtestados({ patient, clinic }: { patient: any; clinic?: any }
                 <button type="button" onClick={() => setReimprimir(r)} className="p-1.5 text-slate-400 hover:text-blue-600 rounded-lg hover:bg-blue-50 dark:hover:bg-slate-700" title="Ver e imprimir">
                   <Printer className="w-4 h-4" />
                 </button>
+                <BotaoImpressoraClinica kind="laudo" refId={r.id} clinic={clinic} grande />
                 <button
                   type="button"
                   onClick={async () => {
@@ -6440,6 +6492,7 @@ export function TabLaudos({ patient, clinic }: { patient: any; clinic?: any }) {
                 <button type="button" onClick={() => setReimprimir(r)} className="p-1.5 text-slate-400 hover:text-blue-600 rounded-lg hover:bg-blue-50 dark:hover:bg-slate-700" title="Ver e imprimir">
                   <Printer className="w-4 h-4" />
                 </button>
+                <BotaoImpressoraClinica kind="laudo" refId={r.id} clinic={clinic} grande />
                 <button
                   type="button"
                   onClick={async () => {
@@ -7420,7 +7473,7 @@ function TabFotos({ patientId }: { patientId: number }) {
 // o celular da Neide. Lê do SERVIDOR tudo o que tem data de hoje — inclusive o
 // que não foi gerado nesta tela (guia SP/SADT, pedido feito por fora) — e
 // imprime de uma vez ou manda num PDF só para a secretária da cidade.
-type ItemPacote =
+export type ItemPacote =
   | { id: string; tipo: "receita"; label: string; rx: RxImpressao }
   | { id: string; tipo: "exame"; label: string; texto: string; dataISO: string }
   | { id: string; tipo: "relatorio"; label: string; reportType: string; titulo: string; conteudo: string; dataISO: string }
@@ -7432,7 +7485,7 @@ const RX_LABEL: Record<string, string> = {
   antimicrobiano: "Receita de antimicrobiano (2 vias)",
 };
 
-function ReportSheet({ item, patient, clinic }: { item: Extract<ItemPacote, { tipo: "relatorio" }>; patient: any; clinic?: any }) {
+export function ReportSheet({ item, patient, clinic }: { item: Extract<ItemPacote, { tipo: "relatorio" }>; patient: any; clinic?: any }) {
   if (item.reportType === "encaminhamento") {
     return (
       <div style={{ fontFamily: "Arial, Helvetica, sans-serif", color: "#1a1a1a", fontSize: "13px" }}>
@@ -7612,6 +7665,33 @@ function PacoteDoDia({ patientId, patient, clinic, onClose }: { patientId: numbe
     return pdf.output("blob");
   };
 
+  // 03/11: manda os escolhidos para a fila da impressora da clínica do
+  // atendimento. Guia em PDF (SP/SADT) não entra — essa continua no Imprimir.
+  const [enviandoImpressora, setEnviandoImpressora] = useState(false);
+  const mandarImpressoraClinica = async () => {
+    if (!clinic?.id) return;
+    const docs = escolhidos.filter((i) => i.tipo !== "guia");
+    if (!docs.length) { toast.error("Guia em PDF não vai para a impressora da clínica — use Imprimir."); return; }
+    setEnviandoImpressora(true);
+    let ok = 0;
+    try {
+      for (const i of docs) {
+        const refId = Number(i.id.slice(2));
+        const kind = i.tipo === "receita" ? "receita" : i.tipo === "exame" ? "exame"
+          : (i.tipo === "relatorio" && i.reportType === "encaminhamento") ? "encaminhamento" : "laudo";
+        try { await enviarParaImpressoraDaClinica(kind, refId, clinic.id); ok++; } catch { /* segue os outros */ }
+      }
+      if (ok) {
+        marcarImpressos(docs.map((i) => i.id));
+        toast.success(`${ok} documento(s) na fila da impressora — ${clinic.name || "clínica"}`);
+      }
+      if (ok < docs.length) toast.error(`${docs.length - ok} documento(s) não foram para a fila`);
+      if (escolhidos.some((i) => i.tipo === "guia")) toast("A guia em PDF não vai para a impressora da clínica — use Imprimir.", { icon: "ℹ️" });
+    } finally {
+      setEnviandoImpressora(false);
+    }
+  };
+
   const mandarSecretaria = async () => {
     if (!escolhidos.length) return;
     setEnviando(true);
@@ -7676,6 +7756,13 @@ function PacoteDoDia({ patientId, patient, clinic, onClose }: { patientId: numbe
               className="flex items-center gap-2 px-3 py-2 border border-green-600 text-green-700 rounded-lg hover:bg-green-50 font-semibold text-sm disabled:opacity-40">
               <Send className="w-4 h-4" /> {enviando ? "Enviando…" : "Mandar para a secretária"}
             </button>
+            {clinic?.id && (
+              <button onClick={mandarImpressoraClinica} disabled={!escolhidos.length || enviandoImpressora}
+                title={`Enviar para impressora da clínica (${clinic.name || "clínica do atendimento"})`}
+                className="flex items-center gap-2 px-3 py-2 border border-emerald-600 text-emerald-700 rounded-lg hover:bg-emerald-50 font-semibold text-sm disabled:opacity-40">
+                <Printer className="w-4 h-4" /> {enviandoImpressora ? "Enviando…" : "Impressora da clínica"}
+              </button>
+            )}
             <button onClick={() => { const ids = escolhidos.map((i) => i.id); window.print(); marcarImpressos(ids); }} disabled={!escolhidos.length || guiasCarregando}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold text-sm disabled:opacity-40">
               <Printer className="w-4 h-4" /> Imprimir
