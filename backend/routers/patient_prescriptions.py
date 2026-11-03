@@ -106,6 +106,11 @@ def create_prescription(
     except (ValueError, TypeError):
         rx_date = today_br()
 
+    # 03/11 (Valth): substância de 2 vias na receita = 2 vias, mesmo que venha marcada simples.
+    if (data.prescription_type or "simples") == "simples":
+        from routers.medicamentos import tipo_exigido
+        data.prescription_type = tipo_exigido(db, data.instructions, [m.model_dump() for m in data.medications]) or "simples"
+
     # 13/10 (Valth): a mesma receita aparecia gravada 2x com segundos de
     # diferença (Julio, Fatima, José Francisco). Igual (tipo + texto +
     # remédios) para o mesmo paciente nos últimos 3 minutos = devolve a que já existe.

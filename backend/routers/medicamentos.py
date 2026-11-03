@@ -41,3 +41,34 @@ def buscar(q: str = Query(..., min_length=3), db: Session = Depends(get_db), cur
         {"t": termo, "ini": f"{q.strip().lower()}%"}).fetchall()
     return [dict(zip(["produto", "substancia", "apresentacao", "laboratorio", "tipo_receita",
                       "notificacao", "lista344", "preco_maximo_pe", "classe"], r)) for r in rows]
+
+
+# 03/11/2026 (Valth): "sempre que tiver uma substância que necessite de 2 vias", a receita
+# e o modelo vão em 2 vias — o MANI ESPECIAL (fórmula com tramadol, pregabalina e duloxetina)
+# estava gravado como simples. Trava no servidor: só SOBE o tipo (simples -> 2 vias), nunca desce.
+import json as _json
+import re as _re
+import time as _time
+import unicodedata as _ud
+
+_CACHE = {"em": 0.0, "termos": []}
+
+
+def _sem_acento(s: str) -> str:
+    return _ud.normalize("NFKD", s or "").encode("ascii", "ignore").decode().lower()
+
+
+def tipo_exigido(db: Session, *partes) -> "str | None":
+    """'controle_especial' ou 'antimicrobiano' se algum termo da base aparece no texto; senão None."""
+    if _time.time() - _CACHE["em"] > 3600:
+        try:
+            rows = db.execute(text("select termo, tipo from medicamento_termos")).fetchall()
+            _CACHE["termos"] = [(_re.compile(r"\b" + _re.escape(_sem_acento(t)) + r"\b"), tp) for t, tp in rows if t and len(t) > 3]
+            _CACHE["em"] = _time.time()
+        except Exception:
+            return None
+    alvo = _sem_acento(" ".join(p if isinstance(p, str) else _json.dumps(p, ensure_ascii=False, default=str) for p in partes))
+    tipos = {tp for rx, tp in _CACHE["termos"] if rx.search(alvo)}
+    if tipos - {"antimicrobiano", "simples"}:
+        return "controle_especial"
+    return "antimicrobiano" if "antimicrobiano" in tipos else None

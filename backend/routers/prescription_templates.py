@@ -77,6 +77,11 @@ def create_template(
     if not data.name.strip():
         raise HTTPException(status_code=422, detail="Nome do modelo é obrigatório")
 
+    # 03/11 (Valth): modelo com substância de 2 vias é salvo em 2 vias.
+    if (data.prescription_type or "simples") == "simples":
+        from routers.medicamentos import tipo_exigido
+        data.prescription_type = tipo_exigido(db, data.name, data.instructions, [m.model_dump() for m in data.medications]) or "simples"
+
     template = PrescriptionTemplate(
         name=data.name.strip(),
         prescription_type=data.prescription_type,
