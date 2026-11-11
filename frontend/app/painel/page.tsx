@@ -148,7 +148,8 @@ function normIns(name: string): string {
 function insuranceStyle(name: string | null): { className: string; style?: React.CSSProperties } {
   const n = normIns(name ?? '');
   if (!n || PARTICULAR_KEYS.some((k) => n.includes(k))) {
-    return { className: 'bg-amber-400 text-amber-950' };
+    // mesmo amarelo da etiqueta "particular" do painel de Marcações (.pill.part)
+    return { className: 'font-extrabold', style: { backgroundColor: '#FFD34D', color: '#111' } };
   }
   const brand = BRAND_COLORS.find(([k]) => n.includes(k));
   if (brand) return { className: 'text-white', style: { backgroundColor: brand[1] } };
