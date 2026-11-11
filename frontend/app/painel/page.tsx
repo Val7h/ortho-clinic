@@ -122,6 +122,39 @@ const INSURANCE_COLORS = [
   'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-200',
 ];
 
+// 11/11 (Valth): cada convênio com a cor da própria marca, no mesmo tamanho
+// da etiqueta; particular (e cortesia/desconto/Adeildo/São Gabriel) em amarelo.
+const PARTICULAR_KEYS = ['PARTICULAR', 'CORTESIA', 'ADEILDO', 'DESCONTO', 'GABRIEL'];
+const BRAND_COLORS: [string, string][] = [
+  ['UNIMED', '#00995D'],
+  ['BRADESCO', '#CC092F'],
+  ['SULAMERICA', '#F47920'],
+  ['SUL AMERICA', '#F47920'],
+  ['AMIL', '#2B3A8C'],
+  ['HAPVIDA', '#F57C00'],
+  ['SASSEPE', '#1D5FA8'],
+  ['CASSI', '#004B8D'],
+  ['GEAP', '#0072BC'],
+  ['PETROBRAS', '#008542'],
+  ['SAUDE CAIXA', '#005CA9'],
+  ['POSTAL', '#00416B'],
+  ['CAMED', '#7A1F6E'],
+];
+
+function normIns(name: string): string {
+  return name.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().trim();
+}
+
+function insuranceStyle(name: string | null): { className: string; style?: React.CSSProperties } {
+  const n = normIns(name ?? '');
+  if (!n || PARTICULAR_KEYS.some((k) => n.includes(k))) {
+    return { className: 'bg-amber-400 text-amber-950' };
+  }
+  const brand = BRAND_COLORS.find(([k]) => n.includes(k));
+  if (brand) return { className: 'text-white', style: { backgroundColor: brand[1] } };
+  return { className: insuranceColor(name) };
+}
+
 function insuranceColor(name: string | null): string {
   if (!name) return 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300';
   let hash = 0;
@@ -268,7 +301,10 @@ function PatientCard({ entry, onStatusChange, onRemove, onAddValue, onSelect, bu
               {clinicLabel(clinics.find((c) => c.id === entry.clinic_id)?.name)}
             </span>
           )}
-          <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium flex-shrink-0 ${insuranceColor(entry.patient_insurance)}`}>
+          <span
+            className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold flex-shrink-0 ${insuranceStyle(entry.patient_insurance).className}`}
+            style={insuranceStyle(entry.patient_insurance).style}
+          >
             {entry.patient_insurance ?? 'Particular'}
           </span>
           {entry.value_cents != null && (
