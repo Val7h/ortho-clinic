@@ -267,6 +267,9 @@ async def start_background_tasks():
     import asyncio as _asyncio
     from services.birthday_task import birthday_loop
     _asyncio.create_task(birthday_loop())
+    # Lembrete de repetição de procedimento por WhatsApp automático (Valth 12/11/2026)
+    from services.reminder_task import reminder_loop
+    _asyncio.create_task(reminder_loop())
 
 
 def _backfill_clinic_org():
