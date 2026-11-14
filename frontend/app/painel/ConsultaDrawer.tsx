@@ -518,6 +518,8 @@ function carregarCid10Completo(): Promise<{ code: string; label: string }[]> {
 
 function CidSearch({ value, onChange, autoFocus }: { value: string; onChange: (v: string) => void; autoFocus?: boolean }) {
   const [query, setQuery] = useState(value || "");
+  // Valor mudado por fora (ex.: CID do topo preenchido sozinho) aparece no campo.
+  useEffect(() => { setQuery((q) => ((value || "") !== q ? (value || "") : q)); }, [value]);
   const inputRef = useRef<HTMLInputElement>(null);
   // 11/08: no CID secundário ele tinha que CLICAR antes de digitar. Campo
   // recém-adicionado já nasce com o cursor dentro.
@@ -657,6 +659,7 @@ function DiagnosticosCids({ patientId, patient, clinic }: { patientId: number; p
 
   const persist = async (next: string[]) => {
     setCids(next);
+    try { window.dispatchEvent(new CustomEvent("ortho:cids-changed", { detail: { patientId, cids: next } })); } catch {}
     try {
       await patientsApi.update(patientId, { cids: next });
     } catch {
@@ -4993,6 +4996,22 @@ function juntarCids(principal: string, extras: string[]): string {
   return [principal, ...extras].map((c) => (c || "").trim()).filter(Boolean).join("; ");
 }
 
+// V2 (14/11): o CID escolhido no topo da consulta (Diagnósticos do paciente) já
+// vem preenchido nos documentos. Só preenche se o campo estiver VAZIO; nunca
+// sobrescreve o que o médico digitou, e ele pode apagar.
+function useCidDoTopo(patient: any, cid: string, setCid: (v: string) => void) {
+  const topo = Array.isArray(patient?.cids) && patient.cids[0] ? String(patient.cids[0]) : "";
+  const cidRef = useRef(cid);
+  cidRef.current = cid;
+  useEffect(() => {
+    if (!topo) return;
+    // pequena espera: deixa o rascunho salvo ser restaurado antes de decidir
+    const t = setTimeout(() => { if (!(cidRef.current || "").trim()) setCid(topo); }, 60);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [topo]);
+}
+
 function CidExtras({ valores, onChange }: { valores: string[]; onChange: (v: string[]) => void }) {
   return (
     <div className="mt-2 space-y-2">
@@ -5024,6 +5043,7 @@ export function TabEncaminhamentos({ patient, clinic, patientId }: { patient: an
   const [cidPrincipal, setCid] = useState("");
   const [cidsExtras, setCidsExtras] = useState<string[]>([]);
   const cid = juntarCids(cidPrincipal, cidsExtras); // o que vai para texto, impressão e modelo
+  useCidDoTopo(patient, cidPrincipal, setCid);
   const [text, setText] = useState("");
   const [outroDestino, setOutroDestino] = useState("");
   const [saving, setSaving] = useState(false);
@@ -5477,6 +5497,7 @@ function TabProcedimentos({ patientId, patient, clinic }: { patientId: number; p
   const [cidPrincipal, setCid] = useState("");
   const [cidsExtras, setCidsExtras] = useState<string[]>([]);
   const cid = juntarCids(cidPrincipal, cidsExtras);
+  useCidDoTopo(patient, cidPrincipal, setCid);
   const [duration, setDuration] = useState("");
   const [saving, setSaving] = useState(false);
   // Repetição do procedimento (11/08). 0 = não repete.
@@ -5755,6 +5776,7 @@ function calcReturnDate(startDate: string, days: string): string | null {
 export function TabAtestados({ patient, clinic }: { patient: any; clinic?: any }) {
   const [docKind, setDocKind] = useState<"atestado" | "comparecimento">("atestado");
   const [cid, setCid] = useState("");
+  useCidDoTopo(patient, cid, setCid);
   // CIDs secundários (Valth 27/08). Mesmo padrão já usado no laudo desde 11/08.
   const [cidsSecundarios, setCidsSecundarios] = useState<string[]>([]);
   const [days, setDays] = useState("1");
@@ -6229,6 +6251,7 @@ export function TabLaudos({ patient, clinic }: { patient: any; clinic?: any }) {
   const [text, setText] = useState("");
   const [finalidade, setFinalidade] = useState("");
   const [cid, setCid] = useState("");
+  useCidDoTopo(patient, cid, setCid);
   const [cidsSecundarios, setCidsSecundarios] = useState<string[]>([]);
   const [funcCapacity, setFuncCapacity] = useState("");
   const [funcDetail, setFuncDetail] = useState("");
@@ -7889,6 +7912,16 @@ export default function ConsultaDrawer({ entry, onClose, onStatusChange }: Consu
     return () => eventos.forEach(ev => document.removeEventListener(ev, marcar));
   }, [entry.id, entry.status]);
 
+  // V2: quando o CID do topo muda, os documentos (encaminhamento etc.) enxergam na hora.
+  useEffect(() => {
+    const h = (e: Event) => {
+      const d = (e as CustomEvent).detail;
+      if (d?.patientId === entry.patient_id) setPatient((p: any) => (p ? { ...p, cids: d.cids } : p));
+    };
+    window.addEventListener("ortho:cids-changed", h);
+    return () => window.removeEventListener("ortho:cids-changed", h);
+  }, [entry.patient_id]);
+
   useEffect(() => {
     setLoadingPatient(true);
     setPatient(null);
@@ -7993,6 +8026,26 @@ export default function ConsultaDrawer({ entry, onClose, onStatusChange }: Consu
   };
 
   const allergies = parseList(patient?.allergies);
+
+  // V1 (14/11): barra de abas rola sozinha até a aba ativa e avisa quando há mais abas fora da vista.
+  const tabsScrollRef = useRef<HTMLDivElement>(null);
+  const [tabsMais, setTabsMais] = useState({ esq: false, dir: false });
+  const medirTabs = useCallback(() => {
+    const el = tabsScrollRef.current;
+    if (!el) return;
+    const esq = el.scrollLeft > 4;
+    const dir = el.scrollLeft + el.clientWidth < el.scrollWidth - 4;
+    setTabsMais((a) => (a.esq === esq && a.dir === dir ? a : { esq, dir }));
+  }, []);
+  useEffect(() => {
+    const el = tabsScrollRef.current;
+    if (!el) return;
+    const ativa = el.querySelector<HTMLElement>('[data-tab-ativa="true"]');
+    ativa?.scrollIntoView({ inline: "nearest", block: "nearest" });
+    medirTabs();
+    window.addEventListener("resize", medirTabs);
+    return () => window.removeEventListener("resize", medirTabs);
+  }, [activeTab, medirTabs]);
 
   const tabs: { key: DrawerTab; label: string; icon: React.ReactNode }[] = [
     { key: "anamnese",        label: "Anamnese",         icon: <ClipboardList className="w-3.5 h-3.5" /> },
@@ -8204,11 +8257,13 @@ export default function ConsultaDrawer({ entry, onClose, onStatusChange }: Consu
       </div>
 
       {/* ── Tabs (scrollable) ── */}
-      <div className="flex-shrink-0 overflow-x-auto border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 scrollbar-none" style={{ scrollbarWidth: "none" }}>
+      <div className="flex-shrink-0 relative border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
+      <div ref={tabsScrollRef} onScroll={medirTabs} className="overflow-x-auto scrollbar-none" style={{ scrollbarWidth: "none" }}>
         <div className="flex min-w-max">
           {tabs.map(({ key, label, icon }) => (
             <button
               key={key}
+              data-tab-ativa={activeTab === key ? "true" : "false"}
               onClick={() => setActiveTab(key)}
               className={`flex items-center gap-1 px-3 py-2.5 text-[11px] font-semibold transition-all border-b-2 whitespace-nowrap ${
                 activeTab === key
@@ -8221,6 +8276,13 @@ export default function ConsultaDrawer({ entry, onClose, onStatusChange }: Consu
             </button>
           ))}
         </div>
+      </div>
+      {tabsMais.esq && (
+        <div aria-hidden className="pointer-events-none absolute left-0 top-0 bottom-0 w-7 bg-gradient-to-r from-white dark:from-slate-900 to-transparent flex items-center justify-start pl-1 text-slate-400 text-sm font-bold">‹</div>
+      )}
+      {tabsMais.dir && (
+        <div aria-hidden className="pointer-events-none absolute right-0 top-0 bottom-0 w-9 bg-gradient-to-l from-white dark:from-slate-900 via-white/80 dark:via-slate-900/80 to-transparent flex items-center justify-end pr-1 text-blue-600 text-base font-bold">›</div>
+      )}
       </div>
 
       {/* ── Tab content (scrollable) ── */}
