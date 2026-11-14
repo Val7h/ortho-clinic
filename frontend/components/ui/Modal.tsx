@@ -29,6 +29,8 @@ interface ModalProps {
   footer?: React.ReactNode;
   size?: 'sm' | 'md' | 'lg' | 'xl';
   closeOnBackdrop?: boolean;
+  /** Classe de z-index da camada (padrão z-50); use maior para abrir por cima de painéis. */
+  zIndexClass?: string;
 }
 
 const sizeStyles: Record<NonNullable<ModalProps['size']>, string> = {
@@ -50,6 +52,7 @@ export const Modal: React.FC<ModalProps> = ({
   footer,
   size = 'md',
   closeOnBackdrop = true,
+  zIndexClass = 'z-50',
 }) => {
   const titleId = useId();
   const descId = useId();
@@ -140,7 +143,7 @@ export const Modal: React.FC<ModalProps> = ({
 
   const dialog = (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
+      className={`fixed inset-0 ${zIndexClass} flex items-center justify-center`}
       // aria-hidden the rest of the page content while the dialog is open
       // (next-themes adds role to html — we target the backdrop instead)
     >

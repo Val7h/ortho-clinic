@@ -13,6 +13,7 @@ import {
   Search, FolderOpen,
 } from "lucide-react";
 import toast from "react-hot-toast";
+import { AppointmentFormModal } from "@/components/AppointmentFormModal";
 import { serverNow } from "@/lib/servertime";
 import { anamnesisApi, api, patientsApi, consultationsApi, prescriptionsApi, prescriptionTemplatesApi, referralTemplatesApi, examsApi, evolutionApi, clinicApi, chatApi, reportsApi, leafletsApi, waitingRoomApi, remindersApi, medicamentosApi, printJobsApi, msgErro } from "@/lib/api";
 import { formatDate, calcAge, hojeISO } from "@/lib/utils";
@@ -7881,6 +7882,23 @@ export default function ConsultaDrawer({ entry, onClose, onStatusChange }: Consu
   // C (14/11): "1ª consulta" calculada pelo HISTÓRICO real. O GET /patients/{id} não
   // devolve consultation_count (só a lista devolve), então o selo antigo dizia
   // "1ª consulta" para todo mundo. Aqui: evoluções anteriores + visitas anteriores.
+  // B (14/11): marcar retorno sem sair da consulta (usa o mesmo formulário da Agenda; o médico confirma).
+  const [retornoMenu, setRetornoMenu] = useState(false);
+  const [retornoForm, setRetornoForm] = useState<{ date: string; dias: number } | null>(null);
+  const [retornoClinicas, setRetornoClinicas] = useState<any[]>([]);
+  const abrirRetorno = async (dias: number) => {
+    setRetornoMenu(false);
+    try {
+      const lista = retornoClinicas.length ? retornoClinicas : await clinicApi.list();
+      if (!retornoClinicas.length) setRetornoClinicas(lista);
+    } catch {
+      toast.error("Não consegui abrir a agenda agora. Tente de novo.");
+      return;
+    }
+    const d = new Date();
+    d.setDate(d.getDate() + dias);
+    setRetornoForm({ date: hojeISO(d), dias });
+  };
   const [historico, setHistorico] = useState<{ evolucoes: number; temVisita: boolean } | null>(null);
   const [loadingPatient, setLoadingPatient] = useState(true);
   const [busyStatus, setBusyStatus] = useState(false);
@@ -8264,6 +8282,50 @@ export default function ConsultaDrawer({ entry, onClose, onStatusChange }: Consu
             {entry.status === "attending" ? "Em Atendimento" : entry.status === "suspended" ? "Suspenso" : entry.status === "waiting" ? "Aguardando" : entry.status === "attended" ? "Atendido" : "Ausente"}
           </span>
 
+          {(entry.status === "attending" || entry.status === "attended" || entry.status === "suspended") && (
+            <div className="relative">
+              <div className="flex items-stretch rounded-lg overflow-hidden border border-cyan-600 text-cyan-700 dark:text-cyan-300 text-xs font-semibold">
+                <button
+                  onClick={() => abrirRetorno(30)}
+                  className="px-2.5 py-1.5 hover:bg-cyan-50 dark:hover:bg-cyan-900/20"
+                  title="Marcar retorno em 30 dias (você confirma antes de gravar)"
+                >
+                  Retorno em 30 dias
+                </button>
+                <button
+                  onClick={() => setRetornoMenu(v => !v)}
+                  className="px-1.5 border-l border-cyan-600 hover:bg-cyan-50 dark:hover:bg-cyan-900/20"
+                  title="Outros prazos de retorno"
+                  aria-label="Outros prazos de retorno"
+                >
+                  ▾
+                </button>
+              </div>
+              {retornoMenu && (
+                <div className="absolute z-40 mt-1 left-0 min-w-[9rem] rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg py-1">
+                  {[7, 15, 30, 60, 90].map(n => (
+                    <button key={n} onClick={() => abrirRetorno(n)}
+                      className="block w-full text-left px-3 py-1.5 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800">
+                      Retorno em {n} dias
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          {retornoForm && retornoClinicas.length > 0 && (
+            <AppointmentFormModal
+              open
+              onOpenChange={(o) => { if (!o) setRetornoForm(null); }}
+              clinics={retornoClinicas}
+              initialDate={retornoForm.date}
+              initialPatient={{ id: entry.patient_id, name: entry.patient_name, phone: patient?.phone ?? "" }}
+              initialClinicId={entry.clinic_id ?? clinic?.id ?? null}
+              initialApptType="retorno"
+              zIndexClass="z-[400]"
+              onSaved={() => { toast.success(`Retorno marcado (${retornoForm.dias} dias)`); setRetornoForm(null); }}
+            />
+          )}
           {/* 21/10: tudo o que tem data de hoje (inclusive o que entrou por fora) */}
           <button
             onClick={() => setPacoteAberto(true)}

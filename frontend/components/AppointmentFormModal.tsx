@@ -47,6 +47,10 @@ interface AppointmentFormModalProps {
   editingAppointment?: any;      // if set, we're editing
   // Vindo da ficha do paciente ("Agendar"): abre já com o paciente preenchido
   initialPatient?: { id: number; name: string; phone?: string } | null;
+  // Usos fora da Agenda (ex.: Retorno dentro da consulta)
+  initialClinicId?: number | null;
+  initialApptType?: string;
+  zIndexClass?: string;
   onSaved: (appt: any, isOptimistic?: boolean) => void;
   onCancelled?: (id: number) => void;
 }
@@ -58,12 +62,15 @@ export function AppointmentFormModal({
   initialDate,
   editingAppointment,
   initialPatient,
+  initialClinicId,
+  initialApptType,
+  zIndexClass,
   onSaved,
   onCancelled,
 }: AppointmentFormModalProps) {
   const isEditing = !!editingAppointment;
 
-  const [clinicId, setClinicId] = useState<number | ''>(editingAppointment?.clinic_id ?? (clinics[0]?.id ?? ''));
+  const [clinicId, setClinicId] = useState<number | ''>(editingAppointment?.clinic_id ?? (clinics.find(c => c.id === initialClinicId)?.id ?? clinics[0]?.id ?? ''));
   const [date, setDate] = useState(editingAppointment?.date ?? initialDate ?? '');
   const [startTime, setStartTime] = useState(editingAppointment?.start_time ?? '');
   const [patientName, setPatientName] = useState(editingAppointment?.patient_name ?? initialPatient?.name ?? '');
@@ -78,7 +85,7 @@ export function AppointmentFormModal({
     setPatientId((prev: number | null) => prev ?? initialPatient.id);
     setPatientPhone((prev: string) => prev || (initialPatient.phone ?? ''));
   }, [initialPatient, editingAppointment]);
-  const [apptType, setApptType] = useState(editingAppointment?.appointment_type ?? 'consulta');
+  const [apptType, setApptType] = useState(editingAppointment?.appointment_type ?? initialApptType ?? 'consulta');
   const [reason, setReason] = useState(editingAppointment?.reason ?? '');
   const [notes, setNotes] = useState(editingAppointment?.notes ?? '');
 
@@ -245,6 +252,7 @@ export function AppointmentFormModal({
       onOpenChange={onOpenChange}
       title={isEditing ? 'Editar Agendamento' : 'Novo Agendamento'}
       size="lg"
+      zIndexClass={zIndexClass}
     >
       <form onSubmit={handleSubmit} className="space-y-5">
         {/* Offline banner */}
