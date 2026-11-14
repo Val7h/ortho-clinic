@@ -37,7 +37,7 @@ const inter = Inter({
 const serif = Source_Serif_4({ subsets: ["latin"], display: "swap", variable: "--font-serif", weight: ["500", "600"] });
 
 export const metadata: Metadata = {
-  title: "OrthoClinic",
+  title: "OrthoMedic",
   description: "Sistema de gestão de consultório ortopédico",
   manifest: "/manifest.json",
   icons: {
@@ -48,7 +48,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "OrthoClinic",
+    title: "OrthoMedic",
   },
 };
 

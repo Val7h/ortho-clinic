@@ -42,7 +42,7 @@ export default function Dashboard() {
   // analytics, sem número de faturamento, sem módulos clínicos.
   if (user?.role === 'secretary') {
     return (
-      <ProtectedPageLayout title="OrthoClinic" subtitle="Bom trabalho!">
+      <ProtectedPageLayout title="OrthoMedic" subtitle="Bom trabalho!">
         <div className="mx-auto max-w-4xl space-y-8">
           <div className="grid gap-4 sm:grid-cols-2">
             {[
@@ -60,7 +60,7 @@ export default function Dashboard() {
   }
 
   return (
-    <ProtectedPageLayout title="OrthoClinic" subtitle="Gestão de Consultório Premium">
+    <ProtectedPageLayout title="OrthoMedic" subtitle="Gestão de Consultório Premium">
       <div className="mx-auto max-w-7xl space-y-8">
         {/* Dashboard v2 (redesign aprovado 02/08): HOJE → mês em 4 números →
             por clínica → funil+recall. Substitui o DashboardAnalytics antigo. */}
