@@ -200,7 +200,7 @@ export default function TabPrescricao({ patientId, patient, onImprimir }: {
     ).join("\n\n\n");
   };
 
-  const gerar = async () => {
+  const gerar = async (imprimir: boolean = true) => {
     const imprimiveis = itens.filter((i) => i.tipo !== "notificacao");
     if (!imprimiveis.length) { toast.error("Nenhum remédio que possa sair nesta receita."); return; }
     setSalvando(true);
@@ -220,7 +220,7 @@ export default function TabPrescricao({ patientId, patient, onImprimir }: {
       }
       toast.success(jobs.length > 1 ? `${jobs.length} receitas salvas (separadas por tipo)` : "Receita salva");
       setItens([]);
-      onImprimir(jobs);
+      if (imprimir) onImprimir(jobs); // "Salvar sem imprimir": mesma gravação, sem abrir a impressão
     } catch (e: any) {
       toast.error(msgErro(e, "Não consegui salvar a receita"));
     } finally {
@@ -340,8 +340,13 @@ export default function TabPrescricao({ patientId, patient, onImprimir }: {
       )}
 
       {itens.length > 0 && (
-        <div className="flex justify-end">
-          <button type="button" onClick={gerar} disabled={salvando}
+        <div className="flex justify-end gap-2">
+          <button type="button" onClick={() => gerar(false)} disabled={salvando}
+            title="Grava a receita no prontuário sem abrir a impressão"
+            className="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-teal-600 text-teal-700 dark:text-teal-300 text-sm font-semibold hover:bg-teal-50 dark:hover:bg-teal-900/20 disabled:opacity-50">
+            Salvar sem imprimir
+          </button>
+          <button type="button" onClick={() => gerar(true)} disabled={salvando}
             className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-teal-600 text-white text-sm font-semibold hover:bg-teal-700 disabled:opacity-50">
             <Printer className="w-4 h-4" /> {salvando ? "Salvando…" : "Gerar receitas e imprimir"}
           </button>
