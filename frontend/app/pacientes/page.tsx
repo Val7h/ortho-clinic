@@ -315,20 +315,18 @@ export default function PatientsPage() {
             <h3 className="mt-4 text-lg font-semibold text-slate-900">
               {rawSearch.trim().length >= 2 || activeFilterCount > 0
                 ? 'Nenhum paciente encontrado'
-                : 'Busque um paciente'}
+                : 'Digite o nome, CPF ou telefone para buscar'}
             </h3>
-            <p className="mt-1 text-sm text-slate-600">
-              {rawSearch.trim().length >= 2 || activeFilterCount > 0
-                ? 'Tente ajustar a busca ou os filtros'
-                : 'Digite o nome, CPF ou telefone no campo acima — ou cadastre um novo'}
-            </p>
-            {!rawSearch && activeFilterCount === 0 && (
+            {(rawSearch.trim().length >= 2 || activeFilterCount > 0) && (
+              <p className="mt-1 text-sm text-slate-600">Tente ajustar a busca ou os filtros</p>
+            )}
+            {(rawSearch.trim().length >= 2 || activeFilterCount > 0) && (
               <Button
                 variant="primary"
                 className="mt-4"
                 onClick={() => router.push('/pacientes/novo')}
               >
-                Cadastrar primeiro paciente
+                Cadastrar novo paciente
               </Button>
             )}
           </div>
