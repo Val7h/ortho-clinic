@@ -350,6 +350,8 @@ function PatientCard({ entry, onStatusChange, onRemove, onAddValue, onSelect, bu
                 <button
                   onClick={() => onStatusChange(entry.id, 'absent')}
                   disabled={busy}
+                  title="Marcar ausente"
+                  aria-label="Marcar ausente"
                   className="flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-[10px] font-semibold hover:bg-slate-300 dark:hover:bg-slate-600 disabled:opacity-50"
                 >
                   <UserX className="w-3 h-3" />
@@ -410,7 +412,7 @@ function PatientCard({ entry, onStatusChange, onRemove, onAddValue, onSelect, bu
             <button
               onClick={() => onAddValue(entry)}
               disabled={busy}
-              className="p-1 rounded text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950 transition-colors disabled:opacity-40"
+              className="relative before:content-[''] before:absolute before:-inset-y-2 before:-inset-x-1 p-1 rounded text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950 transition-colors disabled:opacity-40"
               title="Acrescentar valor (procedimento) na conta deste paciente"
             >
               <Plus className="w-3 h-3" />
@@ -421,7 +423,7 @@ function PatientCard({ entry, onStatusChange, onRemove, onAddValue, onSelect, bu
                   .then(() => toast.success('Nome copiado — cole no chat com a IA'))
                   .catch(() => toast.error('Não foi possível copiar'));
               }}
-              className="p-1 rounded text-slate-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-950 transition-colors"
+              className="relative before:content-[''] before:absolute before:-inset-y-2 before:-inset-x-1 p-1 rounded text-slate-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-950 transition-colors"
               title="Copiar nome do paciente (para colar no chat com a IA)"
             >
               <Copy className="w-3 h-3" />
@@ -429,7 +431,7 @@ function PatientCard({ entry, onStatusChange, onRemove, onAddValue, onSelect, bu
             <button
               onClick={() => onRemove(entry.id)}
               disabled={busy}
-              className="p-1 rounded text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950 transition-colors disabled:opacity-40"
+              className="relative ml-3 before:content-[''] before:absolute before:-inset-y-2 before:-inset-x-2 p-1 rounded text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950 transition-colors disabled:opacity-40"
               title="Remover da fila"
             >
               <Trash2 className="w-3 h-3" />
