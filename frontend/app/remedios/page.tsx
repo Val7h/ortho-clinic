@@ -9,7 +9,7 @@ import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import NavBar from "@/components/NavBar";
 import { PageWithSidebar } from "@/components/PageWithSidebar";
-import { medicamentosApi, msgErro } from "@/lib/api";
+import { medicamentosApi } from "@/lib/api";
 import { useProtectedPage } from "@/components/AuthProvider";
 
 const RECEITA: Record<string, { rotulo: string; cor: string }> = {
@@ -32,16 +32,18 @@ export default function RemediosPage() {
   const [q, setQ] = useState("");
   const [lista, setLista] = useState<any[]>([]);
   const [buscando, setBuscando] = useState(false);
+  const [erroBusca, setErroBusca] = useState(false);
 
   useEffect(() => {
     if (!user) return;
     const termo = q.trim();
+    setErroBusca(false);
     if (termo.length < 3) { setLista([]); return; }
     const t = setTimeout(() => {
       setBuscando(true);
       medicamentosApi.busca(termo)
         .then(setLista)
-        .catch((e) => toast.error(msgErro(e, "Não consegui buscar")))
+        .catch(() => { setLista([]); setErroBusca(true); toast.error("Não consegui buscar agora. Tente de novo."); })
         .finally(() => setBuscando(false));
     }, 350);
     return () => clearTimeout(t);
@@ -61,7 +63,8 @@ export default function RemediosPage() {
             className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-base"
           />
           {buscando && <p className="text-sm text-slate-500">Procurando…</p>}
-          {!buscando && q.trim().length >= 3 && lista.length === 0 && (
+          {!buscando && erroBusca && <p className="text-sm text-red-600">Não consegui buscar agora. Tente de novo.</p>}
+          {!buscando && !erroBusca && q.trim().length >= 3 && lista.length === 0 && (
             <p className="text-sm text-slate-500">Nada encontrado na lista da Anvisa com “{q}”.</p>
           )}
           <div className="space-y-2">
