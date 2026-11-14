@@ -7878,6 +7878,10 @@ export default function ConsultaDrawer({ entry, onClose, onStatusChange }: Consu
     { key: "documentos",      render: () => <TabDocumentos patientId={entry.patient_id} patient={patient} /> },
   ];
   const [patient, setPatient] = useState<any>(null);
+  // C (14/11): "1ª consulta" calculada pelo HISTÓRICO real. O GET /patients/{id} não
+  // devolve consultation_count (só a lista devolve), então o selo antigo dizia
+  // "1ª consulta" para todo mundo. Aqui: evoluções anteriores + visitas anteriores.
+  const [historico, setHistorico] = useState<{ evolucoes: number; temVisita: boolean } | null>(null);
   const [loadingPatient, setLoadingPatient] = useState(true);
   const [busyStatus, setBusyStatus] = useState(false);
   const [clinic, setClinic] = useState<any>(null);
@@ -7920,6 +7924,22 @@ export default function ConsultaDrawer({ entry, onClose, onStatusChange }: Consu
     };
     window.addEventListener("ortho:cids-changed", h);
     return () => window.removeEventListener("ortho:cids-changed", h);
+  }, [entry.patient_id]);
+
+  useEffect(() => {
+    let vivo = true;
+    setHistorico(null);
+    const hoje = hojeISO();
+    Promise.all([
+      evolutionApi.list(entry.patient_id).catch(() => null),
+      evolutionApi.visitasAnteriores(entry.patient_id).catch(() => null),
+    ]).then(([evs, vis]) => {
+      if (!vivo) return;
+      if (evs === null && vis === null) return; // sem dado: não afirma nada
+      const anteriores = Array.isArray(evs) ? (evs as any[]).filter(e => (e?.entry_date || "") < hoje).length : 0;
+      setHistorico({ evolucoes: anteriores, temVisita: !!vis?.tem_visita_anterior });
+    });
+    return () => { vivo = false; };
   }, [entry.patient_id]);
 
   useEffect(() => {
@@ -8102,13 +8122,22 @@ export default function ConsultaDrawer({ entry, onClose, onStatusChange }: Consu
               }`}>
                 {entry.patient_insurance || "Particular"}
               </span>
-              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                (patient?.consultation_count ?? 0) > 0
-                  ? "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
-                  : "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
-              }`}>
-                {(patient?.consultation_count ?? 0) > 0 ? `Retorno · ${patient.consultation_count}ª vez` : "1ª consulta"}
-              </span>
+              {(() => {
+                const veioComoRetorno = /retorn/i.test(entry.reason || "");
+                const nAnt = Math.max(patient?.consultation_count ?? 0, historico?.evolucoes ?? 0);
+                const jaVeio = nAnt > 0 || !!historico?.temVisita || veioComoRetorno;
+                const pronto = historico !== null || jaVeio;
+                const cor = !pronto
+                  ? "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400"
+                  : jaVeio
+                    ? "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+                    : "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300";
+                return (
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${cor}`}>
+                    {!pronto ? "Consulta" : jaVeio ? (nAnt > 0 ? `Retorno · ${nAnt + 1}ª vez` : "Retorno") : "1ª consulta"}
+                  </span>
+                );
+              })()}
               {patient?.address_city && (
                 <span className="text-xs text-slate-500 dark:text-slate-400">📍 {patient.address_city}{patient.address_state ? `-${patient.address_state}` : ""}</span>
               )}
