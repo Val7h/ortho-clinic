@@ -2029,7 +2029,7 @@ function lerFolha(folha: string): BlocoFolha[] {
   return blocos;
 }
 
-function TabProntuario({ patientId, patient, clinic }: { patientId: number; patient?: any; clinic?: any }) {
+function TabProntuario({ patientId, patient, clinic, motivo }: { patientId: number; patient?: any; clinic?: any; motivo?: string }) {
   const [folha, setFolha] = useState("");
   const [loading, setLoading] = useState(true);
   const [rascunhoSalvo, setRascunhoSalvo] = useState(false);
@@ -2086,7 +2086,9 @@ function TabProntuario({ patientId, patient, clinic }: { patientId: number; pati
           // Cristina Gomes da Silva, hoje era a primeira vez dela). Sem
           // histórico nenhum só pode ser 1ª consulta; com histórico, mantém
           // "retorno" como já era.
-          const tipoInicial = blocosComHoje.length === 0 && !visitas.tem_visita_anterior ? "primeira_consulta" : "retorno";
+          // 14/11 (Valth): agendado como "Retorno" também abre em Retorno, igual ao selo do topo.
+          const veioComoRetorno = /retorn/i.test(motivo || "");
+          const tipoInicial = blocosComHoje.length === 0 && !visitas.tem_visita_anterior && !veioComoRetorno ? "primeira_consulta" : "retorno";
           setConsultType(tipoInicial);
           blocosComHoje.push({ id: null, dataISO: todayISO, tipo: tipoLabel(tipoInicial), texto: "" });
         } else {
@@ -7867,7 +7869,7 @@ export default function ConsultaDrawer({ entry, onClose, onStatusChange }: Consu
   }, [activeTab]);
 
   const ABAS_DO_ATENDIMENTO: Array<{ key: DrawerTab; render: () => JSX.Element }> = [
-    { key: "anamnese",        render: () => <TabProntuario patientId={entry.patient_id} patient={patient} clinic={clinic} /> },
+    { key: "anamnese",        render: () => <TabProntuario patientId={entry.patient_id} patient={patient} clinic={clinic} motivo={entry.reason || ""} /> },
     { key: "exames",          render: () => <TabExames patientId={entry.patient_id} patient={patient} clinic={clinic} /> },
     { key: "prescricao",      render: () => <TabPrescricao patientId={entry.patient_id} patient={patient} onImprimir={(jobs) => { setRxExterna((v) => ({ seq: (v?.seq || 0) + 1, jobs })); setActiveTab("receitas"); }} /> },
     { key: "receitas",        render: () => <TabReceita patientId={entry.patient_id} patient={patient} clinic={clinic} rxExterna={rxExterna} /> },
