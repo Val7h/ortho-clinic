@@ -113,7 +113,10 @@ export function Sidebar() {
 
   const isActive = (href: string) => {
     if (href === '/') return pathname === '/';
-    return pathname?.startsWith(href);
+    if (pathname === href) return true;
+    if (!pathname?.startsWith(href + '/')) return false;
+    // Um item mais específico (ex.: /pacientes/duplicados) acende sozinho
+    return !menuItems.some(m => m.href !== href && m.href.startsWith(href + '/') && (pathname === m.href || pathname.startsWith(m.href + '/')));
   };
 
   const handleLogout = async () => {
@@ -125,7 +128,7 @@ export function Sidebar() {
     <>
       {/* Sidebar — sempre visível */}
       <aside
-        className="fixed left-0 top-0 h-screen w-64 bg-gradient-to-b from-blue-900 to-blue-800 text-white overflow-y-auto z-40"
+        className="fixed left-0 top-0 h-screen w-64 flex flex-col bg-gradient-to-b from-blue-900 to-blue-800 text-white overflow-y-auto z-40"
       >
         {/* Logomarca OrthoMedic (pedido do Dr. Valth) */}
         <div className="p-4 border-b border-blue-700 flex flex-col items-center gap-1.5">
@@ -231,8 +234,8 @@ export function Sidebar() {
         </div>
 
         {/* Footer */}
-        <div className="absolute bottom-0 left-0 right-0 p-3 border-t border-blue-700 text-center">
-          <p className="text-xs text-blue-300">© 2026 OrthoClinic</p>
+        <div className="mt-auto p-3 border-t border-blue-700 text-center">
+          <p className="text-xs text-blue-300">© 2026 OrthoMedic</p>
           <p className="text-xs text-blue-400">v2.0.0 Premium</p>
         </div>
       </aside>
