@@ -31,7 +31,8 @@ def init_db():
     from models import billing  # noqa — Sprint 8 Enterprise Billing
     from models import audit_log  # noqa — Sprint 8 Immutable Audit Log
     from models import clinical_evolution  # noqa — Prontuário evolutivo em folha corrida
-    from models import escriba  # noqa — 17/11: sessoes, pedacos e aviso CFM do Escriba integrado
+    from models import escriba  # noqa — 17/11: sessoes, pedacos e aviso CFM do Escriba integrado; sugestoes e pedidos (fatia 3)
+    from models import assistente  # noqa — 17/11: assistente ao vivo (chat da coluna Escriba + IA)
     from models import messages  # noqa — DirectMessage (chat medico <-> secretaria)
     Base.metadata.create_all(bind=engine)
     # Register SQLAlchemy event hooks for automatic webhook fan-out
@@ -711,6 +712,13 @@ def migrate_db():
             _cols = [c["name"] for c in inspector.get_columns(_t)]
             if "organization_id" not in _cols:
                 migrations.append(f"ALTER TABLE {_t} ADD COLUMN organization_id INTEGER DEFAULT 1")
+
+    # 17/11 (Escriba fatia 3): quem gravou o resumo da coluna — 'sessao' (sessao Claude) ou 'auto' (ponte do PC).
+    # O automatico nunca escreve por cima do que a sessao gravou no mesmo dia.
+    if "escriba_resumos" in existing_tables:
+        _cols = [c["name"] for c in inspector.get_columns("escriba_resumos")]
+        if "fonte" not in _cols:
+            migrations.append("ALTER TABLE escriba_resumos ADD COLUMN fonte VARCHAR(10) DEFAULT 'sessao'")
 
     # 21/10 (Valth): histórico de versões da anamnese. Gatilho no banco guarda
     # o texto ANTERIOR a cada alteração/exclusão — pega a tela, a API e SQL direto.

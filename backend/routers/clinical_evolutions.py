@@ -329,6 +329,7 @@ class EscribaResumoOut(BaseModel):
     linhas: List[str]
     faltas: List[str]
     updated_at: Optional[datetime] = None
+    fonte: Optional[str] = None
 
 
 def _resumo_out(r: EscribaResumo) -> dict:
@@ -339,7 +340,7 @@ def _resumo_out(r: EscribaResumo) -> dict:
         except Exception:
             return []
     return {"patient_id": r.patient_id, "entry_date": r.entry_date, "linhas": lista(r.linhas),
-            "faltas": lista(r.faltas), "updated_at": r.updated_at}
+            "faltas": lista(r.faltas), "updated_at": r.updated_at, "fonte": getattr(r, "fonte", None)}
 
 
 @router.get("/{patient_id}/escriba-resumo", response_model=Optional[EscribaResumoOut])
@@ -361,5 +362,6 @@ def put_escriba_resumo(patient_id: int, body: EscribaResumoIn, db: Session = Dep
         db.add(r)
     r.linhas = _json.dumps(linhas, ensure_ascii=False)
     r.faltas = _json.dumps(faltas, ensure_ascii=False)
+    r.fonte = "sessao"  # 17/11: o resumo automatico da ponte nao escreve mais por cima deste no mesmo dia
     db.commit(); db.refresh(r)
     return _resumo_out(r)

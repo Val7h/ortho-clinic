@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, Text, Date, DateTime, ForeignKey, UniqueConstraint
+from sqlalchemy import Column, Integer, String, Text, Date, DateTime, ForeignKey, UniqueConstraint
 from sqlalchemy.sql import func
 from database import Base
 
@@ -24,4 +24,6 @@ class EscribaResumo(Base):
     entry_date = Column(Date, nullable=False)
     linhas = Column(Text, nullable=False, default="[]")   # JSON: frases curtas do resumo
     faltas = Column(Text, nullable=False, default="[]")   # JSON: falado e nao escrito
+    # 17/11: 'sessao' (PUT da sessao Claude) ou 'auto' (ponte do PC, a cada rascunho). Auto nao cobre sessao.
+    fonte = Column(String(10), nullable=True, default="sessao")
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

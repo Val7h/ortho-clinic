@@ -8,7 +8,7 @@ depois o audio e apagado (a coluna `audio` volta a NULL).
 - EscribaPedaco: pedaco de ~10 s. Repetir o envio nao duplica.
 - EscribaConsentimento: o aviso CFM, uma vez por paciente.
 """
-from sqlalchemy import (Column, Integer, String, DateTime, ForeignKey, LargeBinary, UniqueConstraint, BigInteger)
+from sqlalchemy import (Column, Integer, String, DateTime, ForeignKey, LargeBinary, UniqueConstraint, BigInteger, Text, Boolean)
 from sqlalchemy.sql import func
 
 from database import Base
@@ -62,3 +62,52 @@ class EscribaConsentimento(Base):
     doctor_user_id = Column(Integer, nullable=True)
     texto_versao = Column(String(40), nullable=False, default="v1-2026-11-17")
     criado_em = Column(DateTime(timezone=True), server_default=func.now())
+
+
+# ─────────── fatia 3 (17/11/2026): botoes "Voce disse que vai fazer" ───────────
+
+class EscribaSugestao(Base):
+    """Um botao da coluna: 1 por classe de exame, fisio, 1 por receita, encaminhamento, atestado, procedimento.
+    A ponte do PC grava e atualiza pela chave estavel (repetir a frase nao duplica).
+    Estados: nova | aberta | feita | descartada | sumiu (o rascunho novo nao trouxe mais)."""
+    __tablename__ = "escriba_sugestoes"
+    __table_args__ = (UniqueConstraint("sessao_id", "chave", name="uq_escriba_sugestao_chave"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, default=1, index=True)
+    sessao_id = Column(Integer, ForeignKey("escriba_sessoes.id"), nullable=False, index=True)
+    entry_id = Column(Integer, nullable=False, index=True)
+    patient_id = Column(Integer, nullable=False, index=True)
+    chave = Column(String(120), nullable=False)
+    # exame | fisio | receita | encaminhamento | atestado | procedimento
+    tipo = Column(String(20), nullable=False)
+    rotulo = Column(String(60), nullable=False)
+    frase = Column(Text, nullable=True)          # o que foi dito, como saiu da transcricao
+    conferida = Column(Boolean, nullable=False, default=False)  # a frase existe na transcricao
+    dados = Column(Text, nullable=True)          # JSON: o que preenche a aba
+    estado = Column(String(20), nullable=False, default="nova")
+    # metrica: ao salvar o documento, o texto ficou igual ao sugerido? (True = usado sem mudar)
+    sem_mudanca = Column(Boolean, nullable=True)
+    criada_em = Column(DateTime(timezone=True), server_default=func.now())
+    atualizada_em = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    feita_em = Column(DateTime(timezone=True), nullable=True)
+
+
+class EscribaPedido(Base):
+    """Pedido do site para o PC executar (ex.: 'Gerar guia oficial (PC)').
+    O PC busca para fora, pega (pendente -> pego), executa e devolve (feito | falhou)."""
+    __tablename__ = "escriba_pedidos"
+
+    id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, default=1, index=True)
+    patient_id = Column(Integer, nullable=False, index=True)
+    entry_id = Column(Integer, nullable=True)
+    sugestao_id = Column(Integer, nullable=True, index=True)
+    tipo = Column(String(20), nullable=False, default="guia")
+    dados = Column(Text, nullable=True)          # JSON com o que o PC precisa
+    estado = Column(String(20), nullable=False, default="pendente")  # pendente | pego | feito | falhou
+    resultado = Column(Text, nullable=True)
+    doctor_user_id = Column(Integer, nullable=True)
+    criado_em = Column(DateTime(timezone=True), server_default=func.now())
+    pego_em = Column(DateTime(timezone=True), nullable=True)
+    feito_em = Column(DateTime(timezone=True), nullable=True)

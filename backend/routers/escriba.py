@@ -13,9 +13,10 @@ Regras:
 - O audio fica aqui so ate o PC confirmar; a confirmacao apaga o audio.
 """
 import hmac
+import json
 import os
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from fastapi.responses import Response
@@ -24,7 +25,7 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from deps import require_doctor
-from models.escriba import EscribaConsentimento, EscribaPedaco, EscribaSessao
+from models.escriba import EscribaConsentimento, EscribaPedaco, EscribaPedido, EscribaSessao, EscribaSugestao
 from models.organization import User
 from models.patient import Patient
 from models.queue import WaitingRoomEntry
@@ -376,3 +377,327 @@ def ponte_recebido(pid: int, db: Session = Depends(get_db), org: int = Depends(e
         p.confirmado_em = p.confirmado_em or _agora()
         db.commit()
     return {"ok": True, "id": p.id}
+
+
+# ─────────── fatia 3 (17/11/2026): botoes "Voce disse que vai fazer" ───────────
+# A ponte do PC grava as sugestoes (chave estavel: repetir a frase nao duplica).
+# O medico ve os botoes na coluna, abre a aba ja preenchida, salva (feita) ou descarta.
+# Exame ou fisio de convenio ganha "Gerar guia oficial (PC)": vira um pedido que o PC executa.
+
+TIPOS_SUG = {"exame", "fisio", "receita", "encaminhamento", "atestado", "procedimento"}
+ESTADOS_MEDICO = {"aberta", "feita", "descartada", "nova"}
+# mesma regra do consulta.py (28/10): sem convenio, cortesia ou desconto = particular (nunca guia SADT)
+_MARCAS_PARTICULAR = ("PARTICULAR", "CORTESIA", "ADEILDO", "DESCONTO", "GABRIEL")
+
+
+def eh_particular(convenio: Optional[str]) -> bool:
+    c = (convenio or "").strip().upper()
+    return not c or any(k in c for k in _MARCAS_PARTICULAR)
+
+
+def _json(txt: Optional[str]):
+    if not txt:
+        return {}
+    try:
+        return json.loads(txt)
+    except ValueError:
+        return {}
+
+
+def _pedido_out(p: Optional[EscribaPedido]) -> Optional[dict]:
+    if not p:
+        return None
+    return {"id": p.id, "tipo": p.tipo, "estado": p.estado, "resultado": p.resultado,
+            "criado_em": _iso(p.criado_em), "feito_em": _iso(p.feito_em)}
+
+
+def _ultimo_pedido(db: Session, sug_id: int) -> Optional[EscribaPedido]:
+    return (db.query(EscribaPedido).filter(EscribaPedido.sugestao_id == sug_id)
+            .order_by(EscribaPedido.id.desc()).first())
+
+
+def _sug_out(db: Session, s: EscribaSugestao) -> dict:
+    return {"id": s.id, "chave": s.chave, "tipo": s.tipo, "rotulo": s.rotulo, "frase": s.frase,
+            "conferida": bool(s.conferida), "dados": _json(s.dados), "estado": s.estado,
+            "atualizada_em": _iso(s.atualizada_em), "pedido": _pedido_out(_ultimo_pedido(db, s.id))}
+
+
+class SugestaoIn(BaseModel):
+    chave: str
+    tipo: str
+    rotulo: str
+    frase: Optional[str] = None
+    conferida: bool = False
+    dados: dict = {}
+
+
+class SugestoesIn(BaseModel):
+    sugestoes: List[SugestaoIn] = []
+    completo: bool = True   # True: o que nao veio nesta lista e ainda esta "nova" vira "sumiu"
+
+
+@router.post("/ponte/sessoes/{sid}/sugestoes")
+def ponte_sugestoes(sid: int, body: SugestoesIn, db: Session = Depends(get_db), org: int = Depends(exigir_ponte)):
+    """A ponte manda TODAS as sugestoes do rascunho atual. Idempotente pela chave.
+    Nunca mexe no que o medico ja decidiu (feita ou descartada)."""
+    s = db.query(EscribaSessao).filter(EscribaSessao.id == sid, EscribaSessao.organization_id == org).first()
+    if not s:
+        raise HTTPException(404, "Sessão não encontrada")
+    atuais = {x.chave: x for x in db.query(EscribaSugestao).filter(EscribaSugestao.sessao_id == s.id).all()}
+    vistas, cont = set(), {"novas": 0, "atualizadas": 0, "sumiram": 0}
+    for it in body.sugestoes:
+        chave = (it.chave or "").strip()[:120]
+        if not chave or it.tipo not in TIPOS_SUG or chave in vistas:
+            continue
+        vistas.add(chave)
+        dados = json.dumps(it.dados or {}, ensure_ascii=False)
+        rot = (it.rotulo or "").strip()[:60] or it.tipo
+        frase = (it.frase or "").strip()[:1000] or None
+        x = atuais.get(chave)
+        if not x:
+            db.add(EscribaSugestao(organization_id=org, sessao_id=s.id, entry_id=s.entry_id, patient_id=s.patient_id,
+                                   chave=chave, tipo=it.tipo, rotulo=rot, frase=frase, conferida=bool(it.conferida),
+                                   dados=dados, estado="nova"))
+            cont["novas"] += 1
+            continue
+        if x.estado in ("feita", "descartada"):
+            continue  # o medico ja decidiu: nao muda nada
+        if x.estado == "sumiu" or (x.rotulo, x.frase, bool(x.conferida), x.dados) != (rot, frase, bool(it.conferida), dados):
+            x.rotulo, x.frase, x.conferida, x.dados = rot, frase, bool(it.conferida), dados
+            if x.estado == "sumiu":
+                x.estado = "nova"
+            cont["atualizadas"] += 1
+    if body.completo:
+        for chave, x in atuais.items():
+            if chave not in vistas and x.estado == "nova":
+                x.estado = "sumiu"
+                cont["sumiram"] += 1
+    try:
+        db.commit()
+    except Exception:  # duas voltas da ponte ao mesmo tempo: a trava unica segura; a proxima volta acerta
+        db.rollback()
+        raise HTTPException(409, "Conflito; tente de novo")
+    return cont
+
+
+@router.get("/sugestoes/entrada/{entry_id}")
+def sugestoes_da_entrada(entry_id: int, db: Session = Depends(get_db), u: User = Depends(require_doctor)):
+    """Os botoes da coluna para este atendimento (sem os que sumiram)."""
+    e, p = _entrada_da_org(db, entry_id, u)
+    conv = " ".join(x for x in (p.insurance, p.insurance_plan) if x) or None
+    q = (db.query(EscribaSugestao).filter(EscribaSugestao.entry_id == e.id, EscribaSugestao.estado != "sumiu")
+         .order_by(EscribaSugestao.id))
+    return {"entry_id": e.id, "patient_id": p.id, "convenio": conv, "particular": eh_particular(p.insurance),
+            "sugestoes": [_sug_out(db, x) for x in q.all()]}
+
+
+def _sugestao_da_org(db: Session, sug_id: int, u: User) -> EscribaSugestao:
+    x = db.query(EscribaSugestao).filter(EscribaSugestao.id == sug_id).first()
+    if not x or not _mesma_org(u, x.organization_id):
+        raise HTTPException(404, "Sugestão não encontrada")
+    return x
+
+
+class SugEstadoIn(BaseModel):
+    estado: str
+    sem_mudanca: Optional[bool] = None
+
+
+@router.post("/sugestoes/{sug_id}/estado")
+def mudar_estado_sugestao(sug_id: int, body: SugEstadoIn, db: Session = Depends(get_db), u: User = Depends(require_doctor)):
+    """aberta (clicou), feita (salvou o documento), descartada (x), nova (desfazer o x)."""
+    if body.estado not in ESTADOS_MEDICO:
+        raise HTTPException(422, "Use aberta, feita, descartada ou nova")
+    x = _sugestao_da_org(db, sug_id, u)
+    de, para = x.estado, body.estado
+    pode = {"aberta": de == "nova",
+            "feita": de in ("nova", "aberta"),
+            "descartada": de in ("nova", "aberta", "sumiu"),
+            "nova": de == "descartada"}[para]
+    if pode:
+        x.estado = para
+        if para == "feita":
+            x.feita_em = _agora()
+            x.sem_mudanca = body.sem_mudanca
+        db.commit()
+        db.refresh(x)
+    return _sug_out(db, x)
+
+
+def _itens_da_guia(x: EscribaSugestao, d: dict) -> List[str]:
+    """'DESCRICAO|QTD'. Exame: 1 por item (1 linha por lado). Fisio: so com o numero de sessoes DITO."""
+    if x.tipo == "exame":
+        return [f"{str(i).strip().upper()}|1" for i in (d.get("itens") or []) if str(i).strip()]
+    n = d.get("sessoes")
+    if not isinstance(n, int) or n <= 0:
+        raise HTTPException(422, "Falta o número de sessões da fisioterapia (não foi dito). Faça a guia pela aba.")
+    desc = (d.get("descricao_guia") or "FISIOTERAPIA").strip().upper()
+    return [f"{desc}|{n}"]
+
+
+@router.post("/sugestoes/{sug_id}/guia")
+def pedir_guia(sug_id: int, db: Session = Depends(get_db), u: User = Depends(require_doctor)):
+    """'Gerar guia oficial (PC)'. So exame ou fisio de paciente de convenio. Repetir nao duplica:
+    devolve o pedido que ja existe (a nao ser que o anterior tenha falhado)."""
+    x = _sugestao_da_org(db, sug_id, u)
+    if x.tipo not in ("exame", "fisio"):
+        raise HTTPException(422, "Guia só para exame ou fisioterapia")
+    p = db.query(Patient).filter(Patient.id == x.patient_id).first()
+    if not p or eh_particular(p.insurance):
+        raise HTTPException(422, "Paciente particular: use o pedido comum, sem guia")
+    ja = _ultimo_pedido(db, x.id)
+    if ja and ja.estado != "falhou":
+        return _pedido_out(ja)
+    d = _json(x.dados)
+    itens = _itens_da_guia(x, d)
+    if not itens:
+        raise HTTPException(422, "Sem item para a guia")
+    indicacao = (d.get("hd") or d.get("diagnostico") or "").strip()
+    if not indicacao:
+        raise HTTPException(422, "Falta a indicação clínica (HD). Faça a guia pela aba.")
+    classe = d.get("classe") or "Exames"
+    dados = {"patient_id": p.id, "indicacao": indicacao, "itens": itens, "convenio": p.insurance,
+             "titulo": "Guia SADT - Fisioterapia" if x.tipo == "fisio" else f"Guia SADT - {classe}",
+             # RNM e TC por convenio: a justificativa vai junto (feita do rascunho, so com fatos)
+             "justificativa": d.get("justificativa") if x.tipo == "exame" and classe in ("Ressonância", "Tomografia") else None}
+    novo = EscribaPedido(organization_id=x.organization_id or 1, patient_id=p.id, entry_id=x.entry_id, sugestao_id=x.id,
+                         tipo="guia", dados=json.dumps(dados, ensure_ascii=False), doctor_user_id=u.id)
+    db.add(novo)
+    db.commit()
+    db.refresh(novo)
+    return _pedido_out(novo)
+
+
+@router.get("/metrica")
+def metrica(dias: int = 30, db: Session = Depends(get_db), u: User = Depends(require_doctor)):
+    """Por dia: usadas sem mudar, mudadas, descartadas, total. Base para decidir o passo 2."""
+    desde = _agora() - timedelta(days=max(1, min(dias, 365)))
+    q = db.query(EscribaSugestao).filter(EscribaSugestao.criada_em >= desde, EscribaSugestao.estado != "sumiu")
+    if u.role != "superadmin":
+        q = q.filter(EscribaSugestao.organization_id == _org(u))
+    br = timezone(timedelta(hours=-3))
+    por_dia: dict = {}
+    for x in q.all():
+        dia = (_utc(x.criada_em) or _agora()).astimezone(br).date().isoformat()
+        m = por_dia.setdefault(dia, {"dia": dia, "total": 0, "sem_mudar": 0, "mudadas": 0, "descartadas": 0, "abertas": 0})
+        m["total"] += 1
+        if x.estado == "feita":
+            m["sem_mudar" if x.sem_mudanca else "mudadas"] += 1
+        elif x.estado == "descartada":
+            m["descartadas"] += 1
+        elif x.estado == "aberta":
+            m["abertas"] += 1
+    return sorted(por_dia.values(), key=lambda m: m["dia"], reverse=True)
+
+
+# ── pedidos para o PC (ponte) ──
+
+@router.get("/ponte/pedidos")
+def ponte_pedidos(db: Session = Depends(get_db), org: int = Depends(exigir_ponte)):
+    """Pedidos pendentes (e os pegos ha mais de 10 min, que o PC largou no meio)."""
+    velho = _agora() - timedelta(minutes=10)
+    ps = (db.query(EscribaPedido).filter(EscribaPedido.organization_id == org,
+                                         EscribaPedido.criado_em >= _agora() - timedelta(hours=14))
+          .filter((EscribaPedido.estado == "pendente") | ((EscribaPedido.estado == "pego") & (EscribaPedido.pego_em < velho)))
+          .order_by(EscribaPedido.id).limit(20).all())
+    return [{"id": p.id, "tipo": p.tipo, "patient_id": p.patient_id, "entry_id": p.entry_id,
+             "dados": _json(p.dados)} for p in ps]
+
+
+def _pedido_da_ponte(db: Session, pid: int, org: int) -> EscribaPedido:
+    p = db.query(EscribaPedido).filter(EscribaPedido.id == pid, EscribaPedido.organization_id == org).first()
+    if not p:
+        raise HTTPException(404, "Pedido não encontrado")
+    return p
+
+
+@router.post("/ponte/pedidos/{pid}/pegar")
+def ponte_pegar_pedido(pid: int, db: Session = Depends(get_db), org: int = Depends(exigir_ponte)):
+    """So um PC executa: quem pega primeiro leva; o outro recebe 409."""
+    p = _pedido_da_ponte(db, pid, org)
+    pego = _utc(p.pego_em)
+    if p.estado == "pendente" or (p.estado == "pego" and pego and _agora() - pego > timedelta(minutes=10)):
+        p.estado, p.pego_em = "pego", _agora()
+        db.commit()
+        return {"ok": True, "id": p.id}
+    raise HTTPException(409, "Pedido já pego ou terminado")
+
+
+class ResultadoIn(BaseModel):
+    ok: bool
+    texto: str = ""
+
+
+@router.post("/ponte/pedidos/{pid}/resultado")
+def ponte_resultado_pedido(pid: int, body: ResultadoIn, db: Session = Depends(get_db), org: int = Depends(exigir_ponte)):
+    p = _pedido_da_ponte(db, pid, org)
+    if p.estado in ("feito", "falhou"):
+        return _pedido_out(p)
+    p.estado = "feito" if body.ok else "falhou"
+    p.resultado = (body.texto or "")[:2000]
+    p.feito_em = _agora()
+    db.commit()
+    db.refresh(p)
+    return _pedido_out(p)
+
+
+# ── resumo automatico da coluna (17/11): a ponte grava sozinha a cada rascunho novo ──
+
+def _sessao_da_ponte(db: Session, sid: int, org: int) -> EscribaSessao:
+    s = db.query(EscribaSessao).filter(EscribaSessao.id == sid, EscribaSessao.organization_id == org).first()
+    if not s:
+        raise HTTPException(404, "Sessão não encontrada")
+    return s
+
+
+def _dia_da_sessao(db: Session, s: EscribaSessao):
+    e = db.query(WaitingRoomEntry).filter(WaitingRoomEntry.id == s.entry_id).first()
+    return (e.entry_date if e and e.entry_date else today_br())
+
+
+@router.get("/ponte/sessoes/{sid}/anamnese-hoje")
+def ponte_anamnese_hoje(sid: int, db: Session = Depends(get_db), org: int = Depends(exigir_ponte)):
+    """So o texto que o MEDICO escreveu hoje para o paciente deste atendimento (sem o bloco do Escriba)."""
+    from models.clinical_evolution import ClinicalEvolution
+    s = _sessao_da_ponte(db, sid, org)
+    dia = _dia_da_sessao(db, s)
+    evs = (db.query(ClinicalEvolution).filter(ClinicalEvolution.patient_id == s.patient_id,
+                                              ClinicalEvolution.entry_date == dia)
+           .order_by(ClinicalEvolution.id).all())
+    texto = "\n".join((e.content or "") for e in evs if (e.organization_id or 1) == org)
+    # o bloco "[ESCRIBA IA – conferir]" e da IA, nao do medico
+    import re as _re
+    texto = _re.sub(r"\n*\[ESCRIBA IA[^\n]*(?:\n(?:QP|HDA|Antecedentes|Exames trazidos|EF|HD|CD): [^\n]*)*", "", texto)
+    return {"patient_id": s.patient_id, "data": dia.isoformat(), "texto": texto}
+
+
+class ResumoPonteIn(BaseModel):
+    linhas: List[str] = []
+    faltas: List[str] = []
+
+
+@router.put("/ponte/sessoes/{sid}/resumo")
+def ponte_resumo(sid: int, body: ResumoPonteIn, db: Session = Depends(get_db), org: int = Depends(exigir_ponte)):
+    """Igual ao PUT /patients/{id}/escriba-resumo, com a chave da ponte. Grava com fonte='auto'.
+    Nao grava se nada mudou e nunca escreve por cima do que a sessao Claude gravou no mesmo dia."""
+    from models.clinical_evolution import EscribaResumo
+    s = _sessao_da_ponte(db, sid, org)
+    dia = _dia_da_sessao(db, s)
+    linhas = [l.strip()[:500] for l in body.linhas if l and l.strip()][:30]
+    faltas = [l.strip()[:500] for l in body.faltas if l and l.strip()][:15]
+    r = db.query(EscribaResumo).filter(EscribaResumo.patient_id == s.patient_id, EscribaResumo.entry_date == dia).first()
+    if r and (r.fonte or "sessao") == "sessao":
+        return {"gravado": False, "motivo": "sessao"}
+    nl, nf = json.dumps(linhas, ensure_ascii=False), json.dumps(faltas, ensure_ascii=False)
+    if r and r.linhas == nl and r.faltas == nf:
+        return {"gravado": False, "motivo": "igual"}
+    if not r:
+        r = EscribaResumo(patient_id=s.patient_id, entry_date=dia, organization_id=org)
+        db.add(r)
+    r.linhas, r.faltas, r.fonte = nl, nf, "auto"
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise HTTPException(409, "Conflito; tente de novo")
+    return {"gravado": True}

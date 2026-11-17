@@ -28,6 +28,7 @@ from routers.pre_consulta import router as pre_consulta_router
 from routers.patient_prescriptions import router as patient_prescriptions_router
 from routers.clinical_evolutions import router as clinical_evolutions_router, flat_router as evolutions_flat_router
 from routers.escriba import router as escriba_router  # 17/11: Escriba integrado (gravar pelo site)
+from routers.assistente import router as assistente_router  # 17/11: assistente ao vivo da coluna
 from routers.laudo_inss import router as laudo_inss_router
 from routers.patient_merge import router as patient_merge_router
 from routers.prescription_templates import router as prescription_templates_router
@@ -199,6 +200,7 @@ app.include_router(patient_prescriptions_router)
 app.include_router(clinical_evolutions_router)
 app.include_router(evolutions_flat_router)
 app.include_router(escriba_router)
+app.include_router(assistente_router)
 app.include_router(laudo_inss_router)
 app.include_router(patient_merge_router)
 app.include_router(prescription_templates_router)
