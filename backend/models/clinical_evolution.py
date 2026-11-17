@@ -26,4 +26,9 @@ class EscribaResumo(Base):
     faltas = Column(Text, nullable=False, default="[]")   # JSON: falado e nao escrito
     # 17/11: 'sessao' (PUT da sessao Claude) ou 'auto' (ponte do PC, a cada rascunho). Auto nao cobre sessao.
     fonte = Column(String(10), nullable=True, default="sessao")
+    # 17/11 tarde (Valth): o automatico e o da sessao CONVIVEM. 'linhas'/'faltas' = automatico (fonte 'auto');
+    # a sessao Claude grava aqui. Linha antiga com fonte 'sessao' e linhas_sessao vazio = linhas e da sessao.
+    linhas_sessao = Column(Text, nullable=True)
+    faltas_sessao = Column(Text, nullable=True)
+    sessao_em = Column(DateTime(timezone=True), nullable=True)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

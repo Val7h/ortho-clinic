@@ -553,6 +553,8 @@ def pedir_guia(sug_id: int, db: Session = Depends(get_db), u: User = Depends(req
     if ja and ja.estado != "falhou":
         return _pedido_out(ja)
     d = _json(x.dados)
+    if d.get("pendente_confirmacao"):
+        raise HTTPException(422, "Aguardando sua resposta no assistente (lado ou convênio conflitante)")
     itens = _itens_da_guia(x, d)
     if not itens:
         raise HTTPException(422, "Sem item para a guia")
@@ -592,6 +594,10 @@ def _motivo_pulo(x: EscribaSugestao) -> Optional[str]:
         return "Sem documento automático"
     if x.tipo == "atestado" and not d.get("dias"):
         return "Atestado: os dias não foram ditos"
+    pend = d.get("pendente_confirmacao")
+    if pend:   # 17/11 tarde: lado ou convenio conflitante; o PC perguntou no assistente
+        motivo = (pend.get("motivo") if isinstance(pend, dict) else None) or "lado/convênio conflitante"
+        return f"Aguardando sua resposta no assistente ({motivo})"
     return None
 
 
@@ -789,21 +795,23 @@ class ResumoPonteIn(BaseModel):
 @router.put("/ponte/sessoes/{sid}/resumo")
 def ponte_resumo(sid: int, body: ResumoPonteIn, db: Session = Depends(get_db), org: int = Depends(exigir_ponte)):
     """Igual ao PUT /patients/{id}/escriba-resumo, com a chave da ponte. Grava com fonte='auto'.
-    Nao grava se nada mudou e nunca escreve por cima do que a sessao Claude gravou no mesmo dia."""
+    Nao grava se nada mudou. 17/11 tarde: o da sessao Claude fica em linhas_sessao e os dois convivem
+    (antes a ponte recusava o dia inteiro quando a sessao tinha gravado)."""
     from models.clinical_evolution import EscribaResumo
     s = _sessao_da_ponte(db, sid, org)
     dia = _dia_da_sessao(db, s)
     linhas = [l.strip()[:500] for l in body.linhas if l and l.strip()][:30]
     faltas = [l.strip()[:500] for l in body.faltas if l and l.strip()][:15]
     r = db.query(EscribaResumo).filter(EscribaResumo.patient_id == s.patient_id, EscribaResumo.entry_date == dia).first()
-    if r and (r.fonte or "sessao") == "sessao":
-        return {"gravado": False, "motivo": "sessao"}
     nl, nf = json.dumps(linhas, ensure_ascii=False), json.dumps(faltas, ensure_ascii=False)
-    if r and r.linhas == nl and r.faltas == nf:
+    if r and (r.fonte or "sessao") == "auto" and r.linhas == nl and r.faltas == nf:
         return {"gravado": False, "motivo": "igual"}
     if not r:
         r = EscribaResumo(patient_id=s.patient_id, entry_date=dia, organization_id=org)
         db.add(r)
+    elif (r.fonte or "sessao") == "sessao" and r.linhas_sessao is None:
+        # linha antiga: o que esta em 'linhas' e da sessao; guarda antes de o automatico ocupar 'linhas'
+        r.linhas_sessao, r.faltas_sessao = r.linhas, r.faltas
     r.linhas, r.faltas, r.fonte = nl, nf, "auto"
     try:
         db.commit()

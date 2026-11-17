@@ -186,3 +186,25 @@ def test_apagar_entrada_da_fila_com_escriba(ambiente):
     assert db.query(WaitingRoomEntry).filter(WaitingRoomEntry.id == eid).first() is None
     assert db.query(EscribaSessao).count() == 0 and db.query(EscribaPedaco).count() == 0
     assert db.query(EscribaSugestao).count() == 0 and db.query(EscribaPedido).count() == 0
+
+
+# ── 17/11 tarde: lado/convenio conflitante -> o PC pergunta no assistente; enquanto isso nao gera ──
+
+def test_pendente_de_confirmacao_e_pulado_e_liberado(ambiente):
+    c, S, pid, eid = ambiente
+    s = _ligar(c, pid, eid)
+    pend = {"chave": "lado:pe", "motivo": "lado do pé", "pergunta": "⚠️ Lado: ..."}
+    proc_rx = {**EXAME, "dados": {**EXAME["dados"], "pendente_confirmacao": pend}}
+    _mandar(c, s["id"], [proc_rx, RX])
+    j = _gerar(c, eid).json()
+    assert j["novos"] == 1                                                          # so a receita
+    pulado = next(x for x in j["itens"] if x["tipo"] == "exame")["pulada"]
+    assert "assistente" in pulado and "lado do pé" in pulado
+    _convenio(S, pid, "Unimed")
+    ex = next(x for x in _lista(c, eid)["sugestoes"] if x["tipo"] == "exame")
+    r = c.post(f"/escriba/sugestoes/{ex['id']}/guia", headers=MEDICO)
+    assert r.status_code == 422 and "assistente" in r.json()["detail"]
+    # o medico respondeu: o PC manda a sugestao de novo, sem a pendencia -> gera
+    _mandar(c, s["id"], [EXAME, RX])
+    j = _gerar(c, eid).json()
+    assert j["novos"] == 1 and not next(x for x in j["itens"] if x["tipo"] == "exame")["pulada"]

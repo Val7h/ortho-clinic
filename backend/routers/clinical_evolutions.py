@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List, Optional
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from pydantic import BaseModel
 from database import get_db
 from models.clinical_evolution import ClinicalEvolution, EscribaResumo
@@ -330,17 +330,36 @@ class EscribaResumoOut(BaseModel):
     faltas: List[str]
     updated_at: Optional[datetime] = None
     fonte: Optional[str] = None
+    # 17/11 tarde: a versao da sessao Claude, separada (None = a sessao nao gravou hoje)
+    linhas_sessao: Optional[List[str]] = None
+    faltas_sessao: Optional[List[str]] = None
+    sessao_em: Optional[datetime] = None
+
+
+def _lista_json(t):
+    try:
+        v = _json.loads(t or "[]")
+        return [str(x) for x in v] if isinstance(v, list) else []
+    except Exception:
+        return []
+
+
+def resumo_da_sessao(r: EscribaResumo):
+    """(linhas, faltas) que a sessao Claude gravou, ou (None, None). Linha antiga: fonte 'sessao' sem linhas_sessao."""
+    if getattr(r, "linhas_sessao", None) is not None:
+        return _lista_json(r.linhas_sessao), _lista_json(r.faltas_sessao)
+    if (r.fonte or "sessao") == "sessao":
+        return _lista_json(r.linhas), _lista_json(r.faltas)
+    return None, None
 
 
 def _resumo_out(r: EscribaResumo) -> dict:
-    def lista(t):
-        try:
-            v = _json.loads(t or "[]")
-            return [str(x) for x in v] if isinstance(v, list) else []
-        except Exception:
-            return []
-    return {"patient_id": r.patient_id, "entry_date": r.entry_date, "linhas": lista(r.linhas),
-            "faltas": lista(r.faltas), "updated_at": r.updated_at, "fonte": getattr(r, "fonte", None)}
+    """linhas/faltas = automatico mais recente; sem automatico no dia, a da sessao (fonte 'sessao').
+    A da sessao vai tambem em linhas_sessao/faltas_sessao."""
+    ls, fs = resumo_da_sessao(r)
+    return {"patient_id": r.patient_id, "entry_date": r.entry_date, "linhas": _lista_json(r.linhas),
+            "faltas": _lista_json(r.faltas), "updated_at": r.updated_at, "fonte": getattr(r, "fonte", None),
+            "linhas_sessao": ls, "faltas_sessao": fs, "sessao_em": getattr(r, "sessao_em", None)}
 
 
 @router.get("/{patient_id}/escriba-resumo", response_model=Optional[EscribaResumoOut])
@@ -388,8 +407,11 @@ def put_escriba_resumo(patient_id: int, body: EscribaResumoIn, db: Session = Dep
         r = EscribaResumo(patient_id=patient_id, entry_date=body.entry_date,
                           organization_id=getattr(current_user, "organization_id", None) or 1)
         db.add(r)
-    r.linhas = _json.dumps(linhas, ensure_ascii=False)
-    r.faltas = _json.dumps(faltas, ensure_ascii=False)
-    r.fonte = "sessao"  # 17/11: o resumo automatico da ponte nao escreve mais por cima deste no mesmo dia
+    nl, nf = _json.dumps(linhas, ensure_ascii=False), _json.dumps(faltas, ensure_ascii=False)
+    # 17/11 tarde: a sessao grava na coluna dela e nao trava o automatico. Sem automatico no dia,
+    # 'linhas' tambem recebe (a tela de hoje continua mostrando o que a sessao escreveu).
+    r.linhas_sessao, r.faltas_sessao, r.sessao_em = nl, nf, datetime.now(timezone.utc)
+    if (r.fonte or "sessao") != "auto":
+        r.linhas, r.faltas, r.fonte = nl, nf, "sessao"
     db.commit(); db.refresh(r)
     return _resumo_out(r)

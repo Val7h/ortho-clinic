@@ -111,8 +111,9 @@ def test_guia_particular_recusa_convenio_cria_pedido_unico(ambiente):
     assert _lista(c, eid)["sugestoes"][0]["pedido"]["estado"] == "feito"
 
 
-def test_resumo_automatico_nao_cobre_a_sessao(ambiente):
-    c, _S, pid, eid = ambiente
+def test_resumo_automatico_e_o_da_sessao_convivem(ambiente):
+    """17/11 tarde: antes a ponte recusava 'auto' o dia inteiro depois que a sessao gravava. Agora os dois ficam."""
+    c, S, pid, eid = ambiente
     s = _ligar(c, pid, eid)
     url = f"/escriba/ponte/sessoes/{s['id']}/resumo"
     corpo = {"linhas": ["dor jd", "cd: rnm jd"], "faltas": ["tempo da dor"]}
@@ -120,14 +121,41 @@ def test_resumo_automatico_nao_cobre_a_sessao(ambiente):
     assert c.put(url, json=corpo, headers=PONTE).json()["motivo"] == "igual"     # sem mudanca, nao regrava
     hoje = today_br().isoformat()
     r = c.get(f"/patients/{pid}/escriba-resumo", params={"data": hoje}, headers=MEDICO).json()
-    assert r["linhas"] == ["dor jd", "cd: rnm jd"] and r["fonte"] == "auto"
-    # a sessao grava por cima (pode); depois o automatico nao apaga o que ela pos
-    assert c.put(f"/patients/{pid}/escriba-resumo", json={"entry_date": hoje, "linhas": ["da sessao"]},
+    assert r["linhas"] == ["dor jd", "cd: rnm jd"] and r["fonte"] == "auto" and r["linhas_sessao"] is None
+    # a sessao grava a dela (PUT do medico, como o consulta.escriba()); o automatico continua na tela
+    assert c.put(f"/patients/{pid}/escriba-resumo", json={"entry_date": hoje, "linhas": ["da sessao"], "faltas": ["f1"]},
                  headers=MEDICO).status_code == 200
-    assert c.put(url, json={"linhas": ["outra"], "faltas": []}, headers=PONTE).json()["motivo"] == "sessao"
     r = c.get(f"/patients/{pid}/escriba-resumo", params={"data": hoje}, headers=MEDICO).json()
-    assert r["linhas"] == ["da sessao"] and r["fonte"] == "sessao"
+    assert r["linhas"] == ["dor jd", "cd: rnm jd"] and r["fonte"] == "auto"
+    assert r["linhas_sessao"] == ["da sessao"] and r["faltas_sessao"] == ["f1"] and r["sessao_em"]
+    # o automatico segue gravando (nao trava mais) e nao apaga o da sessao
+    assert c.put(url, json={"linhas": ["outra"], "faltas": []}, headers=PONTE).json() == {"gravado": True}
+    r = c.get(f"/patients/{pid}/escriba-resumo", params={"data": hoje}, headers=MEDICO).json()
+    assert r["linhas"] == ["outra"] and r["linhas_sessao"] == ["da sessao"]
+    lst = c.get(f"/patients/{pid}/escriba-resumos", headers=MEDICO).json()
+    assert lst[0]["linhas"] == ["outra"] and lst[0]["linhas_sessao"] == ["da sessao"]
     assert c.put(url, json=corpo).status_code == 401
+
+
+def test_resumo_so_da_sessao_e_linha_antiga(ambiente):
+    """Sem automatico no dia, 'linhas' mostra a da sessao. Linha antiga (fonte 'sessao', sem linhas_sessao):
+    o automatico guarda a da sessao antes de ocupar 'linhas'."""
+    from models.clinical_evolution import EscribaResumo
+    c, S, pid, eid = ambiente
+    s = _ligar(c, pid, eid)
+    hoje = today_br().isoformat()
+    c.put(f"/patients/{pid}/escriba-resumo", json={"entry_date": hoje, "linhas": ["so sessao"]}, headers=MEDICO)
+    r = c.get(f"/patients/{pid}/escriba-resumo", params={"data": hoje}, headers=MEDICO).json()
+    assert r["linhas"] == ["so sessao"] and r["fonte"] == "sessao" and r["linhas_sessao"] == ["so sessao"]
+    db = S()
+    db.query(EscribaResumo).filter(EscribaResumo.patient_id == pid).update({"linhas_sessao": None, "faltas_sessao": None})
+    db.commit()
+    r = c.get(f"/patients/{pid}/escriba-resumo", params={"data": hoje}, headers=MEDICO).json()
+    assert r["linhas_sessao"] == ["so sessao"]                                    # linha antiga lida como da sessao
+    assert c.put(f"/escriba/ponte/sessoes/{s['id']}/resumo", json={"linhas": ["auto"], "faltas": []},
+                 headers=PONTE).json() == {"gravado": True}
+    r = c.get(f"/patients/{pid}/escriba-resumo", params={"data": hoje}, headers=MEDICO).json()
+    assert r["linhas"] == ["auto"] and r["fonte"] == "auto" and r["linhas_sessao"] == ["so sessao"]
 
 
 def test_anamnese_hoje_so_texto_do_medico(ambiente):

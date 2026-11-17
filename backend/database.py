@@ -724,6 +724,13 @@ def migrate_db():
         _cols = [c["name"] for c in inspector.get_columns("escriba_resumos")]
         if "fonte" not in _cols:
             migrations.append("ALTER TABLE escriba_resumos ADD COLUMN fonte VARCHAR(10) DEFAULT 'sessao'")
+        # 17/11 tarde: resumo da sessao em colunas proprias; o automatico nao fica mais travado o dia inteiro
+        if "linhas_sessao" not in _cols:
+            migrations.append("ALTER TABLE escriba_resumos ADD COLUMN linhas_sessao TEXT")
+        if "faltas_sessao" not in _cols:
+            migrations.append("ALTER TABLE escriba_resumos ADD COLUMN faltas_sessao TEXT")
+        if "sessao_em" not in _cols:
+            migrations.append("ALTER TABLE escriba_resumos ADD COLUMN sessao_em TIMESTAMP")
 
     # 21/10 (Valth): histórico de versões da anamnese. Gatilho no banco guarda
     # o texto ANTERIOR a cada alteração/exclusão — pega a tela, a API e SQL direto.
