@@ -2316,7 +2316,14 @@ function usePendenteEscriba(onSalvo?: AoSalvarEscriba) {
 
 function BotoesEscriba({ entry, onAbrir }: { entry: WaitingRoomEntry; onAbrir: (s: EscribaSugestao) => void }) {
   const [res, setRes] = useState<EscribaSugestoes | null>(null);
-  const ler = useCallback(() => escribaSugestoesApi.listar(entry.id).then(setRes).catch(() => {}), [entry.id]);
+  const assinSugRef = useRef<string | null>(null);
+  const ler = useCallback(() => escribaSugestoesApi.listar(entry.id).then((r) => {
+    setRes(r);
+    // lista de botões mudou (nova, feita, descartada) => documentos podem ter sido criados
+    const a = (r?.sugestoes || []).map((s) => `${s.id}:${s.estado}`).join("|");
+    if (assinSugRef.current !== null && assinSugRef.current !== a) pedirAtualizacaoDeDocs();
+    assinSugRef.current = a;
+  }).catch(() => {}), [entry.id]);
   useEffect(() => {
     let vivo = true;
     const l = () => { if (vivo) ler(); };
@@ -2380,6 +2387,27 @@ function BotoesEscriba({ entry, onAbrir }: { entry: WaitingRoomEntry; onAbrir: (
   );
 }
 
+// 17/11: documentos criados por fora (assistente via API) aparecem sozinhos nas abas e no "Tudo de hoje".
+// Um único gatilho (evento) pega carona nos polls que já existem; cada lista recarrega EM SILÊNCIO e só
+// troca o estado se id/updated_at mudou. Nunca mexe em formulário, rascunho nem anamnese.
+const EVT_DOCS = "ortho:docs-refresh";
+function pedirAtualizacaoDeDocs() {
+  if (typeof document !== "undefined" && document.hidden) return;
+  window.dispatchEvent(new Event(EVT_DOCS));
+}
+function assinaturaDocs(l: any[] | null | undefined): string {
+  return (l || []).map((x: any) => `${x?.id}:${x?.updated_at || ""}`).join("|");
+}
+function useDocsSozinhos(recarregar: () => void) {
+  const ref = useRef(recarregar);
+  ref.current = recarregar;
+  useEffect(() => {
+    const h = () => ref.current();
+    window.addEventListener(EVT_DOCS, h);
+    return () => window.removeEventListener(EVT_DOCS, h);
+  }, []);
+}
+
 // 17/11 (Valth): "IA ajudando na hora". Chat curto do paciente no dia: a sessão de atendimento
 // escreve (consulta.assistente) e o médico pergunta na caixinha. Lê a cada 5 s.
 function AssistenteAoVivo({ patientId }: { patientId: number }) {
@@ -2389,8 +2417,18 @@ function AssistenteAoVivo({ patientId }: { patientId: number }) {
   const fimRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     let vivo = true;
+    let ultimoId: any = undefined;
+    let tick = 0;
     setMsgs([]);
-    const ler = () => assistenteApi.listar(patientId).then((r) => { if (vivo) setMsgs((v) => (v.length === r.length && v[v.length - 1]?.id === r[r.length - 1]?.id ? v : r)); }).catch(() => {});
+    const ler = () => assistenteApi.listar(patientId).then((r) => {
+      if (!vivo) return;
+      setMsgs((v) => (v.length === r.length && v[v.length - 1]?.id === r[r.length - 1]?.id ? v : r));
+      // mensagem nova do assistente => recarrega as listas de documentos; senão, a cada ~20 s por garantia
+      const novoId = r[r.length - 1]?.id;
+      tick++;
+      if ((ultimoId !== undefined && novoId !== ultimoId) || tick % 4 === 0) pedirAtualizacaoDeDocs();
+      ultimoId = novoId;
+    }).catch(() => {});
     ler();
     const t = setInterval(ler, 5000);
     return () => { vivo = false; clearInterval(t); };
@@ -3274,6 +3312,12 @@ function TabReceita({ patientId, patient, clinic, rxExterna, prefill, onSalvoEsc
     setPrintRxQueue(resto as any);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rxExterna?.seq]);
+
+  useDocsSozinhos(() => {
+    prescriptionsApi.list(patientId)
+      .then((r) => setPrescriptions((prev) => (assinaturaDocs(prev) === assinaturaDocs(r) ? prev : r)))
+      .catch(() => {});
+  });
 
   useEffect(() => {
     prescriptionsApi.list(patientId)
@@ -4624,6 +4668,12 @@ function TabExames({ patientId, patient, clinic, prefill, onSalvoEscriba }: { pa
 
   useEffect(() => { fetchExams(); }, [fetchExams]);
 
+  useDocsSozinhos(() => {
+    examsApi.list(patientId)
+      .then((r) => setExams((prev) => (assinaturaDocs(prev) === assinaturaDocs(r) ? prev : r)))
+      .catch(() => {});
+  });
+
   // Auto-resize textarea
   const autoResize = () => {
     const ta = textareaRef.current;
@@ -5863,6 +5913,16 @@ export function TabEncaminhamentos({ patient, clinic, patientId, prefill, onSalv
       .finally(() => setCarregandoSalvos(false));
   }, [patient?.id]);
 
+  useDocsSozinhos(() => {
+    if (!patient?.id) return;
+    reportsApi.list(patient.id)
+      .then((r: any[]) => {
+        const nova = (r || []).filter((x: any) => x.report_type === "encaminhamento");
+        setEncaminhamentosSalvos((prev) => (assinaturaDocs(prev) === assinaturaDocs(nova) ? prev : nova));
+      })
+      .catch(() => {});
+  });
+
   const today = new Date();
   const dateStr = `${String(today.getDate()).padStart(2,"0")}/${String(today.getMonth()+1).padStart(2,"0")}/${today.getFullYear()}`;
   const cityState = clinic ? `${clinic.city}/${clinic.state}` : "_________";
@@ -6636,6 +6696,16 @@ export function TabAtestados({ patient, clinic, prefill, onSalvoEscriba }: { pat
       .finally(() => setCarregandoSalvos(false));
   }, [patient?.id]);
 
+  useDocsSozinhos(() => {
+    if (!patient?.id) return;
+    reportsApi.list(patient.id)
+      .then((r: any[]) => {
+        const nova = (r || []).filter((x: any) => x.report_type === "atestado" || x.report_type === "comparecimento");
+        setDocumentosSalvos((prev) => (assinaturaDocs(prev) === assinaturaDocs(nova) ? prev : nova));
+      })
+      .catch(() => {});
+  });
+
   // 24/09 (Valth): auditoria achou que "Visualizar e Imprimir" nunca chamava
   // isto aqui — só o botão separado "Salvar" gravava. Mesmo defeito já
   // corrigido em Laudos e Encaminhamentos (17/09). Agora devolve true/false
@@ -7089,6 +7159,13 @@ export function TabLaudos({ patient, clinic }: { patient: any; clinic?: any }) {
       .catch(() => toast.error("Erro ao carregar laudos salvos"))
       .finally(() => setCarregandoSalvos(false));
   }, [patient?.id]);
+
+  useDocsSozinhos(() => {
+    if (!patient?.id) return;
+    reportsApi.list(patient.id)
+      .then((r: any[]) => setLaudosSalvos((prev) => (assinaturaDocs(prev) === assinaturaDocs(r) ? prev : (r || []))))
+      .catch(() => {});
+  });
 
   // ── Laudo INSS por ditado (IA) ──────────────────────────────────────────
   const [ditado, setDitado] = useState("");
@@ -8388,8 +8465,12 @@ function PacoteDoDia({ patientId, patient, clinic, entryId, onClose }: { patient
   const naoGerados = (escriba?.itens || []).filter((i) => i.estado !== "feita" && (i.pulada || i.pedido?.estado === "falhou"));
   const [itens, setItens] = useState<ItemPacote[] | null>(null);
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
+  const itensRef = useRef<ItemPacote[]>([]);
+  itensRef.current = itens || [];
   // Guia da Unimed é DEITADA (297 x 210 mm); cada guia guarda o tamanho da folha.
   const [paginas, setPaginas] = useState<Record<number, { imgs: string[]; deitada: boolean }>>({});
+  const paginasRef = useRef(paginas);
+  paginasRef.current = paginas;
   const [enviando, setEnviando] = useState(false);
   // 28/10 (Valth): "estou confuso com o que eu já imprimi". O que já saiu (impresso
   // ou mandado à secretária) fica guardado por paciente+dia e abre DESMARCADO,
@@ -8404,10 +8485,17 @@ function PacoteDoDia({ patientId, patient, clinic, entryId, onClose }: { patient
     return n;
   });
 
+  const recarregarPacoteRef = useRef<() => void>(() => {});
+  useDocsSozinhos(() => recarregarPacoteRef.current());
+
   useEffect(() => {
     if (fase !== "lista") return;
     let vivo = true;
+    let primeira = true;
     const doDia = (d: any) => String(d || "").slice(0, 10) === hoje;
+    const carregar = () => {
+    const silencioso = !primeira;
+    primeira = false;
     Promise.all([
       prescriptionsApi.list(patientId).catch(() => []),
       examsApi.list(patientId).catch(() => []),
@@ -8440,16 +8528,29 @@ function PacoteDoDia({ patientId, patient, clinic, entryId, onClose }: { patient
       let jaSaiu: Set<string> = new Set();
       try { jaSaiu = new Set(JSON.parse(localStorage.getItem(chaveImpressos) || "[]")); } catch {}
       lista.sort((a, b) => Number(jaSaiu.has(a.id)) - Number(jaSaiu.has(b.id)));
-      setItens(lista);
-      setSelecionados(new Set(lista.filter((i) => !jaSaiu.has(i.id)).map((i) => i.id)));
+      if (silencioso) {
+        // atualização em segundo plano: só ACRESCENTA itens novos; não mexe no que o médico já marcou/desmarcou
+        const conhecidos = new Set(itensRef.current.map((i) => i.id));
+        const novos = lista.filter((i) => !conhecidos.has(i.id));
+        if (!novos.length) return;
+        setItens((prev) => [...(prev || []), ...novos.filter((n) => !(prev || []).some((p) => p.id === n.id))]);
+        setSelecionados((prev) => { const n = new Set(prev); novos.filter((i) => !jaSaiu.has(i.id)).forEach((i) => n.add(i.id)); return n; });
+      } else {
+        setItens(lista);
+        setSelecionados(new Set(lista.filter((i) => !jaSaiu.has(i.id)).map((i) => i.id)));
+      }
       for (const g of lista) {
         if (g.tipo !== "guia") continue;
+        if (silencioso && paginasRef.current[g.docId] !== undefined) continue;
         api.get(`/patients/${patientId}/documents/${g.docId}/paginas`)
           .then((r) => { if (vivo) setPaginas((p) => ({ ...p, [g.docId]: { imgs: r.data.paginas || [], deitada: (r.data.largura_mm || 0) > (r.data.altura_mm || 0) } })); })
           .catch(() => { if (vivo) setPaginas((p) => ({ ...p, [g.docId]: { imgs: [], deitada: false } })); });
       }
     });
-    return () => { vivo = false; };
+    };
+    carregar();
+    recarregarPacoteRef.current = carregar;
+    return () => { vivo = false; recarregarPacoteRef.current = () => {}; };
   }, [patientId, hoje, fase]);
 
   const escolhidos = (itens || []).filter((i) => selecionados.has(i.id));
