@@ -7942,7 +7942,10 @@ export default function ConsultaDrawer({ entry, onClose, onStatusChange }: Consu
   const [rxExterna, setRxExterna] = useState<{ seq: number; jobs: JobImpressao[] } | null>(null);
   // 13/10: base oficial de medicamentos — reconhece qualquer marca controlada.
   useEffect(() => { carregarTermosDaBase(medicamentosApi.termos); }, []);
-  const [activeTab, setActiveTabRaw] = useState<DrawerTab>(() => ultimaAbaPorPaciente.get(entry.patient_id) ?? "anamnese");
+  const [activeTab, setActiveTabRaw] = useState<DrawerTab>(() => {
+    const ultima = ultimaAbaPorPaciente.get(entry.patient_id) ?? "anamnese";
+    return ultima === "fotos" ? "anamnese" : ultima; // 17/11: aba Fotos escondida
+  });
   const setActiveTab = (tab: DrawerTab) => {
     ultimaAbaPorPaciente.set(entry.patient_id, tab);
     setActiveTabRaw(tab);
@@ -8184,7 +8187,8 @@ export default function ConsultaDrawer({ entry, onClose, onStatusChange }: Consu
     { key: "procedimentos",   label: "Procedimentos",     icon: <ClipboardCheck className="w-3.5 h-3.5" /> },
     { key: "atestados",       label: "Atestados",         icon: <Award className="w-3.5 h-3.5" /> },
     { key: "laudos",          label: "Laudos",            icon: <FileSearch2 className="w-3.5 h-3.5" /> },
-    { key: "fotos",           label: "Fotos",             icon: <Camera className="w-3.5 h-3.5" /> },
+    // 17/11 (Valth): aba "Fotos" fora da lista. Ele nunca usa; as fotos ja vao para "Documentos".
+    // O componente TabFotos e os dados continuam; so a aba nao aparece.
     { key: "documentos",      label: "Documentos",        icon: <FolderOpen className="w-3.5 h-3.5" /> },
   ];
 
