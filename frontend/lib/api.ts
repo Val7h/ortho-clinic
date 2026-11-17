@@ -283,6 +283,32 @@ export const escribaApi = {
     api.get(`/patients/${patientId}/escriba-resumo`, { params: { data } }).then((r) => r.data),
 };
 
+// 17/11/2026 (fatia 3): botões "Você disse que vai fazer" — a ponte do PC grava, o médico usa.
+export type EscribaSugTipo = "exame" | "fisio" | "receita" | "encaminhamento" | "atestado" | "procedimento";
+export interface EscribaPedidoPC { id: number; tipo: string; estado: "pendente" | "pego" | "feito" | "falhou"; resultado?: string | null }
+export interface EscribaSugestao {
+  id: number; chave: string; tipo: EscribaSugTipo; rotulo: string; frase?: string | null; conferida: boolean;
+  dados: any; estado: "nova" | "aberta" | "feita" | "descartada"; pedido?: EscribaPedidoPC | null;
+}
+export interface EscribaSugestoes { entry_id: number; patient_id: number; convenio?: string | null; particular: boolean; sugestoes: EscribaSugestao[] }
+export const escribaSugestoesApi = {
+  listar: (entryId: number): Promise<EscribaSugestoes> =>
+    api.get(`/escriba/sugestoes/entrada/${entryId}`).then((r) => r.data),
+  estado: (id: number, estado: "aberta" | "feita" | "descartada" | "nova", sem_mudanca?: boolean): Promise<EscribaSugestao> =>
+    api.post(`/escriba/sugestoes/${id}/estado`, { estado, sem_mudanca }).then((r) => r.data),
+  guia: (id: number): Promise<EscribaPedidoPC> =>
+    api.post(`/escriba/sugestoes/${id}/guia`).then((r) => r.data),
+};
+
+// 17/11/2026: assistente ao vivo (chat curto por paciente e por dia).
+export interface AssistenteMsg { id: number; autor: "ia" | "medico"; texto: string; data: string; criado_em?: string | null }
+export const assistenteApi = {
+  listar: (patientId: number, data?: string): Promise<AssistenteMsg[]> =>
+    api.get(`/patients/${patientId}/assistente`, { params: data ? { data } : {} }).then((r) => r.data),
+  mandar: (patientId: number, texto: string): Promise<AssistenteMsg> =>
+    api.post(`/patients/${patientId}/assistente`, { texto, autor: "medico" }).then((r) => r.data),
+};
+
 // ── Fisioterapia ──────────────────────────────────────────────────────────
 export const physioApi = {
   list: (patientId: number) =>

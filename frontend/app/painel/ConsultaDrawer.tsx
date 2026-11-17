@@ -17,7 +17,8 @@ import { AppointmentFormModal } from "@/components/AppointmentFormModal";
 import { lerCronoLimites, faixaDoCrono, editarCronoLimites, CronoLimites } from "@/lib/cronoLimites";
 import { serverNow } from "@/lib/servertime";
 import * as escriba from "@/lib/escribaGravador";
-import { anamnesisApi, api, patientsApi, consultationsApi, prescriptionsApi, prescriptionTemplatesApi, referralTemplatesApi, examsApi, evolutionApi, clinicApi, chatApi, reportsApi, leafletsApi, waitingRoomApi, remindersApi, medicamentosApi, printJobsApi, msgErro, escribaApi, EscribaResumo } from "@/lib/api";
+import { anamnesisApi, api, patientsApi, consultationsApi, prescriptionsApi, prescriptionTemplatesApi, referralTemplatesApi, examsApi, evolutionApi, clinicApi, chatApi, reportsApi, leafletsApi, waitingRoomApi, remindersApi, medicamentosApi, printJobsApi, msgErro, escribaApi, EscribaResumo, escribaSugestoesApi, assistenteApi } from "@/lib/api";
+import type { EscribaSugestao, EscribaSugestoes, EscribaSugTipo, AssistenteMsg } from "@/lib/api";
 import { formatDate, calcAge, hojeISO } from "@/lib/utils";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -2201,7 +2202,182 @@ function RelogioGravacao() {
 // 17/11 (Valth, proposta C aprovada): coluna "Escriba + IA" na ALTURA TODA da gaveta, só em lg+.
 // De cima para baixo: gravar/parar, assistente ao vivo (fatia futura), "você disse que vai
 // fazer" (fatia 3) e o resumo do Escriba com "+ passar" e "Falado e não escrito".
-function ColunaDireitaEscriba({ entry }: { entry: WaitingRoomEntry }) {
+// ── Fatia 3 (17/11/2026): botões "Você disse que vai fazer" ──
+// O clique abre a aba certa JÁ PREENCHIDA (padrão do rxExterna): a gaveta guarda o pedido
+// {seq, aba, sug} e a aba recebe `prefill`. A aba NUNCA escreve por cima do que já está na caixa:
+// acrescenta embaixo e avisa. Ao salvar o documento, a sugestão vira "feita" (✓).
+export type PrefillEscriba = { seq: number; sugId: number; tipo: EscribaSugTipo; dados: any };
+export type AoSalvarEscriba = (sugId: number, semMudanca: boolean) => void;
+const ABA_DA_SUGESTAO: Record<EscribaSugTipo, DrawerTab> = {
+  exame: "exames", fisio: "encaminhamentos", receita: "receitas",
+  encaminhamento: "encaminhamentos", atestado: "atestados", procedimento: "procedimentos",
+};
+const COR_SUGESTAO: Record<EscribaSugTipo, { emoji: string; cls: string }> = {
+  exame: { emoji: "🟨", cls: "border-amber-300 bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-800" },
+  fisio: { emoji: "🟦", cls: "border-sky-300 bg-sky-50 text-sky-900 dark:bg-sky-950/40 dark:text-sky-200 dark:border-sky-800" },
+  receita: { emoji: "🟩", cls: "border-emerald-300 bg-emerald-50 text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200 dark:border-emerald-800" },
+  encaminhamento: { emoji: "🟪", cls: "border-purple-300 bg-purple-50 text-purple-900 dark:bg-purple-950/40 dark:text-purple-200 dark:border-purple-800" },
+  atestado: { emoji: "🟧", cls: "border-orange-300 bg-orange-50 text-orange-900 dark:bg-orange-950/40 dark:text-orange-200 dark:border-orange-800" },
+  procedimento: { emoji: "💉", cls: "border-rose-300 bg-rose-50 text-rose-900 dark:bg-rose-950/40 dark:text-rose-200 dark:border-rose-800" },
+};
+
+const semAcentoMin = (s: string) => (s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+// antibiótico (oral e tópico): receita sempre em controle especial (Valth). Mesma lista do PC (sugestoes.py).
+const ANTIBIOTICO_RX = /CEFALEX|CEFADROX|CEFUROX|CEFTRIAX|AMOXICIL|CLAVULAN|AZITROMI|CLARITROMI|ERITROMI|CIPROFLOX|CIPRO\b|LEVOFLOX|MOXIFLOX|NORFLOX|CLINDAMI|DOXICICL|MINOCICL|SULFAMETOX|BACTRIM|NITROFURANT|METRONIDAZ|LINEZOLID|RIFAMPI|GENTAMI|NEOMICI|BACITRAC|MUPIROCI|FUSIDIC|SULFADIAZINA|NEBACETIN|BACTROBAN|VERUTEX|TETRACICL|PENICIL|BENZETACIL|OXACIL/;
+// Junta o texto do Escriba ao que já está na caixa, sem apagar nada. Se já está lá, não repete.
+function juntarEscriba(atual: string, novo: string): { texto: string; embaixo: boolean } {
+  const a = (atual || "").trimEnd();
+  const n = (novo || "").trim();
+  if (!n || a.includes(n)) return { texto: atual, embaixo: false };
+  if (!a.trim()) return { texto: n, embaixo: false };
+  return { texto: `${a}\n\n${n}`, embaixo: true };
+}
+// Aplica no estado da caixa pelo "updater" (pega o rascunho restaurado na mesma montagem) e avisa depois.
+function acrescentarNaCaixa(set: (f: (v: string) => string) => void, novo: string) {
+  let embaixo = false;
+  set((v) => { const r = juntarEscriba(v, novo); embaixo = r.embaixo; return r.texto; });
+  setTimeout(() => { if (embaixo) toast("Já havia texto na caixa: o do Escriba entrou EMBAIXO. Confira.", { icon: "⚠️", duration: 6000 }); }, 0);
+}
+
+// Guarda qual sugestão está esperando o "Salvar" desta aba e o texto que entrou por ela.
+function usePendenteEscriba(onSalvo?: AoSalvarEscriba) {
+  const ref = useRef<{ sugId: number; texto: string } | null>(null);
+  return {
+    marcar: (sugId: number, texto: string) => { ref.current = { sugId, texto: (texto || "").trim() }; },
+    salvou: (textoSalvo: string) => {
+      const p = ref.current;
+      if (!p || !onSalvo) return;
+      ref.current = null;
+      onSalvo(p.sugId, !!p.texto && (textoSalvo || "").includes(p.texto));
+    },
+  };
+}
+
+function BotoesEscriba({ entry, onAbrir }: { entry: WaitingRoomEntry; onAbrir: (s: EscribaSugestao) => void }) {
+  const [res, setRes] = useState<EscribaSugestoes | null>(null);
+  const ler = useCallback(() => escribaSugestoesApi.listar(entry.id).then(setRes).catch(() => {}), [entry.id]);
+  useEffect(() => {
+    let vivo = true;
+    const l = () => { if (vivo) ler(); };
+    l();
+    const t = setInterval(l, 5000);
+    const h = () => l();
+    window.addEventListener("ortho:escriba-sug", h);
+    return () => { vivo = false; clearInterval(t); window.removeEventListener("ortho:escriba-sug", h); };
+  }, [ler]);
+  const lista = (res?.sugestoes || []).filter((s) => s.estado !== "descartada");
+  const descartar = async (s: EscribaSugestao) => {
+    try { await escribaSugestoesApi.estado(s.id, "descartada"); ler(); } catch (e) { toast.error(msgErro(e, "Não consegui descartar")); }
+  };
+  const guia = async (s: EscribaSugestao) => {
+    if (!window.confirm(`Gerar a guia oficial do convênio (${s.rotulo}) pelo PC do consultório?`)) return;
+    try { await escribaSugestoesApi.guia(s.id); toast.success("Pedido enviado ao PC. A guia aparece em Documentos."); ler(); }
+    catch (e) { toast.error(msgErro(e, "Não consegui pedir a guia")); }
+  };
+  return (
+    <section className="flex-none rounded-lg border border-violet-200 dark:border-violet-900 bg-white dark:bg-slate-900 px-3 py-2">
+      <span className="text-[10.5px] text-slate-500">Você disse que vai fazer:</span>
+      {lista.length === 0 ? (
+        <p className="text-[11.5px] text-slate-400">Nada ainda. Os botões aparecem quando você fala um pedido.</p>
+      ) : (
+        <div className="flex flex-wrap gap-1.5 mt-1">
+          {lista.map((s) => {
+            const cor = COR_SUGESTAO[s.tipo] || COR_SUGESTAO.exame;
+            const feita = s.estado === "feita";
+            const ped = s.pedido;
+            const podeGuia = (s.tipo === "exame" || s.tipo === "fisio") && res && !res.particular;
+            const dica = `${s.frase ? `Você disse: "${s.frase}"` : "Frase não achada na transcrição"}${s.conferida ? "" : "\n⚠️ Não conferida na transcrição: confira"}${s.dados?.aviso ? `\n⚠️ ${s.dados.aviso}` : ""}`;
+            return (
+              <span key={s.id} className={`inline-flex items-center rounded-full border text-[11.5px] font-semibold ${cor.cls} ${feita ? "opacity-70" : ""}`}>
+                <button type="button" onClick={() => onAbrir(s)} title={dica} className="pl-2 pr-1 py-0.5 hover:underline">
+                  {cor.emoji} {s.rotulo}{!s.conferida ? " ⚠️" : ""}{feita ? " ✓" : ""}
+                </button>
+                {podeGuia && (
+                  ped && ped.estado !== "falhou" ? (
+                    <span className="px-1 text-[10px]" title={ped.resultado || "Gerando no PC do consultório"}>
+                      {ped.estado === "feito" ? "🧾✓" : "🧾…"}
+                    </span>
+                  ) : (
+                    <button type="button" onClick={() => guia(s)} className="px-1 text-[10px] hover:underline"
+                      title={ped?.estado === "falhou" ? `A guia falhou: ${ped.resultado || ""}\nClique para tentar de novo` : "Gerar guia oficial (PC)"}>
+                      {ped?.estado === "falhou" ? "🧾⚠️" : "🧾"}
+                    </button>
+                  )
+                )}
+                {!feita && (
+                  <button type="button" onClick={() => descartar(s)} className="pr-2 pl-0.5 text-[12px] opacity-60 hover:opacity-100" title="Descartar esta sugestão">×</button>
+                )}
+              </span>
+            );
+          })}
+        </div>
+      )}
+      {lista.some((s) => (s.tipo === "exame" || s.tipo === "fisio")) && res && !res.particular && (
+        <p className="text-[10px] text-slate-400 mt-1">🧾 = Gerar guia oficial (PC) · convênio {res.convenio || ""}</p>
+      )}
+    </section>
+  );
+}
+
+// 17/11 (Valth): "IA ajudando na hora". Chat curto do paciente no dia: a sessão de atendimento
+// escreve (consulta.assistente) e o médico pergunta na caixinha. Lê a cada 5 s.
+function AssistenteAoVivo({ patientId }: { patientId: number }) {
+  const [msgs, setMsgs] = useState<AssistenteMsg[]>([]);
+  const [texto, setTexto] = useState("");
+  const [mandando, setMandando] = useState(false);
+  const fimRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    let vivo = true;
+    setMsgs([]);
+    const ler = () => assistenteApi.listar(patientId).then((r) => { if (vivo) setMsgs((v) => (v.length === r.length && v[v.length - 1]?.id === r[r.length - 1]?.id ? v : r)); }).catch(() => {});
+    ler();
+    const t = setInterval(ler, 5000);
+    return () => { vivo = false; clearInterval(t); };
+  }, [patientId]);
+  useEffect(() => { fimRef.current?.scrollIntoView({ block: "end" }); }, [msgs.length]);
+  const mandar = async () => {
+    const t = texto.trim();
+    if (!t || mandando) return;
+    setMandando(true);
+    try {
+      const m = await assistenteApi.mandar(patientId, t);
+      setMsgs((v) => [...v, m]);
+      setTexto("");
+    } catch (e) { toast.error(msgErro(e, "Não consegui mandar")); }
+    finally { setMandando(false); }
+  };
+  return (
+    <section className="flex flex-col flex-1 min-h-[160px] max-h-[45vh] rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-2.5 py-2">
+      <span className="text-[13px] font-bold text-slate-800 dark:text-slate-200 mb-1">🤖 Assistente ao vivo</span>
+      <div className="flex-1 overflow-y-auto space-y-1.5 pr-0.5">
+        {msgs.length === 0 && <p className="text-[11.5px] text-slate-400">Avisos e documentos prontos aparecem aqui. Pergunte ou peça algo abaixo.</p>}
+        {msgs.map((m) => (
+          <div key={m.id} className={m.autor === "medico" ? "flex justify-end" : "flex justify-start"}>
+            <div className={`max-w-[92%] rounded-lg px-2 py-1 text-[12px] leading-snug whitespace-pre-wrap break-words ${m.autor === "medico" ? "bg-sky-100 text-sky-950 dark:bg-sky-900/50 dark:text-sky-100" : "bg-white text-slate-800 border border-slate-200 dark:bg-slate-800 dark:text-slate-100 dark:border-slate-700"}`}>
+              {m.texto}
+              {m.criado_em && (
+                <span className="block text-[9.5px] opacity-50 text-right">
+                  {new Date(/[zZ]$|[+-]\d{2}:?\d{2}$/.test(m.criado_em) ? m.criado_em : m.criado_em + "Z").toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                </span>
+              )}
+            </div>
+          </div>
+        ))}
+        <div ref={fimRef} />
+      </div>
+      <input
+        value={texto}
+        onChange={(e) => setTexto(e.target.value)}
+        onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); mandar(); } }}
+        disabled={mandando}
+        placeholder="Pergunte ou peça algo…"
+        className="mt-1.5 w-full rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1 text-[12px] focus:outline-none focus:ring-1 focus:ring-violet-400"
+      />
+    </section>
+  );
+}
+
+function ColunaDireitaEscriba({ entry, onAbrirSugestao }: { entry: WaitingRoomEntry; onAbrirSugestao: (s: EscribaSugestao) => void }) {
   const g = escriba.useEscribaGravador();
   const aqui = g.entryId === entry.id && g.estado === "gravando";
   const dataISO = useMemo(() => hojeISO(), []);
@@ -2220,14 +2396,8 @@ function ColunaDireitaEscriba({ entry }: { entry: WaitingRoomEntry }) {
         )}
       </div>
       <EstadoGravacaoEscriba entry={entry} />
-      <section className="flex flex-col flex-1 min-h-[140px] rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5">
-        <span className="text-[13px] font-bold text-slate-800 dark:text-slate-200">🤖 Assistente ao vivo</span>
-        <p className="text-[11.5px] text-slate-400 mt-1">Em breve.</p>
-      </section>
-      <section className="flex-none rounded-lg border border-violet-200 dark:border-violet-900 bg-white dark:bg-slate-900 px-3 py-2">
-        <span className="text-[10.5px] text-slate-500">Você disse que vai fazer:</span>
-        <p className="text-[11.5px] text-slate-400">Em breve.</p>
-      </section>
+      <AssistenteAoVivo patientId={entry.patient_id} />
+      <BotoesEscriba entry={entry} onAbrir={onAbrirSugestao} />
       <ColunaEscriba patientId={entry.patient_id} dataISO={dataISO} onPassar={passar} />
     </aside>
   );
@@ -2856,7 +3026,8 @@ const RX_TYPE_OPTIONS: { value: PrescriptionType; label: string; activeClass: st
   { value: "antimicrobiano",    label: "Antimicrobiano (ATB)",       activeClass: "border-blue-600 bg-blue-600 text-white" },
 ];
 
-function TabReceita({ patientId, patient, clinic, rxExterna }: { patientId: number; patient: any; clinic?: any; rxExterna?: { seq: number; jobs: JobImpressao[] } | null }) {
+function TabReceita({ patientId, patient, clinic, rxExterna, prefill, onSalvoEscriba }: { patientId: number; patient: any; clinic?: any; rxExterna?: { seq: number; jobs: JobImpressao[] } | null; prefill?: PrefillEscriba | null; onSalvoEscriba?: AoSalvarEscriba }) {
+  const pendenteEscriba = usePendenteEscriba(onSalvoEscriba);
   const [rxType, setRxType] = useState<PrescriptionType>("simples");
   // 11/08: a lista de modelos cresceu e achar o certo virou rolagem. Busca por
   // nome e pelo conteúdo (medicamento), que é como ele lembra do modelo.
@@ -3035,6 +3206,55 @@ function TabReceita({ patientId, patient, clinic, rxExterna }: { patientId: numb
     } catch {}
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rxDraftKey]);
+
+  // valores atuais para o botão do Escriba decidir sem escrever por cima (lidos depois do rascunho restaurado)
+  const freeTextAtual = useRef(""); freeTextAtual.current = freeText;
+  const modoLivreAtual = useRef(false); modoLivreAtual.current = freeTextMode;
+  const medsAtual = useRef<Medication[]>([]); medsAtual.current = medications;
+  const rxTypeAtual = useRef<PrescriptionType>("simples"); rxTypeAtual.current = rxType;
+  // 17/11 (fatia 3): botão do Escriba -> receita no texto livre. Receita de modelo vem do MODELO SALVO.
+  // Antibiótico (inclusive tópico) sempre em controle especial. Nunca apaga o que já está na caixa.
+  useEffect(() => {
+    if (!prefill || prefill.tipo !== "receita") return;
+    let vivo = true;
+    (async () => {
+      const d = prefill.dados || {};
+      let texto = String(d.texto || "").trim();
+      let tipo: PrescriptionType = normalizePrescriptionType(d.tipo || "simples");
+      if (d.modelo) {
+        try {
+          const lista: any[] = await prescriptionTemplatesApi.list();
+          const alvo = semAcentoMin(String(d.modelo)).replace(/^modelo\s+/, "");
+          const m = lista.find((x) => semAcentoMin(x.name || "") === alvo);
+          if (m && (m.instructions || "").trim()) {
+            texto = String(m.instructions).trim();
+            tipo = normalizePrescriptionType(m.prescription_type || tipo);
+            if (d.ajustes) toast(`Modelo "${m.name}" carregado. Você falou um ajuste: ${d.ajustes}. Confira.`, { icon: "⚠️", duration: 9000 });
+          } else {
+            toast(`Modelo "${d.modelo}" não achado nos seus modelos: entrou o texto do Escriba. Confira.`, { icon: "⚠️", duration: 7000 });
+          }
+        } catch {}
+      }
+      // espera o rascunho restaurado na montagem entrar na tela antes de decidir (nunca escreve por cima)
+      await new Promise((r) => setTimeout(r, 80));
+      if (!vivo || !texto) return;
+      if (ANTIBIOTICO_RX.test(semAcentoMin(texto).toUpperCase())) tipo = "controle_especial";
+      const modoLivre = modoLivreAtual.current;
+      const atualTexto = modoLivre ? freeTextAtual.current : "";
+      const temMeds = !modoLivre && medsAtual.current.some((m) => m.name.trim());
+      const vazia = !atualTexto.trim() && !temMeds;
+      const junto = juntarEscriba(atualTexto, texto);
+      setFreeTextMode(true);
+      setFreeText(junto.texto);
+      const atualTipo = rxTypeAtual.current;
+      setRxType(vazia || atualTipo === tipo ? tipo : (atualTipo === "controle_especial" || tipo === "controle_especial" ? "controle_especial" : atualTipo));
+      if (junto.embaixo) toast("Já havia receita na caixa: a do Escriba entrou EMBAIXO. Confira o tipo.", { icon: "⚠️", duration: 7000 });
+      if (temMeds) toast("Havia remédios na lista: a receita do Escriba entrou no texto livre. Confira.", { icon: "⚠️", duration: 7000 });
+      pendenteEscriba.marcar(prefill.sugId, texto);
+    })();
+    return () => { vivo = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefill?.seq]);
 
   // Autosave com debounce; grava só quando há conteúdo, limpa quando esvazia
   useEffect(() => {
@@ -3249,6 +3469,7 @@ function TabReceita({ patientId, patient, clinic, rxExterna }: { patientId: numb
         toast.success("Receita salva! O texto continua aqui — pode imprimir ou enviar.");
       }
       setPrescriptions((prev) => [...novas, ...prev]);
+      pendenteEscriba.salvou(freeTextMode ? freeText : "");
       // A14: receita salva → limpa o rascunho persistido (já está salvo "de
       // verdade" no prontuário; o rascunho local perderia sentido)
       if (typeof window !== "undefined") localStorage.removeItem(rxDraftKey);
@@ -4174,9 +4395,10 @@ function montarValoresGuiaSadt(patient: any, clinic: any, examesTexto: string): 
   };
 }
 
-function TabExames({ patientId, patient, clinic }: { patientId: number; patient: any; clinic?: any }) {
+function TabExames({ patientId, patient, clinic, prefill, onSalvoEscriba }: { patientId: number; patient: any; clinic?: any; prefill?: PrefillEscriba | null; onSalvoEscriba?: AoSalvarEscriba }) {
   const [freeText, setFreeText] = useState("");
   const [saving, setSaving] = useState(false);
+  const pendenteEscriba = usePendenteEscriba(onSalvoEscriba);
 
   // 24/09 (auditoria): diferente de Receita (rascunho em localStorage) e
   // Anamnese (autosave no servidor), o pedido de exame não tinha NENHUMA
@@ -4195,6 +4417,16 @@ function TabExames({ patientId, patient, clinic }: { patientId: number; patient:
     } catch {}
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [examDraftKey]);
+
+  // 17/11 (fatia 3): botão do Escriba -> "SOLICITO:", itens e "HD:" (depois do rascunho restaurado acima)
+  useEffect(() => {
+    if (!prefill || prefill.tipo !== "exame") return;
+    const ft = String(prefill.dados?.free_text || "").trim();
+    if (!ft) return;
+    acrescentarNaCaixa(setFreeText, ft);
+    pendenteEscriba.marcar(prefill.sugId, ft);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefill?.seq]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -4394,6 +4626,7 @@ function TabExames({ patientId, patient, clinic }: { patientId: number; patient:
       // na tela, já pronto pra Imprimir ou pra gerar a guia do convênio.
       toast.success(`Solicitação salva para ${patientName} — o texto continua aqui`);
       setExams((prev) => [newEx, ...prev]);
+      pendenteEscriba.salvou(freeText);
       try { localStorage.removeItem(examDraftKey); } catch {}
     } catch {
       toast.error("Erro ao salvar solicitação");
@@ -5351,7 +5584,8 @@ function CidExtras({ valores, onChange }: { valores: string[]; onChange: (v: str
   );
 }
 
-export function TabEncaminhamentos({ patient, clinic, patientId }: { patient: any; clinic?: any; patientId?: number }) {
+export function TabEncaminhamentos({ patient, clinic, patientId, prefill, onSalvoEscriba }: { patient: any; clinic?: any; patientId?: number; prefill?: PrefillEscriba | null; onSalvoEscriba?: AoSalvarEscriba }) {
+  const pendenteEscriba = usePendenteEscriba(onSalvoEscriba);
   const [refType, setRefType] = useState("fisioterapia");
   const [specialty, setSpecialty] = useState("");
   const [specialtyOther, setSpecialtyOther] = useState("");
@@ -5463,6 +5697,22 @@ export function TabEncaminhamentos({ patient, clinic, patientId }: { patient: an
     } catch {}
   }, [draftKey]);
 
+  // 17/11 (fatia 3): botão do Escriba. Fisio: diagnóstico, CID se dito e nº de sessões; nunca técnica.
+  // O texto entra embaixo do que já houver; o CID só entra se a caixa de CID estiver vazia.
+  useEffect(() => {
+    if (!prefill || (prefill.tipo !== "fisio" && prefill.tipo !== "encaminhamento")) return;
+    const d = prefill.dados || {};
+    const novo = String(d.texto || "").trim();
+    if (!novo) return;
+    if (prefill.tipo === "fisio") setRefType("fisioterapia");
+    else toast("Encaminhamento do Escriba: confira o destino.", { icon: "⚠️", duration: 5000 });
+    acrescentarNaCaixa(setText, novo);
+    if (d.cid) setTimeout(() => setCid((c) => (c || "").trim() ? c : d.cid), 120);
+    if (d.aviso) toast(`⚠️ ${d.aviso}`, { duration: 6000 });
+    pendenteEscriba.marcar(prefill.sugId, novo);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefill?.seq]);
+
   // Autosave draft with debounce — no guard so clearing text also persists the cleared state
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -5500,6 +5750,7 @@ export function TabEncaminhamentos({ patient, clinic, patientId }: { patient: an
       content,
     });
     setEncaminhamentosSalvos((prev) => [novo, ...prev]);
+    pendenteEscriba.salvou(text);
     return novo;
   };
 
@@ -5809,8 +6060,18 @@ function primeiraLinha(texto: string): string {
   return (texto || "").trim().split(/\r?\n/)[0].slice(0, 110);
 }
 
-function TabProcedimentos({ patientId, patient, clinic }: { patientId: number; patient: any; clinic?: any }) {
+function TabProcedimentos({ patientId, patient, clinic, prefill, onSalvoEscriba }: { patientId: number; patient: any; clinic?: any; prefill?: PrefillEscriba | null; onSalvoEscriba?: AoSalvarEscriba }) {
   const [text, setText] = useState("");
+  const pendenteEscriba = usePendenteEscriba(onSalvoEscriba);
+  // 17/11 (fatia 3): botão do Escriba -> procedimento dito (nome, região e lado), embaixo do que já houver
+  useEffect(() => {
+    if (!prefill || prefill.tipo !== "procedimento") return;
+    const novo = String(prefill.dados?.texto || "").trim();
+    if (!novo) return;
+    acrescentarNaCaixa(setText, novo);
+    pendenteEscriba.marcar(prefill.sugId, novo);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefill?.seq]);
   const [cidPrincipal, setCid] = useState("");
   const [cidsExtras, setCidsExtras] = useState<string[]>([]);
   const cid = juntarCids(cidPrincipal, cidsExtras);
@@ -5880,6 +6141,7 @@ function TabProcedimentos({ patientId, patient, clinic }: { patientId: number; p
         }
       }
       toast.success("Procedimento registrado!");
+      pendenteEscriba.salvou(text);
       setText("");
       setCid(""); setCidsExtras([]);
       setDuration("");
@@ -6090,10 +6352,12 @@ function calcReturnDate(startDate: string, days: string): string | null {
 
 // ── Tab: Atestados ────────────────────────────────────────────────────────────
 
-export function TabAtestados({ patient, clinic }: { patient: any; clinic?: any }) {
+export function TabAtestados({ patient, clinic, prefill, onSalvoEscriba }: { patient: any; clinic?: any; prefill?: PrefillEscriba | null; onSalvoEscriba?: AoSalvarEscriba }) {
   const [docKind, setDocKind] = useState<"atestado" | "comparecimento">("atestado");
   const [cid, setCid] = useState("");
   useCidDoTopo(patient, cid, setCid);
+  const pendenteEscriba = usePendenteEscriba(onSalvoEscriba);
+  const diasEscriba = useRef<string | null>(null);
   // CIDs secundários (Valth 27/08). Mesmo padrão já usado no laudo desde 11/08.
   const [cidsSecundarios, setCidsSecundarios] = useState<string[]>([]);
   const [days, setDays] = useState("1");
@@ -6129,6 +6393,19 @@ export function TabAtestados({ patient, clinic }: { patient: any; clinic?: any }
   const addObsChip = (chip: string) => {
     setObs(prev => prev ? prev + "; " + chip : chip);
   };
+
+  // 17/11 (fatia 3): botão do Escriba. Dias só se ditos. SEM CID se não foi dito (tira o CID do topo).
+  useEffect(() => {
+    if (!prefill || prefill.tipo !== "atestado") return;
+    const d = prefill.dados || {};
+    setDocKind("atestado");
+    if (d.dias) { setDays(String(d.dias)); diasEscriba.current = String(d.dias); }
+    else { diasEscriba.current = null; toast("Atestado: os dias não foram ditos. Preencha.", { icon: "⚠️", duration: 6000 }); }
+    if (d.cid) setTimeout(() => setCid(d.cid), 150);
+    else setTimeout(() => { setCid((c) => { if ((c || "").trim()) toast("CID tirado do atestado: não foi dito na consulta.", { icon: "ℹ️" }); return ""; }); setCidsSecundarios([]); }, 150);
+    pendenteEscriba.marcar(prefill.sugId, d.dias ? String(d.dias) : "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefill?.seq]);
 
   const [savingDoc, setSavingDoc] = useState(false);
 
@@ -6172,6 +6449,7 @@ export function TabAtestados({ patient, clinic }: { patient: any; clinic?: any }
         (obs ? `\nRestrições/Observações: ${obs}` : "");
       const novo = await reportsApi.create(patient.id, { date: startDate, report_type: "atestado", title: `Atestado — ${typeLabel}`, content });
       setDocumentosSalvos((prev) => [novo, ...prev]);
+      pendenteEscriba.salvou(diasEscriba.current && diasEscriba.current === days ? days : "");
       toast.success("Atestado salvo no prontuário");
       return true;
     } catch {
@@ -8197,14 +8475,30 @@ export default function ConsultaDrawer({ entry, onClose, onStatusChange }: Consu
     setVisitadas((v) => (v.has(activeTab) ? v : new Set(v).add(activeTab)));
   }, [activeTab]);
 
+  // 17/11 (fatia 3): botão do Escriba clicado -> aba certa já preenchida (mesmo padrão do rxExterna)
+  const [pedidoEscriba, setPedidoEscriba] = useState<(PrefillEscriba & { aba: DrawerTab }) | null>(null);
+  const abrirSugestao = (s: EscribaSugestao) => {
+    const aba = ABA_DA_SUGESTAO[s.tipo];
+    if (!aba) return;
+    setPedidoEscriba((v) => ({ seq: (v?.seq || 0) + 1, sugId: s.id, tipo: s.tipo, dados: s.dados || {}, aba }));
+    setActiveTab(aba);
+    if (s.estado === "nova") escribaSugestoesApi.estado(s.id, "aberta").catch(() => {});
+    if (!s.conferida) toast("Esta sugestão não foi conferida na transcrição. Confira antes de salvar.", { icon: "⚠️", duration: 6000 });
+  };
+  const prefillDe = (aba: DrawerTab) => (pedidoEscriba && pedidoEscriba.aba === aba ? pedidoEscriba : null);
+  const aoSalvarEscriba: AoSalvarEscriba = (sugId, semMudanca) => {
+    escribaSugestoesApi.estado(sugId, "feita", semMudanca)
+      .then(() => window.dispatchEvent(new Event("ortho:escriba-sug")))
+      .catch(() => {});
+  };
   const ABAS_DO_ATENDIMENTO: Array<{ key: DrawerTab; render: () => JSX.Element }> = [
     { key: "anamnese",        render: () => <TabProntuario patientId={entry.patient_id} patient={patient} clinic={clinic} motivo={entry.reason || ""} entry={entry} /> },
-    { key: "exames",          render: () => <TabExames patientId={entry.patient_id} patient={patient} clinic={clinic} /> },
+    { key: "exames",          render: () => <TabExames patientId={entry.patient_id} patient={patient} clinic={clinic} prefill={prefillDe("exames")} onSalvoEscriba={aoSalvarEscriba} /> },
     { key: "prescricao",      render: () => <TabPrescricao patientId={entry.patient_id} patient={patient} onImprimir={(jobs) => { setRxExterna((v) => ({ seq: (v?.seq || 0) + 1, jobs })); setActiveTab("receitas"); }} /> },
-    { key: "receitas",        render: () => <TabReceita patientId={entry.patient_id} patient={patient} clinic={clinic} rxExterna={rxExterna} /> },
-    { key: "encaminhamentos", render: () => <TabEncaminhamentos patient={patient} clinic={clinic} patientId={entry.patient_id} /> },
-    { key: "procedimentos",   render: () => <TabProcedimentos patientId={entry.patient_id} patient={patient} clinic={clinic} /> },
-    { key: "atestados",       render: () => <TabAtestados patient={patient} clinic={clinic} /> },
+    { key: "receitas",        render: () => <TabReceita patientId={entry.patient_id} patient={patient} clinic={clinic} rxExterna={rxExterna} prefill={prefillDe("receitas")} onSalvoEscriba={aoSalvarEscriba} /> },
+    { key: "encaminhamentos", render: () => <TabEncaminhamentos patient={patient} clinic={clinic} patientId={entry.patient_id} prefill={prefillDe("encaminhamentos")} onSalvoEscriba={aoSalvarEscriba} /> },
+    { key: "procedimentos",   render: () => <TabProcedimentos patientId={entry.patient_id} patient={patient} clinic={clinic} prefill={prefillDe("procedimentos")} onSalvoEscriba={aoSalvarEscriba} /> },
+    { key: "atestados",       render: () => <TabAtestados patient={patient} clinic={clinic} prefill={prefillDe("atestados")} onSalvoEscriba={aoSalvarEscriba} /> },
     { key: "laudos",          render: () => <TabLaudos patient={patient} clinic={clinic} /> },
     { key: "fotos",           render: () => <TabFotos patientId={entry.patient_id} /> },
     { key: "documentos",      render: () => <TabDocumentos patientId={entry.patient_id} patient={patient} /> },
@@ -8759,7 +9053,7 @@ export default function ConsultaDrawer({ entry, onClose, onStatusChange }: Consu
         )}
       </div>
     </div>
-    <ColunaDireitaEscriba entry={entry} />
+    <ColunaDireitaEscriba entry={entry} onAbrirSugestao={abrirSugestao} />
     </div>
     </PrintCollectorContext.Provider>
   );
