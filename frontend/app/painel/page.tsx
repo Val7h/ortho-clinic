@@ -219,6 +219,59 @@ interface PatientCardProps {
   isDoctor: boolean;
 }
 
+// 17/11/2026 (Valth): a secretária dá baixa SEMPRE com motivo (perícia, infiltração...).
+// O motivo vai para dentro da anamnese de hoje. O paciente continua na tela do médico.
+const MOTIVOS_BAIXA = ['Perícia', 'Infiltração', 'Viscossuplementação', 'Bloqueio', 'Curativo', 'Entrega de exame'];
+function BaixaSecretaria({ entryId, busy, onFeito }: { entryId: number; busy: boolean; onFeito: () => void }) {
+  const [aberto, setAberto] = useState(false);
+  const [motivo, setMotivo] = useState('');
+  const [enviando, setEnviando] = useState(false);
+  const confirmar = async () => {
+    const m = motivo.trim();
+    if (m.length < 3) { toast.error('Escolha ou escreva o motivo da baixa'); return; }
+    setEnviando(true);
+    try {
+      await api.post(`/api/clinic/waiting-room/${entryId}/baixa`, { motivo: m });
+      toast.success(`Baixa dada: ${m}`);
+      setAberto(false); setMotivo('');
+      onFeito();
+    } catch (e: any) { toast.error(msgErro(e, 'Não consegui dar baixa')); }
+    finally { setEnviando(false); }
+  };
+  if (!aberto) {
+    return (
+      <button
+        onClick={() => setAberto(true)}
+        disabled={busy}
+        title="Marcar como atendido (procedimento, perícia...) — continua na tela do médico"
+        className="flex items-center gap-1 px-2 py-1 rounded-lg bg-blue-600 text-white text-[10px] font-semibold hover:bg-blue-700 disabled:opacity-50"
+      >
+        <CheckCircle className="w-3 h-3" /> Dar baixa
+      </button>
+    );
+  }
+  return (
+    <div className="flex flex-col gap-1 p-2 rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-800 w-[230px]">
+      <span className="text-[10px] font-bold text-blue-800 dark:text-blue-300">Motivo da baixa (vai para a anamnese):</span>
+      <div className="flex flex-wrap gap-1">
+        {MOTIVOS_BAIXA.map((m) => (
+          <button key={m} type="button" onClick={() => setMotivo(m)}
+            className={`px-1.5 py-0.5 rounded border text-[10px] ${motivo === m ? 'bg-blue-600 text-white border-blue-600' : 'bg-white dark:bg-slate-900 border-blue-200 text-blue-700'}`}>
+            {m}
+          </button>
+        ))}
+      </div>
+      <input value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="ou escreva o motivo…"
+        onKeyDown={(e) => { if (e.key === 'Enter') confirmar(); }}
+        className="px-1.5 py-1 text-[11px] rounded border border-blue-200 bg-white dark:bg-slate-900" />
+      <div className="flex gap-1 justify-end">
+        <button type="button" onClick={() => { setAberto(false); setMotivo(''); }} className="px-2 py-0.5 text-[10px] rounded border border-slate-300">Cancelar</button>
+        <button type="button" onClick={confirmar} disabled={enviando} className="px-2 py-0.5 text-[10px] rounded bg-blue-600 text-white font-semibold disabled:opacity-50">{enviando ? 'Salvando…' : 'Confirmar baixa'}</button>
+      </div>
+    </div>
+  );
+}
+
 function PatientCard({ entry, onStatusChange, onRemove, onAddValue, onSelect, busy, selected, saindo, clinics, isDoctor }: PatientCardProps) {
   const isAttended = entry.status === 'attended';
   const isAbsent = entry.status === 'absent';
@@ -344,20 +397,7 @@ function PatientCard({ entry, onStatusChange, onRemove, onAddValue, onSelect, bu
                 escondido de quem não é médico (backend também trava). */}
             {/* 17/11 (Valth): secretária dá baixa em procedimento/perícia sem o médico abrir a consulta. */}
             {!isDoctor && (entry.status === 'waiting' || entry.status === 'absent') && (
-              <button
-                onClick={async () => {
-                  try {
-                    await api.post(`/api/clinic/waiting-room/${entry.id}/baixa`);
-                    onStatusChange(entry.id, 'attended', true);
-                    toast.success('Baixa dada — fica como atendido');
-                  } catch (e: any) { toast.error(msgErro(e, 'Não consegui dar baixa')); }
-                }}
-                disabled={busy}
-                title="Marcar como atendido (procedimento, perícia...) — continua na tela do médico"
-                className="flex items-center gap-1 px-2 py-1 rounded-lg bg-blue-600 text-white text-[10px] font-semibold hover:bg-blue-700 disabled:opacity-50"
-              >
-                <CheckCircle className="w-3 h-3" /> Dar baixa
-              </button>
+              <BaixaSecretaria entryId={entry.id} busy={busy} onFeito={() => onStatusChange(entry.id, 'attended', true)} />
             )}
             {isDoctor && entry.status === 'waiting' && (
               <>

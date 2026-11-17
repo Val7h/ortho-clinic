@@ -1272,9 +1272,14 @@ async def update_waiting_status(
     return _build_entry_out(entry, patient, now)
 
 
+class BaixaIn(BaseModel):
+    motivo: str
+
+
 @router.post("/waiting-room/{entry_id}/baixa", response_model=WaitingRoomEntryOut)
 async def dar_baixa_secretaria(
     entry_id: int,
+    body: BaixaIn,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -1291,6 +1296,10 @@ async def dar_baixa_secretaria(
         raise HTTPException(status_code=404, detail="Entrada não encontrada")
     if entry.status not in ("waiting", "absent"):
         raise HTTPException(status_code=409, detail="Só dá baixa em quem está aguardando. Consulta aberta pelo médico, só ele finaliza.")
+    motivo = (body.motivo or "").strip()
+    if len(motivo) < 3:
+        raise HTTPException(status_code=422, detail="Escreva o motivo da baixa (ex.: infiltração, perícia).")
+    motivo = motivo[:200]
     now = datetime.now(timezone.utc)
     if entry.called_at is None:
         entry.called_at = now
@@ -1298,9 +1307,21 @@ async def dar_baixa_secretaria(
     entry.segment_started_at = None
     entry.status = "attended"
     quem = (getattr(current_user, "full_name", None) or getattr(current_user, "name", None) or current_user.email or "secretaria")
-    marca = f"baixa dada por {quem}"
+    marca = f"baixa dada por {quem}: {motivo}"
     entry.notes = f"{entry.notes} · {marca}" if entry.notes else marca
     _sync_appointment_status(db, entry, "attended")
+    # 17/11 (Valth): o motivo vai para DENTRO da anamnese de hoje, para ficar no prontuário.
+    from models.clinical_evolution import ClinicalEvolution
+    linha = f"baixa dada pela secretária ({quem}): {motivo}"
+    hoje = today_br()
+    ev = (db.query(ClinicalEvolution)
+          .filter(ClinicalEvolution.patient_id == entry.patient_id, ClinicalEvolution.entry_date == hoje)
+          .order_by(ClinicalEvolution.id.desc()).first())
+    if ev:
+        ev.content = (ev.content or "").rstrip() + "\n" + linha
+    else:
+        db.add(ClinicalEvolution(patient_id=entry.patient_id, entry_date=hoje, content=linha,
+                                 organization_id=entry_patient.organization_id or 1))
     db.commit()
     db.refresh(entry)
     return _build_entry_out(entry, entry_patient, now)
