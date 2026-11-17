@@ -94,6 +94,11 @@ def migrate_db():
         if "phone" not in cols:
             migrations.append("ALTER TABLE clinics ADD COLUMN phone VARCHAR(30)")
 
+    if "procedure_reminders" in existing_tables:
+        cols = [c["name"] for c in inspector.get_columns("procedure_reminders")]
+        if "interval_days" not in cols:
+            migrations.append("ALTER TABLE procedure_reminders ADD COLUMN interval_days INTEGER")
+
     if "appointments" in existing_tables:
         cols = [c["name"] for c in inspector.get_columns("appointments")]
         if "confirmation_token" not in cols:

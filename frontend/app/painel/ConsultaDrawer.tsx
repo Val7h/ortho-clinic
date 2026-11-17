@@ -1724,8 +1724,11 @@ function BotaoLembrete({ patientId }: { patientId: number }) {
   const [aberto, setAberto] = useState(false);
   const [procedimento, setProcedimento] = useState("");
   const [salvando, setSalvando] = useState(false);
+  // 17/11 (Valth): prazo livre — número + dias ou meses.
+  const [numLivre, setNumLivre] = useState("");
+  const [unidade, setUnidade] = useState<"dias" | "meses">("meses");
 
-  const criar = async (meses: number) => {
+  const criar = async (meses: number, dias?: number) => {
     const nome = procedimento.trim();
     if (!nome) {
       toast.error("Escolha ou escreva o procedimento");
@@ -1736,8 +1739,9 @@ function BotaoLembrete({ patientId }: { patientId: number }) {
       const r: any = await remindersApi.create({
         patient_id: patientId,
         procedure: nome,
-        interval_months: meses,
-      });
+        interval_months: dias ? 0 : meses,
+        ...(dias ? { interval_days: dias } : {}),
+      } as any);
       const vence = new Date(r.vence_em + "T12:00:00").toLocaleDateString("pt-BR");
       toast.success(`Lembrete criado — ${nome} em ${vence}`);
       setAberto(false);
@@ -1818,8 +1822,33 @@ function BotaoLembrete({ patientId }: { patientId: number }) {
           </button>
         ))}
       </div>
+      <div className="flex items-center gap-1 mt-1.5">
+        <span className="text-[11px] text-slate-500 mr-0.5">ou em:</span>
+        <input
+          type="number" min={1} value={numLivre} onChange={e => setNumLivre(e.target.value)}
+          placeholder="nº"
+          className="w-14 text-[11px] px-1.5 py-0.5 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800"
+        />
+        <select value={unidade} onChange={e => setUnidade(e.target.value as any)}
+          className="text-[11px] px-1 py-0.5 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800">
+          <option value="dias">dias</option>
+          <option value="meses">meses</option>
+        </select>
+        <button
+          type="button" disabled={salvando}
+          onClick={() => {
+            const n = parseInt(numLivre, 10);
+            if (!n || n < 1) { toast.error("Escreva o número"); return; }
+            if (unidade === "dias") criar(0, n); else criar(n);
+          }}
+          className="text-[11px] px-2 py-0.5 rounded bg-blue-600 text-white disabled:opacity-40"
+        >
+          criar
+        </button>
+      </div>
       <p className="text-[10px] text-slate-400 mt-1">
-        A secretária é avisada 1 mês antes e de novo faltando 1 semana.
+        O paciente recebe o lembrete pelo WhatsApp da clínica 1 mês antes e de novo 1 semana antes.
+        Prazo curto: só 1 semana antes (até 7 dias, na véspera).
       </p>
     </div>
       )}

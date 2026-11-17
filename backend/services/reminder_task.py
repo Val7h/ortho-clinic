@@ -114,9 +114,15 @@ def montar_texto(toque: int, nome: str, procedimento: str, aplicado, vence, doct
     )
 
 
-def toque_devido(dias_para_vencer: int):
-    """Qual toque cabe hoje (30, 7) ou None. Vencido (<=0) não recebe."""
+def toque_devido(dias_para_vencer: int, prazo_total: int = 9999):
+    """Qual toque cabe hoje (30, 7) ou None. Vencido (<=0) não recebe.
+    17/11 (Valth): prazo curto em dias. Prazo até ~5 semanas não leva o aviso de 1 mês;
+    prazo de até 7 dias só leva 1 aviso, na véspera."""
     if dias_para_vencer <= 0:
+        return None
+    if prazo_total <= TOQUE_2_DIAS:
+        return TOQUE_2_DIAS if dias_para_vencer <= 1 else None
+    if prazo_total <= TOQUE_1_DIAS + TOQUE_2_DIAS and dias_para_vencer > TOQUE_2_DIAS:
         return None
     if dias_para_vencer <= TOQUE_2_DIAS:
         return TOQUE_2_DIAS
@@ -131,7 +137,7 @@ def _enviar_lembretes_devidos() -> None:
     from models.patient import Patient
     from models.procedure_reminder import ProcedureReminder
     from models.whatsapp import WhatsAppMessage
-    from routers.procedure_reminders import _somar_meses
+    from routers.procedure_reminders import vencimento, prazo_em_dias
     from services.whatsapp import DOCTOR_NAME, is_demo, send_whatsapp
 
     if is_demo():
@@ -151,8 +157,8 @@ def _enviar_lembretes_devidos() -> None:
             .all()
         )
         for r, p in pares:
-            vence = _somar_meses(r.applied_on, r.interval_months)
-            toque = toque_devido((vence - hoje).days)
+            vence = vencimento(r)
+            toque = toque_devido((vence - hoje).days, prazo_em_dias(r))
             if toque is None:
                 continue
             tipo = f"lembrete_{r.id}_{toque}"

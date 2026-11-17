@@ -93,7 +93,7 @@ export default function RetornosPage() {
                   <p className="text-sm text-slate-600 dark:text-slate-300">{r.procedure}</p>
                   <p className="text-xs text-slate-500 mt-1">
                     Aplicado em {new Date(r.applied_on + "T12:00:00").toLocaleDateString("pt-BR")} ·
-                    repete a cada {r.interval_months} meses ·
+                    repete a cada {r.interval_days ? `${r.interval_days} dias` : `${r.interval_months} meses`} ·
                     vence {new Date(r.vence_em + "T12:00:00").toLocaleDateString("pt-BR")}
                   </p>
                 </div>

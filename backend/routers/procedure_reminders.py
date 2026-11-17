@@ -39,10 +39,22 @@ def _somar_meses(d: date, meses: int) -> date:
     return date(ano, mes, min(d.day, ultimo))
 
 
+def vencimento(r) -> date:
+    """17/11: prazo em dias (se houver) ou em meses."""
+    if getattr(r, "interval_days", None):
+        return r.applied_on + timedelta(days=int(r.interval_days))
+    return _somar_meses(r.applied_on, r.interval_months)
+
+
+def prazo_em_dias(r) -> int:
+    return (vencimento(r) - r.applied_on).days
+
+
 class ReminderIn(BaseModel):
     patient_id: int
     procedure: str
-    interval_months: int
+    interval_months: int = 0
+    interval_days: Optional[int] = None
     applied_on: Optional[date] = None
     notes: Optional[str] = None
 
@@ -55,6 +67,7 @@ class ReminderOut(BaseModel):
     procedure: str
     applied_on: date
     interval_months: int
+    interval_days: Optional[int] = None
     vence_em: date
     dias_para_vencer: int
     fase: str
@@ -73,7 +86,10 @@ def criar(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if data.interval_months < 1 or data.interval_months > 60:
+    if data.interval_days:
+        if data.interval_days < 1 or data.interval_days > 1825:
+            raise HTTPException(422, "Prazo em dias deve ser entre 1 e 1825")
+    elif data.interval_months < 1 or data.interval_months > 60:
         raise HTTPException(422, "Intervalo deve ser entre 1 e 60 meses")
     paciente = db.query(Patient).filter(Patient.id == data.patient_id).first()
     if not paciente or (
@@ -87,7 +103,8 @@ def criar(
         patient_id=paciente.id,
         procedure=(data.procedure or "").strip() or "Procedimento",
         applied_on=data.applied_on or today_br(),
-        interval_months=data.interval_months,
+        interval_months=0 if data.interval_days else data.interval_months,
+        interval_days=data.interval_days or None,
         notes=data.notes,
         created_by=current_user.id,
         status="pending",
@@ -99,7 +116,7 @@ def criar(
 
 
 def _para_saida(r: ProcedureReminder, p: Patient) -> ReminderOut:
-    vence = _somar_meses(r.applied_on, r.interval_months)
+    vence = vencimento(r)
     faltam = (vence - today_br()).days
     if faltam <= 0:
         fase = "vencido"
@@ -112,7 +129,7 @@ def _para_saida(r: ProcedureReminder, p: Patient) -> ReminderOut:
     return ReminderOut(
         id=r.id, patient_id=p.id, paciente=p.name, telefone=p.phone,
         procedure=r.procedure, applied_on=r.applied_on,
-        interval_months=r.interval_months, vence_em=vence,
+        interval_months=r.interval_months, interval_days=r.interval_days, vence_em=vence,
         dias_para_vencer=faltam, fase=fase, status=r.status,
     )
 

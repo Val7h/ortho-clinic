@@ -23,6 +23,7 @@ class ProcedureReminder(Base):
     procedure = Column(String(120), nullable=False)      # "Viscossuplementação", "Ácido zoledrônico"...
     applied_on = Column(Date, nullable=False)            # quando foi aplicado
     interval_months = Column(Integer, nullable=False)    # de quanto em quanto tempo repete
+    interval_days = Column(Integer, nullable=True)       # 17/11: prazo em DIAS (se preenchido, vale no lugar dos meses)
 
     # pending = ainda vai ser chamado · done = remarcado/aplicado · cancelled = não repetir
     status = Column(String(20), nullable=False, default="pending", index=True)
