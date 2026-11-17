@@ -2457,16 +2457,8 @@ function ColunaEscriba({ patientId, dataISO, onPassar }: { patientId: number; da
         <div className="space-y-1.5">
           {linhas.map((l, i) => (
             <div key={i} className="flex items-start gap-1.5 text-[12.5px] leading-snug text-violet-900 dark:text-violet-200">
+              {/* 17/11 (Valth): sem "+ passar" — o Escriba é um resumo à parte, não escreve na anamnese do médico. */}
               <span className="flex-1">{l}</span>
-              <button
-                type="button"
-                onClick={() => { onPassar(l); setPassadas(p => new Set(p).add(i)); }}
-                disabled={passadas.has(i)}
-                className="flex-shrink-0 text-[10.5px] px-1.5 py-0.5 rounded border border-violet-300 dark:border-violet-700 bg-white dark:bg-slate-900 text-violet-700 dark:text-violet-300 hover:bg-violet-100 disabled:opacity-40"
-                title="Levar esta linha para o fim da sua anamnese"
-              >
-                {passadas.has(i) ? "✓" : "+ passar"}
-              </button>
             </div>
           ))}
         </div>
