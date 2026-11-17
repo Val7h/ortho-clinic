@@ -216,6 +216,9 @@ export const consultationsApi = {
 export const medicamentosApi = {
   termos: () => api.get("/medicamentos/termos").then((r) => r.data as any[]),
   busca: (q: string) => api.get("/medicamentos/busca", { params: { q } }).then((r) => r.data as any[]),
+  // 17/11/2026: marca -> princípio ativo pela base pública da ANVISA ("Insit = pregabalina")
+  composicao: (q: string) => api.get("/medicamentos/composicao", { params: { q } })
+    .then((r) => r.data as { marca: string; composicao: string; outras: string[] }[]),
 };
 
 export const prescriptionsApi = {
