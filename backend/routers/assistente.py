@@ -67,3 +67,14 @@ def mandar(patient_id: int, body: MensagemIn, db: Session = Depends(get_db), u: 
     db.commit()
     db.refresh(m)
     return _out(m)
+
+
+# 17/11 (Valth, testes): limpar as mensagens do dia (consulta de teste zerada). So medico, mesma organizacao.
+@router.delete("/{patient_id}/assistente")
+def apagar_dia(patient_id: int, data: Optional[date] = None, db: Session = Depends(get_db), u: User = Depends(require_doctor)):
+    p = _paciente_da_org(db, patient_id, u)
+    n = (db.query(AssistenteMensagem).filter(AssistenteMensagem.patient_id == p.id,
+                                             AssistenteMensagem.data == (data or today_br()))
+         .delete(synchronize_session=False))
+    db.commit()
+    return {"apagadas": n}

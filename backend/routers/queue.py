@@ -1343,6 +1343,18 @@ async def delete_waiting_entry(
     if not entry_patient or not _same_org(current_user, entry_patient.organization_id):
         raise HTTPException(status_code=404, detail="Entrada não encontrada")
 
+    # 17/11 (bug em producao, entrada 1189): com sessao do Escriba o DELETE dava 500 (escriba_sessoes.entry_id e
+    # chave estrangeira). Apaga antes, NA MESMA TRANSACAO, o que do Escriba aponta para esta entrada:
+    # pedacos e sugestoes (das sessoes), pedidos e as sessoes.
+    from models.escriba import EscribaPedaco, EscribaPedido, EscribaSessao, EscribaSugestao
+    sids = [s.id for s in db.query(EscribaSessao.id).filter(EscribaSessao.entry_id == entry.id).all()]
+    if sids:
+        db.query(EscribaPedaco).filter(EscribaPedaco.sessao_id.in_(sids)).delete(synchronize_session=False)
+        db.query(EscribaSugestao).filter(EscribaSugestao.sessao_id.in_(sids)).delete(synchronize_session=False)
+    db.query(EscribaSugestao).filter(EscribaSugestao.entry_id == entry.id).delete(synchronize_session=False)
+    db.query(EscribaPedido).filter(EscribaPedido.entry_id == entry.id).delete(synchronize_session=False)
+    if sids:
+        db.query(EscribaSessao).filter(EscribaSessao.id.in_(sids)).delete(synchronize_session=False)
     db.delete(entry)
     db.commit()
     return None

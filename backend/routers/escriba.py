@@ -876,3 +876,24 @@ def ponte_assistente(sid: int, body: AssistentePonteIn, db: Session = Depends(ge
     db.commit()
     db.refresh(m)
     return {"id": m.id, "gravado": True}
+
+
+
+
+# 17/11 (Valth, testes): os botoes do dia de um paciente somem (estado 'sumiu'); nada e apagado.
+@router.delete("/sugestoes/paciente/{patient_id}")
+def limpar_sugestoes_do_dia(patient_id: int, data: Optional[str] = None, db: Session = Depends(get_db),
+                            u: User = Depends(require_doctor)):
+    p = db.query(Patient).filter(Patient.id == patient_id).first()
+    if not p or not _mesma_org(u, p.organization_id):
+        raise HTTPException(404, "Paciente não encontrado")
+    dia = data or today_br().isoformat()
+    entradas = [e.id for e in db.query(WaitingRoomEntry).filter(WaitingRoomEntry.patient_id == p.id).all()
+                if e.entry_date and e.entry_date.isoformat() == dia]
+    n = 0
+    if entradas:
+        for x in db.query(EscribaSugestao).filter(EscribaSugestao.entry_id.in_(entradas), EscribaSugestao.estado != "sumiu").all():
+            x.estado = "sumiu"
+            n += 1
+        db.commit()
+    return {"sumiram": n}

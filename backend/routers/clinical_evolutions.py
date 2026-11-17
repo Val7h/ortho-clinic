@@ -349,6 +349,34 @@ def get_escriba_resumo(patient_id: int, data: date, db: Session = Depends(get_db
     return _resumo_out(r) if r else None
 
 
+@router.get("/{patient_id}/escriba-resumos", response_model=List[EscribaResumoOut])
+def listar_escriba_resumos(patient_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    """17/11 (Valth): o Escriba fica no prontuario. Todos os dias com resumo, o mais novo primeiro."""
+    p = db.query(Patient).filter(Patient.id == patient_id).first()
+    org = getattr(current_user, "organization_id", None) or 1
+    if not p or (getattr(current_user, "role", "") != "superadmin" and (p.organization_id or 1) != org):
+        raise HTTPException(status_code=404, detail="Paciente não encontrado")
+    q = (db.query(EscribaResumo).filter(EscribaResumo.patient_id == patient_id)
+         .order_by(EscribaResumo.entry_date.desc()).limit(200))
+    return [_resumo_out(r) for r in q.all()]
+
+
+@router.delete("/{patient_id}/escriba-resumo")
+def apagar_escriba_resumo(patient_id: int, data: Optional[date] = None, db: Session = Depends(get_db),
+                          current_user=Depends(require_doctor)):
+    """17/11 (Valth, testes): apaga o resumo do dia inteiro; o 'sessao' some e o automatico volta a poder escrever."""
+    from tzutil import today_br
+    p = db.query(Patient).filter(Patient.id == patient_id).first()
+    org = getattr(current_user, "organization_id", None) or 1
+    if not p or (getattr(current_user, "role", "") != "superadmin" and (p.organization_id or 1) != org):
+        raise HTTPException(status_code=404, detail="Paciente não encontrado")
+    n = (db.query(EscribaResumo).filter(EscribaResumo.patient_id == patient_id,
+                                        EscribaResumo.entry_date == (data or today_br()))
+         .delete(synchronize_session=False))
+    db.commit()
+    return {"apagados": n}
+
+
 @router.put("/{patient_id}/escriba-resumo", response_model=EscribaResumoOut)
 def put_escriba_resumo(patient_id: int, body: EscribaResumoIn, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     if not db.query(Patient).filter(Patient.id == patient_id).first():

@@ -2376,7 +2376,7 @@ function AssistenteAoVivo({ patientId }: { patientId: number }) {
     finally { setMandando(false); }
   };
   return (
-    <section className="flex flex-col flex-1 min-h-[160px] max-h-[45vh] rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-2.5 py-2">
+    <section className="flex flex-col flex-1 min-h-[220px] rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-2.5 py-2">
       <span className="text-[13px] font-bold text-slate-800 dark:text-slate-200 mb-1">🤖 Assistente ao vivo</span>
       <div className="flex-1 overflow-y-auto space-y-1.5 pr-0.5">
         {msgs.length === 0 && <p className="text-[11.5px] text-slate-400">Avisos e documentos prontos aparecem aqui. Pergunte ou peça algo abaixo.</p>}
@@ -2409,9 +2409,6 @@ function AssistenteAoVivo({ patientId }: { patientId: number }) {
 function ColunaDireitaEscriba({ entry, onAbrirSugestao }: { entry: WaitingRoomEntry; onAbrirSugestao: (s: EscribaSugestao) => void }) {
   const g = escriba.useEscribaGravador();
   const aqui = g.entryId === entry.id && g.estado === "gravando";
-  const dataISO = useMemo(() => hojeISO(), []);
-  const passar = (linha: string) =>
-    window.dispatchEvent(new CustomEvent("ortho:escriba-passar", { detail: { patientId: entry.patient_id, linha } }));
   return (
     <aside className="hidden lg:flex flex-col gap-2 w-[300px] xl:w-[330px] flex-shrink-0 sticky top-16 self-start h-[calc(100vh-4rem)] overflow-y-auto py-2.5 pr-3">
       <div className="flex items-center justify-between rounded-lg border border-violet-300 dark:border-violet-800 bg-violet-50 dark:bg-violet-950/30 px-3 py-2">
@@ -2425,9 +2422,9 @@ function ColunaDireitaEscriba({ entry, onAbrirSugestao }: { entry: WaitingRoomEn
         )}
       </div>
       <EstadoGravacaoEscriba entry={entry} />
+      {/* 17/11 02h45 (Valth): o resumo do Escriba foi para a coluna do meio, abaixo da anamnese. O assistente ganha a altura. */}
       <AssistenteAoVivo patientId={entry.patient_id} />
       <BotoesEscriba entry={entry} onAbrir={onAbrirSugestao} />
-      <ColunaEscriba patientId={entry.patient_id} dataISO={dataISO} onPassar={passar} />
     </aside>
   );
 }
@@ -2452,54 +2449,74 @@ function ChipEscriba({ entry }: { entry: WaitingRoomEntry }) {
   return null;
 }
 
-// 16/11/2026 (Valth): "a anamnese do escriba separada da anamnese do médico,
-// como se fosse duas colunas". Lilás = escrito pela IA; o texto dele não muda.
-// "+ passar" leva só aquela linha para o fim da folha dele.
-function ColunaEscriba({ patientId, dataISO, onPassar }: { patientId: number; dataISO: string; onPassar: (linha: string) => void }) {
+// 16/11/2026 (Valth): "a anamnese do escriba separada da anamnese do médico". Lilás = escrito pela IA.
+// 17/11 02h45: fica na coluna do MEIO, logo ABAIXO da folha dele e FORA dela (nunca atrapalha a digitação).
+// Só leitura. Ao finalizar, o PC troca o resumo pela "📋 Anamnese unificada (IA)" (texto dele + o que foi
+// falado e falta); o texto que ELE digitou nunca é trocado. Fica no prontuário: os dias anteriores aparecem
+// em "ver Escriba dos outros dias".
+function LinhasEscriba({ res }: { res: EscribaResumo }) {
+  return (
+    <div className="space-y-1">
+      {(res.linhas || []).map((l, i) => (
+        <p key={i} className={`text-[12.5px] leading-snug text-violet-900 dark:text-violet-200 whitespace-pre-wrap ${i === 0 && l.startsWith("📋") ? "font-bold" : ""}`}>{l}</p>
+      ))}
+    </div>
+  );
+}
+
+function EscribaNaFolha({ patientId, dataISO }: { patientId: number; dataISO: string }) {
   const [res, setRes] = useState<EscribaResumo | null>(null);
-  const [passadas, setPassadas] = useState<Set<number>>(new Set());
+  const [outros, setOutros] = useState<EscribaResumo[] | null>(null);
+  const [verOutros, setVerOutros] = useState(false);
   useEffect(() => {
     let vivo = true;
-    setRes(null); setPassadas(new Set());
+    setRes(null); setOutros(null);
     const ler = () => escribaApi.get(patientId, dataISO).then(r => { if (vivo) setRes(r); }).catch(() => {});
     ler();
     const t = setInterval(ler, 15000);
+    escribaApi.listar(patientId).then(l => { if (vivo) setOutros((l || []).filter(x => String(x.entry_date).slice(0, 10) !== dataISO)); }).catch(() => {});
     return () => { vivo = false; clearInterval(t); };
   }, [patientId, dataISO]);
   const linhas = res?.linhas || [];
   const faltas = res?.faltas || [];
   return (
-    <section className="flex flex-col gap-2.5 flex-1 min-h-[200px] rounded-lg border border-violet-300 dark:border-violet-800 bg-violet-50 dark:bg-violet-950/30 px-3 py-3">
-      <div className="flex items-center justify-between">
-        <span className="text-[13px] font-bold text-violet-800 dark:text-violet-300">🎙️ Escriba · resumo</span>
-        <span className="flex items-center gap-1.5">
-          {res?.updated_at && (
-            <span className="text-[10px] text-violet-500">
-              {new Date(/[zZ]$|[+-]\d{2}:?\d{2}$/.test(res.updated_at) ? res.updated_at : res.updated_at + "Z").toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
-            </span>
-          )}
-        </span>
+    <div className="mt-3 mb-2">
+      <div className="flex items-center gap-2 mb-1.5">
+        <div className="flex-1 border-t border-violet-300 dark:border-violet-800" />
+        <span className="text-[11.5px] font-bold text-violet-700 dark:text-violet-300 whitespace-nowrap">🎙️ Escriba (IA)</span>
+        {res?.updated_at && (
+          <span className="text-[10px] text-violet-500">
+            {new Date(/[zZ]$|[+-]\d{2}:?\d{2}$/.test(res.updated_at) ? res.updated_at : res.updated_at + "Z").toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+          </span>
+        )}
+        <div className="flex-1 border-t border-violet-300 dark:border-violet-800" />
       </div>
-      {linhas.length === 0 && faltas.length === 0 ? (
-        <p className="text-[12px] text-violet-500 dark:text-violet-400">O Escriba ainda não escreveu nada nesta consulta.</p>
-      ) : (
-        <div className="space-y-1.5">
-          {linhas.map((l, i) => (
-            <div key={i} className="flex items-start gap-1.5 text-[12.5px] leading-snug text-violet-900 dark:text-violet-200">
-              {/* 17/11 (Valth): sem "+ passar" — o Escriba é um resumo à parte, não escreve na anamnese do médico. */}
-              <span className="flex-1">{l}</span>
-            </div>
-          ))}
-        </div>
-      )}
+      <div className="rounded-lg border border-violet-300 dark:border-violet-800 bg-violet-50 dark:bg-violet-950/30 px-3 py-2">
+        {linhas.length === 0 ? (
+          <p className="text-[12px] text-violet-500 dark:text-violet-400">O Escriba ainda não escreveu nada hoje.</p>
+        ) : <LinhasEscriba res={res as EscribaResumo} />}
+        <p className="text-[10px] text-violet-500 dark:text-violet-400 mt-1.5">Feito pela IA a partir da conversa. Só leitura: o seu texto não muda.</p>
+      </div>
       {faltas.length > 0 && (
-        <div className="rounded-md border border-orange-300 dark:border-orange-800 bg-orange-50 dark:bg-orange-950/30 px-2.5 py-2 text-[12px] text-orange-800 dark:text-orange-300">
+        <div className="mt-1.5 rounded-md border border-orange-300 dark:border-orange-800 bg-orange-50 dark:bg-orange-950/30 px-2.5 py-1.5 text-[12px] text-orange-800 dark:text-orange-300">
           <p className="font-bold mb-0.5">⚠️ Falado e não escrito</p>
           {faltas.map((f, i) => <p key={i}>{f}</p>)}
         </div>
       )}
-      <p className="text-[10px] text-violet-500 dark:text-violet-400 mt-auto">Resumo feito pela IA a partir da conversa. Confira antes de usar.</p>
-    </section>
+      {!!outros?.length && (
+        <div className="mt-1.5">
+          <button type="button" onClick={() => setVerOutros(v => !v)} className="text-[11px] text-violet-600 dark:text-violet-300 hover:underline">
+            {verOutros ? "▾" : "▸"} ver Escriba dos outros dias ({outros.length})
+          </button>
+          {verOutros && outros.map(o => (
+            <div key={String(o.entry_date)} className="mt-1.5 rounded-lg border border-violet-200 dark:border-violet-900 bg-violet-50/70 dark:bg-violet-950/20 px-3 py-2">
+              <p className="text-[11px] font-bold text-violet-700 dark:text-violet-300 mb-1">{cabecalhoFolha(String(o.entry_date).slice(0, 10))}</p>
+              <LinhasEscriba res={o} />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -2995,6 +3012,7 @@ function TabProntuario({ patientId, patient, clinic, motivo, entry }: { patientI
             onFocus={garantirCabecalhoDeHoje}
           />
         )}
+        {!loading && <EscribaNaFolha patientId={patientId} dataISO={todayISO} />}
         </div>
        </div>
       </div>
@@ -5398,32 +5416,68 @@ function linhasDoEncaminhamento(texto: string): string {
   return (texto || "").replace(/\r/g, "").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 
+// 17/11 02h50 (Valth): "com cor, estruturado e profissional". Faixa de titulo na cor da marca + filete dourado;
+// blocos rotulados (PACIENTE, SOLICITACAO, HIPOTESE DIAGNOSTICA, N DE SESSOES, CID-10): rotulo em cor, valor em
+// caixa alta e letra grande. Texto livre (encaminhamento a especialista, modelos) vai inteiro no bloco ENCAMINHAMENTO.
+const ENC_OURO = "#B8914A";
+const ENC_AZUL = "#0F2D5E";
+
+function camposDoEncaminhamento(texto: string) {
+  const c: { solicitacao: string[]; hipotese: string; sessoes: string; cid: string; resto: string[] } =
+    { solicitacao: [], hipotese: "", sessoes: "", cid: "", resto: [] };
+  for (const bruta of linhasDoEncaminhamento(texto).split("\n")) {
+    const l = bruta.trim();
+    if (!l) continue;
+    let m: RegExpMatchArray | null;
+    if ((m = l.match(/^CID-?10\s*:?\s*(.+)$/i))) c.cid = c.cid ? `${c.cid}; ${m[1]}` : m[1];
+    else if ((m = l.match(/^(?:hip[oó]tese diagn[oó]stica|diagn[oó]stico|hd)\s*:\s*(.+)$/i))) c.hipotese = m[1].replace(/\.$/, "");
+    else if ((m = l.match(/^(?:n[uú]mero de sess[oõ]es|n[ºo°]?\s*de sess[oõ]es|sess[oõ]es)\s*:\s*(.+)$/i))) c.sessoes = m[1].replace(/\.$/, "");
+    else if (/^(encaminho|solicito)\b/i.test(l)) c.solicitacao.push(l);
+    else c.resto.push(l);
+  }
+  return c;
+}
+
+function BlocoEnc({ rotulo, children }: { rotulo: string; children: any }) {
+  return (
+    <div style={{ display: "flex", alignItems: "stretch", marginBottom: "10px", pageBreakInside: "avoid", breakInside: "avoid" } as any}>
+      <div style={{ width: "4px", background: ENC_OURO, borderRadius: "2px", marginRight: "12px", flexShrink: 0 }} />
+      <div style={{ flex: 1 }}>
+        <div style={{ fontSize: "9.5pt", fontWeight: 700, letterSpacing: "2px", color: ENC_AZUL, textTransform: "uppercase", marginBottom: "2px" }}>{rotulo}</div>
+        <div style={{ fontSize: "15pt", lineHeight: 1.45, textTransform: "uppercase", color: "#1a1a1a", whiteSpace: "pre-wrap" }}>{children}</div>
+      </div>
+    </div>
+  );
+}
+
 function EncaminhamentoFolha({ clinic, patient, dataISO, destino, colega, texto, cid }: {
   clinic?: any; patient: any; dataISO?: string; destino?: string; colega?: string; texto: string; cid?: string;
 }) {
-  const corpo = linhasDoEncaminhamento(texto);
-  // o texto salvo ja traz "CID-10: ..." no fim; so acrescenta se ainda nao tem
-  const comCid = cid && !/CID-10\s*:/i.test(corpo) ? `${corpo}\nCID-10: ${cid}` : corpo;
-  const mostraDestino = !!destino && !/^\s*encaminho\b/i.test(corpo);
+  const c = camposDoEncaminhamento(texto);
+  const cidFinal = c.cid || (cid || "");
+  const solicitacao = c.solicitacao.length ? c.solicitacao.join("\n") : (destino ? `Encaminho para: ${destino}` : "");
+  const nasc = patient?.birth_date ? new Date(patient.birth_date + "T12:00:00").toLocaleDateString("pt-BR") : "";
   return (
     <div style={{ fontFamily: "Arial, Helvetica, sans-serif", color: "#1a1a1a" }}>
       <TimbradoOficial clinic={clinic} />
-      <p style={{ textAlign: "center", fontFamily: DOC_SERIF, fontSize: "21pt", fontWeight: 700, letterSpacing: "5px", textTransform: "uppercase", color: "#0F2D5E", margin: "4px 0 6px" }}>
-        Encaminhamento
-      </p>
-      <div style={{ width: "90px", borderTop: "2px solid #0F2D5E", margin: "0 auto 22px" }} />
-      <div style={{ fontSize: "12.5pt", lineHeight: 1.6, marginBottom: "22px", textTransform: "uppercase" }}>
-        <div><span style={{ color: "#555" }}>Paciente: </span><strong>{patient?.name}</strong></div>
-        {patient?.birth_date && <div><span style={{ color: "#555" }}>Nascimento: </span>{new Date(patient.birth_date + "T12:00:00").toLocaleDateString("pt-BR")}</div>}
-        {dataISO && <div><span style={{ color: "#555" }}>Data: </span>{formatDate(dataISO)}</div>}
+      <div style={{ background: ENC_AZUL, color: "#fff", textAlign: "center", padding: "9px 0", borderRadius: "3px", margin: "0 0 3px" }}>
+        <span style={{ fontFamily: DOC_SERIF, fontSize: "19pt", fontWeight: 700, letterSpacing: "6px" }}>ENCAMINHAMENTO</span>
       </div>
-      {mostraDestino && (
-        <p style={{ margin: "0 0 14px", fontSize: "15pt", textTransform: "uppercase" }}>
-          <span style={{ color: "#555" }}>Encaminho para: </span><strong>{destino}</strong>
-        </p>
-      )}
-      {colega && <p style={{ margin: "0 0 12px", fontSize: "15pt", textTransform: "uppercase" }}>Prezado(a) Dr(a). <strong>{colega}</strong>,</p>}
-      <div style={{ whiteSpace: "pre-wrap", fontSize: "15pt", lineHeight: 1.75, textTransform: "uppercase", minHeight: "100px" }}>{comCid}</div>
+      <div style={{ borderTop: `2px solid ${ENC_OURO}`, margin: "0 0 20px" }} />
+      <BlocoEnc rotulo="Paciente">
+        <strong>{patient?.name}</strong>
+        {(nasc || dataISO) && (
+          <span style={{ display: "block", fontSize: "11.5pt", color: "#444", marginTop: "2px" }}>
+            {nasc ? `Nascimento: ${nasc}` : ""}{nasc && dataISO ? "   ·   " : ""}{dataISO ? `Data: ${formatDate(dataISO)}` : ""}
+          </span>
+        )}
+      </BlocoEnc>
+      {colega && <BlocoEnc rotulo="Ao colega">Dr(a). {colega}</BlocoEnc>}
+      {solicitacao && <BlocoEnc rotulo="Solicitação">{solicitacao}</BlocoEnc>}
+      {c.hipotese && <BlocoEnc rotulo="Hipótese diagnóstica">{c.hipotese}</BlocoEnc>}
+      {c.sessoes && <BlocoEnc rotulo="Nº de sessões">{c.sessoes}</BlocoEnc>}
+      {c.resto.length > 0 && <BlocoEnc rotulo={c.solicitacao.length ? "Observações" : "Encaminhamento"}>{c.resto.join("\n")}</BlocoEnc>}
+      {cidFinal && <BlocoEnc rotulo="CID-10">{cidFinal}</BlocoEnc>}
       <FechoOficial clinic={clinic} dataISO={dataISO} />
     </div>
   );
@@ -7229,8 +7283,8 @@ export function TabLaudos({ patient, clinic }: { patient: any; clinic?: any }) {
         </select>
       </div>
 
-      {/* Templates */}
-      <div>
+      {/* Templates — 17/11 (Valth): "não servem para nada, são dispensáveis". Só escondidos (código e dados ficam). */}
+      <div className="hidden">
         <label className={lbl}>Modelos</label>
         <div className="flex flex-wrap gap-1.5">
           {LAUDO_TEMPLATES.map(t => (

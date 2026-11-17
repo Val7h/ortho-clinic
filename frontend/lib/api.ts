@@ -281,6 +281,9 @@ export interface EscribaResumo { patient_id: number; entry_date: string; linhas:
 export const escribaApi = {
   get: (patientId: number, data: string): Promise<EscribaResumo | null> =>
     api.get(`/patients/${patientId}/escriba-resumo`, { params: { data } }).then((r) => r.data),
+  // 17/11 02h45: o Escriba fica no prontuário (todos os dias com registro)
+  listar: (patientId: number): Promise<EscribaResumo[]> =>
+    api.get(`/patients/${patientId}/escriba-resumos`).then((r) => r.data),
 };
 
 // 17/11/2026 (fatia 3): botões "Você disse que vai fazer" — a ponte do PC grava, o médico usa.

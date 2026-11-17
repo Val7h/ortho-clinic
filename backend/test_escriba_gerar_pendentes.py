@@ -7,6 +7,7 @@ from test_escriba_fatia3 import EXAME, FISIO, RX, _mandar, _lista, _convenio
 
 import routers.escriba as R
 from models.patient import Patient
+from tzutil import today_br
 
 PROC = {"chave": "procedimento:infiltracao", "tipo": "procedimento", "rotulo": "Infiltracao jd", "frase": "vou infiltrar",
         "conferida": True, "dados": {"texto": "INFILTRACAO DO JOELHO DIREITO"}}
@@ -135,3 +136,53 @@ def test_ponte_ficha_e_assistente(ambiente):
     assert c.post(url, json={"texto": "qual a dose?", "autor": "medico"}, headers=PONTE).status_code == 422
     r = c.post(url, json={"texto": "🎙️ qual a dose de pregabalina?", "autor": "medico"}, headers=PONTE).json()
     assert r["gravado"] is True and c.get(url, headers=PONTE).json()[-1]["autor"] == "medico"
+
+
+# ── 17/11 02h45: Escriba na coluna do meio (resumos por dia) e juntar automatico no PC ──
+
+def test_resumos_por_dia_e_juntar(ambiente):
+    c, S, pid, eid = ambiente
+    s = _ligar(c, pid, eid)
+    hoje = today_br().isoformat()
+    c.put(f"/escriba/ponte/sessoes/{s['id']}/resumo", json={"linhas": ["📋 Resumo final da consulta (10:00)", "qp: dor jd"],
+                                                         "faltas": ["ef: não ditado"]}, headers=PONTE)
+    lst = c.get(f"/patients/{pid}/escriba-resumos", headers=MEDICO).json()
+    assert len(lst) == 1 and lst[0]["entry_date"] == hoje and lst[0]["linhas"][1] == "qp: dor jd"
+
+
+def test_zerar_escriba_do_dia(ambiente):
+    c, S, pid, eid = ambiente
+    s = _ligar(c, pid, eid)
+    hoje = today_br().isoformat()
+    _mandar(c, s["id"], [EXAME, RX])
+    c.put(f"/patients/{pid}/escriba-resumo", json={"entry_date": hoje, "linhas": []}, headers=MEDICO)   # fonte 'sessao'
+    c.post(f"/patients/{pid}/assistente", json={"texto": "teste"}, headers=MEDICO)
+    assert c.delete(f"/patients/{pid}/escriba-resumo", params={"data": hoje}, headers=SECRETARIA).status_code == 403
+    assert c.delete(f"/patients/{pid}/escriba-resumo", params={"data": hoje}, headers=MEDICO).json() == {"apagados": 1}
+    assert c.delete(f"/patients/{pid}/assistente", params={"data": hoje}, headers=MEDICO).json() == {"apagadas": 1}
+    assert c.delete(f"/escriba/sugestoes/paciente/{pid}", params={"data": hoje}, headers=MEDICO).json() == {"sumiram": 2}
+    assert _lista(c, eid)["sugestoes"] == []
+    # o automatico volta a poder escrever
+    r = c.put(f"/escriba/ponte/sessoes/{s['id']}/resumo", json={"linhas": ["dor jd"], "faltas": []}, headers=PONTE).json()
+    assert r == {"gravado": True}
+
+
+def test_apagar_entrada_da_fila_com_escriba(ambiente):
+    """Bug 17/11 (entrada 1189): DELETE da fila dava 500 com sessao do Escriba (chave estrangeira)."""
+    c, S, pid, eid = ambiente
+    from sqlalchemy import text
+    from models.escriba import EscribaPedaco, EscribaSessao, EscribaSugestao, EscribaPedido
+    from models.queue import WaitingRoomEntry
+    s = _ligar(c, pid, eid)
+    assert c.post(f"/escriba/sessoes/{s['id']}/pedacos?aparelho=pc-1&seq=0&ext=webm", content=b"abc", headers=MEDICO).status_code == 200
+    _mandar(c, s["id"], [EXAME])
+    _gerar(c, eid)
+    db = S()
+    db.execute(text("PRAGMA foreign_keys=ON"))   # o SQLite so cobra a chave estrangeira com isto (o Postgres sempre cobra)
+    db.commit()
+    r = c.delete(f"/api/clinic/waiting-room/{eid}", headers=MEDICO)
+    assert r.status_code == 204, r.text
+    db = S()
+    assert db.query(WaitingRoomEntry).filter(WaitingRoomEntry.id == eid).first() is None
+    assert db.query(EscribaSessao).count() == 0 and db.query(EscribaPedaco).count() == 0
+    assert db.query(EscribaSugestao).count() == 0 and db.query(EscribaPedido).count() == 0
