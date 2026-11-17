@@ -1272,6 +1272,40 @@ async def update_waiting_status(
     return _build_entry_out(entry, patient, now)
 
 
+@router.post("/waiting-room/{entry_id}/baixa", response_model=WaitingRoomEntryOut)
+async def dar_baixa_secretaria(
+    entry_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """17/11/2026 (Valth): a SECRETÁRIA pode dar baixa (marcar como atendido) num
+    paciente que só veio a um procedimento (infiltração) ou a uma perícia, sem o
+    médico abrir a consulta. O paciente NÃO some da tela do médico: fica na lista
+    como atendido, igual a quem ele finalizou. Só vale para quem está aguardando
+    (ou ausente por engano); não mexe em consulta aberta pelo médico."""
+    entry = db.query(WaitingRoomEntry).filter(WaitingRoomEntry.id == entry_id).first()
+    if not entry:
+        raise HTTPException(status_code=404, detail="Entrada não encontrada")
+    entry_patient = db.query(Patient).filter(Patient.id == entry.patient_id).first()
+    if not entry_patient or not _same_org(current_user, entry_patient.organization_id):
+        raise HTTPException(status_code=404, detail="Entrada não encontrada")
+    if entry.status not in ("waiting", "absent"):
+        raise HTTPException(status_code=409, detail="Só dá baixa em quem está aguardando. Consulta aberta pelo médico, só ele finaliza.")
+    now = datetime.now(timezone.utc)
+    if entry.called_at is None:
+        entry.called_at = now
+    entry.attended_at = now
+    entry.segment_started_at = None
+    entry.status = "attended"
+    quem = (getattr(current_user, "full_name", None) or getattr(current_user, "name", None) or current_user.email or "secretaria")
+    marca = f"baixa dada por {quem}"
+    entry.notes = f"{entry.notes} · {marca}" if entry.notes else marca
+    _sync_appointment_status(db, entry, "attended")
+    db.commit()
+    db.refresh(entry)
+    return _build_entry_out(entry, entry_patient, now)
+
+
 @router.delete("/waiting-room/{entry_id}", status_code=204)
 async def delete_waiting_entry(
     entry_id: int,

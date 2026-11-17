@@ -9,7 +9,7 @@ import Link from 'next/link';
 import NavBar from '@/components/NavBar';
 import { PageWithSidebar } from '@/components/PageWithSidebar';
 import { Card, CardContent, Badge, Button, Modal, useModal } from '@/components/ui';
-import { patientsApi, waitingRoomApi, clinicApi, msgErro } from '@/lib/api';
+import { api, patientsApi, waitingRoomApi, clinicApi, msgErro } from '@/lib/api';
 import { serverNow } from '@/lib/servertime';
 import { faixaDoCrono } from '@/lib/cronoLimites';
 import toast from 'react-hot-toast';
@@ -199,7 +199,7 @@ function clinicLabel(name: string | undefined): string {
 
 interface PatientCardProps {
   entry: WaitingRoomEntry;
-  onStatusChange: (id: number, status: QueueStatus) => Promise<void>;
+  onStatusChange: (id: number, status: QueueStatus, soNaTela?: boolean) => Promise<void>;
   onRemove: (id: number) => void;
   onAddValue: (entry: WaitingRoomEntry) => void;
   onSelect: (entry: WaitingRoomEntry) => void;
@@ -342,6 +342,23 @@ function PatientCard({ entry, onStatusChange, onRemove, onAddValue, onSelect, bu
           <div className="ml-auto flex items-center gap-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
             {/* 28/09: abrir/fechar/suspender/reabrir consulta é ato clínico —
                 escondido de quem não é médico (backend também trava). */}
+            {/* 17/11 (Valth): secretária dá baixa em procedimento/perícia sem o médico abrir a consulta. */}
+            {!isDoctor && (entry.status === 'waiting' || entry.status === 'absent') && (
+              <button
+                onClick={async () => {
+                  try {
+                    await api.post(`/api/clinic/waiting-room/${entry.id}/baixa`);
+                    onStatusChange(entry.id, 'attended', true);
+                    toast.success('Baixa dada — fica como atendido');
+                  } catch (e: any) { toast.error(msgErro(e, 'Não consegui dar baixa')); }
+                }}
+                disabled={busy}
+                title="Marcar como atendido (procedimento, perícia...) — continua na tela do médico"
+                className="flex items-center gap-1 px-2 py-1 rounded-lg bg-blue-600 text-white text-[10px] font-semibold hover:bg-blue-700 disabled:opacity-50"
+              >
+                <CheckCircle className="w-3 h-3" /> Dar baixa
+              </button>
+            )}
             {isDoctor && entry.status === 'waiting' && (
               <>
                 <button
@@ -590,7 +607,12 @@ export default function SalaDeEsperaPage() {
     .filter((e) => e.status !== 'absent')
     .reduce((sum, e) => sum + (e.value_cents ?? 0), 0);
 
-  const handleStatusChange = async (id: number, newStatus: QueueStatus) => {
+  const handleStatusChange = async (id: number, newStatus: QueueStatus, soNaTela?: boolean) => {
+    // 17/11: "Dar baixa" da secretária já gravou no servidor; aqui só atualiza a tela.
+    if (soNaTela) {
+      setEntries((prev) => prev.map((e) => (e.id === id ? { ...e, status: newStatus } : e)));
+      return;
+    }
     setBusyIds((prev) => new Set(prev).add(id));
     try {
       const updated = await waitingRoomApi.updateStatus(id, newStatus);
