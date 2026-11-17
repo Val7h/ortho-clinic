@@ -1,6 +1,7 @@
 "use client";
 import { controladoCitado, exigeNotificacao, carregarTermosDaBase } from "@/lib/medicamentosOrtopedia";
 import TabPrescricao, { type JobImpressao } from "./TabPrescricao";
+import ComposicaoDica, { nomeDaLinha, linhaNoCursor } from "./ComposicaoDica";
 
 import { useEffect, useState, useRef, useCallback, useMemo, createContext, useContext } from "react";
 import { createPortal } from "react-dom";
@@ -940,6 +941,7 @@ function MedRowInline({ med, index, total, onChange, onRemove, allergyWarning, s
         <div className="col-span-2 relative">
           <label className={lbl}>Nome *</label>
           <input className={inp} placeholder="Ex: Nimesulida 100mg" value={med.name} onChange={(e) => onChange("name", e.target.value)} />
+          <ComposicaoDica nome={nomeDaLinha(med.name)} />
           {showSuggestions && (
             <ul className="absolute z-50 w-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg max-h-48 overflow-y-auto">
               {suggestions!.map((p) => (
@@ -3149,6 +3151,7 @@ function TabReceita({ patientId, patient, clinic, rxExterna, prefill, onSalvoEsc
   const [buscaModelo, setBuscaModelo] = useState("");
   const [freeTextMode, setFreeTextMode] = useState(false);
   const [freeText, setFreeText] = useState("");
+  const [linhaRx, setLinhaRx] = useState("");   // 17/11: linha do cursor -> composição ANVISA embaixo
   const [medications, setMedications] = useState<Medication[]>([emptyMed()]);
   const [instructions, setInstructions] = useState("");
   const [patientAddress, setPatientAddress] = useState("");
@@ -4049,13 +4052,15 @@ function TabReceita({ patientId, patient, clinic, rxExterna, prefill, onSalvoEsc
                   }}
                   placeholder={"Escreva a receita à mão livre. Ex:\n\n1. Nimesulida 100mg — 1 cp de 12/12h por 5 dias\n2. Omeprazol 20mg — 1 cp em jejum por 30 dias\n\nOrientações: repouso relativo, retorno em 7 dias."}
                   value={freeText}
-                  onChange={(e) => setFreeText(e.target.value)}
+                  onChange={(e) => { setFreeText(e.target.value); setLinhaRx(linhaNoCursor(e.target.value, e.target.selectionStart)); }}
+                  onSelect={(e) => { const el = e.currentTarget; setLinhaRx(linhaNoCursor(el.value, el.selectionStart)); }}
                   onKeyDown={(e) => {
                     if (e.ctrlKey && (e.key === "b" || e.key === "B")) { e.preventDefault(); marcar("*"); }
                     if (e.ctrlKey && (e.key === "i" || e.key === "I")) { e.preventDefault(); marcar("_"); }
                   }}
                   rows={12}
                 />
+                <ComposicaoDica nome={nomeDaLinha(linhaRx)} />
                 <p className="text-[11px] text-slate-400 mt-1">
                   O negrito aparece como <span className="font-mono">*assim*</span> e o itálico como{" "}
                   <span className="font-mono">_assim_</span> enquanto o senhor escreve. No papel e no
