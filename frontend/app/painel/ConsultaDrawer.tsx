@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { AppointmentFormModal } from "@/components/AppointmentFormModal";
+import { lerCronoLimites, faixaDoCrono, editarCronoLimites, CronoLimites } from "@/lib/cronoLimites";
 import { serverNow } from "@/lib/servertime";
 import { anamnesisApi, api, patientsApi, consultationsApi, prescriptionsApi, prescriptionTemplatesApi, referralTemplatesApi, examsApi, evolutionApi, clinicApi, chatApi, reportsApi, leafletsApi, waitingRoomApi, remindersApi, medicamentosApi, printJobsApi, msgErro } from "@/lib/api";
 import { formatDate, calcAge, hojeISO } from "@/lib/utils";
@@ -7819,6 +7820,12 @@ function PacoteDoDia({ patientId, patient, clinic, onClose }: { patientId: numbe
 
 function DrawerCrono({ entry }: { entry: WaitingRoomEntry }) {
   const [nowMs, setNowMs] = useState(serverNow());
+  const [limites, setLimites] = useState<CronoLimites>(() => lerCronoLimites());
+  useEffect(() => {
+    const f = () => setLimites(lerCronoLimites());
+    window.addEventListener("crono-limites", f);
+    return () => window.removeEventListener("crono-limites", f);
+  }, []);
   useEffect(() => {
     if (entry.status !== "attending" || !entry.segment_started_at) return;
     const t = setInterval(() => setNowMs(serverNow()), 1000);
@@ -7838,12 +7845,18 @@ function DrawerCrono({ entry }: { entry: WaitingRoomEntry }) {
   const m = Math.floor((sec % 3600) / 60);
   const s = sec % 60;
   const label = h > 0 ? `${h}h ${String(m).padStart(2, "0")}min` : `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  const faixa = faixaDoCrono(sec, limites);
   const style =
-    entry.status === "attending" ? "bg-green-600 text-white"
+    entry.status === "attending"
+      ? (faixa === "vermelho" ? "bg-red-600 text-white" : faixa === "amarelo" ? "bg-yellow-400 text-slate-900" : "bg-green-600 text-white")
     : entry.status === "suspended" ? "bg-amber-500 text-white"
     : "bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200";
   return (
-    <span className={`font-mono text-sm font-bold px-2.5 py-1 rounded-lg ${style}`} title="Tempo de consulta (pausas descontadas)">
+    <span
+      onClick={() => editarCronoLimites()}
+      className={`font-mono text-sm font-bold px-2.5 py-1 rounded-lg cursor-pointer ${style}`}
+      title={`Tempo de consulta (pausas descontadas). Amarelo a partir de ${limites.amarelo} min, vermelho a partir de ${limites.vermelho} min — clique para mudar.`}
+    >
       {entry.status === "suspended" ? "⏸" : "⏱"} {label}
     </span>
   );

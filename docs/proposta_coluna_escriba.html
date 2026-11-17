@@ -1,0 +1,95 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Proposta coluna Escriba</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:"Segoe UI",Arial,sans-serif;background:#eef2f6;color:#1d2733;width:1600px;height:900px}
+.top{height:52px;background:#0b3d5c;color:#fff;display:flex;align-items:center;padding:0 18px;font-weight:700;letter-spacing:1px;gap:14px}
+.top small{font-weight:400;opacity:.8;letter-spacing:0}
+.wrap{display:flex;height:848px}
+.fila{width:440px;background:#f7f9fb;border-right:1px solid #d8e0e8;padding:14px 14px;overflow:hidden}
+.stats{display:flex;background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:8px 6px;margin-bottom:10px}
+.stats div{flex:1;text-align:center;font-size:14px;font-weight:700}.stats small{font-size:10px;color:#64748b;font-weight:400;margin-left:3px}
+.filt{display:flex;gap:3px;background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:3px;margin-bottom:12px}
+.filt div{flex:1;text-align:center;font-size:12px;padding:6px 0;border-radius:8px;color:#475569}.filt .on{background:#2563eb;color:#fff}
+.filt i{font-style:normal;display:inline-block;min-width:18px;border-radius:9px;background:#e2e8f0;margin-left:4px;font-size:11px}.filt .on i{background:#3b82f6}
+.c{background:#fff;border-radius:12px;padding:9px 12px;margin-bottom:9px;border:1px solid #e2e8f0;border-left:5px solid #1f9d55;font-size:12px;box-shadow:0 1px 2px #0001}
+.c b{display:block;font-size:14px;margin-bottom:2px}
+.c .l{display:flex;gap:5px;align-items:center;flex-wrap:wrap;color:#64748b;font-size:11.5px}
+.bd{padding:1px 6px;border-radius:4px;font-size:10px;font-weight:700}
+.cron{font-family:Consolas;background:#fde047;color:#0f172a}.esp{font-family:Consolas;background:#fef3c7;color:#b45309}
+.cl{background:#e0e7ff;color:#3730a3}.cv{background:#dcfce7;color:#166534}.cvc{background:#fef3c7;color:#92400e}.cvp{background:#f1f5f9;color:#334155}.cvb{background:#dbeafe;color:#1e40af}
+.bt{display:flex;gap:6px;margin-top:7px}.bt span{border:1px solid #cbd5e1;border-radius:7px;padding:2px 8px;font-size:11px;color:#334155}
+.c.on{outline:2px solid #0f6e8c;background:#f0f9ff}
+.unimed{border-left-color:#1f9d55}.cassi{border-left-color:#e0a21b}.part{border-left-color:#64748b}.bra{border-left-color:#2563eb}
+.drawer{flex:1;display:flex;flex-direction:column;background:#fff}
+.pac{padding:10px 18px 8px;border-bottom:1px solid #e3e9ef}
+.pac b{font-size:18px}.lin{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:4px;font-size:12px;color:#475569}
+.pl{padding:1px 8px;border-radius:10px;font-weight:600;font-size:11.5px}
+.alerg{margin-top:7px;background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;padding:5px 10px;font-size:12px;font-weight:700;color:#991b1b}
+.acoes{display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin-top:8px}
+.b{padding:5px 11px;border-radius:8px;font-size:12px;font-weight:600;color:#fff}
+.crono{font-family:Consolas;font-weight:700;font-size:13px;background:#facc15;color:#0f172a;padding:3px 9px;border-radius:8px}
+.ret{border:1px solid #0891b2;color:#0e7490;border-radius:8px;font-size:12px;font-weight:600;padding:4px 10px}
+.tabs{display:flex;gap:2px;padding:0 14px;border-bottom:1px solid #e3e9ef}
+.tabs div{padding:9px 13px;font-size:13px;color:#56677a}.tabs .at{color:#0b3d5c;font-weight:700;border-bottom:3px solid #0f6e8c}
+.form{margin:12px 16px 0;border:1px solid #5eead4;background:#f0fdfa;color:#115e59;border-radius:8px;padding:8px 12px;font-size:13px;font-weight:600;display:flex;justify-content:space-between}
+.barra2{display:flex;gap:8px;margin:8px 16px 0;font-size:12px}.barra2 span{border:1px solid #e2e8f0;border-radius:5px;padding:3px 8px;color:#475569}
+.corpo{flex:1;display:flex;gap:14px;padding:10px 16px 14px;overflow:hidden}
+
+.med{flex:1;border:1px solid #d8e0e8;border-radius:8px;padding:12px 14px;font-family:Consolas,monospace;font-size:13.5px;line-height:1.55;white-space:pre-wrap;color:#1d2733}
+.med .h{color:#0f6e8c;font-weight:700}
+.lbl{font-family:"Segoe UI";font-size:11px;color:#56677a;font-weight:700;text-transform:uppercase;margin-bottom:6px;display:block}
+.esc{width:330px;background:#f5f3ff;border:1px solid #c4b5fd;border-radius:8px;padding:12px 14px;display:flex;flex-direction:column;gap:10px}
+.esc .tit{display:flex;justify-content:space-between;align-items:center;color:#5b21b6;font-weight:700;font-size:14px}
+.ao{font-size:10.5px;background:#ede9fe;color:#6d28d9;padding:2px 7px;border-radius:9px;font-weight:700}
+.res{font-size:13px;line-height:1.55;color:#4c1d95}
+.res p{margin:0 0 6px;display:flex;gap:6px;align-items:flex-start}
+.res p button{margin-left:auto;flex:none;border:1px solid #c4b5fd;background:#fff;color:#6d28d9;border-radius:6px;font-size:11px;padding:1px 6px}
+.falta{background:#fff7ed;border:1px solid #fdba74;border-radius:7px;padding:8px 10px;font-size:12.5px;color:#9a3412;line-height:1.5}
+.falta b{display:block;margin-bottom:3px}
+.rod{margin-top:auto;font-size:11px;color:#7c6aa8}
+.nota{position:absolute;font-family:"Segoe UI";font-size:13px;background:#fffbe6;border:1px solid #f1d27a;border-radius:6px;padding:6px 9px;color:#6b5200;box-shadow:0 2px 6px #0002}
+</style></head><body>
+<div class="top">ORTHOMEDIC <small>Sala de espera · CTO · amostra com pacientes fictícios</small></div>
+<div class="wrap">
+ <div class="fila">
+  <div class="stats"><div style="color:#d97706">5<small>Aguard.</small></div><div style="color:#16a34a">1<small>Atend.</small></div><div style="color:#2563eb">3<small>Concl.</small></div><div style="color:#ef4444">0<small>Aus.</small></div></div>
+  <div class="filt"><div class="on">Tod<i>9</i></div><div>Agu<i>5</i></div><div>Em <i>1</i></div><div>Ate<i>3</i></div><div>Aus<i>0</i></div></div>
+  <div class="c unimed on"><b>Maria Fictícia Souza</b><div class="l">08:40 <span class="bd cl">CTO</span><span class="bd cv">Unimed</span><span class="bd cron">⏱ 12:04</span> Retorno</div><div class="bt"><span>✓ Concluir</span><span>⏸ Suspender</span></div></div>
+  <div class="c cassi"><b>João Exemplo Lima</b><div class="l">08:55 · 25 min <span class="bd cl">CTO</span><span class="bd cvc">CASSI</span><span class="bd esp">⌛ 25:10</span> 1ª consulta</div><div class="bt"><span>▶ Atender</span><span>Ausente</span></div></div>
+  <div class="c part"><b>Ana Teste Ferreira</b><div class="l">09:05 · 15 min <span class="bd cl">CTO</span><span class="bd cvp">Particular</span><span class="bd esp">⌛ 15:02</span> Infiltração</div><div class="bt"><span>▶ Atender</span><span>Ausente</span></div></div>
+  <div class="c unimed"><b>Pedro Modelo Alves</b><div class="l">09:10 · 10 min <span class="bd cl">CTO</span><span class="bd cv">Unimed</span><span class="bd esp">⌛ 10:40</span> Retorno</div><div class="bt"><span>▶ Atender</span><span>Ausente</span></div></div>
+  <div class="c bra"><b>Lúcia Amostra Rocha</b><div class="l">09:20 · 2 min <span class="bd cl">CTO</span><span class="bd cvb">Bradesco</span><span class="bd esp">⌛ 02:15</span> 1ª consulta</div><div class="bt"><span>▶ Atender</span><span>Ausente</span></div></div>
+ </div>
+ <div class="drawer">
+  <div class="pac"><b>Maria Fictícia Souza</b>
+   <div class="lin"><span>58 anos <span style="color:#94a3b8">(12/03/1968)</span></span><span class="pl" style="background:#dbeafe;color:#1d4ed8">Unimed</span><span class="pl" style="background:#f1f5f9;color:#475569">Retorno · 2ª vez</span><span>📍 Campina Grande-PB</span><span>💼 Professora</span><span style="color:#059669">📱 (83) 90000-0000</span><span>🏷 M22.4</span><span style="color:#94a3b8">· Retorno</span></div>
+   <div class="alerg">⚠️ Alérgico a: dipirona</div>
+   <div class="acoes"><span class="b" style="background:#f59e0b">⏸ Suspender</span><span class="b" style="background:#2563eb">✓ Finalizar Consulta</span><span class="crono">⏱ 12:04</span><span class="pl" style="background:#dcfce7;color:#15803d">Em Atendimento</span><span class="ret">↻ Retorno em 30 dias ▾</span></div>
+  </div>
+  <div class="tabs"><div class="at">Anamnese</div><div>Receitas</div><div>Exames</div><div>Encaminhamentos</div><div>Procedimentos</div><div>Atestados</div><div>Laudos</div><div>Fotos</div></div>
+  <div class="form"><span>📋 Formulário respondido pelo paciente</span><span>▾ abrir</span></div>
+  <div class="barra2"><span>Retorno ▾</span><span>Modelos ▾</span><span>🔍 Buscar na folha</span></div>
+  <div class="corpo">
+   <div class="med"><span class="lbl">Anamnese do médico</span><span class="h">── 02/10/2026 · 1ª Consulta ──</span>
+dor jd há 3 meses, pior ao subir escada / sem trauma / fez fisio 10 sessões sem melhora / rx: artrose leve fêmoro-patelar
+hd: condropatia patelar jd / cd: rnm jd, coxeto 90, retorno c/ exame
+
+<span class="h">── 16/11/2026 · Retorno ──</span>
+trouxe rnm jd: condropatia grau III patelar, sem lesão meniscal / ef: crepitação patelar, sem derrame
+cd: infiltração jd *</div>
+   <div class="esc">
+    <div class="tit">🎙️ Escriba · IA <span class="ao">● ouvindo</span></div>
+    <div class="res">
+     <p>Melhorou 30% com Coxeto, mas volta a doer ao parar. <button>+ passar</button></p>
+     <p>Dor piora de manhã, rigidez ~15 min. <button>+ passar</button></p>
+     <p>Hipertensa, usa losartana 50 mg. <button>+ passar</button></p>
+     <p>Quer evitar cirurgia; aceitou infiltração. <button>+ passar</button></p>
+    </div>
+    <div class="falta"><b>⚠️ Falado e não escrito</b>Uso de losartana 50 mg.<br>Rigidez matinal de ~15 min.</div>
+    <div class="rod">Resumo gerado pela IA a partir da conversa. Confira antes de usar.</div>
+   </div>
+  </div>
+ </div>
+</div>
+<div class="nota" style="left:20px;top:860px">Fila: de 40% para ~28% da tela, cards com tudo que já têm</div>
+<div class="nota" style="left:1230px;top:200px">Coluna do Escriba: lilás, só leitura</div>
+</body></html>

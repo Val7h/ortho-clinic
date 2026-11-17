@@ -11,6 +11,7 @@ import { PageWithSidebar } from '@/components/PageWithSidebar';
 import { Card, CardContent, Badge, Button, Modal, useModal } from '@/components/ui';
 import { patientsApi, waitingRoomApi, clinicApi, msgErro } from '@/lib/api';
 import { serverNow } from '@/lib/servertime';
+import { faixaDoCrono } from '@/lib/cronoLimites';
 import toast from 'react-hot-toast';
 import ConsultaDrawer, { WaitingRoomEntry } from './ConsultaDrawer';
 import { useAuth } from '@/components/AuthProvider';
@@ -318,7 +319,10 @@ function PatientCard({ entry, onStatusChange, onRemove, onAddValue, onSelect, bu
               o cronômetro rodando (a cada segundo!) não empurrar o texto do
               motivo (flex-1) do lado. */}
           {entry.status === 'attending' && (
-            <span className="inline-flex items-center justify-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold flex-shrink-0 min-w-[64px] bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 font-mono">
+            <span className={`inline-flex items-center justify-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold flex-shrink-0 min-w-[64px] font-mono ${
+              faixaDoCrono(cronoSec) === 'vermelho' ? 'bg-red-600 text-white'
+              : faixaDoCrono(cronoSec) === 'amarelo' ? 'bg-yellow-300 text-slate-900'
+              : 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300'}`}>
               ⏱ {formatElapsed(cronoSec)}
             </span>
           )}
