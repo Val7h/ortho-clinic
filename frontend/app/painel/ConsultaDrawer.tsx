@@ -6394,7 +6394,7 @@ export function TabAtestados({ patient, clinic, prefill, onSalvoEscriba }: { pat
     setObs(prev => prev ? prev + "; " + chip : chip);
   };
 
-  // 17/11 (fatia 3): botão do Escriba. Dias só se ditos. SEM CID se não foi dito (tira o CID do topo).
+  // 17/11 (fatia 3): botão do Escriba. Dias só se ditos. CID: o dito; senão, o das doenças da ficha.
   useEffect(() => {
     if (!prefill || prefill.tipo !== "atestado") return;
     const d = prefill.dados || {};
@@ -6402,7 +6402,8 @@ export function TabAtestados({ patient, clinic, prefill, onSalvoEscriba }: { pat
     if (d.dias) { setDays(String(d.dias)); diasEscriba.current = String(d.dias); }
     else { diasEscriba.current = null; toast("Atestado: os dias não foram ditos. Preencha.", { icon: "⚠️", duration: 6000 }); }
     if (d.cid) setTimeout(() => setCid(d.cid), 150);
-    else setTimeout(() => { setCid((c) => { if ((c || "").trim()) toast("CID tirado do atestado: não foi dito na consulta.", { icon: "ℹ️" }); return ""; }); setCidsSecundarios([]); }, 150);
+    // 17/11 (Valth): "o atestado precisa sair com CID" — usa o CID das doenças da ficha (topo, já preenchido na aba).
+    else setTimeout(() => { setCid((c) => { if (!(c || "").trim()) toast("Atestado sem CID: a ficha não tem doença marcada. Escolha o CID.", { icon: "⚠️", duration: 7000 }); return c; }); }, 300);
     pendenteEscriba.marcar(prefill.sugId, d.dias ? String(d.dias) : "");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefill?.seq]);
