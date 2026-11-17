@@ -2464,7 +2464,15 @@ function LinhasEscriba({ res }: { res: EscribaResumo }) {
   );
 }
 
-function EscribaNaFolha({ patientId, dataISO }: { patientId: number; dataISO: string }) {
+// 17/11 (Valth): muitas consultas ele não escreve nada; tudo vem do Escriba. Linha do Escriba cujas palavras já
+// estão todas no texto dele não se repete no bloco.
+function jaEscritoPeloMedico(linha: string, textoMedico: string): boolean {
+  const escrito = new Set(normTxt(textoMedico).split(/[^a-z0-9]+/).filter(Boolean));
+  const palavras = normTxt(linha.replace(/^[a-zçãé ]{1,20}:\s*/i, "")).split(/[^a-z0-9]+/).filter(w => w.length >= 4);
+  return palavras.length > 0 && palavras.every(w => escrito.has(w));
+}
+
+function EscribaNaFolha({ patientId, dataISO, textoHoje }: { patientId: number; dataISO: string; textoHoje: string }) {
   const [res, setRes] = useState<EscribaResumo | null>(null);
   const [outros, setOutros] = useState<EscribaResumo[] | null>(null);
   const [verOutros, setVerOutros] = useState(false);
@@ -2477,8 +2485,14 @@ function EscribaNaFolha({ patientId, dataISO }: { patientId: number; dataISO: st
     escribaApi.listar(patientId).then(l => { if (vivo) setOutros((l || []).filter(x => String(x.entry_date).slice(0, 10) !== dataISO)); }).catch(() => {});
     return () => { vivo = false; clearInterval(t); };
   }, [patientId, dataISO]);
-  const linhas = res?.linhas || [];
-  const faltas = res?.faltas || [];
+  const todas = res?.linhas || [];
+  const semTexto = !textoHoje.trim();
+  const unificada = !!todas[0] && todas[0].startsWith("📋 Anamnese unificada");
+  const titulo = todas[0]?.startsWith("📋") ? todas[0] : null;
+  const corpo = titulo ? todas.slice(1) : todas;
+  // sem nada digitado: tudo o que o Escriba ouviu, em texto corrido; com texto dele: só o que ele ainda não escreveu
+  const linhas = semTexto || unificada ? corpo : corpo.filter(l => !jaEscritoPeloMedico(l, textoHoje));
+  const faltas = semTexto ? [] : (res?.faltas || []);
   return (
     <div className="mt-3 mb-2">
       <div className="flex items-center gap-2 mb-1.5">
@@ -2492,15 +2506,23 @@ function EscribaNaFolha({ patientId, dataISO }: { patientId: number; dataISO: st
         <div className="flex-1 border-t border-violet-300 dark:border-violet-800" />
       </div>
       <div className="rounded-lg border border-violet-300 dark:border-violet-800 bg-violet-50 dark:bg-violet-950/30 px-3 py-2">
-        {linhas.length === 0 ? (
+        {titulo && <p className="text-[12.5px] font-bold text-violet-900 dark:text-violet-200 mb-1">{titulo}</p>}
+        {!titulo && semTexto && corpo.length > 0 && <p className="text-[12px] font-bold text-violet-800 dark:text-violet-300 mb-1">🎙️ O que o Escriba ouviu</p>}
+        {todas.length === 0 ? (
           <p className="text-[12px] text-violet-500 dark:text-violet-400">O Escriba ainda não escreveu nada hoje.</p>
-        ) : <LinhasEscriba res={res as EscribaResumo} />}
+        ) : semTexto || unificada ? (
+          <p className="text-[12.5px] leading-snug text-violet-900 dark:text-violet-200 whitespace-pre-wrap">{linhas.join(" / ")}</p>
+        ) : linhas.length === 0 ? (
+          <p className="text-[12px] text-violet-500 dark:text-violet-400">Tudo o que o Escriba ouviu já está na sua anamnese.</p>
+        ) : (
+          <div className="space-y-1">{linhas.map((l, i) => <p key={i} className="text-[12.5px] leading-snug text-violet-900 dark:text-violet-200">{l}</p>)}</div>
+        )}
         <p className="text-[10px] text-violet-500 dark:text-violet-400 mt-1.5">Feito pela IA a partir da conversa. Só leitura: o seu texto não muda.</p>
       </div>
       {faltas.length > 0 && (
         <div className="mt-1.5 rounded-md border border-orange-300 dark:border-orange-800 bg-orange-50 dark:bg-orange-950/30 px-2.5 py-1.5 text-[12px] text-orange-800 dark:text-orange-300">
-          <p className="font-bold mb-0.5">⚠️ Falado e não escrito</p>
-          {faltas.map((f, i) => <p key={i}>{f}</p>)}
+          <p className="font-bold mb-0.5">⚠️ Ela falou, mas o senhor não anotou:</p>
+          {faltas.map((f, i) => <p key={i}>• {f.length > 90 ? f.slice(0, 88) + "…" : f}</p>)}
         </div>
       )}
       {!!outros?.length && (
@@ -3012,7 +3034,7 @@ function TabProntuario({ patientId, patient, clinic, motivo, entry }: { patientI
             onFocus={garantirCabecalhoDeHoje}
           />
         )}
-        {!loading && <EscribaNaFolha patientId={patientId} dataISO={todayISO} />}
+        {!loading && <EscribaNaFolha patientId={patientId} dataISO={todayISO} textoHoje={lerFolha(folha).find(b => b.dataISO === todayISO)?.texto || ""} />}
         </div>
        </div>
       </div>
