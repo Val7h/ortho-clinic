@@ -8427,6 +8427,86 @@ export function ReportSheet({ item, patient, clinic }: { item: Extract<ItemPacot
   );
 }
 
+// Fonte ÚNICA do que o "Tudo de hoje" lista (usada pelo painel e pelo selo do botão).
+async function listarDocsDeHoje(patientId: number, hoje: string): Promise<ItemPacote[]> {
+  const doDia = (d: any) => String(d || "").slice(0, 10) === hoje;
+  const [rxs, exs, rels, docs]: any[] = await Promise.all([
+    prescriptionsApi.list(patientId).catch(() => []),
+    examsApi.list(patientId).catch(() => []),
+    reportsApi.list(patientId).catch(() => []),
+    api.get(`/patients/${patientId}/documents`).then((r) => r.data).catch(() => []),
+  ]);
+  const lista: ItemPacote[] = [];
+  for (const r of (rxs || []).filter((r: any) => doDia(r.date) && RX_LABEL[r.prescription_type])) {
+    lista.push({ id: `rx${r.id}`, tipo: "receita", label: RX_LABEL[r.prescription_type], rx: {
+      date: String(r.date).slice(0, 10), medications: r.medications || [], instructions: r.instructions || "",
+      prescription_type: normalizePrescriptionType(r.prescription_type),
+      patientAddress: r.patient_address || undefined, patientPhone: r.patient_phone || undefined,
+    } });
+  }
+  // 28/10 (Valth): exame pedido em guia do convênio fica TAMBÉM no histórico da
+  // aba Exames (marcado "Solicitado em guia SP/SADT"). Esse registro é só
+  // histórico — o papel que sai é a guia, que já entra pelos Documentos.
+  for (const e of (exs || []).filter((e: any) => doDia(e.date) && (e.free_text || "").trim() && !/Solicitado em guia SP\/SADT/i.test(e.free_text))) {
+    const primeira = (e.free_text as string).split("\n").map((l) => l.trim()).filter((l) => l && !/^SOLICITO/i.test(l))[0] || "";
+    lista.push({ id: `ex${e.id}`, tipo: "exame", label: `Pedido de exame — ${primeira}`.slice(0, 90), texto: e.free_text, dataISO: String(e.date).slice(0, 10) });
+  }
+  for (const r of (rels || []).filter((r: any) => doDia(r.date))) {
+    lista.push({ id: `re${r.id}`, tipo: "relatorio", label: r.title || r.report_type, reportType: r.report_type, titulo: r.title || "", conteudo: r.content || "", dataISO: String(r.date).slice(0, 10) });
+  }
+  for (const d of (Array.isArray(docs) ? docs : []).filter((d: any) =>
+    (doDia(d.date) || doDia(d.created_at)) && (d.mime_type || "").includes("pdf") && ["referral", "report", "other"].includes(d.category))) {
+    lista.push({ id: `dc${d.id}`, tipo: "guia", label: d.title, docId: d.id });
+  }
+  return lista;
+}
+
+const EVT_IMPRESSOS = "ortho:impressos-changed";
+
+// Quantos documentos de hoje ainda NÃO saíram (mesmo critério do painel: id fora do
+// localStorage `orthoclinic_impressos_<paciente>_<dia>`). Carrega em silêncio, sem spinner.
+function useDocsParaImprimir(patientId: number): { n: number; pulsar: boolean } {
+  const [n, setN] = useState(0);
+  const [pulsar, setPulsar] = useState(false);
+  const idsRef = useRef<string[]>([]);
+  const anteriorRef = useRef<number | null>(null);
+  const timerRef = useRef<any>(null);
+  useEffect(() => {
+    let vivo = true;
+    const hoje = hojeISO();
+    const chave = `orthoclinic_impressos_${patientId}_${hoje}`;
+    idsRef.current = [];
+    anteriorRef.current = null;
+    setN(0);
+    const contar = () => {
+      let saiu: Set<string> = new Set();
+      try { saiu = new Set(JSON.parse(localStorage.getItem(chave) || "[]")); } catch {}
+      const novo = idsRef.current.filter((id) => !saiu.has(id)).length;
+      const ant = anteriorRef.current;
+      anteriorRef.current = novo;
+      setN(novo);
+      if (ant !== null && novo > ant) {
+        setPulsar(true);
+        if (timerRef.current) clearTimeout(timerRef.current);
+        timerRef.current = setTimeout(() => setPulsar(false), 2200);
+      }
+    };
+    const recarregar = () => {
+      listarDocsDeHoje(patientId, hoje).then((l) => { if (!vivo) return; idsRef.current = l.map((i) => i.id); contar(); }).catch(() => {});
+    };
+    recarregar();
+    window.addEventListener(EVT_DOCS, recarregar);
+    window.addEventListener(EVT_IMPRESSOS, contar);
+    return () => {
+      vivo = false;
+      window.removeEventListener(EVT_DOCS, recarregar);
+      window.removeEventListener(EVT_IMPRESSOS, contar);
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, [patientId]);
+  return { n, pulsar };
+}
+
 function PacoteDoDia({ patientId, patient, clinic, entryId, onClose }: { patientId: number; patient: any; clinic?: any; entryId?: number; onClose: () => void }) {
   const hoje = hojeISO();
   // 17/11 02h10 (Valth): "todos os botoes eu quero clicar em 'imprimir tudo de hoje' ... se uma das coisas eu nao
@@ -8482,6 +8562,8 @@ function PacoteDoDia({ patientId, patient, clinic, entryId, onClose }: { patient
   const marcarImpressos = (ids: string[]) => setImpressos((prev) => {
     const n = new Set(prev); ids.forEach((id) => n.add(id));
     try { localStorage.setItem(chaveImpressos, JSON.stringify(Array.from(n))); } catch {}
+    // avisa o selo do botão "Tudo de hoje" (fora do painel) para recontar sem F5
+    setTimeout(() => { try { window.dispatchEvent(new Event(EVT_IMPRESSOS)); } catch {} }, 0);
     return n;
   });
 
@@ -8492,39 +8574,11 @@ function PacoteDoDia({ patientId, patient, clinic, entryId, onClose }: { patient
     if (fase !== "lista") return;
     let vivo = true;
     let primeira = true;
-    const doDia = (d: any) => String(d || "").slice(0, 10) === hoje;
     const carregar = () => {
     const silencioso = !primeira;
     primeira = false;
-    Promise.all([
-      prescriptionsApi.list(patientId).catch(() => []),
-      examsApi.list(patientId).catch(() => []),
-      reportsApi.list(patientId).catch(() => []),
-      api.get(`/patients/${patientId}/documents`).then((r) => r.data).catch(() => []),
-    ]).then(([rxs, exs, rels, docs]: any[]) => {
+    listarDocsDeHoje(patientId, hoje).then((lista) => {
       if (!vivo) return;
-      const lista: ItemPacote[] = [];
-      for (const r of (rxs || []).filter((r: any) => doDia(r.date) && RX_LABEL[r.prescription_type])) {
-        lista.push({ id: `rx${r.id}`, tipo: "receita", label: RX_LABEL[r.prescription_type], rx: {
-          date: String(r.date).slice(0, 10), medications: r.medications || [], instructions: r.instructions || "",
-          prescription_type: normalizePrescriptionType(r.prescription_type),
-          patientAddress: r.patient_address || undefined, patientPhone: r.patient_phone || undefined,
-        } });
-      }
-      // 28/10 (Valth): exame pedido em guia do convênio fica TAMBÉM no histórico da
-      // aba Exames (marcado "Solicitado em guia SP/SADT"). Esse registro é só
-      // histórico — o papel que sai é a guia, que já entra pelos Documentos.
-      for (const e of (exs || []).filter((e: any) => doDia(e.date) && (e.free_text || "").trim() && !/Solicitado em guia SP\/SADT/i.test(e.free_text))) {
-        const primeira = (e.free_text as string).split("\n").map((l) => l.trim()).filter((l) => l && !/^SOLICITO/i.test(l))[0] || "";
-        lista.push({ id: `ex${e.id}`, tipo: "exame", label: `Pedido de exame — ${primeira}`.slice(0, 90), texto: e.free_text, dataISO: String(e.date).slice(0, 10) });
-      }
-      for (const r of (rels || []).filter((r: any) => doDia(r.date))) {
-        lista.push({ id: `re${r.id}`, tipo: "relatorio", label: r.title || r.report_type, reportType: r.report_type, titulo: r.title || "", conteudo: r.content || "", dataISO: String(r.date).slice(0, 10) });
-      }
-      for (const d of (Array.isArray(docs) ? docs : []).filter((d: any) =>
-        (doDia(d.date) || doDia(d.created_at)) && (d.mime_type || "").includes("pdf") && ["referral", "report", "other"].includes(d.category))) {
-        lista.push({ id: `dc${d.id}`, tipo: "guia", label: d.title, docId: d.id });
-      }
       let jaSaiu: Set<string> = new Set();
       try { jaSaiu = new Set(JSON.parse(localStorage.getItem(chaveImpressos) || "[]")); } catch {}
       lista.sort((a, b) => Number(jaSaiu.has(a.id)) - Number(jaSaiu.has(b.id)));
@@ -8885,6 +8939,7 @@ export default function ConsultaDrawer({ entry, onClose, onStatusChange }: Consu
   const [collectedDocs, setCollectedDocs] = useState<CollectedDoc[]>([]);
   const [printCenterOpen, setPrintCenterOpen] = useState(false);
   const [pacoteAberto, setPacoteAberto] = useState(false);
+  const { n: docsParaImprimir, pulsar: pulsarSelo } = useDocsParaImprimir(entry.patient_id);
   const addDoc = useCallback((doc: CollectedDoc) => {
     setCollectedDocs((prev) => [...prev.filter((d) => d.id !== doc.id), doc]);
   }, []);
@@ -9309,10 +9364,20 @@ export default function ConsultaDrawer({ entry, onClose, onStatusChange }: Consu
           {/* 21/10: tudo o que tem data de hoje (inclusive o que entrou por fora) */}
           <button
             onClick={() => setPacoteAberto(true)}
-            className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700"
-            title="Juntar receitas, pedidos, laudos e guias de hoje para imprimir ou mandar para a secretária"
+            className="ml-auto relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700"
+            title={docsParaImprimir > 0 ? `${docsParaImprimir} documento(s) para imprimir` : "Juntar receitas, pedidos, laudos e guias de hoje para imprimir ou mandar para a secretária"}
           >
             <Printer className="w-3.5 h-3.5" /> Tudo de hoje
+            {docsParaImprimir > 0 && (
+              <span
+                role="status"
+                aria-label={`${docsParaImprimir} documento(s) para imprimir`}
+                title={`${docsParaImprimir} documento(s) para imprimir`}
+                className={`absolute -top-2 -right-2 min-w-[20px] h-5 px-1 rounded-full bg-red-600 text-white text-[11px] font-bold leading-5 text-center ring-2 ring-white dark:ring-slate-900 ${pulsarSelo ? "animate-pulse scale-125" : ""}`}
+              >
+                {docsParaImprimir}
+              </span>
+            )}
           </button>
           {/* Impressão final em lote — só aparece quando há documentos gerados */}
           {collectedDocs.length > 0 && (
