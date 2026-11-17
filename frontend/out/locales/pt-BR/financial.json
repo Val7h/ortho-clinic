@@ -1,0 +1,113 @@
+{
+  "title": "Financeiro",
+  "dashboard": "Painel Financeiro",
+  "invoices": "Faturas",
+  "payments": "Pagamentos",
+  "expenses": "Despesas",
+  "reports": "Relatórios",
+  "add_invoice": "Nova Fatura",
+  "add_payment": "Novo Pagamento",
+  "add_expense": "Nova Despesa",
+  "overview": {
+    "total_revenue": "Receita Total",
+    "total_expenses": "Total de Despesas",
+    "net_profit": "Lucro Líquido",
+    "pending_payments": "Pagamentos Pendentes",
+    "outstanding_invoices": "Faturas em Aberto",
+    "growth": "Crescimento"
+  },
+  "invoice": {
+    "title": "Fatura",
+    "invoice_number": "Número da Fatura",
+    "invoice_date": "Data da Fatura",
+    "due_date": "Data de Vencimento",
+    "patient": "Paciente",
+    "items": "Itens",
+    "amount": "Valor",
+    "tax": "Imposto",
+    "total": "Total",
+    "status": "Status",
+    "notes": "Observações",
+    "send_invoice": "Enviar Fatura",
+    "mark_as_paid": "Marcar como Pago",
+    "regenerate": "Regenerar PDF"
+  },
+  "payment": {
+    "title": "Pagamento",
+    "date": "Data do Pagamento",
+    "method": "Método de Pagamento",
+    "amount": "Valor",
+    "reference": "Referência",
+    "notes": "Observações",
+    "status": "Status"
+  },
+  "expense": {
+    "title": "Despesa",
+    "date": "Data da Despesa",
+    "category": "Categoria",
+    "description": "Descrição",
+    "amount": "Valor",
+    "supplier": "Fornecedor",
+    "status": "Status",
+    "receipt": "Comprovante"
+  },
+  "expense_category": {
+    "supplies": "Suprimentos",
+    "equipment": "Equipamento",
+    "maintenance": "Manutenção",
+    "utilities": "Utilidades",
+    "staff": "Pessoal",
+    "rent": "Aluguel",
+    "insurance": "Seguro",
+    "other": "Outro"
+  },
+  "payment_method": {
+    "cash": "Dinheiro",
+    "credit_card": "Cartão de Crédito",
+    "debit_card": "Cartão de Débito",
+    "check": "Cheque",
+    "transfer": "Transferência",
+    "pix": "PIX",
+    "other": "Outro"
+  },
+  "status": {
+    "draft": "Rascunho",
+    "sent": "Enviada",
+    "pending": "Pendente",
+    "paid": "Paga",
+    "partially_paid": "Parcialmente Paga",
+    "overdue": "Vencida",
+    "cancelled": "Cancelada"
+  },
+  "table": {
+    "number": "Número",
+    "patient": "Paciente",
+    "date": "Data",
+    "due_date": "Vencimento",
+    "amount": "Valor",
+    "status": "Status",
+    "actions": "Ações"
+  },
+  "messages": {
+    "invoice_created": "Fatura criada com sucesso",
+    "invoice_updated": "Fatura atualizada com sucesso",
+    "invoice_deleted": "Fatura deletada com sucesso",
+    "invoice_sent": "Fatura enviada com sucesso",
+    "payment_recorded": "Pagamento registrado com sucesso",
+    "expense_added": "Despesa adicionada com sucesso",
+    "no_invoices": "Nenhuma fatura encontrada"
+  },
+  "filters": {
+    "search_placeholder": "Buscar por paciente ou número",
+    "filter_by_status": "Filtrar por Status",
+    "filter_by_date_range": "Filtrar por Período"
+  },
+  "period": {
+    "today": "Hoje",
+    "this_week": "Esta Semana",
+    "this_month": "Este Mês",
+    "this_quarter": "Este Trimestre",
+    "this_year": "Este Ano",
+    "custom_range": "Período Personalizado"
+  }
+}

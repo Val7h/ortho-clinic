@@ -1,0 +1,702 @@
+<!DOCTYPE html><html lang="pt-BR" dir="ltr" class="__variable_3ccf5d __variable_f4a8eb"><head><meta charSet="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/><link rel="stylesheet" href="/_next/static/css/0fc4504c0e7e6427.css" crossorigin="" data-precedence="next"/><link rel="preload" as="script" fetchPriority="low" href="/_next/static/chunks/webpack-c613c01c47f4b045.js" crossorigin=""/><script src="/_next/static/chunks/1b304565-ab313e116a7b6904.js" async="" crossorigin=""></script><script src="/_next/static/chunks/7673-fa693edb8ab9ff2c.js" async="" crossorigin=""></script><script src="/_next/static/chunks/main-app-7d0728c205c169c6.js" async="" crossorigin=""></script><script src="/_next/static/chunks/app/pre-consulta/page-ee10bd698a0c0eaa.js" async=""></script><script src="/_next/static/chunks/1322-4625e3d39951fab3.js" async=""></script><script src="/_next/static/chunks/8642-01315723b6a5f0f6.js" async=""></script><script src="/_next/static/chunks/8613-075b169cf819804b.js" async=""></script><script src="/_next/static/chunks/7172-1c9a84355499286c.js" async=""></script><script src="/_next/static/chunks/7215-9f429061d193d3b6.js" async=""></script><script src="/_next/static/chunks/app/layout-7df18786f7466fbf.js" async=""></script><meta name="theme-color" media="(prefers-color-scheme: light)" content="#0F2D5E"/><meta name="theme-color" media="(prefers-color-scheme: dark)" content="#020617"/><title>OrthoMedic</title><meta name="description" content="Sistema de gestão de consultório ortopédico"/><link rel="manifest" href="/manifest.json"/><meta name="apple-mobile-web-app-capable" content="yes"/><meta name="apple-mobile-web-app-title" content="OrthoMedic"/><meta name="apple-mobile-web-app-status-bar-style" content="default"/><link rel="shortcut icon" href="/favicon.svg"/><link rel="icon" href="/favicon.svg"/><link rel="apple-touch-icon" href="/favicon.svg"/><script src="/_next/static/chunks/polyfills-c67a75d1b6f99dc8.js" crossorigin="" noModule=""></script></head><body><a href="#main-content" class="skip-to-content">Pular para o conteúdo principal</a><script>!function(){try{var d=document.documentElement,c=d.classList;c.remove('light','dark');var e=localStorage.getItem('theme');if('system'===e||(!e&&true)){var t='(prefers-color-scheme: dark)',m=window.matchMedia(t);if(m.media!==t||m.matches){d.style.colorScheme = 'dark';c.add('dark')}else{d.style.colorScheme = 'light';c.add('light')}}else if(e){c.add(e|| '')}if(e==='light'||e==='dark')d.style.colorScheme=e}catch(e){}}()</script><!--$!--><template data-dgst="NEXT_DYNAMIC_NO_SSR_CODE"></template><!--/$--><div class="min-h-screen flex flex-col"><main id="main-content" tabindex="-1" class="flex-1 pb-16 lg:pb-0 outline-none"><div style="all:unset"><!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Formulário Pré-Consulta</title>
+  <style>
+    :root {
+      --azul: #1a4fa0;
+      --azul-claro: #e8f0fc;
+      --vermelho: #cc3300;
+      --cinza: #555;
+      --borda: #dce3ef;
+      --radius: 10px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f4f6fb;
+      color: #222;
+      min-height: 100vh;
+    }
+    header {
+      background: var(--azul);
+      color: white;
+      padding: 16px 20px 14px;
+    }
+    header h1 { font-size: 17px; font-weight: 700; }
+    header p  { font-size: 12px; opacity: .85; margin-top: 2px; }
+
+    .progresso {
+      background: white;
+      border-bottom: 1px solid var(--borda);
+      padding: 12px 20px;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .prog-dots {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 4px;
+    }
+    .dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      background: #cdd5e0;
+      transition: background .3s;
+    }
+    .dot.ativo   { background: var(--azul); }
+    .dot.feito   { background: #27ae60; }
+    .prog-texto  { font-size: 12px; color: var(--cinza); }
+    .prog-bar    { height: 4px; background: #e0e4ee; border-radius: 2px; margin-top: 8px; }
+    .prog-fill   { height: 100%; background: var(--azul); border-radius: 2px; transition: width .4s; }
+
+    main { max-width: 520px; margin: 0 auto; padding: 0 16px 100px; }
+
+    .secao {
+      display: none;
+      padding-top: 20px;
+    }
+    .secao.ativa { display: block; }
+
+    .secao-titulo {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--azul);
+      margin-bottom: 16px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid var(--azul-claro);
+    }
+
+    .campo { margin-bottom: 16px; }
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--cinza);
+      margin-bottom: 5px;
+    }
+    label .opt { font-weight: 400; color: #999; }
+
+    input[type=text],
+    input[type=date],
+    input[type=number],
+    select,
+    textarea {
+      width: 100%;
+      padding: 11px 13px;
+      border: 1.5px solid var(--borda);
+      border-radius: var(--radius);
+      font-size: 15px;
+      color: #222;
+      background: white;
+      transition: border-color .2s;
+      -webkit-appearance: none;
+    }
+    input:focus, select:focus, textarea:focus {
+      outline: none;
+      border-color: var(--azul);
+    }
+    textarea { min-height: 80px; resize: vertical; }
+
+    input[readonly], select[disabled] {
+      background: #f0f3f9;
+      color: #666;
+    }
+
+    .slider-wrap { position: relative; padding-bottom: 20px; }
+    input[type=range] {
+      width: 100%;
+      -webkit-appearance: none;
+      height: 8px;
+      border-radius: 4px;
+      background: linear-gradient(to right, var(--azul) 0%, var(--azul) 0%, #dce3ef 0%);
+      border: none;
+      padding: 0;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 24px; height: 24px;
+      border-radius: 50%;
+      background: var(--azul);
+      cursor: pointer;
+      border: 3px solid white;
+      box-shadow: 0 0 4px rgba(0,0,0,.25);
+    }
+    .slider-labels {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      color: #999;
+      margin-top: 4px;
+    }
+    .eva-val {
+      text-align: center;
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--azul);
+      line-height: 1;
+    }
+    .eva-desc {
+      text-align: center;
+      font-size: 12px;
+      color: var(--cinza);
+      margin-top: 2px;
+    }
+
+    .radio-group, .check-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .radio-group label, .check-group label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: white;
+      border: 1.5px solid var(--borda);
+      border-radius: 20px;
+      padding: 7px 14px;
+      font-size: 14px;
+      font-weight: 500;
+      color: #333;
+      cursor: pointer;
+      transition: border-color .15s, background .15s;
+      margin-bottom: 0;
+    }
+    .radio-group input, .check-group input { display: none; }
+    .radio-group label:has(input:checked),
+    .check-group label:has(input:checked) {
+      border-color: var(--azul);
+      background: var(--azul-claro);
+      color: var(--azul);
+    }
+
+    .campo-duplo { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .cep-aviso { font-size: 13px; margin-top: 6px; min-height: 18px; }
+    .cep-aviso.ok  { color: #0f7a4d; }
+    .cep-aviso.err { color: var(--vermelho); }
+    .spinner {
+      display: none;
+      width: 18px; height: 18px;
+      border: 2px solid var(--borda);
+      border-top-color: var(--azul);
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .botoes {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      background: white;
+      border-top: 1px solid var(--borda);
+      padding: 12px 20px;
+      display: flex;
+      gap: 10px;
+      max-width: 520px;
+      margin: 0 auto;
+    }
+    @media (min-width: 552px) {
+      .botoes { left: 50%; right: auto; transform: translateX(-50%); width: 520px; }
+    }
+
+    button {
+      flex: 1;
+      padding: 14px;
+      border: none;
+      border-radius: var(--radius);
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: opacity .2s;
+    }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+    .btn-prox { background: var(--azul); color: white; }
+    .btn-ant  { background: #eef1f7; color: #444; flex: 0 0 80px; }
+    .btn-enviar { background: #27ae60; color: white; }
+
+    .erro-campo {
+      font-size: 12px;
+      color: var(--vermelho);
+      margin-top: 4px;
+      display: none;
+    }
+    .campo.invalido input,
+    .campo.invalido select,
+    .campo.invalido textarea {
+      border-color: var(--vermelho);
+    }
+    .campo.invalido .erro-campo { display: block; }
+
+    .info-box {
+      background: #fff8e1;
+      border: 1px solid #ffe082;
+      border-radius: var(--radius);
+      padding: 12px 14px;
+      font-size: 13px;
+      color: #7a5c00;
+      margin-bottom: 16px;
+    }
+
+    #tela-expirado {
+      display: none;
+      text-align: center;
+      padding: 60px 24px;
+    }
+    #tela-expirado .icon { font-size: 52px; margin-bottom: 16px; }
+    #tela-expirado h2 { font-size: 18px; color: #333; margin-bottom: 10px; }
+    #tela-expirado p  { font-size: 14px; color: #666; margin-bottom: 24px; }
+    #tela-expirado a {
+      display: inline-block;
+      background: #25d366;
+      color: white;
+      text-decoration: none;
+      padding: 14px 28px;
+      border-radius: 30px;
+      font-weight: 700;
+      font-size: 15px;
+    }
+  </style>
+</head>
+<body>
+
+<div id="tela-expirado">
+  <div class="icon">⏰</div>
+  <h2>Link não está mais disponível</h2>
+  <p>Este link não está mais disponível. Sem problema — entre em contato pelo WhatsApp e reenviamos em instantes.</p>
+  <a href="https://wa.me/5581999179609">Falar com a clínica →</a>
+</div>
+
+<div id="app" style="display:none">
+
+  <header>
+    <h1 id="cab-unidade">Formulário Pré-Consulta</h1>
+    <p>Dr. Valth Menezes Guimarães · <span id="cab-crm">CRM-PB 6326</span></p>
+  </header>
+
+  <div class="progresso">
+    <div class="prog-dots">
+      <span class="prog-texto">⚡ Rapidinho: leva menos de 1 minuto</span>
+    </div>
+  </div>
+
+  <main>
+
+    <!-- Bloco 1: Identificação -->
+    <div class="secao ativa" id="sec1">
+      <div class="secao-titulo">Identificação</div>
+
+      <div class="campo" id="c-nasc">
+        <label>Data de nascimento</label>
+        <input type="date" id="nascimento" />
+        <div class="erro-campo">Informe sua data de nascimento.</div>
+      </div>
+
+      <div class="campo">
+        <label>Sexo</label>
+        <div class="radio-group" id="grupo-sexo">
+          <label><input type="radio" name="sexo" value="F" /> Feminino</label>
+          <label><input type="radio" name="sexo" value="M" /> Masculino</label>
+        </div>
+      </div>
+
+      <div class="campo" id="c-cpf">
+        <label>CPF</label>
+        <input type="text" id="cpf" inputmode="numeric" placeholder="000.000.000-00" />
+        <div class="erro-campo">Informe seu CPF.</div>
+      </div>
+
+      <div class="campo">
+        <label>Profissão <span class="opt">(opcional)</span></label>
+        <input type="text" id="profissao" placeholder="Ex: professora, agricultor…" />
+      </div>
+
+      <div class="campo" id="c-cep">
+        <label>CEP <span class="opt">(o endereço aparece sozinho)</span></label>
+        <input type="text" id="cep" inputmode="numeric" placeholder="00000-000" />
+        <div class="cep-aviso" id="cep-aviso"></div>
+      </div>
+
+      <div class="campo">
+        <label>Rua</label>
+        <input type="text" id="logradouro" placeholder="Preenchido pelo CEP" />
+      </div>
+
+      <div class="campo-duplo">
+        <div class="campo">
+          <label>Número</label>
+          <input type="text" id="numero" placeholder="123" />
+        </div>
+        <div class="campo">
+          <label>Complemento <span class="opt">(opcional)</span></label>
+          <input type="text" id="complemento" placeholder="Apto 202" />
+        </div>
+      </div>
+
+      <div class="campo">
+        <label>Bairro</label>
+        <input type="text" id="bairro" placeholder="Preenchido pelo CEP" />
+      </div>
+
+      <div class="campo-duplo">
+        <div class="campo">
+          <label>Cidade</label>
+          <input type="text" id="cidade" placeholder="Preenchido pelo CEP" />
+        </div>
+        <div class="campo">
+          <label>UF</label>
+          <input type="text" id="uf" maxlength="2" placeholder="PE" />
+        </div>
+      </div>
+    </div>
+
+    <!-- Bloco 2: Queixa -->
+    <div class="secao ativa">
+      <div class="secao-titulo">Queixa</div>
+
+      <div class="campo" id="c-regiao">
+        <label>Região do corpo afetada <span class="opt">(marque todas onde sente dor)</span></label>
+        <!-- 14/09 (Valth, relato da Rosilene): era uma lista de escolha única —
+             quem sentia dor em mais de um lugar (poliarticular) marcava um
+             segmento, ia marcar o outro, e o app "não aceitava" o segundo:
+             a lista simplesmente trocava a escolha, sem avisar nada. Agora
+             marca quantos precisar, igual ao campo de doenças abaixo. -->
+        <div class="check-group">
+          <label><input type="checkbox" name="regioes_corpo" value="joelho_dir" /> Joelho direito</label>
+          <label><input type="checkbox" name="regioes_corpo" value="joelho_esq" /> Joelho esquerdo</label>
+          <label><input type="checkbox" name="regioes_corpo" value="quadril" /> Quadril</label>
+          <label><input type="checkbox" name="regioes_corpo" value="ombro" /> Ombro</label>
+          <label><input type="checkbox" name="regioes_corpo" value="tornozelo" /> Tornozelo</label>
+          <label><input type="checkbox" name="regioes_corpo" value="coluna" /> Coluna</label>
+          <label><input type="checkbox" name="regioes_corpo" value="mao_punho" /> Mão / Punho</label>
+          <label><input type="checkbox" name="regioes_corpo" value="outro" /> Outro</label>
+        </div>
+        <div class="erro-campo">Por favor, marque ao menos uma região.</div>
+      </div>
+
+      <div class="campo" id="c-desc">
+        <label>Descreva com suas palavras o que está sentindo</label>
+        <textarea id="descricao" placeholder="Ex: Dor ao subir escadas, inchaço no joelho…" rows="3"></textarea>
+        <div class="erro-campo">Por favor, descreva o que está sentindo.</div>
+      </div>
+
+      <div class="campo">
+        <label>Há quanto tempo tem esses sintomas?</label>
+        <select id="tempo_sintomas">
+          <option value="">Selecione…</option>
+          <option value="menos_1sem">Menos de 1 semana</option>
+          <option value="1_4sem">1 a 4 semanas</option>
+          <option value="1_6meses">1 a 6 meses</option>
+          <option value="mais_6meses">Mais de 6 meses</option>
+          <option value="mais_1ano">Mais de 1 ano</option>
+        </select>
+      </div>
+
+      <div class="campo">
+        <label>Intensidade da dor agora</label>
+        <div class="slider-wrap">
+          <div class="eva-val" id="eva-val">5</div>
+          <div class="eva-desc" id="eva-desc">Dor moderada</div>
+          <input type="range" id="eva" min="0" max="10" value="5" />
+          <div class="slider-labels"><span>0 – Sem dor</span><span>10 – Dor máxima</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bloco 3: Saúde geral -->
+    <div class="secao ativa">
+      <div class="secao-titulo">Saúde geral</div>
+
+      <div class="campo">
+        <label>Doenças que você tem <span class="opt">(marque as que se aplicam)</span></label>
+        <div class="check-group">
+          <label><input type="checkbox" name="doencas" value="has" /> Pressão alta</label>
+          <label><input type="checkbox" name="doencas" value="dm" /> Diabetes</label>
+          <label><input type="checkbox" name="doencas" value="osteoporose" /> Osteoporose</label>
+          <label><input type="checkbox" name="doencas" value="artrite" /> Artrite</label>
+          <label><input type="checkbox" name="doencas" value="artrose" /> Artrose</label>
+          <label><input type="checkbox" name="doencas" value="outra" /> Outra</label>
+        </div>
+      </div>
+
+      <div class="campo">
+        <label>Medicações em uso contínuo <span class="opt">(opcional)</span></label>
+        <input type="text" id="medicacoes" placeholder="Ex: Losartana 50mg, AAS 100mg" />
+      </div>
+
+      <div class="campo">
+        <label>Alergias a medicamentos <span class="opt">(especialmente dipirona / anti-inflamatórios)</span></label>
+        <input type="text" id="alergias" placeholder="Ex: Dipirona — ou 'nenhuma conhecida'" />
+      </div>
+
+      <div class="campo">
+        <label>Cirurgias anteriores <span class="opt">(opcional)</span></label>
+        <input type="text" id="cirurgias_anteriores" placeholder="Ex: menisco joelho direito, 2019" />
+      </div>
+    </div>
+
+    <!-- Bloco 4: Pagamento -->
+    <div class="secao ativa">
+      <div class="secao-titulo">Pagamento</div>
+
+      <div class="campo">
+        <label>Como vai pagar a consulta?</label>
+        <div class="radio-group" id="forma_pagamento">
+          <label><input type="radio" name="pagamento" value="particular" /> Particular</label>
+          <label><input type="radio" name="pagamento" value="convenio" /> Convênio / plano</label>
+        </div>
+      </div>
+
+      <div class="campo" id="campo-plano" style="display:none">
+        <label>Qual plano de saúde?</label>
+        <input type="text" id="plano_saude" placeholder="Ex: Unimed, Bradesco Saúde…" />
+      </div>
+    </div>
+
+  </main>
+
+  <div class="botoes" id="botoes">
+    <button class="btn-enviar" id="btn-prox" onclick="enviar()">✓ Enviar</button>
+  </div>
+
+</div>
+
+<script>
+const params = new URLSearchParams(location.search);
+const NOME        = params.get('nome')   || '';
+const TEL         = params.get('tel')    || '';
+const DATA        = params.get('data')   || '';
+const MOTIVO      = params.get('motivo') || '';
+const AID         = params.get('aid')    || '';
+const EXP         = params.get('exp')    || '';
+const TOKEN       = params.get('token')  || '';
+const UNIDADE     = params.get('unidade')|| '';
+
+// A unidade vem no link do agendamento. Nunca mais escrever "CTO" fixo: era
+// isso que fazia o paciente do IP abrir uma pagina com o nome de outra clinica.
+const UNIDADES = [
+  { chaves: ['artro'],                                  nome: 'Clínica Artro',             uf: 'PB' },
+  { chaves: ['cto'],                                    nome: 'Clínica CTO',               uf: 'PB' },
+  { chaves: ['pernambuco', 'instituto pe', 'ip'],       nome: 'Instituto Pernambuco (IP)', uf: 'PE' },
+  { chaves: ['unimagem'],                               nome: 'Clínica Unimagem',          uf: 'PE' },
+  { chaves: ['mario bento', 'mário bento', 'palmares'], nome: 'Clínica Mário Bento',       uf: 'PE' },
+];
+const CRM = { PB: 'CRM-PB 6326', PE: 'CREMEPE 16.551' };
+
+function semAcento(t) {
+  return (t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+}
+
+function aplicarCabecalho() {
+  const texto = ' ' + semAcento(UNIDADE) + ' ';
+  const u = UNIDADES.find(x => x.chaves.some(c => texto.includes(semAcento(c))));
+  if (!u) return;
+  document.getElementById('cab-unidade').textContent = u.nome + ' – Formulário Pré-Consulta';
+  document.getElementById('cab-crm').textContent = CRM[u.uf];
+  document.title = 'Pré-Consulta – ' + u.nome;
+}
+
+function init() {
+  if (!TOKEN || !EXP || !AID) {
+    mostrarExpirado();
+    return;
+  }
+  if (Date.now() > parseInt(EXP)) {
+    mostrarExpirado();
+    return;
+  }
+
+  document.getElementById('app').style.display = 'block';
+
+  // Identificação vem do agendamento (link do WhatsApp) — não perguntamos de novo.
+  if (NOME) {
+    const t = document.querySelector('.secao-titulo');
+    if (t) t.textContent = 'Olá, ' + NOME.split(' ')[0] + '! Conte sobre sua queixa';
+  }
+
+  aplicarCabecalho();
+  initEva();
+  initCep();
+  initPagamento();
+}
+
+function mostrarExpirado() {
+  document.getElementById('tela-expirado').style.display = 'block';
+}
+
+const EVA_DESC = ['Sem dor','Dor mínima','Dor leve','Dor leve','Dor moderada','Dor moderada',
+                  'Dor intensa','Dor intensa','Dor muito intensa','Dor severa','Dor máxima'];
+function initEva() {
+  const slider = document.getElementById('eva');
+  function atualizar() {
+    const v = parseInt(slider.value);
+    document.getElementById('eva-val').textContent  = v;
+    document.getElementById('eva-desc').textContent = EVA_DESC[v];
+    const pct = (v / 10) * 100;
+    slider.style.background =
+      'linear-gradient(to right, var(--azul) ' + pct + '%, #dce3ef ' + pct + '%)';
+  }
+  slider.addEventListener('input', atualizar);
+  atualizar();
+}
+
+function initCep() {
+  const inp = document.getElementById('cep');
+  const aviso = document.getElementById('cep-aviso');
+  inp.addEventListener('input', () => {
+    const d = inp.value.replace(/D/g, '').slice(0, 8);
+    inp.value = d.length > 5 ? d.slice(0, 5) + '-' + d.slice(5) : d;
+    if (d.length === 8) buscarCep(d, aviso);
+    else aviso.textContent = '';
+  });
+}
+
+async function buscarCep(cep, aviso) {
+  aviso.className = 'cep-aviso';
+  aviso.textContent = 'Buscando endereço…';
+  try {
+    const res = await fetch('https://viacep.com.br/ws/' + cep + '/json/');
+    const d = await res.json();
+    if (d.erro) {
+      aviso.className = 'cep-aviso err';
+      aviso.textContent = 'CEP não encontrado — pode preencher à mão.';
+      return;
+    }
+    // Cidades pequenas tem CEP unico: vem so a cidade, sem rua/bairro. Nao
+    // apagamos o que o paciente ja digitou nesse caso.
+    if (d.logradouro) document.getElementById('logradouro').value = d.logradouro;
+    if (d.bairro)     document.getElementById('bairro').value     = d.bairro;
+    document.getElementById('cidade').value = d.localidade || '';
+    document.getElementById('uf').value     = d.uf || '';
+    aviso.className = 'cep-aviso ok';
+    aviso.textContent = d.logradouro ? '✓ endereço encontrado'
+                                     : '✓ cidade encontrada — complete a rua e o bairro';
+    document.getElementById('numero').focus();
+  } catch {
+    aviso.className = 'cep-aviso err';
+    aviso.textContent = 'Não consegui buscar agora — pode preencher à mão.';
+  }
+}
+
+function initPagamento() {
+  document.querySelectorAll('input[name="pagamento"]').forEach(r => {
+    r.addEventListener('change', () => {
+      document.getElementById('campo-plano').style.display =
+        r.value === 'convenio' ? 'block' : 'none';
+    });
+  });
+}
+
+function validarCampo(idCampo, idInput) {
+  const campo = document.getElementById(idCampo);
+  const inp   = document.getElementById(idInput);
+  if (!inp) return true;
+  const vazio = !inp.value || inp.value.trim() === '';
+  campo.classList.toggle('invalido', vazio);
+  return !vazio;
+}
+
+async function enviar() {
+  // Obrigatorios (Valth 19/08: CPF e nascimento SEMPRE, de todo paciente).
+  // 14/09: regiao_corpo virou check-group (varias regioes) — validarCampo
+  // le .value de um elemento so, que nao existe mais; confere direto aqui.
+  const regioesMarcadas = document.querySelectorAll('input[name="regioes_corpo"]:checked').length > 0;
+  document.getElementById('c-regiao').classList.toggle('invalido', !regioesMarcadas);
+  const ok = validarCampo('c-nasc', 'nascimento') &
+             validarCampo('c-cpf', 'cpf') &
+             (regioesMarcadas ? 1 : 0) &
+             validarCampo('c-desc', 'descricao');
+  if (!ok) {
+    const inv = document.querySelector('.campo.invalido');
+    if (inv) inv.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return;
+  }
+  const btnProx = document.getElementById('btn-prox');
+  btnProx.disabled = true;
+  btnProx.textContent = 'Enviando…';
+
+  const pagamento = document.querySelector('input[name="pagamento"]:checked');
+  const doencas   = Array.from(document.querySelectorAll('input[name="doencas"]:checked')).map(i => i.value);
+  const regioes   = Array.from(document.querySelectorAll('input[name="regioes_corpo"]:checked')).map(i => i.value);
+
+  // Identificação (nome/tel/unidade/data) vem do link do agendamento — sem re-perguntar.
+  // Campos cortados da folha única vão vazios (backend trata todos como opcionais).
+  const payload = {
+    token: TOKEN,
+    exp: EXP,
+    agendamento_id: AID,
+    nome:           NOME,
+    telefone:       TEL,
+    data_consulta:  DATA,
+    nascimento:     document.getElementById('nascimento').value,
+    sexo:           (document.querySelector('input[name="sexo"]:checked') || {}).value || null,
+    cpf:            document.getElementById('cpf').value,
+    cidade:         document.getElementById('cidade').value,
+    unidade:        UNIDADE,
+    bairro:         document.getElementById('bairro').value,
+    profissao:      document.getElementById('profissao').value,
+    estado_civil:   '',
+    filhos:         0,
+    cep:            document.getElementById('cep').value,
+    logradouro:     document.getElementById('logradouro').value,
+    numero:         document.getElementById('numero').value,
+    complemento:    document.getElementById('complemento').value,
+    uf:             document.getElementById('uf').value,
+    doencas_cronicas: doencas,
+    medicacoes:         document.getElementById('medicacoes').value,
+    alergias:           document.getElementById('alergias').value,
+    cirurgias_anteriores: document.getElementById('cirurgias_anteriores').value,
+    tabagismo:      '',
+    alcool:         '',
+    regiao_corpo:   regioes,
+    descricao:      document.getElementById('descricao').value,
+    tempo_sintomas: document.getElementById('tempo_sintomas').value,
+    mecanismo:      '',
+    eva:            parseInt(document.getElementById('eva').value),
+    piora:          '',
+    melhora:        '',
+    tratamento_anterior: '',
+    uso_analgesicos:     '',
+    exames_urls:    [],
+    forma_pagamento: pagamento ? pagamento.value : 'particular',
+    plano_saude:    document.getElementById('plano_saude').value || null,
+  };
+
+  try {
+    const res = await fetch('/pre-consulta/submit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      if (res.status === 401) { mostrarExpirado(); return; }
+      let erro = 'Erro inesperado.';
+      try {
+        const body = await res.json();
+        erro = body.detail || body.erro || erro;
+      } catch {}
+      alert('Erro ao enviar: ' + erro);
+      btnProx.disabled = false;
+      btnProx.textContent = '✓ Enviar formulário';
+      return;
+    }
+
+    const dataFmt = DATA ? new Date(DATA).toLocaleDateString('pt-BR') : '';
+    const horaFmt = DATA ? new Date(DATA).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}) : '';
+    location.href = '/confirmacao?nome=' + encodeURIComponent(NOME) + '&data=' + encodeURIComponent(dataFmt) + '&hora=' + encodeURIComponent(horaFmt);
+  } catch {
+    alert('Falha de rede. Verifique sua conexão e tente novamente.');
+    btnProx.disabled = false;
+    btnProx.textContent = '✓ Enviar formulário';
+  }
+}
+
+init();
+</script>
+</body>
+</html></div></main></div><div data-rht-toaster="" style="position:fixed;z-index:9999;top:16px;left:16px;right:16px;bottom:16px;pointer-events:none"></div><!--$!--><template data-dgst="NEXT_DYNAMIC_NO_SSR_CODE"></template><!--/$--><!--$!--><template data-dgst="NEXT_DYNAMIC_NO_SSR_CODE"></template><!--/$--><script src="/_next/static/chunks/webpack-c613c01c47f4b045.js" crossorigin="" async=""></script><script>(self.__next_f=self.__next_f||[]).push([0]);self.__next_f.push([2,null])</script><script>self.__next_f.push([1,"1:HL[\"/_next/static/css/0fc4504c0e7e6427.css\",\"style\",{\"crossOrigin\":\"\"}]\n0:\"$L2\"\n"])</script><script>self.__next_f.push([1,"3:I[5274,[],\"\"]\n5:I[9036,[],\"\"]\n6:I[15736,[\"1191\",\"static/chunks/app/pre-consulta/page-ee10bd698a0c0eaa.js\"],\"\"]\n7:I[88976,[],\"\"]\n8:I[41450,[],\"\"]\n9:I[40365,[\"1322\",\"static/chunks/1322-4625e3d39951fab3.js\",\"8642\",\"static/chunks/8642-01315723b6a5f0f6.js\",\"8613\",\"static/chunks/8613-075b169cf819804b.js\",\"7172\",\"static/chunks/7172-1c9a84355499286c.js\",\"7215\",\"static/chunks/7215-9f429061d193d3b6.js\",\"3185\",\"static/chunks/app/layout-7df18786f7466fbf.js\"],\"Providers\"]\na:I[20132,[\"1322\",\"static/chunks/1322-4625e3d3"])</script><script>self.__next_f.push([1,"9951fab3.js\",\"8642\",\"static/chunks/8642-01315723b6a5f0f6.js\",\"8613\",\"static/chunks/8613-075b169cf819804b.js\",\"7172\",\"static/chunks/7172-1c9a84355499286c.js\",\"7215\",\"static/chunks/7215-9f429061d193d3b6.js\",\"3185\",\"static/chunks/app/layout-7df18786f7466fbf.js\"],\"AuthProvider\"]\nb:I[79859,[\"1322\",\"static/chunks/1322-4625e3d39951fab3.js\",\"8642\",\"static/chunks/8642-01315723b6a5f0f6.js\",\"8613\",\"static/chunks/8613-075b169cf819804b.js\",\"7172\",\"static/chunks/7172-1c9a84355499286c.js\",\"7215\",\"static/chunks/7215-9f4290"])</script><script>self.__next_f.push([1,"61d193d3b6.js\",\"3185\",\"static/chunks/app/layout-7df18786f7466fbf.js\"],\"NavigationProvider\"]\nc:I[66982,[\"1322\",\"static/chunks/1322-4625e3d39951fab3.js\",\"8642\",\"static/chunks/8642-01315723b6a5f0f6.js\",\"8613\",\"static/chunks/8613-075b169cf819804b.js\",\"7172\",\"static/chunks/7172-1c9a84355499286c.js\",\"7215\",\"static/chunks/7215-9f429061d193d3b6.js\",\"3185\",\"static/chunks/app/layout-7df18786f7466fbf.js\"],\"DeepLinkHandler\"]\nd:I[67626,[\"1322\",\"static/chunks/1322-4625e3d39951fab3.js\",\"8642\",\"static/chunks/8642-01315723b"])</script><script>self.__next_f.push([1,"6a5f0f6.js\",\"8613\",\"static/chunks/8613-075b169cf819804b.js\",\"7172\",\"static/chunks/7172-1c9a84355499286c.js\",\"7215\",\"static/chunks/7215-9f429061d193d3b6.js\",\"3185\",\"static/chunks/app/layout-7df18786f7466fbf.js\"],\"Toaster\"]\ne:I[60642,[\"1322\",\"static/chunks/1322-4625e3d39951fab3.js\",\"8642\",\"static/chunks/8642-01315723b6a5f0f6.js\",\"8613\",\"static/chunks/8613-075b169cf819804b.js\",\"7172\",\"static/chunks/7172-1c9a84355499286c.js\",\"7215\",\"static/chunks/7215-9f429061d193d3b6.js\",\"3185\",\"static/chunks/app/layout-7df187"])</script><script>self.__next_f.push([1,"86f7466fbf.js\"],\"TeamChatWidget\"]\n10:I[14670,[],\"\"]\n"])</script><script>self.__next_f.push([1,"2:[[[\"$\",\"link\",\"0\",{\"rel\":\"stylesheet\",\"href\":\"/_next/static/css/0fc4504c0e7e6427.css\",\"precedence\":\"next\",\"crossOrigin\":\"\"}]],[\"$\",\"$L3\",null,{\"buildId\":\"lGx5DeIYm1gvfCEvVOufJ\",\"assetPrefix\":\"\",\"initialCanonicalUrl\":\"/pre-consulta\",\"initialTree\":[\"\",{\"children\":[\"pre-consulta\",{\"children\":[\"__PAGE__\",{}]}]},\"$undefined\",\"$undefined\",true],\"initialSeedData\":[\"\",{\"children\":[\"pre-consulta\",{\"children\":[\"__PAGE__\",{},[\"$L4\",[\"$\",\"$L5\",null,{\"propsForComponent\":{\"params\":{}},\"Component\":\"$6\",\"isStaticGeneration\":true}],null]]},[null,[\"$\",\"$L7\",null,{\"parallelRouterKey\":\"children\",\"segmentPath\":[\"children\",\"pre-consulta\",\"children\"],\"loading\":\"$undefined\",\"loadingStyles\":\"$undefined\",\"loadingScripts\":\"$undefined\",\"hasLoading\":false,\"error\":\"$undefined\",\"errorStyles\":\"$undefined\",\"errorScripts\":\"$undefined\",\"template\":[\"$\",\"$L8\",null,{}],\"templateStyles\":\"$undefined\",\"templateScripts\":\"$undefined\",\"notFound\":\"$undefined\",\"notFoundStyles\":\"$undefined\",\"styles\":null}],null]]},[null,[\"$\",\"html\",null,{\"lang\":\"pt-BR\",\"dir\":\"ltr\",\"className\":\"__variable_3ccf5d __variable_f4a8eb\",\"suppressHydrationWarning\":true,\"children\":[\"$\",\"body\",null,{\"suppressHydrationWarning\":true,\"children\":[[\"$\",\"a\",null,{\"href\":\"#main-content\",\"className\":\"skip-to-content\",\"children\":\"Pular para o conteúdo principal\"}],[\"$\",\"$L9\",null,{\"children\":[\"$\",\"$La\",null,{\"children\":[\"$\",\"$Lb\",null,{\"children\":[[\"$\",\"$Lc\",null,{}],[\"$\",\"div\",null,{\"className\":\"min-h-screen flex flex-col\",\"children\":[\"$\",\"main\",null,{\"id\":\"main-content\",\"tabIndex\":-1,\"className\":\"flex-1 pb-16 lg:pb-0 outline-none\",\"children\":[\"$\",\"$L7\",null,{\"parallelRouterKey\":\"children\",\"segmentPath\":[\"children\"],\"loading\":\"$undefined\",\"loadingStyles\":\"$undefined\",\"loadingScripts\":\"$undefined\",\"hasLoading\":false,\"error\":\"$undefined\",\"errorStyles\":\"$undefined\",\"errorScripts\":\"$undefined\",\"template\":[\"$\",\"$L8\",null,{}],\"templateStyles\":\"$undefined\",\"templateScripts\":\"$undefined\",\"notFound\":[[\"$\",\"title\",null,{\"children\":\"404: This page could not be found.\"}],[\"$\",\"div\",null,{\"style\":{\"fontFamily\":\"system-ui,\\\"Segoe UI\\\",Roboto,Helvetica,Arial,sans-serif,\\\"Apple Color Emoji\\\",\\\"Segoe UI Emoji\\\"\",\"height\":\"100vh\",\"textAlign\":\"center\",\"display\":\"flex\",\"flexDirection\":\"column\",\"alignItems\":\"center\",\"justifyContent\":\"center\"},\"children\":[\"$\",\"div\",null,{\"children\":[[\"$\",\"style\",null,{\"dangerouslySetInnerHTML\":{\"__html\":\"body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}\"}}],[\"$\",\"h1\",null,{\"className\":\"next-error-h1\",\"style\":{\"display\":\"inline-block\",\"margin\":\"0 20px 0 0\",\"padding\":\"0 23px 0 0\",\"fontSize\":24,\"fontWeight\":500,\"verticalAlign\":\"top\",\"lineHeight\":\"49px\"},\"children\":\"404\"}],[\"$\",\"div\",null,{\"style\":{\"display\":\"inline-block\"},\"children\":[\"$\",\"h2\",null,{\"style\":{\"fontSize\":14,\"fontWeight\":400,\"lineHeight\":\"49px\",\"margin\":0},\"children\":\"This page could not be found.\"}]}]]}]}]],\"notFoundStyles\":[],\"styles\":null}]}]}],[\"$\",\"$Ld\",null,{\"position\":\"top-center\",\"toastOptions\":{\"duration\":3500,\"style\":{\"maxWidth\":360}}}],[\"$\",\"$Le\",null,{}]]}]}]}]]}]}],null]],\"initialHead\":[false,\"$Lf\"],\"globalErrorComponent\":\"$10\"}]]\n"])</script><script>self.__next_f.push([1,"f:[[\"$\",\"meta\",\"0\",{\"name\":\"viewport\",\"content\":\"width=device-width, initial-scale=1, viewport-fit=cover\"}],[\"$\",\"meta\",\"1\",{\"name\":\"theme-color\",\"media\":\"(prefers-color-scheme: light)\",\"content\":\"#0F2D5E\"}],[\"$\",\"meta\",\"2\",{\"name\":\"theme-color\",\"media\":\"(prefers-color-scheme: dark)\",\"content\":\"#020617\"}],[\"$\",\"meta\",\"3\",{\"charSet\":\"utf-8\"}],[\"$\",\"title\",\"4\",{\"children\":\"OrthoMedic\"}],[\"$\",\"meta\",\"5\",{\"name\":\"description\",\"content\":\"Sistema de gestão de consultório ortopédico\"}],[\"$\",\"link\",\"6\",{\"rel\":\"manifest\",\"href\":\"/manifest.json\"}],[\"$\",\"meta\",\"7\",{\"name\":\"apple-mobile-web-app-capable\",\"content\":\"yes\"}],[\"$\",\"meta\",\"8\",{\"name\":\"apple-mobile-web-app-title\",\"content\":\"OrthoMedic\"}],[\"$\",\"meta\",\"9\",{\"name\":\"apple-mobile-web-app-status-bar-style\",\"content\":\"default\"}],[\"$\",\"link\",\"10\",{\"rel\":\"shortcut icon\",\"href\":\"/favicon.svg\"}],[\"$\",\"link\",\"11\",{\"rel\":\"icon\",\"href\":\"/favicon.svg\"}],[\"$\",\"link\",\"12\",{\"rel\":\"apple-touch-icon\",\"href\":\"/favicon.svg\"}]]\n"])</script><script>self.__next_f.push([1,"4:null\n"])</script><script>self.__next_f.push([1,""])</script></body></html>

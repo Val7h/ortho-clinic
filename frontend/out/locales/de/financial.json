@@ -1,0 +1,22 @@
+{
+  "title": "Finanzen",
+  "dashboard": "Finanz-Dashboard",
+  "invoices": "Rechnungen",
+  "payments": "Zahlungen",
+  "expenses": "Ausgaben",
+  "reports": "Berichte",
+  "add_invoice": "Neue Rechnung",
+  "add_payment": "Neue Zahlung",
+  "add_expense": "Neue Ausgabe",
+  "overview": {"total_revenue": "Gesamtumsatz", "total_expenses": "Gesamtausgaben", "net_profit": "Nettogewinn", "pending_payments": "Ausstehende Zahlungen", "outstanding_invoices": "Ausstehende Rechnungen", "growth": "Wachstum"},
+  "invoice": {"title": "Rechnung", "invoice_number": "Rechnungsnummer", "invoice_date": "Rechnungsdatum", "due_date": "Fälligkeitsdatum", "patient": "Patient", "items": "Artikel", "amount": "Betrag", "tax": "Steuern", "total": "Gesamt", "status": "Status", "notes": "Notizen", "send_invoice": "Rechnung senden", "mark_as_paid": "Als bezahlt markieren", "regenerate": "PDF neu erstellen"},
+  "payment": {"title": "Zahlung", "date": "Zahlungsdatum", "method": "Zahlungsart", "amount": "Betrag", "reference": "Referenz", "notes": "Notizen", "status": "Status"},
+  "expense": {"title": "Ausgabe", "date": "Ausgabedatum", "category": "Kategorie", "description": "Beschreibung", "amount": "Betrag", "supplier": "Lieferant", "status": "Status", "receipt": "Beleg"},
+  "expense_category": {"supplies": "Versorgungsmaterialien", "equipment": "Ausrüstung", "maintenance": "Wartung", "utilities": "Versorgungsleistungen", "staff": "Personal", "rent": "Miete", "insurance": "Versicherung", "other": "Sonstiges"},
+  "payment_method": {"cash": "Bargeld", "credit_card": "Kreditkarte", "debit_card": "Debitkarte", "check": "Scheck", "transfer": "Überweisung", "pix": "PIX", "other": "Sonstiges"},
+  "status": {"draft": "Entwurf", "sent": "Gesendet", "pending": "Ausstehend", "paid": "Bezahlt", "partially_paid": "Teilweise bezahlt", "overdue": "Überfällig", "cancelled": "Storniert"},
+  "table": {"number": "Nummer", "patient": "Patient", "date": "Datum", "due_date": "Fälligkeitsdatum", "amount": "Betrag", "status": "Status", "actions": "Aktionen"},
+  "messages": {"invoice_created": "Rechnung erfolgreich erstellt", "invoice_updated": "Rechnung erfolgreich aktualisiert", "invoice_deleted": "Rechnung erfolgreich gelöscht", "invoice_sent": "Rechnung erfolgreich gesendet", "payment_recorded": "Zahlung erfolgreich registriert", "expense_added": "Ausgabe erfolgreich hinzugefügt", "no_invoices": "Keine Rechnungen gefunden"},
+  "filters": {"search_placeholder": "Nach Patient oder Nummer suchen", "filter_by_status": "Nach Status filtern", "filter_by_date_range": "Nach Zeitraum filtern"},
+  "period": {"today": "Heute", "this_week": "Diese Woche", "this_month": "Dieser Monat", "this_quarter": "Dieses Quartal", "this_year": "Dieses Jahr", "custom_range": "Benutzerdefinierter Bereich"}
+}

@@ -1,0 +1,81 @@
+{
+  "title": "Pacientes",
+  "add_patient": "Agregar Paciente",
+  "edit_patient": "Editar Paciente",
+  "view_details": "Ver Detalles",
+  "delete_patient": "Eliminar Paciente",
+  "patient_form": {
+    "personal_info": "Información Personal",
+    "contact_info": "Información de Contacto",
+    "address_info": "Dirección",
+    "medical_info": "Información Médica",
+    "insurance": "Seguro"
+  },
+  "fields": {
+    "name": "Nombre Completo",
+    "email": "Correo electrónico",
+    "phone": "Teléfono",
+    "cellphone": "Celular",
+    "date_of_birth": "Fecha de Nacimiento",
+    "cpf": "CPF",
+    "rg": "RG",
+    "gender": "Género",
+    "marital_status": "Estado Civil",
+    "profession": "Profesión",
+    "street": "Calle",
+    "number": "Número",
+    "complement": "Complemento",
+    "neighborhood": "Barrio",
+    "city": "Ciudad",
+    "state": "Provincia",
+    "postal_code": "Código Postal",
+    "country": "País",
+    "insurance_company": "Compañía de Seguros",
+    "insurance_plan": "Plan",
+    "insurance_number": "Número de Póliza",
+    "medical_history": "Historial Médico",
+    "allergies": "Alergias",
+    "medications": "Medicamentos",
+    "notes": "Notas"
+  },
+  "gender": {
+    "male": "Masculino",
+    "female": "Femenino",
+    "other": "Otro"
+  },
+  "marital_status": {
+    "single": "Soltero",
+    "married": "Casado",
+    "divorced": "Divorciado",
+    "widowed": "Viudo",
+    "domestic_partnership": "Unión de Hecho"
+  },
+  "filters": {
+    "search_placeholder": "Buscar por nombre, correo electrónico o CPF",
+    "all_status": "Todos los Estados",
+    "active": "Activo",
+    "inactive": "Inactivo"
+  },
+  "table": {
+    "name": "Nombre",
+    "email": "Correo electrónico",
+    "phone": "Teléfono",
+    "date_of_birth": "Fecha de Nacimiento",
+    "age": "Edad",
+    "status": "Estado",
+    "last_visit": "Última Visita",
+    "actions": "Acciones"
+  },
+  "status": {
+    "active": "Activo",
+    "inactive": "Inactivo",
+    "archived": "Archivado"
+  },
+  "messages": {
+    "patient_created": "Paciente creado con éxito",
+    "patient_updated": "Paciente actualizado con éxito",
+    "patient_deleted": "Paciente eliminado con éxito",
+    "no_patients": "No se encontraron pacientes",
+    "confirm_delete": "¿Está seguro de que desea eliminar este paciente?"
+  }
+}

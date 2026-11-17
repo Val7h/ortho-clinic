@@ -1,0 +1,81 @@
+{
+  "title": "Pacientes",
+  "add_patient": "Adicionar Paciente",
+  "edit_patient": "Editar Paciente",
+  "view_details": "Ver Detalhes",
+  "delete_patient": "Deletar Paciente",
+  "patient_form": {
+    "personal_info": "Informações Pessoais",
+    "contact_info": "Informações de Contato",
+    "address_info": "Endereço",
+    "medical_info": "Informações Médicas",
+    "insurance": "Seguro"
+  },
+  "fields": {
+    "name": "Nome Completo",
+    "email": "E-mail",
+    "phone": "Telefone",
+    "cellphone": "Celular",
+    "date_of_birth": "Data de Nascimento",
+    "cpf": "CPF",
+    "rg": "RG",
+    "gender": "Gênero",
+    "marital_status": "Estado Civil",
+    "profession": "Profissão",
+    "street": "Rua",
+    "number": "Número",
+    "complement": "Complemento",
+    "neighborhood": "Bairro",
+    "city": "Cidade",
+    "state": "Estado",
+    "postal_code": "CEP",
+    "country": "País",
+    "insurance_company": "Seguradora",
+    "insurance_plan": "Plano",
+    "insurance_number": "Número da Apólice",
+    "medical_history": "Histórico Médico",
+    "allergies": "Alergias",
+    "medications": "Medicamentos",
+    "notes": "Observações"
+  },
+  "gender": {
+    "male": "Masculino",
+    "female": "Feminino",
+    "other": "Outro"
+  },
+  "marital_status": {
+    "single": "Solteiro",
+    "married": "Casado",
+    "divorced": "Divorciado",
+    "widowed": "Viúvo",
+    "domestic_partnership": "União Estável"
+  },
+  "filters": {
+    "search_placeholder": "Buscar por nome, e-mail ou CPF",
+    "all_status": "Todos os Status",
+    "active": "Ativo",
+    "inactive": "Inativo"
+  },
+  "table": {
+    "name": "Nome",
+    "email": "E-mail",
+    "phone": "Telefone",
+    "date_of_birth": "Data de Nascimento",
+    "age": "Idade",
+    "status": "Status",
+    "last_visit": "Última Visita",
+    "actions": "Ações"
+  },
+  "status": {
+    "active": "Ativo",
+    "inactive": "Inativo",
+    "archived": "Arquivado"
+  },
+  "messages": {
+    "patient_created": "Paciente criado com sucesso",
+    "patient_updated": "Paciente atualizado com sucesso",
+    "patient_deleted": "Paciente deletado com sucesso",
+    "no_patients": "Nenhum paciente encontrado",
+    "confirm_delete": "Tem certeza que deseja deletar este paciente?"
+  }
+}

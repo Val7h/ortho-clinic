@@ -1,0 +1,6 @@
+{
+  "main": {"dashboard": "Dashboard", "patients": "Patienten", "consultations": "Konsultationen", "calendar": "Kalender", "financial": "Finanzen", "clinics": "Kliniken", "plans": "Pläne", "documents": "Dokumente", "whatsapp": "WhatsApp", "settings": "Einstellungen", "users": "Benutzer", "reports": "Berichte"},
+  "submenu": {"my_profile": "Mein Profil", "account_settings": "Kontoeinstellungen", "general_settings": "Allgemeine Einstellungen", "help": "Hilfe", "documentation": "Dokumentation", "logout": "Abmelden"},
+  "breadcrumb": {"home": "Startseite"},
+  "mobile": {"menu": "Menü", "close": "Schließen"}
+}

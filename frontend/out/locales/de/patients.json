@@ -1,0 +1,15 @@
+{
+  "title": "Patienten",
+  "add_patient": "Patient hinzufügen",
+  "edit_patient": "Patient bearbeiten",
+  "view_details": "Details anzeigen",
+  "delete_patient": "Patient löschen",
+  "patient_form": {"personal_info": "Persönliche Daten", "contact_info": "Kontaktinformationen", "address_info": "Adresse", "medical_info": "Medizinische Informationen", "insurance": "Versicherung"},
+  "fields": {"name": "Vollständiger Name", "email": "E-Mail", "phone": "Telefon", "cellphone": "Mobiltelefon", "date_of_birth": "Geburtsdatum", "cpf": "CPF", "rg": "RG", "gender": "Geschlecht", "marital_status": "Familienstand", "profession": "Beruf", "street": "Straße", "number": "Nummer", "complement": "Ergänzung", "neighborhood": "Nachbarschaft", "city": "Stadt", "state": "Bundesland", "postal_code": "Postleitzahl", "country": "Land", "insurance_company": "Versicherungsgesellschaft", "insurance_plan": "Plan", "insurance_number": "Richtliniennummer", "medical_history": "Krankengeschichte", "allergies": "Allergien", "medications": "Medikamente", "notes": "Notizen"},
+  "gender": {"male": "Männlich", "female": "Weiblich", "other": "Sonstiges"},
+  "marital_status": {"single": "Ledig", "married": "Verheiratet", "divorced": "Geschieden", "widowed": "Verwitwet", "domestic_partnership": "Eheähnliche Gemeinschaft"},
+  "filters": {"search_placeholder": "Nach Name, E-Mail oder CPF suchen", "all_status": "Alle Status", "active": "Aktiv", "inactive": "Inaktiv"},
+  "table": {"name": "Name", "email": "E-Mail", "phone": "Telefon", "date_of_birth": "Geburtsdatum", "age": "Alter", "status": "Status", "last_visit": "Letzter Besuch", "actions": "Aktionen"},
+  "status": {"active": "Aktiv", "inactive": "Inaktiv", "archived": "Archiviert"},
+  "messages": {"patient_created": "Patient erfolgreich erstellt", "patient_updated": "Patient erfolgreich aktualisiert", "patient_deleted": "Patient erfolgreich gelöscht", "no_patients": "Keine Patienten gefunden", "confirm_delete": "Sind Sie sicher, dass Sie diesen Patienten löschen möchten?"}
+}

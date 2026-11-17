@@ -1,0 +1,87 @@
+{
+  "title": "Consultas",
+  "add_consultation": "Nueva Consulta",
+  "edit_consultation": "Editar Consulta",
+  "view_details": "Ver Detalles",
+  "calendar_view": "Ver Calendario",
+  "agenda": "Agenda",
+  "consultation_form": {
+    "basic_info": "Información Básica",
+    "patient_info": "Información del Paciente",
+    "medical_info": "Información Médica",
+    "attachments": "Archivos Adjuntos"
+  },
+  "fields": {
+    "patient": "Paciente",
+    "doctor": "Médico",
+    "date": "Fecha",
+    "time": "Hora",
+    "duration": "Duración",
+    "room": "Sala",
+    "type": "Tipo",
+    "reason": "Razón",
+    "notes": "Notas",
+    "status": "Estado",
+    "confirmed": "Confirmada",
+    "price": "Precio",
+    "payment_method": "Método de Pago",
+    "payment_status": "Estado de Pago",
+    "description": "Descripción",
+    "diagnosis": "Diagnóstico",
+    "treatment_plan": "Plan de Tratamiento",
+    "next_consultation": "Próxima Consulta",
+    "observations": "Observaciones"
+  },
+  "type": {
+    "initial_consultation": "Consulta Inicial",
+    "follow_up": "Seguimiento",
+    "treatment": "Tratamiento",
+    "emergency": "Emergencia",
+    "review": "Revisión"
+  },
+  "status": {
+    "scheduled": "Programada",
+    "confirmed": "Confirmada",
+    "in_progress": "En Progreso",
+    "completed": "Completada",
+    "cancelled": "Cancelada",
+    "no_show": "No se Presentó"
+  },
+  "payment_status": {
+    "pending": "Pendiente",
+    "paid": "Pagada",
+    "partially_paid": "Parcialmente Pagada",
+    "refunded": "Reembolsada",
+    "overdue": "Vencida"
+  },
+  "table": {
+    "date": "Fecha",
+    "time": "Hora",
+    "patient": "Paciente",
+    "doctor": "Médico",
+    "type": "Tipo",
+    "status": "Estado",
+    "payment_status": "Pago",
+    "room": "Sala",
+    "actions": "Acciones"
+  },
+  "messages": {
+    "consultation_created": "Consulta creada con éxito",
+    "consultation_updated": "Consulta actualizada con éxito",
+    "consultation_deleted": "Consulta eliminada con éxito",
+    "consultation_confirmed": "Consulta confirmada",
+    "consultation_cancelled": "Consulta cancelada",
+    "no_consultations": "No se encontraron consultas",
+    "confirm_delete": "¿Está seguro de que desea eliminar esta consulta?",
+    "confirm_cancel": "¿Está seguro de que desea cancelar esta consulta?"
+  },
+  "filters": {
+    "search_placeholder": "Buscar por paciente o médico",
+    "filter_by_status": "Filtrar por Estado",
+    "filter_by_doctor": "Filtrar por Médico",
+    "filter_by_date": "Filtrar por Fecha",
+    "today": "Hoy",
+    "this_week": "Esta Semana",
+    "this_month": "Este Mes"
+  }
+}

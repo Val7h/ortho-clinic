@@ -1,0 +1,16 @@
+{
+  "title": "Konsultationen",
+  "add_consultation": "Neue Konsultation",
+  "edit_consultation": "Konsultation bearbeiten",
+  "view_details": "Details anzeigen",
+  "calendar_view": "Kalender anzeigen",
+  "agenda": "Agenda",
+  "consultation_form": {"basic_info": "Grundinformationen", "patient_info": "Patienteninformationen", "medical_info": "Medizinische Informationen", "attachments": "Anhänge"},
+  "fields": {"patient": "Patient", "doctor": "Zahnarzt", "date": "Datum", "time": "Zeit", "duration": "Dauer", "room": "Zimmer", "type": "Typ", "reason": "Grund", "notes": "Notizen", "status": "Status", "confirmed": "Bestätigt", "price": "Preis", "payment_method": "Zahlungsart", "payment_status": "Zahlungsstatus", "description": "Beschreibung", "diagnosis": "Diagnose", "treatment_plan": "Behandlungsplan", "next_consultation": "Nächste Konsultation", "observations": "Beobachtungen"},
+  "type": {"initial_consultation": "Erstberatung", "follow_up": "Nachverfolgung", "treatment": "Behandlung", "emergency": "Notfall", "review": "Überprüfung"},
+  "status": {"scheduled": "Geplant", "confirmed": "Bestätigt", "in_progress": "In Bearbeitung", "completed": "Abgeschlossen", "cancelled": "Storniert", "no_show": "Nicht erschienen"},
+  "payment_status": {"pending": "Ausstehend", "paid": "Bezahlt", "partially_paid": "Teilweise bezahlt", "refunded": "Erstattet", "overdue": "Überfällig"},
+  "table": {"date": "Datum", "time": "Zeit", "patient": "Patient", "doctor": "Zahnarzt", "type": "Typ", "status": "Status", "payment_status": "Zahlung", "room": "Zimmer", "actions": "Aktionen"},
+  "messages": {"consultation_created": "Konsultation erfolgreich erstellt", "consultation_updated": "Konsultation erfolgreich aktualisiert", "consultation_deleted": "Konsultation erfolgreich gelöscht", "consultation_confirmed": "Konsultation bestätigt", "consultation_cancelled": "Konsultation storniert", "no_consultations": "Keine Konsultationen gefunden", "confirm_delete": "Sind Sie sicher, dass Sie diese Konsultation löschen möchten?", "confirm_cancel": "Sind Sie sicher, dass Sie diese Konsultation stornieren möchten?"},
+  "filters": {"search_placeholder": "Nach Patient oder Zahnarzt suchen", "filter_by_status": "Nach Status filtern", "filter_by_doctor": "Nach Zahnarzt filtern", "filter_by_date": "Nach Datum filtern", "today": "Heute", "this_week": "Diese Woche", "this_month": "Dieser Monat"}
+}

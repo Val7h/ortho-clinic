@@ -1,0 +1,31 @@
+{
+  "main": {
+    "dashboard": "Dashboard",
+    "patients": "Patients",
+    "consultations": "Consultations",
+    "calendar": "Calendar",
+    "financial": "Financial",
+    "clinics": "Clinics",
+    "plans": "Plans",
+    "documents": "Documents",
+    "whatsapp": "WhatsApp",
+    "settings": "Settings",
+    "users": "Users",
+    "reports": "Reports"
+  },
+  "submenu": {
+    "my_profile": "My Profile",
+    "account_settings": "Account Settings",
+    "general_settings": "General Settings",
+    "help": "Help",
+    "documentation": "Documentation",
+    "logout": "Sign Out"
+  },
+  "breadcrumb": {
+    "home": "Home"
+  },
+  "mobile": {
+    "menu": "Menu",
+    "close": "Close"
+  }
+}

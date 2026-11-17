@@ -1,0 +1,49 @@
+{
+  "title": "Tableau de Bord",
+  "welcome": "Bienvenue à OrthoClinic",
+  "welcome_message": "Voici un résumé de votre clinique",
+  "quick_stats": {
+    "title": "Statistiques Rapides",
+    "total_patients": "Total des Patients",
+    "consultations_today": "Consultations Aujourd'hui",
+    "pending_approvals": "Approbations en Attente",
+    "revenue_month": "Revenus ce Mois",
+    "no_data": "Pas de données"
+  },
+  "upcoming_consultations": {
+    "title": "Prochaines Consultations",
+    "time": "Heure",
+    "patient": "Patient",
+    "doctor": "Médecin",
+    "room": "Salle",
+    "no_consultations": "Aucune consultation programmée pour aujourd'hui",
+    "view_all": "Voir Tous"
+  },
+  "recent_patients": {
+    "title": "Patients Récents",
+    "name": "Nom",
+    "email": "E-mail",
+    "phone": "Téléphone",
+    "last_visit": "Dernière Visite",
+    "no_patients": "Aucun patient récent"
+  },
+  "financial_overview": {
+    "title": "Aperçu Financier",
+    "total_revenue": "Revenus Totaux",
+    "pending_payments": "Paiements en Attente",
+    "expenses": "Dépenses",
+    "balance": "Solde"
+  },
+  "calendar": {
+    "title": "Calendrier",
+    "today": "Aujourd'hui",
+    "week": "Semaine",
+    "month": "Mois"
+  },
+  "notifications": {
+    "title": "Notifications",
+    "no_notifications": "Pas de notifications",
+    "mark_all_read": "Marquer tout comme lu",
+    "view_all": "Voir Tous"
+  }
+}

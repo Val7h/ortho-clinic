@@ -2519,8 +2519,7 @@ function EscribaNaFolha({ patientId, dataISO, textoHoje }: { patientId: number; 
         )}
         <p className="text-[10px] text-violet-500 dark:text-violet-400 mt-1.5">Feito pela IA a partir da conversa. Só leitura: o seu texto não muda.</p>
       </div>
-      {/* 17/11 (Valth): a caixa laranja "nao anotou" nao tem sentido — escondida. */}
-      {false && faltas.length > 0 && (
+      {faltas.length > 0 && (
         <div className="mt-1.5 rounded-md border border-orange-300 dark:border-orange-800 bg-orange-50 dark:bg-orange-950/30 px-2.5 py-1.5 text-[12px] text-orange-800 dark:text-orange-300">
           <p className="font-bold mb-0.5">⚠️ Ela falou, mas o senhor não anotou:</p>
           {faltas.map((f, i) => <p key={i}>• {f.length > 90 ? f.slice(0, 88) + "…" : f}</p>)}

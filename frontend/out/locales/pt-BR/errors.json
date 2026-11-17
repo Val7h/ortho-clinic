@@ -1,0 +1,64 @@
+{
+  "error": "Erro",
+  "errors": {
+    "400": "Requisição Inválida",
+    "401": "Não Autorizado",
+    "403": "Acesso Proibido",
+    "404": "Não Encontrado",
+    "409": "Conflito",
+    "422": "Entidade Não Processável",
+    "429": "Muitas Requisições",
+    "500": "Erro Interno do Servidor",
+    "502": "Gateway Inválido",
+    "503": "Serviço Indisponível",
+    "504": "Tempo Limite Expirado",
+    "generic": "Erro desconhecido. Por favor, tente novamente.",
+    "network": "Erro de conexão. Verifique sua internet.",
+    "timeout": "Tempo limite de requisição expirado."
+  },
+  "validation": {
+    "required_field": "Este campo é obrigatório",
+    "invalid_email": "E-mail inválido",
+    "invalid_phone": "Telefone inválido",
+    "invalid_cpf": "CPF inválido",
+    "invalid_date": "Data inválida",
+    "password_too_short": "Senha muito curta",
+    "password_mismatch": "Senhas não correspondem",
+    "email_already_exists": "Este e-mail já está registrado",
+    "minimum_length": "Deve ter no mínimo {{count}} caracteres",
+    "maximum_length": "Deve ter no máximo {{count}} caracteres",
+    "pattern_mismatch": "Formato inválido",
+    "invalid_number": "Número inválido"
+  },
+  "auth": {
+    "unauthorized": "Você não tem permissão para acessar este recurso",
+    "session_expired": "Sua sessão expirou. Por favor, faça login novamente",
+    "invalid_credentials": "E-mail ou senha inválidos",
+    "account_locked": "Sua conta foi bloqueada. Contate o suporte",
+    "account_disabled": "Sua conta foi desativada",
+    "email_not_verified": "Por favor, verifique seu e-mail",
+    "two_factor_required": "Autenticação de dois fatores necessária",
+    "invalid_token": "Token inválido ou expirado"
+  },
+  "data": {
+    "not_found": "Recurso não encontrado",
+    "already_exists": "Este recurso já existe",
+    "cannot_delete": "Não é possível deletar este recurso",
+    "cannot_update": "Não é possível atualizar este recurso",
+    "conflict": "Conflito ao processar dados",
+    "invalid_operation": "Operação inválida"
+  },
+  "file": {
+    "upload_failed": "Erro ao fazer upload do arquivo",
+    "file_too_large": "Arquivo muito grande",
+    "invalid_file_type": "Tipo de arquivo inválido",
+    "file_not_found": "Arquivo não encontrado",
+    "download_failed": "Erro ao baixar o arquivo"
+  },
+  "messages": {
+    "try_again": "Por favor, tente novamente",
+    "contact_support": "Contate o suporte para ajuda",
+    "go_back": "Voltar",
+    "reload_page": "Recarregar página"
+  }
+}

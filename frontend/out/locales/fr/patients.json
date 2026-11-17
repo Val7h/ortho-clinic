@@ -1,0 +1,81 @@
+{
+  "title": "Patients",
+  "add_patient": "Ajouter un Patient",
+  "edit_patient": "Modifier le Patient",
+  "view_details": "Voir les Détails",
+  "delete_patient": "Supprimer le Patient",
+  "patient_form": {
+    "personal_info": "Informations Personnelles",
+    "contact_info": "Informations de Contact",
+    "address_info": "Adresse",
+    "medical_info": "Informations Médicales",
+    "insurance": "Assurance"
+  },
+  "fields": {
+    "name": "Nom Complet",
+    "email": "E-mail",
+    "phone": "Téléphone",
+    "cellphone": "Téléphone Mobile",
+    "date_of_birth": "Date de Naissance",
+    "cpf": "CPF",
+    "rg": "RG",
+    "gender": "Genre",
+    "marital_status": "État Civil",
+    "profession": "Profession",
+    "street": "Rue",
+    "number": "Numéro",
+    "complement": "Complément",
+    "neighborhood": "Quartier",
+    "city": "Ville",
+    "state": "État",
+    "postal_code": "Code Postal",
+    "country": "Pays",
+    "insurance_company": "Compagnie d'Assurance",
+    "insurance_plan": "Plan",
+    "insurance_number": "Numéro de Polka",
+    "medical_history": "Historique Médical",
+    "allergies": "Allergies",
+    "medications": "Médicaments",
+    "notes": "Notes"
+  },
+  "gender": {
+    "male": "Homme",
+    "female": "Femme",
+    "other": "Autre"
+  },
+  "marital_status": {
+    "single": "Célibataire",
+    "married": "Marié",
+    "divorced": "Divorcé",
+    "widowed": "Veuf",
+    "domestic_partnership": "Union de Fait"
+  },
+  "filters": {
+    "search_placeholder": "Rechercher par nom, e-mail ou CPF",
+    "all_status": "Tous les Statuts",
+    "active": "Actif",
+    "inactive": "Inactif"
+  },
+  "table": {
+    "name": "Nom",
+    "email": "E-mail",
+    "phone": "Téléphone",
+    "date_of_birth": "Date de Naissance",
+    "age": "Âge",
+    "status": "Statut",
+    "last_visit": "Dernière Visite",
+    "actions": "Actions"
+  },
+  "status": {
+    "active": "Actif",
+    "inactive": "Inactif",
+    "archived": "Archivé"
+  },
+  "messages": {
+    "patient_created": "Patient créé avec succès",
+    "patient_updated": "Patient mis à jour avec succès",
+    "patient_deleted": "Patient supprimé avec succès",
+    "no_patients": "Aucun patient trouvé",
+    "confirm_delete": "Êtes-vous sûr de vouloir supprimer ce patient?"
+  }
+}

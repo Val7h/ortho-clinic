@@ -1,0 +1,87 @@
+{
+  "title": "Consultations",
+  "add_consultation": "Nouvelle Consultation",
+  "edit_consultation": "Modifier la Consultation",
+  "view_details": "Voir les Détails",
+  "calendar_view": "Voir Calendrier",
+  "agenda": "Agenda",
+  "consultation_form": {
+    "basic_info": "Informations de Base",
+    "patient_info": "Informations du Patient",
+    "medical_info": "Informations Médicales",
+    "attachments": "Pièces Jointes"
+  },
+  "fields": {
+    "patient": "Patient",
+    "doctor": "Médecin",
+    "date": "Date",
+    "time": "Heure",
+    "duration": "Durée",
+    "room": "Salle",
+    "type": "Type",
+    "reason": "Raison",
+    "notes": "Notes",
+    "status": "Statut",
+    "confirmed": "Confirmée",
+    "price": "Prix",
+    "payment_method": "Mode de Paiement",
+    "payment_status": "Statut du Paiement",
+    "description": "Description",
+    "diagnosis": "Diagnostic",
+    "treatment_plan": "Plan de Traitement",
+    "next_consultation": "Prochaine Consultation",
+    "observations": "Observations"
+  },
+  "type": {
+    "initial_consultation": "Consultation Initiale",
+    "follow_up": "Suivi",
+    "treatment": "Traitement",
+    "emergency": "Urgence",
+    "review": "Examen"
+  },
+  "status": {
+    "scheduled": "Programmée",
+    "confirmed": "Confirmée",
+    "in_progress": "En Cours",
+    "completed": "Terminée",
+    "cancelled": "Annulée",
+    "no_show": "Absent"
+  },
+  "payment_status": {
+    "pending": "En Attente",
+    "paid": "Payée",
+    "partially_paid": "Partiellement Payée",
+    "refunded": "Remboursée",
+    "overdue": "Échue"
+  },
+  "table": {
+    "date": "Date",
+    "time": "Heure",
+    "patient": "Patient",
+    "doctor": "Médecin",
+    "type": "Type",
+    "status": "Statut",
+    "payment_status": "Paiement",
+    "room": "Salle",
+    "actions": "Actions"
+  },
+  "messages": {
+    "consultation_created": "Consultation créée avec succès",
+    "consultation_updated": "Consultation mise à jour avec succès",
+    "consultation_deleted": "Consultation supprimée avec succès",
+    "consultation_confirmed": "Consultation confirmée",
+    "consultation_cancelled": "Consultation annulée",
+    "no_consultations": "Aucune consultation trouvée",
+    "confirm_delete": "Êtes-vous sûr de vouloir supprimer cette consultation?",
+    "confirm_cancel": "Êtes-vous sûr de vouloir annuler cette consultation?"
+  },
+  "filters": {
+    "search_placeholder": "Rechercher par patient ou médecin",
+    "filter_by_status": "Filtrer par Statut",
+    "filter_by_doctor": "Filtrer par Médecin",
+    "filter_by_date": "Filtrer par Date",
+    "today": "Aujourd'hui",
+    "this_week": "Cette Semaine",
+    "this_month": "Ce Mois"
+  }
+}
