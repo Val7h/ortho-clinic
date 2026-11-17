@@ -2515,11 +2515,12 @@ function EscribaNaFolha({ patientId, dataISO, textoHoje }: { patientId: number; 
         ) : linhas.length === 0 ? (
           <p className="text-[12px] text-violet-500 dark:text-violet-400">Tudo o que o Escriba ouviu já está na sua anamnese.</p>
         ) : (
-          <div className="space-y-1">{linhas.map((l, i) => <p key={i} className="text-[12.5px] leading-snug text-violet-900 dark:text-violet-200">{l}</p>)}</div>
+          <div className="space-y-1">{linhas.map((l, i) => <LinhaEscriba key={i} l={l} />)}</div>
         )}
         <p className="text-[10px] text-violet-500 dark:text-violet-400 mt-1.5">Feito pela IA a partir da conversa. Só leitura: o seu texto não muda.</p>
       </div>
-      {faltas.length > 0 && (
+      {/* 17/11 (Valth): a caixa laranja "nao anotou" nao tem sentido — escondida. */}
+      {false && faltas.length > 0 && (
         <div className="mt-1.5 rounded-md border border-orange-300 dark:border-orange-800 bg-orange-50 dark:bg-orange-950/30 px-2.5 py-1.5 text-[12px] text-orange-800 dark:text-orange-300">
           <p className="font-bold mb-0.5">⚠️ Ela falou, mas o senhor não anotou:</p>
           {faltas.map((f, i) => <p key={i}>• {f.length > 90 ? f.slice(0, 88) + "…" : f}</p>)}
@@ -2539,6 +2540,29 @@ function EscribaNaFolha({ patientId, dataISO, textoHoje }: { patientId: number; 
         </div>
       )}
     </div>
+  );
+}
+
+// 17/11 (Valth): poucas cores para achar rápido cada parte da anamnese do Escriba.
+// Rótulo em negrito e colorido; o texto em tom neutro.
+const COR_ROTULO_ESCRIBA: Array<[RegExp, string]> = [
+  [/^queixa principal/i, "text-violet-800 dark:text-violet-300"],
+  [/^hist[oó]ria da doen/i, "text-violet-800 dark:text-violet-300"],
+  [/^exames trazidos/i, "text-amber-700 dark:text-amber-300"],
+  [/^exame f[ií]sico/i, "text-sky-700 dark:text-sky-300"],
+  [/^hip[oó]tese/i, "text-rose-700 dark:text-rose-300"],
+  [/^prescri[cç][aã]o/i, "text-emerald-700 dark:text-emerald-300"],
+  [/^exames solicitados/i, "text-amber-700 dark:text-amber-300"],
+];
+function LinhaEscriba({ l }: { l: string }) {
+  const i = l.indexOf(": ");
+  if (i <= 0 || i > 45) return <p className="text-[12.5px] leading-snug text-slate-700 dark:text-slate-200">{l}</p>;
+  const rot = l.slice(0, i), txt = l.slice(i + 2);
+  const cor = COR_ROTULO_ESCRIBA.find(([re]) => re.test(rot))?.[1] ?? "text-violet-800 dark:text-violet-300";
+  return (
+    <p className="text-[12.5px] leading-snug text-slate-700 dark:text-slate-200">
+      <span className={`font-bold uppercase text-[11px] tracking-wide ${cor}`}>{rot}:</span> {txt}
+    </p>
   );
 }
 
