@@ -407,8 +407,12 @@ def _json(txt: Optional[str]):
 def _pedido_out(p: Optional[EscribaPedido]) -> Optional[dict]:
     if not p:
         return None
-    return {"id": p.id, "tipo": p.tipo, "estado": p.estado, "resultado": p.resultado,
-            "criado_em": _iso(p.criado_em), "feito_em": _iso(p.feito_em)}
+    out = {"id": p.id, "tipo": p.tipo, "estado": p.estado, "resultado": p.resultado,
+           "criado_em": _iso(p.criado_em), "feito_em": _iso(p.feito_em)}
+    docs = _json(p.dados).get("documentos") if p.tipo == "gerar_documento" else None
+    if docs:
+        out["documentos"] = docs
+    return out
 
 
 def _ultimo_pedido(db: Session, sug_id: int) -> Optional[EscribaPedido]:
@@ -568,6 +572,99 @@ def pedir_guia(sug_id: int, db: Session = Depends(get_db), u: User = Depends(req
     return _pedido_out(novo)
 
 
+# ── 17/11 02h10 (Valth): "imprimir tudo de hoje" com TODOS os botoes ──
+# "Durante a consulta vao aparecendo os botoes, e todos os botoes eu quero clicar em 'imprimir tudo de hoje'.
+#  Se uma das coisas eu nao tiver, ai eu desmarco la." Ao abrir o "Tudo de hoje", cada sugestao ainda nao feita
+# nem descartada vira um pedido "gerar_documento" para o PC (o PC grava o documento de verdade pelo consulta.py).
+# Idempotente por sugestao. Procedimento continua pela aba (como hoje). Atestado so com os dias ditos.
+
+GERAVEIS = {"exame", "fisio", "receita", "encaminhamento", "atestado"}
+PC_VIVO_S = 30                      # a ponte busca pedidos a cada 3 s; 30 s sem buscar = PC desligado
+_PONTE_VISTA: dict = {}             # org -> ultima vez que a ponte buscou pedidos (1 worker no Render)
+NAO_GERA = "NAO GERA:"              # o PC recusou por falta de dado dito: nao tenta de novo sozinho
+
+
+def _motivo_pulo(x: EscribaSugestao) -> Optional[str]:
+    d = _json(x.dados)
+    if x.tipo == "procedimento":
+        return "Procedimento: faça pela aba, como hoje"
+    if x.tipo not in GERAVEIS:
+        return "Sem documento automático"
+    if x.tipo == "atestado" and not d.get("dias"):
+        return "Atestado: os dias não foram ditos"
+    return None
+
+
+def _pedido_ativo(db: Session, sug_id: int) -> Optional[EscribaPedido]:
+    """Ultimo pedido (guia do botao ou gerar_documento) desta sugestao."""
+    return (db.query(EscribaPedido).filter(EscribaPedido.sugestao_id == sug_id,
+                                           EscribaPedido.tipo.in_(("guia", "gerar_documento")))
+            .order_by(EscribaPedido.id.desc()).first())
+
+
+def _pc_vivo(org: int) -> bool:
+    v = _PONTE_VISTA.get(org)
+    return bool(v and (_agora() - v).total_seconds() < PC_VIVO_S)
+
+
+def _gerar_out(db: Session, e: WaitingRoomEntry, org: int) -> dict:
+    sugs = (db.query(EscribaSugestao).filter(EscribaSugestao.entry_id == e.id, EscribaSugestao.estado != "sumiu")
+            .order_by(EscribaSugestao.id).all())
+    itens, andando, cont = [], False, {"gerando": 0, "feitos": 0, "falhas": 0, "pulados": 0}
+    for x in sugs:
+        if x.estado == "descartada":
+            continue
+        ped = _pedido_ativo(db, x.id)
+        motivo = None if (ped or x.estado == "feita") else _motivo_pulo(x)
+        if ped and ped.estado in ("pendente", "pego"):
+            andando = True
+            cont["gerando"] += 1
+        elif ped and ped.estado == "falhou" and x.estado != "feita":
+            cont["falhas"] += 1
+        elif (ped and ped.estado == "feito") or x.estado == "feita":
+            cont["feitos"] += 1
+        elif motivo:
+            cont["pulados"] += 1
+        itens.append({"sugestao_id": x.id, "tipo": x.tipo, "rotulo": x.rotulo, "estado": x.estado,
+                      "pedido": _pedido_out(ped), "pulada": motivo})
+    return {"entry_id": e.id, "pc_vivo": _pc_vivo(org), "terminado": not andando, **cont, "itens": itens}
+
+
+@router.post("/sugestoes/entrada/{entry_id}/gerar-pendentes")
+def gerar_pendentes(entry_id: int, db: Session = Depends(get_db), u: User = Depends(require_doctor)):
+    """Abre o "Tudo de hoje": cria 1 pedido gerar_documento por sugestao nova/aberta. Repetir nao duplica:
+    sugestao com pedido andando ou feito fica como esta; falha por erro passageiro tenta de novo."""
+    e, p = _entrada_da_org(db, entry_id, u)
+    org = p.organization_id or 1
+    q = (db.query(EscribaSugestao).filter(EscribaSugestao.entry_id == e.id,
+                                          EscribaSugestao.estado.in_(("nova", "aberta")))
+         .order_by(EscribaSugestao.id))
+    novos = 0
+    for x in q.all():
+        if _motivo_pulo(x):
+            continue
+        ja = _pedido_ativo(db, x.id)
+        if ja and (ja.estado != "falhou" or (ja.resultado or "").startswith(NAO_GERA)):
+            continue
+        dados = {"sugestao_id": x.id, "tipo": x.tipo, "rotulo": x.rotulo, "frase": x.frase, "conferida": bool(x.conferida),
+                 "dados": _json(x.dados), "convenio": p.insurance, "convenio_plano": p.insurance_plan,
+                 "particular": eh_particular(p.insurance), "clinic_id": e.clinic_id,
+                 "data": (e.entry_date or today_br()).isoformat()}
+        db.add(EscribaPedido(organization_id=x.organization_id or org, patient_id=p.id, entry_id=e.id, sugestao_id=x.id,
+                             tipo="gerar_documento", dados=json.dumps(dados, ensure_ascii=False), doctor_user_id=u.id))
+        novos += 1
+    if novos:
+        db.commit()
+    return {**_gerar_out(db, e, org), "novos": novos}
+
+
+@router.get("/sugestoes/entrada/{entry_id}/gerar-pendentes")
+def gerar_pendentes_estado(entry_id: int, db: Session = Depends(get_db), u: User = Depends(require_doctor)):
+    """A tela acompanha ate terminar (terminado=True) ou ate desistir (PC desligado)."""
+    e, p = _entrada_da_org(db, entry_id, u)
+    return _gerar_out(db, e, p.organization_id or 1)
+
+
 @router.get("/metrica")
 def metrica(dias: int = 30, db: Session = Depends(get_db), u: User = Depends(require_doctor)):
     """Por dia: usadas sem mudar, mudadas, descartadas, total. Base para decidir o passo 2."""
@@ -595,6 +692,7 @@ def metrica(dias: int = 30, db: Session = Depends(get_db), u: User = Depends(req
 @router.get("/ponte/pedidos")
 def ponte_pedidos(db: Session = Depends(get_db), org: int = Depends(exigir_ponte)):
     """Pedidos pendentes (e os pegos ha mais de 10 min, que o PC largou no meio)."""
+    _PONTE_VISTA[org] = _agora()
     velho = _agora() - timedelta(minutes=10)
     ps = (db.query(EscribaPedido).filter(EscribaPedido.organization_id == org,
                                          EscribaPedido.criado_em >= _agora() - timedelta(hours=14))
@@ -626,6 +724,8 @@ def ponte_pegar_pedido(pid: int, db: Session = Depends(get_db), org: int = Depen
 class ResultadoIn(BaseModel):
     ok: bool
     texto: str = ""
+    # 17/11 (gerar pendentes): o que o PC gravou, ex. [{"kind": "receita", "id": 12}] (ou o que ja existia hoje)
+    documentos: List[dict] = []
 
 
 @router.post("/ponte/pedidos/{pid}/resultado")
@@ -636,6 +736,16 @@ def ponte_resultado_pedido(pid: int, body: ResultadoIn, db: Session = Depends(ge
     p.estado = "feito" if body.ok else "falhou"
     p.resultado = (body.texto or "")[:2000]
     p.feito_em = _agora()
+    if p.tipo == "gerar_documento":
+        d = _json(p.dados)
+        d["documentos"] = [{"kind": str(x.get("kind") or "")[:20], "id": x.get("id"),
+                            "ja_existia": bool(x.get("ja_existia"))} for x in (body.documentos or [])[:10]
+                           if isinstance(x, dict)]
+        p.dados = json.dumps(d, ensure_ascii=False)
+        x = db.query(EscribaSugestao).filter(EscribaSugestao.id == p.sugestao_id).first() if p.sugestao_id else None
+        # documento pronto (ou ja existia hoje): o botao fica "feito", igual ao clique do medico
+        if body.ok and x and x.estado in ("nova", "aberta"):
+            x.estado, x.feita_em, x.sem_mudanca = "feita", _agora(), True
     db.commit()
     db.refresh(p)
     return _pedido_out(p)
@@ -701,3 +811,68 @@ def ponte_resumo(sid: int, body: ResumoPonteIn, db: Session = Depends(get_db), o
         db.rollback()
         raise HTTPException(409, "Conflito; tente de novo")
     return {"gravado": True}
+
+
+# ── 17/11 02h35 (Valth): avisos automaticos e respostas no "Assistente ao vivo", escritos pelo PC ──
+# A ponte le a ficha (alergia, remedios em uso, comorbidades, idade) e as mensagens do dia, e grava como 'ia'.
+# Mesmo filtro de organizacao da chave da ponte (_sessao_da_ponte).
+
+def _idade(nasc) -> Optional[int]:
+    if not nasc:
+        return None
+    h = today_br()
+    return h.year - nasc.year - ((h.month, h.day) < (nasc.month, nasc.day))
+
+
+@router.get("/ponte/sessoes/{sid}/ficha")
+def ponte_ficha(sid: int, db: Session = Depends(get_db), org: int = Depends(exigir_ponte)):
+    """So o que os avisos precisam: alergia, remedios em uso, comorbidades, idade, sexo e convenio."""
+    s = _sessao_da_ponte(db, sid, org)
+    p = db.query(Patient).filter(Patient.id == s.patient_id).first()
+    if not p:
+        raise HTTPException(404, "Paciente não encontrado")
+    return {"patient_id": p.id, "allergies": p.allergies or p.alergias or "", "current_medications": p.current_medications or "",
+            "medicacoes_uso_continuo": p.medicacoes_uso_continuo or [], "comorbidades": p.comorbidades or {},
+            "chronic_conditions": p.chronic_conditions or "", "contraindicacoes": p.contraindicacoes or "",
+            "cids": p.cids or [], "idade": _idade(p.birthdate), "sexo": p.gender,
+            "peso_kg": float(p.peso_kg) if p.peso_kg is not None else None,
+            "convenio": " ".join(x for x in (p.insurance, p.insurance_plan) if x) or None}
+
+
+@router.get("/ponte/sessoes/{sid}/assistente")
+def ponte_assistente_listar(sid: int, db: Session = Depends(get_db), org: int = Depends(exigir_ponte)):
+    from models.assistente import AssistenteMensagem
+    s = _sessao_da_ponte(db, sid, org)
+    q = (db.query(AssistenteMensagem).filter(AssistenteMensagem.patient_id == s.patient_id,
+                                             AssistenteMensagem.data == _dia_da_sessao(db, s))
+         .order_by(AssistenteMensagem.id).limit(300))
+    return [{"id": m.id, "autor": m.autor, "texto": m.texto, "criado_em": _iso(m.criado_em)} for m in q.all()]
+
+
+class AssistentePonteIn(BaseModel):
+    texto: str
+    # 'medico' so para a pergunta FALADA ("assistente, ..."), que vem com o prefixo do microfone
+    autor: str = "ia"
+
+
+@router.post("/ponte/sessoes/{sid}/assistente")
+def ponte_assistente(sid: int, body: AssistentePonteIn, db: Session = Depends(get_db), org: int = Depends(exigir_ponte)):
+    """Grava como 'ia'. O mesmo texto no mesmo dia nao entra duas vezes (a ponte pode reiniciar)."""
+    from models.assistente import AssistenteMensagem
+    s = _sessao_da_ponte(db, sid, org)
+    texto = (body.texto or "").strip()[:4000]
+    if not texto:
+        raise HTTPException(422, "Texto vazio")
+    autor = body.autor if body.autor in ("ia", "medico") else "ia"
+    if autor == "medico" and not texto.startswith("🎙"):
+        raise HTTPException(422, "Pela ponte, 'medico' so a pergunta falada (prefixo do microfone)")
+    dia = _dia_da_sessao(db, s)
+    ja = (db.query(AssistenteMensagem).filter(AssistenteMensagem.patient_id == s.patient_id, AssistenteMensagem.data == dia,
+                                              AssistenteMensagem.autor == autor, AssistenteMensagem.texto == texto).first())
+    if ja:
+        return {"id": ja.id, "gravado": False}
+    m = AssistenteMensagem(organization_id=org, patient_id=s.patient_id, data=dia, autor=autor, texto=texto)
+    db.add(m)
+    db.commit()
+    db.refresh(m)
+    return {"id": m.id, "gravado": True}

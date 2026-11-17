@@ -17,7 +17,7 @@ import { AppointmentFormModal } from "@/components/AppointmentFormModal";
 import { lerCronoLimites, faixaDoCrono, editarCronoLimites, CronoLimites } from "@/lib/cronoLimites";
 import { serverNow } from "@/lib/servertime";
 import * as escriba from "@/lib/escribaGravador";
-import { anamnesisApi, api, patientsApi, consultationsApi, prescriptionsApi, prescriptionTemplatesApi, referralTemplatesApi, examsApi, evolutionApi, clinicApi, chatApi, reportsApi, leafletsApi, waitingRoomApi, remindersApi, medicamentosApi, printJobsApi, msgErro, escribaApi, EscribaResumo, escribaSugestoesApi, assistenteApi } from "@/lib/api";
+import { anamnesisApi, api, patientsApi, consultationsApi, prescriptionsApi, prescriptionTemplatesApi, referralTemplatesApi, examsApi, evolutionApi, clinicApi, chatApi, reportsApi, leafletsApi, waitingRoomApi, remindersApi, medicamentosApi, printJobsApi, msgErro, escribaApi, EscribaResumo, escribaSugestoesApi, EscribaGerar, assistenteApi } from "@/lib/api";
 import type { EscribaSugestao, EscribaSugestoes, EscribaSugTipo, AssistenteMsg } from "@/lib/api";
 import { formatDate, calcAge, hojeISO } from "@/lib/utils";
 
@@ -5391,6 +5391,44 @@ function TimbradoOficial({ clinic }: { clinic?: any }) {
 }
 
 // Local/data por extenso + bloco de assinatura (nunca quebra de página).
+// 17/11 (Valth: o encaminhamento de fisio saiu "pessimo graficamente"). Folha UNICA do encaminhamento:
+// aba (Salvar e imprimir / Reimprimir), "Tudo de hoje" e impressora da clinica (ReportSheet).
+// Titulo ENCAMINHAMENTO destacado; texto em CAIXA ALTA, letra grande (15 pt), uma informacao por linha.
+function linhasDoEncaminhamento(texto: string): string {
+  return (texto || "").replace(/\r/g, "").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+function EncaminhamentoFolha({ clinic, patient, dataISO, destino, colega, texto, cid }: {
+  clinic?: any; patient: any; dataISO?: string; destino?: string; colega?: string; texto: string; cid?: string;
+}) {
+  const corpo = linhasDoEncaminhamento(texto);
+  // o texto salvo ja traz "CID-10: ..." no fim; so acrescenta se ainda nao tem
+  const comCid = cid && !/CID-10\s*:/i.test(corpo) ? `${corpo}\nCID-10: ${cid}` : corpo;
+  const mostraDestino = !!destino && !/^\s*encaminho\b/i.test(corpo);
+  return (
+    <div style={{ fontFamily: "Arial, Helvetica, sans-serif", color: "#1a1a1a" }}>
+      <TimbradoOficial clinic={clinic} />
+      <p style={{ textAlign: "center", fontFamily: DOC_SERIF, fontSize: "21pt", fontWeight: 700, letterSpacing: "5px", textTransform: "uppercase", color: "#0F2D5E", margin: "4px 0 6px" }}>
+        Encaminhamento
+      </p>
+      <div style={{ width: "90px", borderTop: "2px solid #0F2D5E", margin: "0 auto 22px" }} />
+      <div style={{ fontSize: "12.5pt", lineHeight: 1.6, marginBottom: "22px", textTransform: "uppercase" }}>
+        <div><span style={{ color: "#555" }}>Paciente: </span><strong>{patient?.name}</strong></div>
+        {patient?.birth_date && <div><span style={{ color: "#555" }}>Nascimento: </span>{new Date(patient.birth_date + "T12:00:00").toLocaleDateString("pt-BR")}</div>}
+        {dataISO && <div><span style={{ color: "#555" }}>Data: </span>{formatDate(dataISO)}</div>}
+      </div>
+      {mostraDestino && (
+        <p style={{ margin: "0 0 14px", fontSize: "15pt", textTransform: "uppercase" }}>
+          <span style={{ color: "#555" }}>Encaminho para: </span><strong>{destino}</strong>
+        </p>
+      )}
+      {colega && <p style={{ margin: "0 0 12px", fontSize: "15pt", textTransform: "uppercase" }}>Prezado(a) Dr(a). <strong>{colega}</strong>,</p>}
+      <div style={{ whiteSpace: "pre-wrap", fontSize: "15pt", lineHeight: 1.75, textTransform: "uppercase", minHeight: "100px" }}>{comCid}</div>
+      <FechoOficial clinic={clinic} dataISO={dataISO} />
+    </div>
+  );
+}
+
 function FechoOficial({ clinic, dataISO }: { clinic?: any; dataISO?: string }) {
   return (
     <div style={{ pageBreakInside: "avoid", breakInside: "avoid" } as any}>
@@ -5605,6 +5643,52 @@ function CidExtras({ valores, onChange }: { valores: string[]; onChange: (v: str
   );
 }
 
+// 17/11 02h20 (Valth): encaminhamento de fisio do Escriba, uma informação por linha.
+function textoFisioEscriba(nome: string, d: any): string {
+  const hip = String(d.hipotese || d.diagnostico || "").trim().replace(/[.\s]+$/, "");
+  const n = Number(d.sessoes) > 0 ? Number(d.sessoes) : null;
+  return [
+    `Encaminho o(a) paciente ${(nome || "").trim().toUpperCase() || "_______"} para fisioterapia motora.`,
+    "Solicito fisioterapia motora.",
+    hip ? `Hipótese diagnóstica: ${hip}.` : "",
+    n ? `Número de sessões: ${n}.` : "",
+  ].filter(Boolean).join("\n");
+}
+
+// "M54.5" -> "M54.5 — Lombalgia (dor lombar baixa)" (descrição da lista da casa; sem ela, só o código)
+function cidComDescricao(c: string): string {
+  const cod = (c || "").trim().toUpperCase().match(/^[A-Z]\d{2}(\.\d{1,2})?/)?.[0];
+  if (!cod) return "";
+  if ((c || "").includes("—") || (c || "").includes(" - ")) return c.trim();
+  const e = ORTHO_CIDS.find((x) => x.code === cod);
+  return e ? `${cod} — ${e.label}` : cod;
+}
+
+// CID que casa com a hipótese DITA: 1ª palavra do nome do CID (ex.: "lombalgia", "gonartrose") na hipótese.
+// Mais de um candidato: desempata por bilateral/unilateral; se continuar ambíguo, não escolhe.
+function cidDaHipotese(hip: string): string {
+  const h = normTxt(hip || "");
+  if (!h.trim()) return "";
+  let cand = ORTHO_CIDS.filter((x) => { const w = normTxt(x.label).split(/[^a-z0-9]+/)[0]; return w.length >= 6 && h.includes(w); });
+  if (cand.length > 1) {
+    const bi = /bilateral|ambos|joelhos|quadris|ombros/.test(h);
+    const f = cand.filter((x) => (/bilateral/.test(normTxt(x.label)) === bi));
+    if (f.length) cand = f;
+  }
+  return cand.length === 1 ? `${cand[0].code} — ${cand[0].label}` : "";
+}
+
+// CID do topo da ficha só serve se for do mesmo assunto da hipótese (palavra do nome ou da região na hipótese).
+function cidCompativel(topo: string, hip: string): boolean {
+  const cod = (topo || "").trim().toUpperCase().match(/^[A-Z]\d{2}(\.\d{1,2})?/)?.[0];
+  const e = cod ? ORTHO_CIDS.find((x) => x.code === cod) : undefined;
+  const h = normTxt(hip || "");
+  if (!e || !h.trim()) return false;
+  const gen = new Set(["primaria", "unilateral", "bilateral", "sindrome", "outros", "outras", "atual", "antiga", "desgaste"]);
+  const palavras = normTxt(`${e.label} ${e.k || ""}`).split(/[^a-z0-9]+/).filter((w) => w.length >= 5 && !gen.has(w));
+  return palavras.some((w) => h.includes(w));
+}
+
 export function TabEncaminhamentos({ patient, clinic, patientId, prefill, onSalvoEscriba }: { patient: any; clinic?: any; patientId?: number; prefill?: PrefillEscriba | null; onSalvoEscriba?: AoSalvarEscriba }) {
   const pendenteEscriba = usePendenteEscriba(onSalvoEscriba);
   const [refType, setRefType] = useState("fisioterapia");
@@ -5718,19 +5802,37 @@ export function TabEncaminhamentos({ patient, clinic, patientId, prefill, onSalv
     } catch {}
   }, [draftKey]);
 
-  // 17/11 (fatia 3): botão do Escriba. Fisio: diagnóstico, CID se dito e nº de sessões; nunca técnica.
-  // O texto entra embaixo do que já houver; o CID só entra se a caixa de CID estiver vazia.
+  // 17/11 (fatia 3): botão do Escriba. Fisio: diagnóstico, CID e nº de sessões; nunca técnica.
+  // 17/11 02h20 (Valth, relatório 290): o texto saiu DUAS vezes e com o CID do topo (gonartrose) numa lombalgia.
+  // Agora: mesmo conteúdo na caixa = não mexe; outro conteúdo = pergunta e TROCA (nunca empilha).
+  // CID da fisio: o dito; senão o que casa com a hipótese dita; senão o do topo SÓ se for compatível; senão vazio.
   useEffect(() => {
     if (!prefill || (prefill.tipo !== "fisio" && prefill.tipo !== "encaminhamento")) return;
     const d = prefill.dados || {};
-    const novo = String(d.texto || "").trim();
+    const fisio = prefill.tipo === "fisio";
+    const novo = fisio ? textoFisioEscriba(patient?.name || "", d) : String(d.texto || "").trim();
     if (!novo) return;
-    if (prefill.tipo === "fisio") setRefType("fisioterapia");
+    if (fisio) { setRefType("fisioterapia"); setPhysioModality("Fisioterapia motora"); }
     else toast("Encaminhamento do Escriba: confira o destino.", { icon: "⚠️", duration: 5000 });
-    acrescentarNaCaixa(setText, novo);
-    if (d.cid) setTimeout(() => setCid((c) => (c || "").trim() ? c : d.cid), 120);
+    // espera o rascunho restaurado (mesma montagem) chegar na caixa antes de comparar
+    const t = setTimeout(() => {
+      const atual = (textRef.current?.value || "").trim();
+      const igual = normTxt(atual).replace(/\s+/g, " ") === normTxt(novo).replace(/\s+/g, " ");
+      const trocar = !igual && (!atual || window.confirm("Já há texto no encaminhamento. Trocar pelo do Escriba?"));
+      if (trocar) setText(novo);
+      if (!igual && !trocar) return; // ele quis manter o texto dele: CID também fica como está
+      if (fisio) {
+        const hip = String(d.hipotese || d.diagnostico || "");
+        const topo = Array.isArray(patient?.cids) && patient.cids[0] ? String(patient.cids[0]) : "";
+        const escolhido = cidComDescricao(String(d.cid || "")) || cidDaHipotese(hip) || (topo && cidCompativel(topo, hip) ? cidComDescricao(topo) : "");
+        setCid(escolhido);
+        setCidsExtras([]);
+        if (!escolhido) toast("CID do encaminhamento: nenhum casa com a hipótese dita. Escolha o CID.", { icon: "⚠️", duration: 7000 });
+      } else if (d.cid) setCid((c) => (c || "").trim() ? c : d.cid);
+    }, 180);
     if (d.aviso) toast(`⚠️ ${d.aviso}`, { duration: 6000 });
     pendenteEscriba.marcar(prefill.sugId, novo);
+    return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefill?.seq]);
 
@@ -5809,63 +5911,14 @@ export function TabEncaminhamentos({ patient, clinic, patientId, prefill, onSalv
   const filteredTemplates = REFERRAL_TEXT_TEMPLATES.filter(t => t.type === refType);
 
   const printContent = printData && (
-    // 10/08: mesmo papel timbrado do laudo e do pedido de exame.
-    <div style={{ fontFamily: "Arial, Helvetica, sans-serif", color: "#1a1a1a", fontSize: "13px" }}>
-      <TimbradoOficial clinic={clinic} />
-
-      <p style={{ textAlign: "center", fontFamily: DOC_SERIF, fontSize: "13px", fontWeight: 700, letterSpacing: "3px", textTransform: "uppercase", color: "#0F2D5E", margin: "0 0 16px" }}>
-        Encaminhamento médico
-      </p>
-
-      <div style={{ border: "1px solid #ddd", borderRadius: "3px", padding: "9px 12px", marginBottom: "16px", fontSize: "12px", lineHeight: 1.7 }}>
-        <div><span style={{ color: "#666" }}>Paciente: </span><strong>{patient?.name}</strong></div>
-        <div>
-          {patient?.birth_date && <><span style={{ color: "#666" }}>Nascimento: </span>{new Date(patient.birth_date + "T12:00:00").toLocaleDateString("pt-BR")}{"  ·  "}</>}
-          {(patient?.patient_insurance || patient?.insurance) && <><span style={{ color: "#666" }}>Convênio: </span>{patient?.patient_insurance || patient?.insurance}</>}
-        </div>
-        {patient?.phone && <div><span style={{ color: "#666" }}>Telefone: </span>{patient.phone}</div>}
-      </div>
-
-      <p style={{ margin: "0 0 14px", fontSize: "13px" }}>
-        <span style={{ color: "#666" }}>Encaminho para: </span><strong>{printData.typeLabel}</strong>
-      </p>
-
-      {printData.colleagueName && (
-        <p style={{ margin: "0 0 12px" }}>Prezado(a) Dr(a). <strong>{printData.colleagueName}</strong>,</p>
-      )}
-
-      <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.7, fontSize: "13px", minHeight: "120px", marginBottom: "8px" }}>
-        {printData.text}
-      </div>
-
-      {printData.cid && (
-        <p style={{ fontSize: "11.5px", color: "#444", margin: "14px 0 0" }}>
-          <span style={{ color: "#666" }}>Diagnóstico / hipótese (CID-10): </span>{printData.cid}
-        </p>
-      )}
-
-      <FechoOficial clinic={clinic} />
-    </div>
+    // 10/08: mesmo papel timbrado do laudo e do pedido de exame. 17/11: folha unica (EncaminhamentoFolha).
+    <EncaminhamentoFolha clinic={clinic} patient={patient} dataISO={hojeISO()} destino={printData.typeLabel}
+      colega={printData.colleagueName} texto={printData.text} cid={printData.cid} />
   );
 
   const reimprimirContent = useMemo(() => {
     if (!reimprimir) return null;
-    return (
-      <div style={{ fontFamily: "Arial, Helvetica, sans-serif", color: "#1a1a1a", fontSize: "13px" }}>
-        <TimbradoOficial clinic={clinic} />
-        <p style={{ textAlign: "center", fontFamily: DOC_SERIF, fontSize: "13px", fontWeight: 700, letterSpacing: "3px", textTransform: "uppercase", color: "#0F2D5E", margin: "0 0 16px" }}>
-          Encaminhamento médico
-        </p>
-        <div style={{ border: "1px solid #ddd", borderRadius: "3px", padding: "9px 12px", marginBottom: "16px", fontSize: "12px", lineHeight: 1.7 }}>
-          <div><span style={{ color: "#666" }}>Paciente: </span><strong>{patient?.name}</strong></div>
-          <div><span style={{ color: "#666" }}>Data: </span>{formatDate(reimprimir.date)}</div>
-        </div>
-        <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.7, fontSize: "13px", minHeight: "80px" }}>
-          {reimprimir.content}
-        </div>
-        <FechoOficial clinic={clinic} dataISO={reimprimir.date} />
-      </div>
-    );
+    return <EncaminhamentoFolha clinic={clinic} patient={patient} dataISO={reimprimir.date} texto={reimprimir.content || ""} />;
   }, [reimprimir, patient, clinic]);
 
   return (
@@ -8127,20 +8180,7 @@ const RX_LABEL: Record<string, string> = {
 
 export function ReportSheet({ item, patient, clinic }: { item: Extract<ItemPacote, { tipo: "relatorio" }>; patient: any; clinic?: any }) {
   if (item.reportType === "encaminhamento") {
-    return (
-      <div style={{ fontFamily: "Arial, Helvetica, sans-serif", color: "#1a1a1a", fontSize: "13px" }}>
-        <TimbradoOficial clinic={clinic} />
-        <p style={{ textAlign: "center", fontFamily: DOC_SERIF, fontSize: "13px", fontWeight: 700, letterSpacing: "3px", textTransform: "uppercase", color: "#0F2D5E", margin: "0 0 16px" }}>
-          Encaminhamento médico
-        </p>
-        <div style={{ border: "1px solid #ddd", borderRadius: "3px", padding: "9px 12px", marginBottom: "16px", fontSize: "12px", lineHeight: 1.7 }}>
-          <div><span style={{ color: "#666" }}>Paciente: </span><strong>{patient?.name}</strong></div>
-          <div><span style={{ color: "#666" }}>Data: </span>{formatDate(item.dataISO)}</div>
-        </div>
-        <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.7, fontSize: "13px", minHeight: "80px" }}>{item.conteudo}</div>
-        <FechoOficial clinic={clinic} dataISO={item.dataISO} />
-      </div>
-    );
+    return <EncaminhamentoFolha clinic={clinic} patient={patient} dataISO={item.dataISO} texto={item.conteudo} />;
   }
   if (item.reportType === "laudo" || item.reportType === "laudo_medico") {
     const age = patient?.birth_date ? calcAge(patient.birth_date) : "";
@@ -8175,8 +8215,42 @@ export function ReportSheet({ item, patient, clinic }: { item: Extract<ItemPacot
   );
 }
 
-function PacoteDoDia({ patientId, patient, clinic, onClose }: { patientId: number; patient: any; clinic?: any; onClose: () => void }) {
+function PacoteDoDia({ patientId, patient, clinic, entryId, onClose }: { patientId: number; patient: any; clinic?: any; entryId?: number; onClose: () => void }) {
   const hoje = hojeISO();
+  // 17/11 02h10 (Valth): "todos os botoes eu quero clicar em 'imprimir tudo de hoje' ... se uma das coisas eu nao
+  // tiver, ai eu desmarco". Ao abrir, pede ao PC os documentos de TODOS os botoes do Escriba ainda nao feitos
+  // e espera (ate ~60 s) antes de montar a lista; os novos entram marcados como qualquer documento de hoje.
+  const [fase, setFase] = useState<"gerando" | "lista">(entryId ? "gerando" : "lista");
+  const [escriba, setEscriba] = useState<EscribaGerar | null>(null);
+  const [avisoEscriba, setAvisoEscriba] = useState("");
+  useEffect(() => {
+    if (!entryId) return;
+    let vivo = true;
+    let timer: any = null;
+    const t0 = Date.now();
+    let progresso = Date.now();
+    let ultimo = "";
+    const fim = (aviso = "") => { if (!vivo) return; setAvisoEscriba(aviso); setFase("lista"); };
+    const seguir = (r: EscribaGerar) => {
+      if (!vivo) return;
+      setEscriba(r);
+      if (r.terminado) return fim();
+      const marca = r.itens.map((i) => `${i.sugestao_id}:${i.pedido?.estado || ""}`).join(",");
+      const pego = r.itens.some((i) => i.pedido?.estado === "pego");
+      if (marca !== ultimo || pego) { progresso = Date.now(); ultimo = marca; }
+      const passou = Date.now() - t0;
+      if (!r.pc_vivo && !pego && passou > 6000)
+        return fim("PC do consultório desligado: os documentos do Escriba não foram gerados. Abrindo com o que já existe.");
+      if (Date.now() - progresso > 20000)
+        return fim("O PC do consultório não respondeu: abrindo com o que já existe.");
+      if (passou > 60000)
+        return fim("Alguns documentos do Escriba ainda não ficaram prontos. Feche e abra de novo daqui a pouco.");
+      timer = setTimeout(() => { escribaSugestoesApi.estadoGerar(entryId).then(seguir).catch(() => fim()); }, 2000);
+    };
+    escribaSugestoesApi.gerarPendentes(entryId).then(seguir).catch(() => fim());
+    return () => { vivo = false; if (timer) clearTimeout(timer); };
+  }, [entryId]);
+  const naoGerados = (escriba?.itens || []).filter((i) => i.estado !== "feita" && (i.pulada || i.pedido?.estado === "falhou"));
   const [itens, setItens] = useState<ItemPacote[] | null>(null);
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
   // Guia da Unimed é DEITADA (297 x 210 mm); cada guia guarda o tamanho da folha.
@@ -8196,6 +8270,7 @@ function PacoteDoDia({ patientId, patient, clinic, onClose }: { patientId: numbe
   });
 
   useEffect(() => {
+    if (fase !== "lista") return;
     let vivo = true;
     const doDia = (d: any) => String(d || "").slice(0, 10) === hoje;
     Promise.all([
@@ -8240,7 +8315,7 @@ function PacoteDoDia({ patientId, patient, clinic, onClose }: { patientId: numbe
       }
     });
     return () => { vivo = false; };
-  }, [patientId, hoje]);
+  }, [patientId, hoje, fase]);
 
   const escolhidos = (itens || []).filter((i) => selecionados.has(i.id));
   const guiasCarregando = escolhidos.some((i) => i.tipo === "guia" && paginas[i.docId] === undefined);
@@ -8376,7 +8451,26 @@ function PacoteDoDia({ patientId, patient, clinic, onClose }: { patientId: numbe
           <button onClick={onClose} className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700"><X className="w-4 h-4" /></button>
         </div>
         <div className="no-print flex-1 overflow-y-auto p-4 space-y-2">
-          {itens === null ? (
+          {fase === "lista" && (avisoEscriba || naoGerados.length > 0) && (
+            <div className="rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-700 px-3 py-2 text-xs text-amber-900 dark:text-amber-200 space-y-0.5">
+              {avisoEscriba && <p className="font-semibold">⚠️ {avisoEscriba}</p>}
+              {naoGerados.map((i) => (
+                <p key={i.sugestao_id}>Escriba não gerou <strong>{i.rotulo}</strong>: {i.pulada || (i.pedido?.resultado || "falhou").replace(/^NAO GERA:\s*/, "")}</p>
+              ))}
+            </div>
+          )}
+          {fase === "gerando" ? (
+            <div className="text-center py-6 space-y-2">
+              <p className="text-sm font-semibold text-violet-700 dark:text-violet-300">Gerando documentos do Escriba…</p>
+              {!!escriba?.itens?.length && (
+                <p className="text-xs text-slate-500">
+                  {escriba.itens.filter((i) => i.estado === "feita" || i.pedido?.estado === "feito").length} de {escriba.itens.filter((i) => !i.pulada).length} prontos
+                  {" · "}{escriba.itens.filter((i) => !i.pulada).map((i) => i.rotulo).join(", ")}
+                </p>
+              )}
+              <button onClick={() => { setAvisoEscriba("Abriu sem esperar o Escriba."); setFase("lista"); }} className="text-xs text-slate-400 underline">abrir sem esperar</button>
+            </div>
+          ) : itens === null ? (
             <p className="text-sm text-slate-400 text-center py-6">Carregando…</p>
           ) : itens.length === 0 ? (
             <p className="text-sm text-slate-400 italic text-center py-6">Nenhum documento com a data de hoje.</p>
@@ -8754,7 +8848,7 @@ export default function ConsultaDrawer({ entry, onClose, onStatusChange }: Consu
         <ConsultaPrintCenter docs={collectedDocs} onRemove={removeDoc} onClose={() => setPrintCenterOpen(false)} />
       )}
       {pacoteAberto && (
-        <PacoteDoDia patientId={entry.patient_id} patient={patient} clinic={clinic} onClose={() => setPacoteAberto(false)} />
+        <PacoteDoDia patientId={entry.patient_id} patient={patient} clinic={clinic} entryId={entry.id} onClose={() => { setPacoteAberto(false); window.dispatchEvent(new Event("ortho:escriba-sug")); }} />
       )}
       {/* ── Header ── */}
       <div className="flex-shrink-0 bg-white dark:bg-slate-900 border-t-4 border-t-brand-600 border-b-2 border-b-accent-400 dark:border-b-accent-700 px-5 pt-4 pb-3 space-y-3">

@@ -298,7 +298,20 @@ export const escribaSugestoesApi = {
     api.post(`/escriba/sugestoes/${id}/estado`, { estado, sem_mudanca }).then((r) => r.data),
   guia: (id: number): Promise<EscribaPedidoPC> =>
     api.post(`/escriba/sugestoes/${id}/guia`).then((r) => r.data),
+  // 17/11 02h10 (Valth): "Tudo de hoje" gera os documentos de TODOS os botões ainda não feitos (o PC grava).
+  gerarPendentes: (entryId: number): Promise<EscribaGerar> =>
+    api.post(`/escriba/sugestoes/entrada/${entryId}/gerar-pendentes`).then((r) => r.data),
+  estadoGerar: (entryId: number): Promise<EscribaGerar> =>
+    api.get(`/escriba/sugestoes/entrada/${entryId}/gerar-pendentes`).then((r) => r.data),
 };
+export interface EscribaGerarItem {
+  sugestao_id: number; tipo: EscribaSugTipo; rotulo: string; estado: string; pulada?: string | null;
+  pedido?: (EscribaPedidoPC & { documentos?: { kind: string; id: number; ja_existia?: boolean }[] }) | null;
+}
+export interface EscribaGerar {
+  entry_id: number; pc_vivo: boolean; terminado: boolean; gerando: number; feitos: number; falhas: number; pulados: number;
+  novos?: number; itens: EscribaGerarItem[];
+}
 
 // 17/11/2026: assistente ao vivo (chat curto por paciente e por dia).
 export interface AssistenteMsg { id: number; autor: "ia" | "medico"; texto: string; data: string; criado_em?: string | null }
