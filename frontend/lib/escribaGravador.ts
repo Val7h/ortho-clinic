@@ -12,6 +12,7 @@
 
 import { useSyncExternalStore } from "react";
 import { api, waitingRoomApi } from "./api";
+import { PRE_LIMITE_MS, ItemPre, chavePre, chavesParaPodar, paraSubir } from "./escribaPreBuffer";
 
 export type TipoAparelho = "pc" | "celular" | "ipad";
 export type EstadoLocal = "parado" | "gravando" | "pausado";
@@ -31,6 +32,8 @@ export interface EstadoGravador {
   outraAba: boolean;
   inicioMs: number | null; // inicio do trecho gravando agora
   acumMs: number;          // tempo ja gravado nesta consulta, antes do trecho atual
+  preGravando: boolean;    // melhoria 5: depois do Finalizar, grava SO no aparelho para o proximo paciente
+  preInicioMs: number | null;
 }
 
 export interface SessaoServidor {
@@ -95,6 +98,7 @@ export function autoLigarAtivo(): boolean {
 }
 export function setAutoLigar(v: boolean) {
   try { localStorage.setItem(kAuto(), v ? "1" : "0"); } catch {}
+  if (!v && pre) descartarPre("Ligar sozinho desmarcado: pré-gravação parada e apagada.");
   emitir();
 }
 
@@ -102,6 +106,7 @@ export function setAutoLigar(v: boolean) {
 let E: EstadoGravador = {
   estado: "parado", religando: false, sessaoId: null, entryId: null, patientId: null, pendentes: 0,
   cor: "c", msg: "", semMicrofone: false, avisoPendente: null, outraAba: false, inicioMs: null, acumMs: 0,
+  preGravando: false, preInicioMs: null,
 };
 const ouvintes = new Set<() => void>();
 function emitir() { ouvintes.forEach((f) => { try { f(); } catch {} }); }
@@ -143,8 +148,12 @@ let dbp: Promise<IDBDatabase> | null = null;
 function banco(): Promise<IDBDatabase> {
   if (!dbp) {
     dbp = new Promise((ok, er) => {
-      const r = indexedDB.open("orthomedic_escriba", 1);
-      r.onupgradeneeded = () => r.result.createObjectStore("f", { keyPath: "k" });
+      const r = indexedDB.open("orthomedic_escriba", 2);
+      r.onupgradeneeded = () => {
+        const d = r.result;
+        if (!d.objectStoreNames.contains("f")) d.createObjectStore("f", { keyPath: "k" });
+        if (!d.objectStoreNames.contains("pre")) d.createObjectStore("pre", { keyPath: "k" }); // pre-gravacao: NUNCA sobe sozinha
+      };
       r.onsuccess = () => ok(r.result);
       r.onerror = () => er(r.error);
     });
@@ -171,6 +180,31 @@ async function todos(): Promise<ItemFila[]> {
 async function conta(): Promise<number> {
   const d = await banco();
   return new Promise((ok) => { const r = d.transaction("f").objectStore("f").count(); r.onsuccess = () => ok(r.result); r.onerror = () => ok(0); });
+}
+// pre-gravacao (store "pre"): fica so no aparelho ate o proximo Iniciar com aviso
+async function guardaPre(it: ItemPre) {
+  const d = await banco();
+  return new Promise<void>((ok, er) => {
+    const t = d.transaction("pre", "readwrite");
+    t.objectStore("pre").put(it);
+    t.oncomplete = () => ok();
+    t.onerror = t.onabort = () => er(t.error || new Error("IndexedDB"));
+  });
+}
+async function todosPre(): Promise<ItemPre[]> {
+  const d = await banco();
+  return new Promise((ok) => { const r = d.transaction("pre").objectStore("pre").getAll(); r.onsuccess = () => ok(r.result as ItemPre[]); r.onerror = () => ok([]); });
+}
+async function apagaPre(ks: string[]) {
+  if (!ks.length) return;
+  const d = await banco();
+  return new Promise<void>((ok) => { const t = d.transaction("pre", "readwrite"); ks.forEach((k) => t.objectStore("pre").delete(k)); t.oncomplete = () => ok(); t.onerror = () => ok(); });
+}
+async function limpaPre() {
+  try {
+    const d = await banco();
+    await new Promise<void>((ok) => { const t = d.transaction("pre", "readwrite"); t.objectStore("pre").clear(); t.oncomplete = () => ok(); t.onerror = () => ok(); });
+  } catch {}
 }
 const chave = (sid: number, seq: number) => `${String(sid).padStart(8, "0")}_${String(seq).padStart(6, "0")}`;
 let memoria: ItemFila[] = []; // se o IndexedDB falhar, o pedaco fica na memoria e sobe do mesmo jeito
@@ -350,7 +384,14 @@ function msgMicErro(e: any): string {
 }
 
 async function comeca(sessao: SessaoServidor) {
-  if (!(await pegaTravaGravador())) {
+  let trava = await pegaTravaGravador();
+  if (!trava) {
+    // outra aba deste aparelho pode estar so pre-gravando: pede para ela soltar e tenta de novo
+    try { canal()?.postMessage("solta-pre"); } catch {}
+    await espera(1500);
+    trava = await pegaTravaGravador();
+  }
+  if (!trava) {
     muda({ outraAba: true });
     luz("a", "Outra aba deste aparelho já está gravando. Use aquela aba.");
     throw new Error("outra aba");
@@ -361,11 +402,18 @@ async function comeca(sessao: SessaoServidor) {
   try { s = +(localStorage.getItem(kSeq(sessao.id)) || 0); } catch {}
   s = Math.max(s, (sessao.max_seq ?? -1) + 1);
   try { for (const it of [...memoria, ...(await todos())]) if (it.sid === sessao.id && it.seq >= s) s = it.seq + 1; } catch {}
+  // Melhoria 5: a pre-gravacao entra PRIMEIRO nesta sessao (o servidor so cria a sessao com o aviso CFM registrado).
+  let reusaMic = false;
+  if (pre) {
+    s += await consumirPre(sessao.id, s);
+    reusaMic = micVivo(); // continuacao do mesmo clique: o microfone ja esta aberto, sem buraco
+    try { localStorage.setItem(kSeq(sessao.id), String(s)); } catch {}
+  }
   seq = s;
   const mesmaConsulta = E.entryId === sessao.entry_id;
   muda({ sessaoId: sessao.id, entryId: sessao.entry_id, patientId: sessao.patient_id, outraAba: false, acumMs: mesmaConsulta ? E.acumMs : 0 });
   try {
-    await ligaMic();
+    if (!reusaMic) await ligaMic();
   } catch (e) {
     soltarTrava?.();
     throw e;
@@ -435,7 +483,8 @@ function seguirServidor(s: SessaoServidor | null) {
     pararLocal(`A gravação passou para outro aparelho (${onde}).`);
     return;
   }
-  if (s.estado === "parada") { pararLocal("Consulta finalizada: gravação parada."); return; }
+  // Finalizar (entrada "attended") pode virar pre-gravacao; Parar em outro aparelho, nao.
+  if (s.estado === "parada") { pararLocal("Consulta finalizada: gravação parada.", s.entry_status === "attended"); return; }
   if (s.estado === "pausada" && E.estado === "gravando") pausarLocal("Consulta suspensa: gravação pausada. Para voltar, aperte Ligar.");
 }
 
@@ -455,16 +504,127 @@ async function pausarLocal(msg: string) {
   enviaFila();
 }
 
-async function pararLocal(msg: string) {
+async function pararLocal(msg: string, preGravar = false) {
+  // pre-gravacao so como continuacao de uma gravacao que ESTE aparelho fazia (clique), e com "ligar sozinho"
+  const continua = preGravar && E.estado === "gravando" && autoLigarAtivo() && micVivo() && !(temJanela && ehIos() && document.hidden);
+  const corte = Date.now(); // tudo o que foi gravado antes daqui e do paciente que saiu
   paraTimers();
   const r = rec; rec = null;
   muda({ estado: "parado", ...fechaTrecho() });
   tiraFlag();
   try { await paraRec(r); } catch {}
-  soltaMic();
-  soltarTrava?.();
-  luz("c", msg);
+  if (continua && E.estado === "parado" && micVivo()) {
+    await iniciarPre(corte);
+    luz("c", msg + " Pré-gravando só neste aparelho para o próximo paciente.");
+  } else {
+    soltaMic();
+    soltarTrava?.();
+    luz("c", msg);
+  }
   enviaFila();
+}
+
+// ── melhoria 5: pre-gravacao entre pacientes (so no aparelho) ────────────────
+// Depois do Finalizar, com "ligar sozinho" marcado, o microfone segue aberto (continuacao do clique)
+// e os pedacos vao para o store "pre" do IndexedDB, NUNCA para a fila de envio. No proximo Iniciar
+// com aviso CFM, os ultimos ate 3 min entram primeiro na sessao nova. Sem Iniciar em 3 min, Parar,
+// aba fechada ou sem aviso: apaga tudo.
+let pre: { corte: number; n: number } | null = null;
+let recPre: (MediaRecorder & { descartar?: boolean; guardado?: Promise<void> }) | null = null;
+let timerPreCiclo: any = null, timerPreVigia: any = null, timerPreFim: any = null;
+let bc: BroadcastChannel | null = null;
+function canal(): BroadcastChannel | null {
+  if (!bc && temJanela && typeof BroadcastChannel !== "undefined") bc = new BroadcastChannel("orthomedic-escriba");
+  return bc;
+}
+
+function paraTimersPre() {
+  clearInterval(timerPreCiclo); clearInterval(timerPreVigia); clearTimeout(timerPreFim);
+  timerPreCiclo = timerPreVigia = timerPreFim = null;
+}
+
+function novoPedacoPre() {
+  if (!stream || !pre) return;
+  const m = mime(), ext = m.includes("mp4") ? "m4a" : "webm";
+  const r = new MediaRecorder(stream, m ? { mimeType: m } : undefined) as NonNullable<typeof recPre>;
+  const partes: Blob[] = [];
+  const meuCorte = pre.corte, ini = Date.now();
+  r.ondataavailable = (e) => { if (e.data && e.data.size) partes.push(e.data); };
+  let pronto: () => void = () => {};
+  r.guardado = new Promise<void>((ok) => { pronto = ok; });
+  r.onstop = async () => {
+    const blob = new Blob(partes, { type: m || "audio/webm" });
+    if (blob.size && !r.descartar && pre && pre.corte === meuCorte && ini >= meuCorte) {
+      const n = pre.n++;
+      try { await guardaPre({ k: chavePre(ini, n), ini_ms: ini, t_ms: Date.now(), ext, blob, corte: meuCorte }); } catch {}
+    }
+    pronto();
+  };
+  r.start();
+  recPre = r;
+}
+
+async function iniciarPre(corte: number) {
+  paraTimersPre();
+  pre = { corte, n: 0 };
+  await limpaPre(); // nada de pre-gravacao antiga
+  if (!pre || pre.corte !== corte) return;
+  try { novoPedacoPre(); } catch { await descartarPre(); return; }
+  muda({ preGravando: true, preInicioMs: corte });
+  timerPreCiclo = setInterval(() => {
+    if (!pre) return;
+    const velho = recPre;
+    if (velho) { try { if (velho.state !== "inactive") velho.stop(); } catch {} }
+    try { novoPedacoPre(); } catch { descartarPre("O gravador parou: pré-gravação apagada."); }
+  }, SEG_MS);
+  timerPreVigia = setInterval(async () => {
+    if (!pre) return;
+    if (!micVivo() || !recPre || recPre.state !== "recording") { descartarPre("O microfone parou: pré-gravação apagada."); return; }
+    try { await apagaPre(chavesParaPodar(await todosPre(), pre.corte, Date.now())); } catch {} // o mais velho se descarta
+  }, 3000);
+  timerPreFim = setTimeout(() => {
+    if (pre && pre.corte === corte) descartarPre(`${Math.round(PRE_LIMITE_MS / 60_000)} min sem Iniciar Consulta: pré-gravação parada e apagada.`);
+  }, PRE_LIMITE_MS);
+}
+
+/** Para a pre-gravacao e apaga tudo (Parar, 3 min sem Iniciar, aba fechada, sem aviso). */
+export async function descartarPre(msg?: string) {
+  if (!pre && !recPre && !E.preGravando) return;
+  pre = null;
+  paraTimersPre();
+  const r = recPre; recPre = null;
+  if (r) { r.descartar = true; try { if (r.state !== "inactive") r.stop(); } catch {} }
+  await limpaPre();
+  if (E.estado === "parado") { soltaMic(); soltarTrava?.(); }
+  muda({ preGravando: false, preInicioMs: null });
+  if (msg) luz("c", msg);
+}
+
+/** Passa a pre-gravacao para a fila da sessao nova, numerada antes dos pedacos novos. Devolve quantos. */
+async function consumirPre(sid: number, seqInicial: number): Promise<number> {
+  if (!pre) return 0;
+  const corte = pre.corte;
+  paraTimersPre();
+  const r = recPre; recPre = null;
+  if (r) { try { if (r.state !== "inactive") r.stop(); } catch {} await Promise.race([r.guardado || Promise.resolve(), espera(4000)]); }
+  let n = 0;
+  try {
+    const lista = paraSubir(await todosPre(), corte, Date.now(), sid, seqInicial);
+    for (const { item, seq: sq } of lista) {
+      const it: ItemFila = { k: chave(sid, sq), sid, seq: sq, ext: item.ext, t_ms: item.t_ms, blob: item.blob };
+      try { await guarda(it); } catch { memoria.push({ ...it, mem: true }); }
+      n++;
+    }
+  } catch {}
+  pre = null;
+  await limpaPre();
+  muda({ preGravando: false, preInicioMs: null });
+  return n;
+}
+
+/** Segundos de pre-gravacao (para a linha discreta na coluna). */
+export function segundosPre(): number {
+  return E.preInicioMs ? Math.floor((Date.now() - E.preInicioMs) / 1000) : 0;
 }
 
 // ── o que as telas chamam ────────────────────────────────────────────────────
@@ -490,6 +650,8 @@ export async function ligarPorClique(entryId: number, patientId: number): Promis
       luz("c", "Falta o aviso de gravação deste paciente.");
       return false;
     }
+    // (sem aviso, acima, a pre-gravacao espera o "Avisei - gravar"; o "Agora nao" apaga)
+    if (pre) await descartarPre();
     if (e?.message === "outra aba") return false;
     const sem = !!e?.name;
     muda({ estado: "parado", religando: false, semMicrofone: sem && e.name !== "NotAllowedError" });
@@ -514,7 +676,10 @@ export async function aviseiEGravar(entryId: number, patientId: number): Promise
 export function pedirAviso(entryId: number, patientId: number) {
   muda({ avisoPendente: entryId, entryId: E.estado === "parado" ? entryId : E.entryId, patientId: E.estado === "parado" ? patientId : E.patientId });
 }
-export function cancelarAviso() { muda({ avisoPendente: null }); }
+export function cancelarAviso() {
+  muda({ avisoPendente: null });
+  if (pre) descartarPre("Sem aviso de gravação: pré-gravação apagada.");
+}
 
 /** Pausar por clique (ou pelo Suspender do PC). */
 export async function pausar() {
@@ -524,11 +689,12 @@ export async function pausar() {
   escribaGravarApi.estado(sid, "pausada").catch(() => {});
 }
 
-/** Parar de vez (Finalizar ou clique em Parar). */
-export async function parar(msg = "Gravação parada.") {
+/** Parar de vez (Finalizar ou clique em Parar). Finalizar com "ligar sozinho" pode virar pre-gravacao. */
+export async function parar(msg = "Gravação parada.", opcoes?: { preGravar?: boolean }) {
+  if (E.estado === "parado" && pre) await descartarPre();
   if (E.sessaoId == null) return;
   const sid = E.sessaoId;
-  if (E.estado !== "parado") await pararLocal(msg);
+  if (E.estado !== "parado") await pararLocal(msg, !!opcoes?.preGravar);
   escribaGravarApi.estado(sid, "parada").catch(() => {});
 }
 
@@ -573,6 +739,22 @@ function iniciar() {
       if (E.estado === "gravando" && ehIos()) luz("a", "Aba escondida: no iPhone e no iPad a gravação para. Ao voltar para esta aba, ela religa sozinha.");
     }
   });
+  // Pre-gravacao nao sobrevive a aba fechada/recarregada: ao abrir, apaga o que sobrou (se nenhuma aba grava agora).
+  (async () => {
+    try {
+      const locks = (navigator as any).locks;
+      const q = locks?.query ? await locks.query() : null;
+      const ocupado = !!q?.held?.some((l: any) => l.name === "orthomedic-escriba-gravador");
+      if (!ocupado) await limpaPre();
+    } catch {}
+  })();
+  window.addEventListener("pagehide", () => { if (pre) descartarPre(); });
+  try {
+    const c = canal();
+    if (c) c.onmessage = (ev) => {
+      if (ev.data === "solta-pre" && pre && E.estado === "parado") descartarPre("Outra aba deste aparelho começou a gravar: pré-gravação apagada.");
+    };
+  } catch {}
   setInterval(enviaFila, 5000);
   pendentes().then((n) => muda({ pendentes: n })).catch(() => {});
   setTimeout(autoRetoma, 400);

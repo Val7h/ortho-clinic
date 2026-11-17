@@ -2132,7 +2132,9 @@ export function escribaAposStatus(entry: WaitingRoomEntry, novo: QueueStatus) {
   const minha = g.entryId === entry.id && g.estado !== "parado";
   if (novo === "suspended") { if (minha) escriba.pausar(); return; }
   if (novo === "attended" || novo === "absent" || novo === "waiting") {
-    if (g.entryId === entry.id) escriba.parar("Consulta finalizada: gravação parada.");
+    // Melhoria 5: Finalizar de quem gravava AQUI vira pré-gravação local (se "ligar sozinho"); o resto apaga a pré.
+    if (g.entryId === entry.id) escriba.parar("Consulta finalizada: gravação parada.", { preGravar: novo === "attended" && g.estado === "gravando" });
+    else escriba.descartarPre();
     if (g.avisoPendente === entry.id) escriba.cancelarAviso();
     return;
   }
@@ -2141,7 +2143,7 @@ export function escribaAposStatus(entry: WaitingRoomEntry, novo: QueueStatus) {
       // Se o celular/iPad já grava esta consulta, o PC não liga o microfone.
       try {
         const s = await escriba.escribaGravarApi.sessaoDaEntrada(entry.id);
-        if (s && s.estado === "gravando" && s.sinal_vivo && !s.ativo) return;
+        if (s && s.estado === "gravando" && s.sinal_vivo && !s.ativo) { escriba.descartarPre(); return; }
       } catch {}
       await escribaLigarComAviso(entry, false);
     })();
@@ -2182,6 +2184,33 @@ function BotaoGravarEscriba({ entry }: { entry: WaitingRoomEntry }) {
   );
 }
 
+// Melhoria 5: linha discreta enquanto o aparelho pré-grava (só local) entre um paciente e o próximo.
+export function IndicadorPreGravacao({ flutuante = false }: { flutuante?: boolean }) {
+  const g = escriba.useEscribaGravador();
+  const [, setT] = useState(0);
+  useEffect(() => {
+    if (!g.preGravando) return;
+    const t = setInterval(() => setT((x) => x + 1), 1000);
+    return () => clearInterval(t);
+  }, [g.preGravando]);
+  if (!g.preGravando) return null;
+  const s = escriba.segundosPre();
+  const tempo = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+  const cls = flutuante
+    ? "fixed bottom-3 left-3 z-40 shadow-md rounded-full border border-violet-300 dark:border-violet-700 bg-white/95 dark:bg-slate-900/95 px-3 py-1"
+    : "";
+  return (
+    <div className={`flex items-center gap-2 text-[11px] leading-snug text-violet-600 dark:text-violet-300 ${cls}`} data-testid="pre-gravando"
+      title="Grava só neste aparelho. Sobe no próximo Iniciar Consulta, se o paciente tiver o aviso de gravação. Sem Iniciar em 3 min, apaga.">
+      <span>● pré-gravando (vai para o próximo paciente) · {tempo}</span>
+      <button type="button" onClick={() => escriba.descartarPre("Pré-gravação parada e apagada.")}
+        className="text-[10.5px] px-1.5 py-0.5 rounded border border-violet-300 dark:border-violet-700 font-semibold hover:bg-violet-100 dark:hover:bg-violet-900/40">
+        Parar
+      </button>
+    </div>
+  );
+}
+
 function EstadoGravacaoEscriba({ entry }: { entry: WaitingRoomEntry }) {
   const g = escriba.useEscribaGravador();
   const s = useSessaoEscriba(entry);
@@ -2200,6 +2229,7 @@ function EstadoGravacaoEscriba({ entry }: { entry: WaitingRoomEntry }) {
   return (
     <>
       {linha && <p className={`text-[11px] leading-snug ${cor}`}>{linha}</p>}
+      <IndicadorPreGravacao />
       {pedeAviso && (
         <div className="rounded-md border border-violet-400 dark:border-violet-700 bg-white dark:bg-slate-900 px-2.5 py-2 text-[11.5px] leading-snug text-violet-900 dark:text-violet-200">
           <b>Aviso de gravação (CFM).</b> {TEXTO_AVISO_CFM}

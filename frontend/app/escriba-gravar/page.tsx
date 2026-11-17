@@ -89,7 +89,7 @@ export default function EscribaGravarPage() {
       <header className="flex items-center justify-between">
         <h1 className="text-lg font-bold text-violet-900 dark:text-violet-200">🎙️ Gravar consulta</h1>
         <span className={`text-xs font-bold px-2.5 py-1 rounded-full text-white ${corEstado}`} data-testid="estado">
-          {gravandoAqui ? "● Gravando" : pausadoAqui ? "⏸ Pausado" : "Parado"}
+          {gravandoAqui ? "● Gravando" : pausadoAqui ? "⏸ Pausado" : g.preGravando ? "● Pré-gravando" : "Parado"}
         </span>
       </header>
 
@@ -141,6 +141,16 @@ export default function EscribaGravarPage() {
           </button>
           <button type="button" onClick={() => escriba.parar()} data-testid="parar" className="py-5 rounded-2xl bg-slate-700 text-white text-lg font-bold">
             ■ Parar
+          </button>
+        </div>
+      )}
+
+      {g.preGravando && !gravandoAqui && (
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-violet-300 dark:border-violet-800 bg-white dark:bg-slate-900 px-4 py-3 text-sm text-violet-800 dark:text-violet-300" data-testid="pre-gravando">
+          <span>● pré-gravando (vai para o próximo paciente). Fica só neste aparelho; sem Gravar em 3 min, apaga.</span>
+          <button type="button" onClick={() => escriba.descartarPre("Pré-gravação parada e apagada.")} data-testid="parar-pre"
+            className="px-3 py-2 rounded-lg bg-slate-700 text-white font-semibold">
+            Parar
           </button>
         </div>
       )}

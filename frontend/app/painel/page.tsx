@@ -13,7 +13,7 @@ import { api, patientsApi, waitingRoomApi, clinicApi, msgErro } from '@/lib/api'
 import { serverNow } from '@/lib/servertime';
 import { faixaDoCrono } from '@/lib/cronoLimites';
 import toast from 'react-hot-toast';
-import ConsultaDrawer, { WaitingRoomEntry, escribaAposStatus } from './ConsultaDrawer';
+import ConsultaDrawer, { WaitingRoomEntry, escribaAposStatus, IndicadorPreGravacao } from './ConsultaDrawer';
 import { useAuth } from '@/components/AuthProvider';
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -1021,6 +1021,11 @@ export default function SalaDeEsperaPage() {
               />
             </div>
           )}
+        </div>
+
+        {/* Melhoria 5 (Escriba): pré-gravação entre pacientes. Com a gaveta aberta em tela larga, aparece na coluna lilás. */}
+        <div className={drawerOpen && selectedEntry ? "lg:hidden" : ""}>
+          <IndicadorPreGravacao flutuante />
         </div>
 
         {/* Checkin Modal */}
