@@ -742,26 +742,24 @@ function DiagnosticosCids({ patientId, patient, clinic }: { patientId: number; p
   };
 
   return (
-    <div className="mb-4 space-y-2">
-      {/* Campo fixo de CIDs */}
-      <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5">
-        <div className="flex items-center justify-between gap-2 mb-1.5">
-          <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
-            Diagnósticos (CID)
-          </p>
+    <div className="mb-1.5 space-y-2">
+      {/* 17/11 (Valth): CID e Folhetos bem pequenos, numa linha só — o lugar é nobre. */}
+      <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1">
+        <div className="flex items-center gap-1.5 flex-shrink-0 order-last">
           {/* 07/10 (Valth): folheto sempre disponível, sem depender de o CID ter oferta */}
           <button
             type="button"
             onClick={() => abrirPicker({ prefix: "", nome: "todos os folhetos", opcoes: [] })}
-            className="px-2.5 py-1 rounded-full border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 text-[11px] font-bold hover:bg-blue-50 dark:hover:bg-blue-900/30"
+            className="px-2 py-0.5 rounded-full border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 text-[10px] font-bold hover:bg-blue-50 dark:hover:bg-blue-900/30"
             title="Abrir a lista de folhetos para imprimir ou enviar por WhatsApp"
           >
             📄 Folhetos
           </button>
         </div>
-        <div className="flex flex-wrap items-center gap-1.5">
+        <div className="flex flex-wrap items-center gap-1 flex-1 min-w-0">
+          <span className="text-[10px] font-bold text-slate-400 uppercase">CID</span>
           {cids.map((c, i) => (
-            <span key={c} className="inline-flex items-center gap-1 bg-blue-50 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 rounded-full px-2.5 py-0.5 text-xs font-semibold">
+            <span key={c} className="inline-flex items-center gap-1 bg-blue-50 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 rounded-full px-2 py-0 text-[11px] font-semibold">
               {c}
               <button
                 onClick={() => persist(cids.filter((_, j) => j !== i))}
@@ -772,10 +770,10 @@ function DiagnosticosCids({ patientId, patient, clinic }: { patientId: number; p
               </button>
             </span>
           ))}
-          <div ref={boxRef} className="relative min-w-[180px] flex-1">
+          <div ref={boxRef} className="relative min-w-[140px] flex-1">
             <input
-              className="w-full px-2 py-1 text-sm bg-transparent border-0 border-b border-dashed border-slate-300 dark:border-slate-600 focus:outline-none focus:border-blue-500 text-slate-800 dark:text-slate-100 placeholder-slate-400"
-              placeholder="+ adicionar CID (ex.: M17, ombro, osteoporose…)"
+              className="w-full px-1.5 py-0.5 text-xs bg-transparent border-0 border-b border-dashed border-slate-300 dark:border-slate-600 focus:outline-none focus:border-blue-500 text-slate-800 dark:text-slate-100 placeholder-slate-400"
+              placeholder="+ CID"
               value={query}
               onChange={e => { setQuery(e.target.value); setOpenList(true); }}
               onFocus={() => setOpenList(true)}
@@ -802,7 +800,8 @@ function DiagnosticosCids({ patientId, patient, clinic }: { patientId: number; p
       </div>
 
       {/* Lembretes de oferta de alto valor por CID */}
-      {ofertas.map(o => (
+      {/* 17/11 (Valth): "nunca usei" — lembrete de alto valor escondido (código mantido). */}
+      {false && ofertas.map(o => (
         <div key={o.prefix} className="bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700 border-l-4 border-l-amber-500 rounded-xl px-3 py-2.5">
           <p className="text-sm font-bold text-amber-900 dark:text-amber-200">
             💡 {o.nome} — opções de alto valor pra discutir:
@@ -1855,7 +1854,23 @@ const TEMPO_FORM: Record<string, string> = {
 
 // Formulario de pre-consulta respondido pelo paciente. Fica recolhido; um
 // clique abre, outro fecha.
-function FormularioRespondido({ patientId }: { patientId: number }) {
+// 17/11 (Valth): "passar para a anamnese" — leva as respostas para o começo da
+// consulta de hoje e a barra some deste paciente (fica guardado neste aparelho).
+function textoDoFormulario(a: any): string {
+  const partes: string[] = [];
+  for (const [campo, rotulo] of ROTULOS_FORM) {
+    let v = a?.responses?.[campo];
+    if (v === null || v === undefined || v === "") continue;
+    if (campo === "pain_location") v = String(v).split(",").map((c: string) => REGIOES_FORM[c.trim()] || c.trim()).join(" + ");
+    if (campo === "symptom_duration") v = TEMPO_FORM[v] || v;
+    partes.push(`${rotulo.toLowerCase()}: ${String(v)}`);
+  }
+  return partes.length ? `formulário do paciente: ${partes.join(" / ")}` : "";
+}
+
+function FormularioRespondido({ patientId, onPassar }: { patientId: number; onPassar?: (texto: string) => void }) {
+  const chavePassado = `orthomedic_form_passado_${patientId}`;
+  const [passado, setPassado] = useState<boolean>(() => { try { return localStorage.getItem(chavePassado) === "1"; } catch { return false; } });
   const [aberto, setAberto] = useState(false);
   const [dados, setDados] = useState<any[] | null>(null);
   const [carregando, setCarregando] = useState(false);
@@ -1886,22 +1901,43 @@ function FormularioRespondido({ patientId }: { patientId: number }) {
     : temResposta ? "Formulário respondido pelo paciente"
     : "Formulário NÃO respondido pelo paciente";
 
+  const passar = () => {
+    const t = respondido.map(textoDoFormulario).filter(Boolean).join("\n");
+    if (!t || !onPassar) return;
+    onPassar(t);
+    try { localStorage.setItem(chavePassado, "1"); } catch {}
+    setPassado(true);
+    toast.success("Formulário passado para o começo da anamnese de hoje");
+  };
+
+  if (passado && temResposta) return null;
+
   return (
-    <div className="px-5 pb-2 flex-shrink-0">
+    <div className="px-5 pb-1 flex-shrink-0 flex flex-wrap items-center gap-1.5">
       <button
         type="button"
         onClick={abrir}
-        className={`w-full flex items-center justify-between gap-2 rounded-lg border px-3 py-2 transition-colors ${cor}`}
+        className={`flex-1 flex items-center justify-between gap-2 rounded-lg border px-2 py-0.5 transition-colors ${cor}`}
       >
-        <span className="flex items-center gap-2 text-[13px] font-semibold">
-          <ClipboardCheck className="w-4 h-4" />
+        <span className="flex items-center gap-1.5 text-[11px] font-semibold">
+          <ClipboardCheck className="w-3.5 h-3.5" />
           {rotulo}
         </span>
         {aberto ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
       </button>
+      {temResposta && onPassar && (
+        <button
+          type="button"
+          onClick={passar}
+          className="flex-shrink-0 rounded-lg border border-teal-300 dark:border-teal-800 bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-300 px-2 py-0.5 text-[11px] font-semibold hover:bg-teal-50"
+          title="Coloca as respostas no começo da consulta de hoje e esconde esta barra"
+        >
+          → passar para a anamnese
+        </button>
+      )}
 
       {aberto && (
-        <div className="mt-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
+        <div className="basis-full mt-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
           {carregando && <p className="text-xs text-slate-500">Carregando…</p>}
 
           {!carregando && respondido.length === 0 && (
@@ -2694,10 +2730,17 @@ function TabProntuario({ patientId, patient, clinic, motivo, entry }: { patientI
         <DiagnosticosCids patientId={patientId} patient={patient} clinic={clinic} />
       </div>
 
-      <FormularioRespondido patientId={patientId} />
+      <FormularioRespondido
+        patientId={patientId}
+        onPassar={(t) => setFolha(f => {
+          const cab = f.split("\n").findIndex(l => { const m = l.trim().match(CABECALHO_RE); return !!m && isoDoCabecalho(m[1]) === todayISO; });
+          if (cab < 0) return (f.replace(/\s+$/, "") + "\n\n" + cabecalhoFolha(todayISO, tipoLabel(consultType)) + "\n" + t);
+          const ls = f.split("\n"); ls.splice(cab + 1, 0, t); return ls.join("\n");
+        })}
+      />
 
       {/* ── Barra: tipo de consulta, modelos e busca ── */}
-      <div className="flex-shrink-0 px-5 pt-2 pb-2 space-y-2">
+      <div className="flex-shrink-0 px-5 pt-1 pb-1.5 space-y-2">
         <div className="flex items-center gap-2 flex-wrap">
           <select
             value={consultType}
@@ -2706,7 +2749,8 @@ function TabProntuario({ patientId, patient, clinic, motivo, entry }: { patientI
           >
             {CONSULT_TYPES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
           </select>
-          <div className="flex flex-wrap gap-1">
+          {/* 17/11 (Valth): botões de modelo e busca escondidos ("nunca usei"). */}
+          <div className="hidden flex-wrap gap-1">
             {PRONTUARIO_TEMPLATES.map(tpl => (
               <button
                 key={tpl.name}
@@ -2719,7 +2763,7 @@ function TabProntuario({ patientId, patient, clinic, motivo, entry }: { patientI
             ))}
           </div>
         </div>
-        {totalDias > 2 && (
+        {false && totalDias > 2 && (
           <div className="flex items-center gap-2">
             <div className="relative flex-1">
               <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
