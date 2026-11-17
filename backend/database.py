@@ -31,6 +31,7 @@ def init_db():
     from models import billing  # noqa — Sprint 8 Enterprise Billing
     from models import audit_log  # noqa — Sprint 8 Immutable Audit Log
     from models import clinical_evolution  # noqa — Prontuário evolutivo em folha corrida
+    from models import escriba  # noqa — 17/11: sessoes, pedacos e aviso CFM do Escriba integrado
     from models import messages  # noqa — DirectMessage (chat medico <-> secretaria)
     Base.metadata.create_all(bind=engine)
     # Register SQLAlchemy event hooks for automatic webhook fan-out

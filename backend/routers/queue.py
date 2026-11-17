@@ -1255,6 +1255,14 @@ async def update_waiting_status(
     # "realizado" e ausente vira "faltou", sem o médico ter que marcar duas vezes.
     _sync_appointment_status(db, entry, request.status)
 
+    # 17/11 (Escriba integrado): Suspender pausa e Finalizar para a gravação desta
+    # consulta. Daqui só se pausa ou para; ligar o microfone é só por clique no aparelho.
+    try:
+        from routers.escriba import seguir_status_da_entrada
+        seguir_status_da_entrada(db, entry.id, request.status)
+    except Exception:
+        logger.exception("Escriba: falha ao seguir o status da consulta")
+
     db.commit()
     db.refresh(entry)
 
