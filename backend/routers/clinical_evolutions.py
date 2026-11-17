@@ -4,7 +4,8 @@ from typing import List, Optional
 from datetime import date, datetime
 from pydantic import BaseModel
 from database import get_db
-from models.clinical_evolution import ClinicalEvolution
+from models.clinical_evolution import ClinicalEvolution, EscribaResumo
+import json as _json
 from models.patient import Patient
 from routers.auth import get_current_user
 from deps import require_doctor
@@ -312,3 +313,53 @@ async def gerar_justificativa(
         return {"texto": modelo, "origem": "modelo", "aviso": "IA não respondeu — usei o modelo padrão."}
 
     return {"texto": texto, "origem": "ia", "aviso": None}
+
+
+
+# ── Resumo do Escriba (IA), separado do texto do médico (16/11/2026) ─────────
+class EscribaResumoIn(BaseModel):
+    entry_date: date
+    linhas: List[str] = []
+    faltas: List[str] = []
+
+
+class EscribaResumoOut(BaseModel):
+    patient_id: int
+    entry_date: date
+    linhas: List[str]
+    faltas: List[str]
+    updated_at: Optional[datetime] = None
+
+
+def _resumo_out(r: EscribaResumo) -> dict:
+    def lista(t):
+        try:
+            v = _json.loads(t or "[]")
+            return [str(x) for x in v] if isinstance(v, list) else []
+        except Exception:
+            return []
+    return {"patient_id": r.patient_id, "entry_date": r.entry_date, "linhas": lista(r.linhas),
+            "faltas": lista(r.faltas), "updated_at": r.updated_at}
+
+
+@router.get("/{patient_id}/escriba-resumo", response_model=Optional[EscribaResumoOut])
+def get_escriba_resumo(patient_id: int, data: date, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    r = db.query(EscribaResumo).filter(EscribaResumo.patient_id == patient_id, EscribaResumo.entry_date == data).first()
+    return _resumo_out(r) if r else None
+
+
+@router.put("/{patient_id}/escriba-resumo", response_model=EscribaResumoOut)
+def put_escriba_resumo(patient_id: int, body: EscribaResumoIn, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    if not db.query(Patient).filter(Patient.id == patient_id).first():
+        raise HTTPException(status_code=404, detail="Paciente não encontrado")
+    linhas = [l.strip()[:500] for l in body.linhas if l and l.strip()][:30]
+    faltas = [l.strip()[:500] for l in body.faltas if l and l.strip()][:15]
+    r = db.query(EscribaResumo).filter(EscribaResumo.patient_id == patient_id, EscribaResumo.entry_date == body.entry_date).first()
+    if not r:
+        r = EscribaResumo(patient_id=patient_id, entry_date=body.entry_date,
+                          organization_id=getattr(current_user, "organization_id", None) or 1)
+        db.add(r)
+    r.linhas = _json.dumps(linhas, ensure_ascii=False)
+    r.faltas = _json.dumps(faltas, ensure_ascii=False)
+    db.commit(); db.refresh(r)
+    return _resumo_out(r)

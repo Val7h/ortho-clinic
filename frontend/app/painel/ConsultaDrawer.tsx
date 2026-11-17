@@ -16,7 +16,7 @@ import toast from "react-hot-toast";
 import { AppointmentFormModal } from "@/components/AppointmentFormModal";
 import { lerCronoLimites, faixaDoCrono, editarCronoLimites, CronoLimites } from "@/lib/cronoLimites";
 import { serverNow } from "@/lib/servertime";
-import { anamnesisApi, api, patientsApi, consultationsApi, prescriptionsApi, prescriptionTemplatesApi, referralTemplatesApi, examsApi, evolutionApi, clinicApi, chatApi, reportsApi, leafletsApi, waitingRoomApi, remindersApi, medicamentosApi, printJobsApi, msgErro } from "@/lib/api";
+import { anamnesisApi, api, patientsApi, consultationsApi, prescriptionsApi, prescriptionTemplatesApi, referralTemplatesApi, examsApi, evolutionApi, clinicApi, chatApi, reportsApi, leafletsApi, waitingRoomApi, remindersApi, medicamentosApi, printJobsApi, msgErro, escribaApi, EscribaResumo } from "@/lib/api";
 import { formatDate, calcAge, hojeISO } from "@/lib/utils";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -2030,6 +2030,63 @@ function lerFolha(folha: string): BlocoFolha[] {
   return blocos;
 }
 
+// 16/11/2026 (Valth): "a anamnese do escriba separada da anamnese do médico,
+// como se fosse duas colunas". Lilás = escrito pela IA; o texto dele não muda.
+// "+ passar" leva só aquela linha para o fim da folha dele.
+function ColunaEscriba({ patientId, dataISO, onPassar }: { patientId: number; dataISO: string; onPassar: (linha: string) => void }) {
+  const [res, setRes] = useState<EscribaResumo | null>(null);
+  const [passadas, setPassadas] = useState<Set<number>>(new Set());
+  useEffect(() => {
+    let vivo = true;
+    setRes(null); setPassadas(new Set());
+    const ler = () => escribaApi.get(patientId, dataISO).then(r => { if (vivo) setRes(r); }).catch(() => {});
+    ler();
+    const t = setInterval(ler, 15000);
+    return () => { vivo = false; clearInterval(t); };
+  }, [patientId, dataISO]);
+  const linhas = res?.linhas || [];
+  const faltas = res?.faltas || [];
+  return (
+    <aside className="hidden lg:flex flex-col gap-2.5 w-[300px] xl:w-[330px] flex-shrink-0 sticky top-0 rounded-lg border border-violet-300 dark:border-violet-800 bg-violet-50 dark:bg-violet-950/30 px-3 py-3 min-h-[260px]">
+      <div className="flex items-center justify-between">
+        <span className="text-[13px] font-bold text-violet-800 dark:text-violet-300">🎙️ Escriba · IA</span>
+        {res?.updated_at && (
+          <span className="text-[10px] text-violet-500">
+            {new Date(/[zZ]$|[+-]\d{2}:?\d{2}$/.test(res.updated_at) ? res.updated_at : res.updated_at + "Z").toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+          </span>
+        )}
+      </div>
+      {linhas.length === 0 && faltas.length === 0 ? (
+        <p className="text-[12px] text-violet-500 dark:text-violet-400">O Escriba ainda não escreveu nada nesta consulta.</p>
+      ) : (
+        <div className="space-y-1.5">
+          {linhas.map((l, i) => (
+            <div key={i} className="flex items-start gap-1.5 text-[12.5px] leading-snug text-violet-900 dark:text-violet-200">
+              <span className="flex-1">{l}</span>
+              <button
+                type="button"
+                onClick={() => { onPassar(l); setPassadas(p => new Set(p).add(i)); }}
+                disabled={passadas.has(i)}
+                className="flex-shrink-0 text-[10.5px] px-1.5 py-0.5 rounded border border-violet-300 dark:border-violet-700 bg-white dark:bg-slate-900 text-violet-700 dark:text-violet-300 hover:bg-violet-100 disabled:opacity-40"
+                title="Levar esta linha para o fim da sua anamnese"
+              >
+                {passadas.has(i) ? "✓" : "+ passar"}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      {faltas.length > 0 && (
+        <div className="rounded-md border border-orange-300 dark:border-orange-800 bg-orange-50 dark:bg-orange-950/30 px-2.5 py-2 text-[12px] text-orange-800 dark:text-orange-300">
+          <p className="font-bold mb-0.5">⚠️ Falado e não escrito</p>
+          {faltas.map((f, i) => <p key={i}>{f}</p>)}
+        </div>
+      )}
+      <p className="text-[10px] text-violet-500 dark:text-violet-400 mt-auto">Resumo feito pela IA a partir da conversa. Confira antes de usar.</p>
+    </aside>
+  );
+}
+
 function TabProntuario({ patientId, patient, clinic, motivo }: { patientId: number; patient?: any; clinic?: any; motivo?: string }) {
   const [folha, setFolha] = useState("");
   // 16/11 (Valth): "enquanto eu digito some coisa, junta uma palavra com outra".
@@ -2481,8 +2538,10 @@ function TabProntuario({ patientId, patient, clinic, motivo }: { patientId: numb
         )}
       </div>
 
-      {/* ── A folha ── */}
+      {/* ── A folha + coluna do Escriba (16/11: lilás, só leitura, separada do texto do médico) ── */}
       <div className="flex-1 overflow-y-auto px-5 min-h-0">
+       <div className="flex gap-3 items-start">
+        <div className="flex-1 min-w-0">
         {loading ? (
           <div className="flex items-center justify-center h-20">
             <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
@@ -2502,6 +2561,13 @@ function TabProntuario({ patientId, patient, clinic, motivo }: { patientId: numb
             onFocus={garantirCabecalhoDeHoje}
           />
         )}
+        </div>
+        <ColunaEscriba
+          patientId={patientId}
+          dataISO={todayISO}
+          onPassar={(linha) => setFolha(f => (f.replace(/\s+$/, "") + "\n" + linha))}
+        />
+       </div>
       </div>
 
       {/* ── Rodapé ── */}

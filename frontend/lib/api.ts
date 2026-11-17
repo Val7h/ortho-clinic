@@ -276,6 +276,13 @@ export const evolutionApi = {
     api.get(`/patients/${patientId}/visitas-anteriores`).then((r) => r.data),
 };
 
+// 16/11/2026: resumo do Escriba (IA), guardado separado do texto do médico.
+export interface EscribaResumo { patient_id: number; entry_date: string; linhas: string[]; faltas: string[]; updated_at?: string | null }
+export const escribaApi = {
+  get: (patientId: number, data: string): Promise<EscribaResumo | null> =>
+    api.get(`/patients/${patientId}/escriba-resumo`, { params: { data } }).then((r) => r.data),
+};
+
 // ── Fisioterapia ──────────────────────────────────────────────────────────
 export const physioApi = {
   list: (patientId: number) =>

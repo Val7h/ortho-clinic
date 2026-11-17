@@ -811,7 +811,7 @@ export default function SalaDeEsperaPage() {
           {/* ── Queue list ── */}
           <main
             className={`flex-shrink-0 overflow-y-auto transition-all duration-300 ${
-              drawerOpen ? 'hidden md:block md:w-[40%] md:min-w-[280px]' : 'w-full'
+              drawerOpen ? 'hidden md:block md:w-[40%] md:min-w-[280px] lg:w-[28%] lg:min-w-[340px]' : 'w-full'
             }`}
           >
             <div className="px-4 py-6 space-y-6">
