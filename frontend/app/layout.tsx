@@ -6,7 +6,6 @@ import { AuthProvider } from "@/components/AuthProvider";
 import { Providers } from "./providers";
 import { NavigationProvider } from "@/components/navigation/NavigationProvider";
 import { DeepLinkHandler } from "@/components/navigation/DeepLinkHandler";
-import { FloatingChatWidget } from "@/components/FloatingChatWidget";
 import { TeamChatWidget } from "@/components/TeamChatWidget";
 
 /**
@@ -121,7 +120,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 }}
               />
 
-              <FloatingChatWidget />
+              {/* 17/11 (Valth): "nunca usei, sem sentido" — chat de IA flutuante tirado; a IA agora fica na coluna da consulta. */}
               <TeamChatWidget />
             </NavigationProvider>
           </AuthProvider>

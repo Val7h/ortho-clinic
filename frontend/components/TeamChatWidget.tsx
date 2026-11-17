@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Users, X, Send, User as UserIcon, Check, CheckCheck } from "lucide-react";
+import { Users, X, Send, User as UserIcon, Check, CheckCheck, MessagesSquare } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
 import {
   messagesApi,
@@ -406,14 +406,15 @@ export function TeamChatWidget() {
         <button
           onClick={() => { setOpen(true); setChamando(false); }}
           aria-label="Abrir conversa com a equipe"
-          className={`fixed bottom-4 z-50 w-14 h-14 rounded-full shadow-lg flex items-center justify-center transition-transform hover:scale-105 active:scale-95 ${
+          title="Conversar com a secretária / equipe"
+          className={`fixed bottom-4 right-4 z-50 h-11 pl-3.5 pr-4 rounded-full shadow-lg shadow-brand-900/20 flex items-center gap-2 text-white text-sm font-semibold transition-transform hover:scale-105 active:scale-95 ${
             chamando
               ? "bg-emerald-500 hover:bg-emerald-600 animate-pulse ring-4 ring-emerald-300/60"
-              : "bg-slate-700 hover:bg-slate-800"
+              : "bg-gradient-to-r from-brand-600 to-teal-600 hover:from-brand-700 hover:to-teal-700"
           }`}
-          style={{ right: "80px" }}
         >
-          <Users className="w-6 h-6 text-white" />
+          <MessagesSquare className="w-5 h-5 text-white" />
+          <span>Equipe</span>
           {totalUnread > 0 && (
             <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 rounded-full bg-error-500 text-white text-xs font-semibold flex items-center justify-center border-2 border-white dark:border-slate-950">
               {totalUnread > 9 ? "9+" : totalUnread}
@@ -425,7 +426,7 @@ export function TeamChatWidget() {
       {open && (
         <div
           className="fixed z-50 bottom-4 flex flex-col bg-white dark:bg-slate-900 rounded-[18px] shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden"
-          style={{ right: "80px", width: "min(380px, calc(100vw - 24px))", height: "min(72vh, 560px)" }}
+          style={{ right: "16px", width: "min(380px, calc(100vw - 24px))", height: "min(72vh, 560px)" }}
         >
           {/* Header */}
           <div className="flex items-center gap-3 px-4 py-3 bg-slate-700 text-white shrink-0">
