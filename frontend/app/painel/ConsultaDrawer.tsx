@@ -2031,6 +2031,12 @@ function lerFolha(folha: string): BlocoFolha[] {
 
 function TabProntuario({ patientId, patient, clinic, motivo }: { patientId: number; patient?: any; clinic?: any; motivo?: string }) {
   const [folha, setFolha] = useState("");
+  // 16/11 (Valth): "enquanto eu digito some coisa, junta uma palavra com outra".
+  // O autosave trocava a folha pela versão do servidor (já sem o espaço/Enter
+  // do fim) no meio da digitação. A folha mais nova fica aqui para o save saber
+  // se ele continuou digitando.
+  const folhaAtualRef = useRef("");
+  folhaAtualRef.current = folha;
   const [loading, setLoading] = useState(true);
   const [rascunhoSalvo, setRascunhoSalvo] = useState(false);
   const [consultType, setConsultType] = useState("primeira_consulta");
@@ -2310,8 +2316,11 @@ function TabProntuario({ patientId, patient, clinic, motivo }: { patientId: numb
       const paraFolha = novos.some(b => b.dataISO === todayISO)
         ? novos
         : [...novos, { id: null, dataISO: todayISO, tipo: tipoLabel(consultType), texto: "" }];
-      setFolha(montarFolha(paraFolha));
-      try { localStorage.removeItem(rascunhoKey); } catch {}
+      // 16/11: autosave NUNCA mexe no que está na tela (comia letras, espaço e
+      // Enter do fim). Só o "Salvar" manual remonta a folha, e só se ele não
+      // digitou nada enquanto salvava.
+      if (!silencioso && folhaAtualRef.current === folha) setFolha(montarFolha(paraFolha));
+      if (folhaAtualRef.current === folha) { try { localStorage.removeItem(rascunhoKey); } catch {} }
 
       setSalvoAgora(true);
       setTimeout(() => setSalvoAgora(false), 2500);
