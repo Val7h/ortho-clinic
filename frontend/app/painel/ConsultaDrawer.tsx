@@ -16,6 +16,7 @@ import toast from "react-hot-toast";
 import { AppointmentFormModal } from "@/components/AppointmentFormModal";
 import { lerCronoLimites, faixaDoCrono, editarCronoLimites, CronoLimites } from "@/lib/cronoLimites";
 import { serverNow } from "@/lib/servertime";
+import * as escriba from "@/lib/escribaGravador";
 import { anamnesisApi, api, patientsApi, consultationsApi, prescriptionsApi, prescriptionTemplatesApi, referralTemplatesApi, examsApi, evolutionApi, clinicApi, chatApi, reportsApi, leafletsApi, waitingRoomApi, remindersApi, medicamentosApi, printJobsApi, msgErro, escribaApi, EscribaResumo } from "@/lib/api";
 import { formatDate, calcAge, hojeISO } from "@/lib/utils";
 
@@ -2030,6 +2031,192 @@ function lerFolha(folha: string): BlocoFolha[] {
   return blocos;
 }
 
+// ── Escriba integrado (fatia 1, 17/11/2026): gravar a consulta por esta tela ──
+// O microfone só liga por CLIQUE neste aparelho: Iniciar/Continuar/Reabrir (se
+// "ligar sozinho" estiver marcado), Ligar ou "Avisei — gravar". Mudança vinda de
+// fora (outro aparelho, Suspender/Finalizar em outra aba) só pausa ou para.
+const TEXTO_AVISO_CFM =
+  "Esta consulta será gravada em áudio para o médico registrar no prontuário o que foi dito. " +
+  "O áudio passa pelo servidor do OrthoMedic, protegido, e é apagado depois de transcrito. " +
+  "Uma inteligência artificial ajuda a organizar o texto, e tudo é conferido pelo médico. " +
+  "Quem não quiser ser gravado pode pedir para parar a qualquer momento.";
+
+async function escribaLigarComAviso(entry: WaitingRoomEntry, perguntarNaHora: boolean) {
+  try {
+    const c = await escriba.escribaGravarApi.consentimento(entry.patient_id);
+    if (!c.tem) {
+      // Tela estreita (coluna lilás escondida): pergunta na hora; o OK é o gesto.
+      if (perguntarNaHora && typeof window !== "undefined" && window.innerWidth < 1024) {
+        if (window.confirm("Aviso de gravação (CFM)\n\n" + TEXTO_AVISO_CFM + "\n\nOK = Avisei — gravar")) {
+          await escriba.aviseiEGravar(entry.id, entry.patient_id);
+        }
+        return;
+      }
+      escriba.pedirAviso(entry.id, entry.patient_id);
+      return;
+    }
+  } catch { return; }
+  await escriba.ligarPorClique(entry.id, entry.patient_id);
+}
+
+// Chamado pela sala de espera DEPOIS que o servidor aceitou o clique em Iniciar /
+// Continuar / Reabrir / Suspender / Finalizar (na gaveta ou no cartão da fila).
+export function escribaAposStatus(entry: WaitingRoomEntry, novo: QueueStatus) {
+  const g = escriba.lerEstado();
+  const minha = g.entryId === entry.id && g.estado !== "parado";
+  if (novo === "suspended") { if (minha) escriba.pausar(); return; }
+  if (novo === "attended" || novo === "absent" || novo === "waiting") {
+    if (g.entryId === entry.id) escriba.parar("Consulta finalizada: gravação parada.");
+    if (g.avisoPendente === entry.id) escriba.cancelarAviso();
+    return;
+  }
+  if (novo === "attending" && escriba.autoLigarAtivo()) {
+    (async () => {
+      // Se o celular/iPad já grava esta consulta, o PC não liga o microfone.
+      try {
+        const s = await escriba.escribaGravarApi.sessaoDaEntrada(entry.id);
+        if (s && s.estado === "gravando" && s.sinal_vivo && !s.ativo) return;
+      } catch {}
+      await escribaLigarComAviso(entry, false);
+    })();
+  }
+}
+
+// Estado da sessão no servidor (para ver "gravando no celular" no PC).
+function useSessaoEscriba(entry: WaitingRoomEntry) {
+  const [s, setS] = useState<escriba.SessaoServidor | null>(null);
+  useEffect(() => {
+    if (entry.status !== "attending" && entry.status !== "suspended") { setS(null); return; }
+    let vivo = true;
+    const ler = () => escriba.escribaGravarApi.sessaoDaEntrada(entry.id).then((r) => { if (vivo) setS(r); }).catch(() => {});
+    ler();
+    const t = setInterval(ler, 8000);
+    return () => { vivo = false; clearInterval(t); };
+  }, [entry.id, entry.status]);
+  return s;
+}
+
+function nomeDoAparelho(t?: string | null) {
+  return t === "ipad" ? "no iPad" : t === "celular" ? "no celular" : "no PC";
+}
+
+function BotaoGravarEscriba({ entry }: { entry: WaitingRoomEntry }) {
+  const g = escriba.useEscribaGravador();
+  const aqui = g.entryId === entry.id && g.estado === "gravando";
+  if (entry.status !== "attending" && !aqui) return null;
+  const cls = "text-[10.5px] px-1.5 py-0.5 rounded border font-semibold";
+  return aqui ? (
+    <button type="button" onClick={() => escriba.parar()} className={`${cls} border-red-300 bg-red-600 text-white hover:bg-red-700`} title="Parar a gravação desta consulta">
+      ■ Parar
+    </button>
+  ) : (
+    <button type="button" onClick={() => escribaLigarComAviso(entry, true)} className={`${cls} border-violet-300 dark:border-violet-700 bg-white dark:bg-slate-900 text-violet-700 dark:text-violet-300 hover:bg-violet-100`} title="Gravar esta consulta neste aparelho">
+      ● Ligar
+    </button>
+  );
+}
+
+function EstadoGravacaoEscriba({ entry }: { entry: WaitingRoomEntry }) {
+  const g = escriba.useEscribaGravador();
+  const s = useSessaoEscriba(entry);
+  const [auto, setAuto] = useState(true);
+  useEffect(() => { setAuto(escriba.autoLigarAtivo()); }, []);
+  const aqui = g.entryId === entry.id;
+  const remoto = !!(s && s.estado === "gravando" && s.sinal_vivo && !s.ativo && !(aqui && g.estado === "gravando"));
+  const pedeAviso = g.avisoPendente === entry.id;
+  let linha = "";
+  let cor = "text-violet-500 dark:text-violet-400";
+  if (aqui && g.estado === "gravando") { linha = `● Gravando neste aparelho${g.pendentes > 1 ? ` · ${g.pendentes} pendente(s)` : ""}`; cor = "text-red-600 dark:text-red-400"; }
+  else if (remoto) { linha = `📱 Gravando ${nomeDoAparelho(s!.aparelho_tipo)}`; cor = "text-red-600 dark:text-red-400"; }
+  else if (aqui && g.estado === "pausado") linha = "⏸ Gravação pausada";
+  else if (aqui && g.msg && (g.cor === "r" || g.semMicrofone)) { linha = g.msg; cor = "text-orange-700 dark:text-orange-300"; }
+  else if (s?.estado === "pausada") linha = "⏸ Gravação pausada";
+  return (
+    <>
+      {linha && <p className={`text-[11px] leading-snug ${cor}`}>{linha}</p>}
+      {pedeAviso && (
+        <div className="rounded-md border border-violet-400 dark:border-violet-700 bg-white dark:bg-slate-900 px-2.5 py-2 text-[11.5px] leading-snug text-violet-900 dark:text-violet-200">
+          <b>Aviso de gravação (CFM).</b> {TEXTO_AVISO_CFM}
+          <div className="flex gap-1.5 mt-2">
+            <button type="button" onClick={() => escriba.aviseiEGravar(entry.id, entry.patient_id)} className="text-[11px] px-2 py-1 rounded bg-violet-600 text-white font-semibold hover:bg-violet-700">
+              Avisei — gravar
+            </button>
+            <button type="button" onClick={() => escriba.cancelarAviso()} className="text-[11px] px-2 py-1 rounded border border-violet-300 text-violet-700 dark:text-violet-300">
+              Agora não
+            </button>
+          </div>
+        </div>
+      )}
+      <label className="flex items-center gap-1 text-[10.5px] text-violet-500 dark:text-violet-400 cursor-pointer">
+        <input type="checkbox" className="w-3 h-3 accent-violet-600" checked={auto} onChange={(e) => { setAuto(e.target.checked); escriba.setAutoLigar(e.target.checked); }} />
+        ligar sozinho ao iniciar a consulta
+      </label>
+    </>
+  );
+}
+
+function RelogioGravacao() {
+  const [, setT] = useState(0);
+  useEffect(() => { const t = setInterval(() => setT((x) => x + 1), 1000); return () => clearInterval(t); }, []);
+  const s = escriba.segundosGravados();
+  return <>{String(Math.floor(s / 60)).padStart(2, "0")}:{String(s % 60).padStart(2, "0")}</>;
+}
+
+// 17/11 (Valth, proposta C aprovada): coluna "Escriba + IA" na ALTURA TODA da gaveta, só em lg+.
+// De cima para baixo: gravar/parar, assistente ao vivo (fatia futura), "você disse que vai
+// fazer" (fatia 3) e o resumo do Escriba com "+ passar" e "Falado e não escrito".
+function ColunaDireitaEscriba({ entry }: { entry: WaitingRoomEntry }) {
+  const g = escriba.useEscribaGravador();
+  const aqui = g.entryId === entry.id && g.estado === "gravando";
+  const dataISO = useMemo(() => hojeISO(), []);
+  const passar = (linha: string) =>
+    window.dispatchEvent(new CustomEvent("ortho:escriba-passar", { detail: { patientId: entry.patient_id, linha } }));
+  return (
+    <aside className="hidden lg:flex flex-col gap-2 w-[300px] xl:w-[330px] flex-shrink-0 sticky top-16 self-start h-[calc(100vh-4rem)] overflow-y-auto py-2.5 pr-3">
+      <div className="flex items-center justify-between rounded-lg border border-violet-300 dark:border-violet-800 bg-violet-50 dark:bg-violet-950/30 px-3 py-2">
+        <span className="text-[13px] font-bold text-violet-800 dark:text-violet-300">Escriba + IA</span>
+        {aqui ? (
+          <button type="button" onClick={() => escriba.parar()} className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-red-600 text-white hover:bg-red-700" title="Parar a gravação desta consulta">
+            ● Gravando <RelogioGravacao /> · Parar
+          </button>
+        ) : (
+          <BotaoGravarEscriba entry={entry} />
+        )}
+      </div>
+      <EstadoGravacaoEscriba entry={entry} />
+      <section className="flex flex-col flex-1 min-h-[140px] rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5">
+        <span className="text-[13px] font-bold text-slate-800 dark:text-slate-200">🤖 Assistente ao vivo</span>
+        <p className="text-[11.5px] text-slate-400 mt-1">Em breve.</p>
+      </section>
+      <section className="flex-none rounded-lg border border-violet-200 dark:border-violet-900 bg-white dark:bg-slate-900 px-3 py-2">
+        <span className="text-[10.5px] text-slate-500">Você disse que vai fazer:</span>
+        <p className="text-[11.5px] text-slate-400">Em breve.</p>
+      </section>
+      <ColunaEscriba patientId={entry.patient_id} dataISO={dataISO} onPassar={passar} />
+    </aside>
+  );
+}
+
+// Chip pequeno ao lado do cronômetro: mostra que está gravando (aqui ou no celular).
+function ChipEscriba({ entry }: { entry: WaitingRoomEntry }) {
+  const g = escriba.useEscribaGravador();
+  const s = useSessaoEscriba(entry);
+  const aqui = g.entryId === entry.id;
+  if (aqui && g.estado === "gravando")
+    return <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-red-600 text-white" title="Gravando a consulta neste aparelho">● REC</span>;
+  if (s && s.estado === "gravando" && s.sinal_vivo && !s.ativo)
+    return <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-red-600 text-white" title={`Gravando ${nomeDoAparelho(s.aparelho_tipo)}`}>📱 REC</span>;
+  if (aqui && g.estado === "pausado")
+    return <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-500 text-white" title="Gravação pausada">⏸ REC</span>;
+  if (g.avisoPendente === entry.id)
+    return (
+      <button type="button" onClick={() => escribaLigarComAviso(entry, true)} className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-violet-600 text-white" title="Falta o aviso de gravação deste paciente">
+        🎙 aviso
+      </button>
+    );
+  return null;
+}
+
 // 16/11/2026 (Valth): "a anamnese do escriba separada da anamnese do médico,
 // como se fosse duas colunas". Lilás = escrito pela IA; o texto dele não muda.
 // "+ passar" leva só aquela linha para o fim da folha dele.
@@ -2047,14 +2234,16 @@ function ColunaEscriba({ patientId, dataISO, onPassar }: { patientId: number; da
   const linhas = res?.linhas || [];
   const faltas = res?.faltas || [];
   return (
-    <aside className="hidden lg:flex flex-col gap-2.5 w-[300px] xl:w-[330px] flex-shrink-0 sticky top-0 rounded-lg border border-violet-300 dark:border-violet-800 bg-violet-50 dark:bg-violet-950/30 px-3 py-3 min-h-[260px]">
+    <section className="flex flex-col gap-2.5 flex-1 min-h-[200px] rounded-lg border border-violet-300 dark:border-violet-800 bg-violet-50 dark:bg-violet-950/30 px-3 py-3">
       <div className="flex items-center justify-between">
-        <span className="text-[13px] font-bold text-violet-800 dark:text-violet-300">🎙️ Escriba · IA</span>
-        {res?.updated_at && (
-          <span className="text-[10px] text-violet-500">
-            {new Date(/[zZ]$|[+-]\d{2}:?\d{2}$/.test(res.updated_at) ? res.updated_at : res.updated_at + "Z").toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
-          </span>
-        )}
+        <span className="text-[13px] font-bold text-violet-800 dark:text-violet-300">🎙️ Escriba · resumo</span>
+        <span className="flex items-center gap-1.5">
+          {res?.updated_at && (
+            <span className="text-[10px] text-violet-500">
+              {new Date(/[zZ]$|[+-]\d{2}:?\d{2}$/.test(res.updated_at) ? res.updated_at : res.updated_at + "Z").toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+            </span>
+          )}
+        </span>
       </div>
       {linhas.length === 0 && faltas.length === 0 ? (
         <p className="text-[12px] text-violet-500 dark:text-violet-400">O Escriba ainda não escreveu nada nesta consulta.</p>
@@ -2083,11 +2272,11 @@ function ColunaEscriba({ patientId, dataISO, onPassar }: { patientId: number; da
         </div>
       )}
       <p className="text-[10px] text-violet-500 dark:text-violet-400 mt-auto">Resumo feito pela IA a partir da conversa. Confira antes de usar.</p>
-    </aside>
+    </section>
   );
 }
 
-function TabProntuario({ patientId, patient, clinic, motivo }: { patientId: number; patient?: any; clinic?: any; motivo?: string }) {
+function TabProntuario({ patientId, patient, clinic, motivo, entry }: { patientId: number; patient?: any; clinic?: any; motivo?: string; entry?: WaitingRoomEntry }) {
   const [folha, setFolha] = useState("");
   // 16/11 (Valth): "enquanto eu digito some coisa, junta uma palavra com outra".
   // O autosave trocava a folha pela versão do servidor (já sem o espaço/Enter
@@ -2108,6 +2297,16 @@ function TabProntuario({ patientId, patient, clinic, motivo }: { patientId: numb
   const refBlocos = useRef<BlocoFolha[]>([]);
 
   const todayISO = useMemo(() => hojeISO(), []);
+  // 17/11: a coluna do Escriba saiu daqui (agora ocupa a altura toda da gaveta).
+  // O "+ passar" dela chega por este evento e entra no fim da folha, pelo setFolha.
+  useEffect(() => {
+    const h = (e: Event) => {
+      const d = (e as CustomEvent).detail;
+      if (d?.patientId === patientId && typeof d.linha === "string") setFolha(f => (f.replace(/\s+$/, "") + "\n" + d.linha));
+    };
+    window.addEventListener("ortho:escriba-passar", h);
+    return () => window.removeEventListener("ortho:escriba-passar", h);
+  }, [patientId]);
   const tipoLabel = (v: string) => CONSULT_TYPES.find(c => c.value === v)?.label ?? "";
 
   const rascunhoKey = `orthoclinic_anamnese_folha_${userScope()}_${patientId}`;
@@ -2562,11 +2761,6 @@ function TabProntuario({ patientId, patient, clinic, motivo }: { patientId: numb
           />
         )}
         </div>
-        <ColunaEscriba
-          patientId={patientId}
-          dataISO={todayISO}
-          onPassar={(linha) => setFolha(f => (f.replace(/\s+$/, "") + "\n" + linha))}
-        />
        </div>
       </div>
 
@@ -7960,7 +8154,7 @@ export default function ConsultaDrawer({ entry, onClose, onStatusChange }: Consu
   }, [activeTab]);
 
   const ABAS_DO_ATENDIMENTO: Array<{ key: DrawerTab; render: () => JSX.Element }> = [
-    { key: "anamnese",        render: () => <TabProntuario patientId={entry.patient_id} patient={patient} clinic={clinic} motivo={entry.reason || ""} /> },
+    { key: "anamnese",        render: () => <TabProntuario patientId={entry.patient_id} patient={patient} clinic={clinic} motivo={entry.reason || ""} entry={entry} /> },
     { key: "exames",          render: () => <TabExames patientId={entry.patient_id} patient={patient} clinic={clinic} /> },
     { key: "prescricao",      render: () => <TabPrescricao patientId={entry.patient_id} patient={patient} onImprimir={(jobs) => { setRxExterna((v) => ({ seq: (v?.seq || 0) + 1, jobs })); setActiveTab("receitas"); }} /> },
     { key: "receitas",        render: () => <TabReceita patientId={entry.patient_id} patient={patient} clinic={clinic} rxExterna={rxExterna} /> },
@@ -8178,23 +8372,24 @@ export default function ConsultaDrawer({ entry, onClose, onStatusChange }: Consu
     return () => window.removeEventListener("resize", medirTabs);
   }, [activeTab, medirTabs]);
 
-  const tabs: { key: DrawerTab; label: string; icon: React.ReactNode }[] = [
-    { key: "anamnese",        label: "Anamnese",         icon: <ClipboardList className="w-3.5 h-3.5" /> },
-    { key: "exames",          label: "Exames",            icon: <FlaskConical className="w-3.5 h-3.5" /> },
-    { key: "prescricao",      label: "Prescrição",        icon: <Pill className="w-3.5 h-3.5" /> },
-    { key: "receitas",        label: "Receitas",          icon: <FileText className="w-3.5 h-3.5" /> },
-    { key: "encaminhamentos", label: "Encaminh.",         icon: <Send className="w-3.5 h-3.5" /> },
-    { key: "procedimentos",   label: "Procedimentos",     icon: <ClipboardCheck className="w-3.5 h-3.5" /> },
-    { key: "atestados",       label: "Atestados",         icon: <Award className="w-3.5 h-3.5" /> },
-    { key: "laudos",          label: "Laudos",            icon: <FileSearch2 className="w-3.5 h-3.5" /> },
+  const tabs: { key: DrawerTab; label: string; emoji: string; curto: string; icon: React.ReactNode }[] = [
+    { key: "anamnese",        label: "Anamnese",         emoji: "📝", curto: "Anamnese", icon: <ClipboardList className="w-3.5 h-3.5" /> },
+    { key: "exames",          label: "Exames",            emoji: "🧪", curto: "Exames", icon: <FlaskConical className="w-3.5 h-3.5" /> },
+    { key: "prescricao",      label: "Prescrição",        emoji: "💊", curto: "Prescr.", icon: <Pill className="w-3.5 h-3.5" /> },
+    { key: "receitas",        label: "Receitas",          emoji: "🧾", curto: "Receitas", icon: <FileText className="w-3.5 h-3.5" /> },
+    { key: "encaminhamentos", label: "Encaminh.",         emoji: "↗️", curto: "Encam.", icon: <Send className="w-3.5 h-3.5" /> },
+    { key: "procedimentos",   label: "Procedimentos",     emoji: "💉", curto: "Proced.", icon: <ClipboardCheck className="w-3.5 h-3.5" /> },
+    { key: "atestados",       label: "Atestados",         emoji: "📄", curto: "Atest.", icon: <Award className="w-3.5 h-3.5" /> },
+    { key: "laudos",          label: "Laudos",            emoji: "📋", curto: "Laudos", icon: <FileSearch2 className="w-3.5 h-3.5" /> },
     // 17/11 (Valth): aba "Fotos" fora da lista. Ele nunca usa; as fotos ja vao para "Documentos".
     // O componente TabFotos e os dados continuam; so a aba nao aparece.
-    { key: "documentos",      label: "Documentos",        icon: <FolderOpen className="w-3.5 h-3.5" /> },
+    { key: "documentos",      label: "Documentos",        emoji: "📁", curto: "Docs", icon: <FolderOpen className="w-3.5 h-3.5" /> },
   ];
 
   return (
     <PrintCollectorContext.Provider value={{ docs: collectedDocs, addDoc, removeDoc }}>
-    <div className="flex flex-col h-full bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-700 overflow-hidden">
+    <div className="flex flex-row gap-3 h-full bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-700 overflow-hidden md:overflow-clip">
+    <div className="flex-1 min-w-0 flex flex-col h-full overflow-hidden">
       {printCenterOpen && (
         <ConsultaPrintCenter docs={collectedDocs} onRemove={removeDoc} onClose={() => setPrintCenterOpen(false)} />
       )}
@@ -8367,6 +8562,7 @@ export default function ConsultaDrawer({ entry, onClose, onStatusChange }: Consu
           )}
           {/* Cronômetro da consulta: vivo em atendimento, congelado quando suspenso */}
           <DrawerCrono entry={entry} />
+          <ChipEscriba entry={entry} />
           <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
             entry.status === "attending" ? "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300"
             : entry.status === "suspended" ? "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
@@ -8445,19 +8641,21 @@ export default function ConsultaDrawer({ entry, onClose, onStatusChange }: Consu
       <div className="flex-shrink-0 relative border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
       <div ref={tabsScrollRef} onScroll={medirTabs} className="overflow-x-auto scrollbar-none" style={{ scrollbarWidth: "none" }}>
         <div className="flex min-w-max">
-          {tabs.map(({ key, label, icon }) => (
+          {/* 17/11 (proposta C): abas em ícone com nome curto embaixo; o nome completo fica no title. */}
+          {tabs.map(({ key, label, emoji, curto }) => (
             <button
               key={key}
+              title={label}
               data-tab-ativa={activeTab === key ? "true" : "false"}
               onClick={() => setActiveTab(key)}
-              className={`flex items-center gap-1 px-3 py-2.5 text-[11px] font-semibold transition-all border-b-2 whitespace-nowrap ${
+              className={`flex flex-col items-center gap-0.5 px-2.5 pt-1.5 pb-1 text-[10.5px] font-semibold transition-all border-b-2 whitespace-nowrap ${
                 activeTab === key
                   ? "border-blue-600 text-blue-600 dark:text-blue-400"
                   : "border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
               }`}
             >
-              {icon}
-              {label}
+              <span className="text-[15px] leading-none" aria-hidden>{emoji}</span>
+              {curto}
             </button>
           ))}
         </div>
@@ -8516,6 +8714,8 @@ export default function ConsultaDrawer({ entry, onClose, onStatusChange }: Consu
           </div>
         )}
       </div>
+    </div>
+    <ColunaDireitaEscriba entry={entry} />
     </div>
     </PrintCollectorContext.Provider>
   );

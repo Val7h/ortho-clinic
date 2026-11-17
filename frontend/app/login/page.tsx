@@ -36,7 +36,12 @@ export default function LoginPage() {
 
   // Already logged in → redirect
   useEffect(() => {
-    if (!loading && user) router.push('/');
+    if (!loading && user) {
+      // 17/11: quem veio da tela de gravar (celular/iPad) volta para ela depois do login.
+      let voltar = '';
+      try { voltar = sessionStorage.getItem('ortho_voltar_para') || ''; sessionStorage.removeItem('ortho_voltar_para'); } catch {}
+      router.push(voltar === '/escriba-gravar' ? '/escriba-gravar' : '/');
+    }
   }, [loading, user, router]);
 
   const handleSubmit = async (e: FormEvent) => {

@@ -13,7 +13,7 @@ import { patientsApi, waitingRoomApi, clinicApi, msgErro } from '@/lib/api';
 import { serverNow } from '@/lib/servertime';
 import { faixaDoCrono } from '@/lib/cronoLimites';
 import toast from 'react-hot-toast';
-import ConsultaDrawer, { WaitingRoomEntry } from './ConsultaDrawer';
+import ConsultaDrawer, { WaitingRoomEntry, escribaAposStatus } from './ConsultaDrawer';
 import { useAuth } from '@/components/AuthProvider';
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -594,6 +594,9 @@ export default function SalaDeEsperaPage() {
     setBusyIds((prev) => new Set(prev).add(id));
     try {
       const updated = await waitingRoomApi.updateStatus(id, newStatus);
+      // 17/11 (Escriba integrado): este clique liga, pausa ou para a gravação NESTE aparelho.
+      const antes = entries.find((e) => e.id === id);
+      if (antes) escribaAposStatus({ ...antes, ...updated }, newStatus);
       setEntries((prev) => prev.map((e) => (e.id === id ? { ...e, ...updated } : e)));
       setSaindoIds((prev) => new Set(prev).add(id));
       const timerAntigo = saindoTimersRef.current.get(id);
@@ -807,7 +810,8 @@ export default function SalaDeEsperaPage() {
         />
 
         {/* Main layout: queue list + optional drawer */}
-        <div className="flex flex-1 overflow-hidden">
+        {/* 17/11: md:overflow-clip (corta igual, mas nao vira caixa de rolagem) para a coluna do Escriba ficar presa no alto ao rolar */}
+        <div className="flex flex-1 overflow-hidden md:overflow-clip">
           {/* ── Queue list ── */}
           <main
             className={`flex-shrink-0 overflow-y-auto transition-all duration-300 ${
@@ -946,7 +950,7 @@ export default function SalaDeEsperaPage() {
 
           {/* ── Drawer panel ── */}
           {drawerOpen && selectedEntry && (
-            <div className="fixed inset-0 z-40 bg-white dark:bg-slate-950 overflow-hidden flex flex-col md:static md:inset-auto md:z-auto md:flex-1 md:border-l md:border-slate-200 md:dark:border-slate-700">
+            <div className="fixed inset-0 z-40 bg-white dark:bg-slate-950 overflow-hidden md:overflow-clip flex flex-col md:static md:inset-auto md:z-auto md:flex-1 md:border-l md:border-slate-200 md:dark:border-slate-700">
               <ConsultaDrawer
                 key={selectedEntry.patient_id}
                 entry={selectedEntry}
