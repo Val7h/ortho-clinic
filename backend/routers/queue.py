@@ -1257,9 +1257,11 @@ async def update_waiting_status(
 
     # 17/11 (Escriba integrado): Suspender pausa e Finalizar para a gravação desta
     # consulta. Daqui só se pausa ou para; ligar o microfone é só por clique no aparelho.
+    # SAVEPOINT: se o Escriba falhar, desfaz só a parte dele; a mudança de status segue.
     try:
         from routers.escriba import seguir_status_da_entrada
-        seguir_status_da_entrada(db, entry.id, request.status)
+        with db.begin_nested():
+            seguir_status_da_entrada(db, entry.id, request.status)
     except Exception:
         logger.exception("Escriba: falha ao seguir o status da consulta")
 
