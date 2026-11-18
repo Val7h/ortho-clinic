@@ -157,6 +157,28 @@ function insuranceStyle(name: string | null): { className: string; style?: React
   return { className: insuranceColor(name) };
 }
 
+// 18/11 (Valth): na sala de espera, o LOGOTIPO do plano no lugar do nome, no
+// mesmo tamanho da etiqueta. Arquivos em public/convenios/. Convênio sem logo
+// conhecido (e "Particular") continua como texto. Ordem importa: 1ª que casar.
+const INSURANCE_LOGOS: [string[], string, string][] = [
+  [['SAUDE CAIXA'], 'saudecaixa.png', 'Saúde Caixa'],
+  [['UNIMED'], 'unimed.png', 'Unimed'],
+  [['BRADESCO'], 'bradesco.png', 'Bradesco'],
+  [['SASSEPE', 'IASSEPE', 'SASSEP'], 'sassepe.png', 'Sassepe'],
+  [['SULAMERICA', 'SUL AMERICA'], 'sulamerica.png', 'SulAmérica'],
+  [['CASSI'], 'cassi.png', 'Cassi'],
+  [['AMIL'], 'amil.png', 'Amil'],
+  [['GEAP'], 'geap.png', 'Geap'],
+  [['CAPESAUDE', 'CAPE SAUDE', 'CAPESESP'], 'capesaude.png', 'Capesaúde'],
+];
+
+function insuranceLogo(name: string | null): { src: string; label: string } | null {
+  const n = normIns(name ?? '');
+  if (!n || PARTICULAR_KEYS.some((k) => n.includes(k))) return null;
+  const hit = INSURANCE_LOGOS.find(([keys]) => keys.some((k) => n.includes(k)));
+  return hit ? { src: `/convenios/${hit[1]}`, label: hit[2] } : null;
+}
+
 function insuranceColor(name: string | null): string {
   if (!name) return 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300';
   let hash = 0;
@@ -356,12 +378,26 @@ function PatientCard({ entry, onStatusChange, onRemove, onAddValue, onSelect, bu
               {clinicLabel(clinics.find((c) => c.id === entry.clinic_id)?.name)}
             </span>
           )}
-          <span
-            className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold flex-shrink-0 ${insuranceStyle(entry.patient_insurance).className}`}
-            style={insuranceStyle(entry.patient_insurance).style}
-          >
-            {entry.patient_insurance ?? 'Particular'}
-          </span>
+          {insuranceLogo(entry.patient_insurance) ? (
+            <span
+              className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] border border-slate-300 bg-white flex-shrink-0"
+              title={insuranceLogo(entry.patient_insurance)!.label}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={insuranceLogo(entry.patient_insurance)!.src}
+                alt={insuranceLogo(entry.patient_insurance)!.label}
+                className="block h-[13px] w-auto max-w-[72px] object-contain"
+              />
+            </span>
+          ) : (
+            <span
+              className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold flex-shrink-0 ${insuranceStyle(entry.patient_insurance).className}`}
+              style={insuranceStyle(entry.patient_insurance).style}
+            >
+              {entry.patient_insurance ?? 'Particular'}
+            </span>
+          )}
           {entry.value_cents != null && (
             <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold flex-shrink-0 bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">
               {formatCentsToReais(entry.value_cents)}
