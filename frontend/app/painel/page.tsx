@@ -380,14 +380,14 @@ function PatientCard({ entry, onStatusChange, onRemove, onAddValue, onSelect, bu
           )}
           {insuranceLogo(entry.patient_insurance) ? (
             <span
-              className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] border border-slate-300 bg-white flex-shrink-0"
+              className="inline-flex items-center px-1 py-px rounded border border-slate-300 bg-white flex-shrink-0"
               title={insuranceLogo(entry.patient_insurance)!.label}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={insuranceLogo(entry.patient_insurance)!.src}
                 alt={insuranceLogo(entry.patient_insurance)!.label}
-                className="block h-[13px] w-auto max-w-[72px] object-contain"
+                className="block h-[18px] w-auto max-w-[120px] object-contain"
               />
             </span>
           ) : (
