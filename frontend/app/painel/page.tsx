@@ -160,10 +160,10 @@ function insuranceStyle(name: string | null): { className: string; style?: React
 // 18/11 (Valth): na sala de espera, o LOGOTIPO do plano no lugar do nome, no
 // mesmo tamanho da etiqueta. Arquivos em public/convenios/. Convênio sem logo
 // conhecido (e "Particular") continua como texto. Ordem importa: 1ª que casar.
-const INSURANCE_LOGOS: [string[], string, string, string?][] = [
+const INSURANCE_LOGOS: [string[], string, string, string?, number?][] = [
   [['SAUDE CAIXA'], 'saudecaixa.png', 'Saúde Caixa'],
-  [['UNIMED'], 'unimed.png', 'Unimed', '#00995D'],  // 4º item: cor de fundo do logo; a caixinha fica dessa cor e o logo ocupa tudo
-  [['BRADESCO'], 'bradesco.png', 'Bradesco'],
+  [['UNIMED'], 'unimed.png', 'Unimed', '#00995D', 15],  // 4º item: cor de fundo (a caixinha fica dessa cor); 5º: altura do logo em px (padrão 18)
+  [['BRADESCO'], 'bradesco.png', 'Bradesco', undefined, 17],
   [['SASSEPE', 'IASSEPE', 'SASSEP'], 'sassepe.png', 'Sassepe'],
   [['SULAMERICA', 'SUL AMERICA'], 'sulamerica.png', 'SulAmérica'],
   [['CASSI'], 'cassi.png', 'Cassi'],
@@ -172,11 +172,11 @@ const INSURANCE_LOGOS: [string[], string, string, string?][] = [
   [['CAPESAUDE', 'CAPE SAUDE', 'CAPESESP'], 'capesaude.png', 'Capesaúde'],
 ];
 
-function insuranceLogo(name: string | null): { src: string; label: string; bg?: string } | null {
+function insuranceLogo(name: string | null): { src: string; label: string; bg?: string; h: number } | null {
   const n = normIns(name ?? '');
   if (!n || PARTICULAR_KEYS.some((k) => n.includes(k))) return null;
   const hit = INSURANCE_LOGOS.find(([keys]) => keys.some((k) => n.includes(k)));
-  return hit ? { src: `/convenios/${hit[1]}`, label: hit[2], bg: hit[3] } : null;
+  return hit ? { src: `/convenios/${hit[1]}`, label: hit[2], bg: hit[3], h: hit[4] ?? 18 } : null;
 }
 
 function insuranceColor(name: string | null): string {
@@ -380,7 +380,7 @@ function PatientCard({ entry, onStatusChange, onRemove, onAddValue, onSelect, bu
           )}
           {insuranceLogo(entry.patient_insurance) ? (
             <span
-              className={`inline-flex items-center rounded border flex-shrink-0 overflow-hidden ${insuranceLogo(entry.patient_insurance)!.bg ? 'px-1.5' : 'px-1 py-px border-slate-300 bg-white'}`}
+              className={`inline-flex items-center rounded border flex-shrink-0 overflow-hidden ${insuranceLogo(entry.patient_insurance)!.bg ? 'px-1.5 py-[3px]' : 'px-1 py-px border-slate-300 bg-white'}`}
               style={insuranceLogo(entry.patient_insurance)!.bg ? { backgroundColor: insuranceLogo(entry.patient_insurance)!.bg, borderColor: insuranceLogo(entry.patient_insurance)!.bg } : undefined}
               title={insuranceLogo(entry.patient_insurance)!.label}
             >
@@ -388,7 +388,8 @@ function PatientCard({ entry, onStatusChange, onRemove, onAddValue, onSelect, bu
               <img
                 src={insuranceLogo(entry.patient_insurance)!.src}
                 alt={insuranceLogo(entry.patient_insurance)!.label}
-                className={`block w-auto max-w-[120px] object-contain ${insuranceLogo(entry.patient_insurance)!.bg ? 'h-[20px]' : 'h-[18px]'}`}
+                className="block w-auto max-w-[120px] object-contain"
+                style={{ height: insuranceLogo(entry.patient_insurance)!.h }}
               />
             </span>
           ) : (
