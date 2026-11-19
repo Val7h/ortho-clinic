@@ -349,7 +349,7 @@ export const reportsApi = {
 };
 
 // ── Impressora da clínica (fila de impressão remota, 03/11/2026) ──────────────
-export type PrintJobKind = "receita" | "exame" | "laudo" | "encaminhamento";
+export type PrintJobKind = "receita" | "exame" | "laudo" | "encaminhamento" | "documento";
 export const printJobsApi = {
   create: (data: { kind: PrintJobKind; ref_id: number; clinic_id: number; opcoes?: Record<string, any> }) =>
     api.post("/print-jobs", data).then((r) => r.data),
@@ -357,6 +357,9 @@ export const printJobsApi = {
     api.get("/print-jobs/pending", { params: { clinic_id: clinicId } }).then((r) => r.data),
   done: (jobId: number) =>
     api.post(`/print-jobs/${jobId}/done`).then((r) => r.data),
+  // 18/11: páginas (imagem) da guia SP/SADT em PDF que está na fila
+  paginas: (jobId: number): Promise<{ paginas: string[]; largura_mm: number; altura_mm: number }> =>
+    api.get(`/print-jobs/${jobId}/paginas`).then((r) => r.data),
 };
 
 // ── Confirmação de agendamento (público, sem auth) ────────────────────────────

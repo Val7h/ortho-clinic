@@ -5640,12 +5640,12 @@ function opcoesDePapel() {
   return { exam_font: loadExamFontSize(), exam_line: loadExamLineHeight(), rx_formato: lerFormatoReceita() };
 }
 
-async function enviarParaImpressoraDaClinica(kind: "receita" | "exame" | "laudo" | "encaminhamento", refId: number, clinicId: number) {
+async function enviarParaImpressoraDaClinica(kind: "receita" | "exame" | "laudo" | "encaminhamento" | "documento", refId: number, clinicId: number) {
   return printJobsApi.create({ kind, ref_id: refId, clinic_id: clinicId, opcoes: opcoesDePapel() });
 }
 
 function BotaoImpressoraClinica({ kind, refId, clinic, grande = false }: {
-  kind: "receita" | "exame" | "laudo" | "encaminhamento"; refId?: number | null; clinic?: any; grande?: boolean;
+  kind: "receita" | "exame" | "laudo" | "encaminhamento" | "documento"; refId?: number | null; clinic?: any; grande?: boolean;
 }) {
   const [enviando, setEnviando] = useState(false);
   if (!clinic?.id || !refId) return null;
@@ -7701,6 +7701,7 @@ interface PatientDocument {
   date: string;
   category?: string;
   notes?: string | null;
+  mime_type?: string | null;
 }
 
 // ── Tab: Documentos ───────────────────────────────────────────────────────────
@@ -7720,7 +7721,7 @@ const DOC_CATEGORIAS: Record<string, string> = {
   other: "Outro",
 };
 
-function TabDocumentos({ patientId, patient }: { patientId: number; patient?: any }) {
+function TabDocumentos({ patientId, patient, clinic }: { patientId: number; patient?: any; clinic?: any }) {
   const [docs, setDocs] = useState<PatientDocument[]>([]);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState(false);
@@ -7829,6 +7830,20 @@ function TabDocumentos({ patientId, patient }: { patientId: number; patient?: an
 
   useEffect(() => { carregar(); }, [carregar]);
 
+  // 18/11 (Valth: "só mostra documento novo com F5, deve ser corrigido agora"): a guia SP/SADT feita por fora
+  // (sessão de atendimento ou botão do Escriba) aparece sozinha aqui, como já acontece nas outras abas.
+  // Em silêncio: sem "Carregando…", sem mexer no que está marcado, e só troca a lista se ela mudou.
+  useDocsSozinhos(() => {
+    fetch(`${API_URL}/patients/${patientId}/documents?limit=200`, { headers: headers() })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!data) return;
+        const lista: PatientDocument[] = (Array.isArray(data) ? data : (data.items ?? [])).filter((d: PatientDocument) => d.category !== "photo");
+        setDocs((prev) => (assinaturaDocs(prev) === assinaturaDocs(lista) ? prev : lista));
+      })
+      .catch(() => {});
+  });
+
   // arquivo guardado no servidor vem como "/uploads/..." — completa com o endereço da API
   const urlDoArquivo = (u: string) => (u.startsWith("/") ? `${API_URL}${u}` : u);
 
@@ -7917,6 +7932,10 @@ function TabDocumentos({ patientId, patient }: { patientId: number; patient?: an
                 </span>
                 <span className="text-[11px] font-semibold text-brand-600 shrink-0">Abrir</span>
               </a>
+              {/* 18/11: a guia em PDF também vai para a impressora da clínica */}
+              {(d.mime_type || "").includes("pdf") && (
+                <span className="pr-2 shrink-0"><BotaoImpressoraClinica kind="documento" refId={Number(d.id)} clinic={clinic} grande /></span>
+              )}
             </li>
           ))}
         </ul>
@@ -8670,28 +8689,28 @@ function PacoteDoDia({ patientId, patient, clinic, entryId, onClose }: { patient
     return pdf.output("blob");
   };
 
-  // 03/11: manda os escolhidos para a fila da impressora da clínica do
-  // atendimento. Guia em PDF (SP/SADT) não entra — essa continua no Imprimir.
+  // 03/11: manda os escolhidos para a fila da impressora da clínica do atendimento.
+  // 18/11 (Valth): a guia SP/SADT em PDF também entra na fila (kind "documento").
   const [enviandoImpressora, setEnviandoImpressora] = useState(false);
   const mandarImpressoraClinica = async () => {
     if (!clinic?.id) return;
-    const docs = escolhidos.filter((i) => i.tipo !== "guia");
-    if (!docs.length) { toast.error("Guia em PDF não vai para a impressora da clínica — use Imprimir."); return; }
+    const docs = escolhidos;
+    if (!docs.length) return;
     setEnviandoImpressora(true);
     let ok = 0;
+    const foram: string[] = [];
     try {
       for (const i of docs) {
-        const refId = Number(i.id.slice(2));
-        const kind = i.tipo === "receita" ? "receita" : i.tipo === "exame" ? "exame"
+        const refId = i.tipo === "guia" ? Number(i.docId) : Number(i.id.slice(2));
+        const kind = i.tipo === "guia" ? "documento" : i.tipo === "receita" ? "receita" : i.tipo === "exame" ? "exame"
           : (i.tipo === "relatorio" && i.reportType === "encaminhamento") ? "encaminhamento" : "laudo";
-        try { await enviarParaImpressoraDaClinica(kind, refId, clinic.id); ok++; } catch { /* segue os outros */ }
+        try { await enviarParaImpressoraDaClinica(kind, refId, clinic.id); ok++; foram.push(i.id); } catch { /* segue os outros */ }
       }
       if (ok) {
-        marcarImpressos(docs.map((i) => i.id));
+        marcarImpressos(foram);
         toast.success(`${ok} documento(s) na fila da impressora — ${clinic.name || "clínica"}`);
       }
       if (ok < docs.length) toast.error(`${docs.length - ok} documento(s) não foram para a fila`);
-      if (escolhidos.some((i) => i.tipo === "guia")) toast("A guia em PDF não vai para a impressora da clínica — use Imprimir.", { icon: "ℹ️" });
     } finally {
       setEnviandoImpressora(false);
     }
@@ -8907,7 +8926,7 @@ export default function ConsultaDrawer({ entry, onClose, onStatusChange }: Consu
     { key: "atestados",       render: () => <TabAtestados patient={patient} clinic={clinic} prefill={prefillDe("atestados")} onSalvoEscriba={aoSalvarEscriba} /> },
     { key: "laudos",          render: () => <TabLaudos patient={patient} clinic={clinic} /> },
     { key: "fotos",           render: () => <TabFotos patientId={entry.patient_id} /> },
-    { key: "documentos",      render: () => <TabDocumentos patientId={entry.patient_id} patient={patient} /> },
+    { key: "documentos",      render: () => <TabDocumentos patientId={entry.patient_id} patient={patient} clinic={clinic} /> },
   ];
   const [patient, setPatient] = useState<any>(null);
   // C (14/11): "1ª consulta" calculada pelo HISTÓRICO real. O GET /patients/{id} não

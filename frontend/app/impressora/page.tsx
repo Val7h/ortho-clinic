@@ -16,7 +16,7 @@ import { RxSheets, ExamSheet, ReportSheet, normalizePrescriptionType } from "../
 
 type Job = {
   id: number;
-  kind: "receita" | "exame" | "laudo" | "encaminhamento";
+  kind: "receita" | "exame" | "laudo" | "encaminhamento" | "documento";
   ref_id: number;
   created_at: string;
   opcoes: any;
@@ -30,6 +30,7 @@ const NOME_TIPO: Record<string, string> = {
   exame: "Pedido de exame",
   laudo: "Laudo / atestado",
   encaminhamento: "Encaminhamento",
+  documento: "Guia do convênio",
 };
 
 const CHAVE_CLINICA = "ortho_impressora_clinic_id";
@@ -40,8 +41,20 @@ function horaAgora(d = new Date()): string {
 }
 
 // A folha do pedido — exatamente os componentes que a tela da consulta usa.
-function Folha({ job }: { job: Job }) {
+type PaginasGuia = { imgs: string[]; deitada: boolean };
+
+function Folha({ job, guia }: { job: Job; guia?: PaginasGuia | null }) {
   const d = job.documento || {};
+  // 18/11 (Valth): a guia SP/SADT também sai sozinha. É um PDF: cada página entra como imagem na folha
+  // inteira (a guia já tem a margem embutida), deitada quando o PDF é deitado (Unimed).
+  if (job.kind === "documento") {
+    const [w, h] = guia?.deitada ? ["297mm", "210mm"] : ["210mm", "297mm"];
+    return (
+      <div className={guia?.deitada ? "imp-guia-deitada" : "imp-guia"}>
+        {(guia?.imgs || []).map((src, k) => <img key={k} src={src} alt="" style={{ width: w, height: h, display: "block" }} />)}
+      </div>
+    );
+  }
   const dataISO = String(d.date || "").slice(0, 10) || undefined;
   const op = job.opcoes || {};
   if (job.kind === "receita") {
@@ -130,6 +143,10 @@ export default function ImpressoraPage() {
   const ocupado = useRef(false);
   // Impresso mas o servidor não confirmou: tenta marcar de novo, NUNCA reimprime.
   const semConfirmar = useRef<Set<number>>(new Set());
+  // Guia cujo PDF não abriu: fica de fora nesta sessão para não travar os outros documentos.
+  const pulados = useRef<Set<number>>(new Set());
+  const [guia, setGuia] = useState<PaginasGuia | null>(null);
+  const [aviso, setAviso] = useState<string>("");
   const jaImpressos = useRef<Set<number>>(new Set());
 
   // clinic_id: do endereço (?clinic_id=5) ou o último escolhido neste computador.
@@ -172,7 +189,7 @@ export default function ImpressoraPage() {
         try { await printJobsApi.done(id); semConfirmar.current.delete(id); } catch { /* tenta no próximo ciclo */ }
       }
       const r = await printJobsApi.pending(clinicId);
-      const jobs: Job[] = (r?.jobs || []).filter((j: Job) => !jaImpressos.current.has(j.id));
+      const jobs: Job[] = (r?.jobs || []).filter((j: Job) => !jaImpressos.current.has(j.id) && !pulados.current.has(j.id));
       setNomeClinica(r?.clinic?.name || "");
       setFila(jobs);
       setConectado(true);
@@ -200,6 +217,25 @@ export default function ImpressoraPage() {
     if (!atual) return;
     let cancelado = false;
     (async () => {
+      if (atual.kind === "documento") {
+        try {
+          const r = await printJobsApi.paginas(atual.id);
+          if (cancelado) return;
+          if (!r?.paginas?.length) throw new Error("sem páginas");
+          setGuia({ imgs: r.paginas, deitada: (r.largura_mm || 0) > (r.altura_mm || 0) });
+        } catch (e: any) {
+          if (cancelado) return;
+          // Não imprime folha em branco nem marca como impresso: avisa na tela e segue a fila.
+          pulados.current.add(atual.id);
+          setAviso(`${horaAgora()} · A guia de ${atual.patient?.name || "paciente"} não abriu: ${msgErro(e, "arquivo não encontrado")}. Imprima pela consulta.`);
+          setFila((prev) => prev.filter((j) => j.id !== atual.id));
+          ocupado.current = false;
+          setAtual(null);
+          return;
+        }
+      } else {
+        setGuia(null);
+      }
       await new Promise((r) => setTimeout(r, 300));
       await esperarImagens(portalRef.current);
       await new Promise((r) => setTimeout(r, 300));
@@ -240,6 +276,12 @@ export default function ImpressoraPage() {
           body > *:not([data-print-portal]) { display: none !important; }
           #imp-print-portal { display: block !important; position: static !important; width: 100% !important; background: #fff !important; }
           @page { size: A4 portrait; margin: 10mm 12mm; }
+          @page impguia { size: A4 portrait; margin: 0; }
+          @page impguiadeitada { size: A4 landscape; margin: 0; }
+          .imp-guia { page: impguia; }
+          .imp-guia-deitada { page: impguiadeitada; }
+          .imp-guia img, .imp-guia-deitada img { page-break-after: always; break-after: page; }
+          .imp-guia img:last-child, .imp-guia-deitada img:last-child { page-break-after: auto; break-after: auto; }
           .rx-via-break { page-break-after: always; break-after: page; margin-bottom: 0 !important; }
           .rx-cut-line { display: none !important; }
         }
@@ -282,6 +324,7 @@ export default function ImpressoraPage() {
                 </p>
               )}
               {conectado === false && erro && <p className="mt-2 text-base text-red-700 dark:text-red-300">{erro}</p>}
+              {aviso && <p className="mt-2 text-base font-semibold text-amber-700 dark:text-amber-300">{aviso}</p>}
             </div>
 
             <div className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-6 space-y-3 text-lg leading-relaxed">
@@ -322,7 +365,7 @@ export default function ImpressoraPage() {
       {/* O papel de verdade — direto no body, fora da tela, só para a impressora. */}
       {atual && typeof document !== "undefined" && createPortal(
         <div id="imp-print-portal" data-print-portal ref={portalRef} style={{ display: "none" }}>
-          <Folha job={atual} />
+          <Folha job={atual} guia={guia} />
         </div>,
         document.body,
       )}

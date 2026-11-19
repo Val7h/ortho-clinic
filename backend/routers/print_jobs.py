@@ -11,6 +11,12 @@ médico imprime e manda direto para a impressora padrão do Windows.
 - GET  /print-jobs/pending      -> o que falta imprimir na clínica, do mais antigo
                                    ao mais novo, já com paciente, clínica e conteúdo
 - POST /print-jobs/{id}/done    -> marca como impresso
+- GET  /print-jobs/{id}/paginas -> as páginas (imagem) de um documento em PDF da fila
+
+18/11/2026 (Valth: "a fila não imprime a guia SADT... deve ser corrigido agora"): a guia
+SP/SADT é um PDF guardado nos Documentos do paciente. Entra na fila como kind "documento"
+(ref_id = id do documento) e a página da clínica imprime as páginas como imagem, no
+mesmo formato do "Tudo de hoje" (guia da Unimed é deitada).
 
 A tabela é criada na primeira chamada (create table if not exists), como em
 envio_documentos.py — sem migração. Log só com ids, nunca dado de paciente.
@@ -30,6 +36,7 @@ from models.clinic import Clinic
 from models.documents import ExamRequest, MedicalReport
 from models.organization import User
 from models.patient import Patient
+from models.patient_documents import PatientDocument
 from models.patient_rx import PatientRx
 
 logger = logging.getLogger("orthoclinic.impressora")
@@ -51,7 +58,7 @@ def _garantir_tabela(db: Session) -> None:
         organization_id int not null,
         clinic_id int not null,
         patient_id int not null,
-        kind text not null check (kind in ('receita','exame','laudo','encaminhamento')),
+        kind text not null,
         ref_id int not null,
         opcoes text,
         created_at timestamptz not null default now(),
@@ -59,6 +66,8 @@ def _garantir_tabela(db: Session) -> None:
         created_by int)"""))
     db.execute(text("create index if not exists ix_print_jobs_pendentes "
                     "on print_jobs(organization_id, clinic_id, created_at) where printed_at is null"))
+    # 18/11: a tabela antiga só aceitava 4 tipos; "documento" (guia em PDF) entra também.
+    db.execute(text("alter table print_jobs drop constraint if exists print_jobs_kind_check"))
     db.commit()
     _tabela_ok = True
 
@@ -75,7 +84,8 @@ def _clinica(db: Session, clinic_id: int, user: User) -> Clinic:
     return c
 
 
-_MODELO = {"receita": PatientRx, "exame": ExamRequest, "laudo": MedicalReport, "encaminhamento": MedicalReport}
+_MODELO = {"receita": PatientRx, "exame": ExamRequest, "laudo": MedicalReport, "encaminhamento": MedicalReport,
+           "documento": PatientDocument}
 
 
 def _registro(db: Session, kind: str, ref_id: int, user: User):
@@ -84,6 +94,9 @@ def _registro(db: Session, kind: str, ref_id: int, user: User):
         return None
     r = db.query(modelo).filter(modelo.id == ref_id).first()
     if not r or not _mesma_org(r.organization_id, user):
+        return None
+    # Só PDF guardado no servidor vai para a impressora (guia SP/SADT); foto e link de fora não.
+    if kind == "documento" and "pdf" not in (r.mime_type or "").lower():
         return None
     return r
 
@@ -99,6 +112,8 @@ def _documento(kind: str, r) -> dict:
                 "patient_address": r.patient_address, "patient_phone": r.patient_phone}
     if kind == "exame":
         return {"date": _iso(r.date), "free_text": r.free_text or "", "exams": r.exams or []}
+    if kind == "documento":
+        return {"date": _iso(r.date), "title": r.title or ""}
     return {"date": _iso(r.date), "report_type": r.report_type, "title": r.title or "", "content": r.content or ""}
 
 
@@ -114,7 +129,7 @@ def _clinica_dict(c: Clinic) -> dict:
 
 
 class PrintJobIn(BaseModel):
-    kind: Literal["receita", "exame", "laudo", "encaminhamento"]
+    kind: Literal["receita", "exame", "laudo", "encaminhamento", "documento"]
     ref_id: int
     clinic_id: int
     # Preferências de papel do médico (tamanho da letra da receita/pedido),
@@ -191,3 +206,32 @@ def marcar_impresso(job_id: int, db: Session = Depends(get_db), user: User = Dep
         raise HTTPException(404, "Pedido de impressão não encontrado")
     logger.info("[IMPRESSORA] job %s impresso", job_id)
     return {"ok": True}
+
+
+@router.get("/print-jobs/{job_id}/paginas")
+def paginas_do_job(job_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Páginas (PNG) do PDF de um pedido "documento" da fila — a página da clínica imprime como imagem."""
+    _garantir_tabela(db)
+    linha = db.execute(text(
+        "select kind, ref_id from print_jobs where id=:i and organization_id=:o"),
+        {"i": job_id, "o": user.organization_id or 1}).fetchone()
+    if not linha or linha[0] != "documento":
+        raise HTTPException(404, "Pedido de impressão não encontrado")
+    doc = _registro(db, "documento", linha[1], user)
+    if doc is None:
+        raise HTTPException(404, "Documento não encontrado")
+    import base64
+    from routers.envio_documentos import _bytes_do_documento
+    conteudo = _bytes_do_documento(doc)
+    if not conteudo:
+        raise HTTPException(404, "Arquivo não encontrado")
+    import fitz  # pymupdf
+    try:
+        pdf = fitz.open(stream=conteudo, filetype="pdf")
+    except Exception:
+        raise HTTPException(422, "O arquivo não é um PDF")
+    if pdf.page_count == 0 or pdf.page_count > 12:
+        raise HTTPException(422, "PDF vazio ou grande demais para a impressora da clínica")
+    paginas = ["data:image/png;base64," + base64.b64encode(p.get_pixmap(dpi=170).tobytes("png")).decode() for p in pdf]
+    return {"paginas": paginas, "largura_mm": round(pdf[0].rect.width / 72 * 25.4, 1),
+            "altura_mm": round(pdf[0].rect.height / 72 * 25.4, 1)}
