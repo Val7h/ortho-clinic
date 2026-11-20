@@ -202,19 +202,7 @@ def _buscar_ou_criar_paciente(db: Session, data: PreConsultaPayload) -> tuple[Pa
         q = q.filter(Patient.active == True)
         return q.filter(Patient.organization_id == org_id) if org_id else q
 
-    if data.cpf:
-        cpf_limpo = "".join(c for c in data.cpf if c.isdigit())
-        patient = no_escopo(db.query(Patient).filter(Patient.cpf == data.cpf)).first()
-        if not patient and cpf_limpo:
-            patient = no_escopo(db.query(Patient).filter(
-                Patient.cpf.like(f"%{cpf_limpo[:11]}%")
-            )).first()
-
-    if not patient and data.telefone:
-        tel = data.telefone.replace("+", "").replace(" ", "")
-        patient = no_escopo(db.query(Patient).filter(
-            Patient.phone.like(f"%{tel[-9:]}%")
-        )).first()
+    patient = _achar_paciente(db, data, no_escopo)
 
     if patient:
         # atualiza campos que vieram do formulário
@@ -249,6 +237,37 @@ def _buscar_ou_criar_paciente(db: Session, data: PreConsultaPayload) -> tuple[Pa
     return patient, True
 
 
+
+def _so_digitos(v) -> str:
+    return "".join(c for c in str(v or "") if c.isdigit())
+
+
+def _primeiro_nome(v) -> str:
+    import unicodedata
+    t = "".join(c for c in unicodedata.normalize("NFD", str(v or "")) if unicodedata.category(c) != "Mn")
+    partes = t.lower().split()
+    return partes[0] if partes else ""
+
+
+def _achar_paciente(db: Session, data: "PreConsultaPayload", no_escopo) -> Optional[Patient]:
+    """19/11/2026 (revisão independente): a busca por PEDAÇO de CPF/telefone gravava o formulário na ficha de
+    OUTRA pessoa (ex.: a mãe preenche pelo filho com o celular dela). Agora:
+    - CPF: só o CPF inteiro (11 dígitos) e igual;
+    - telefone: só se o PRIMEIRO NOME também bater (o número pode ser de outra pessoa da família).
+    Sem certeza, devolve None e o formulário cria cadastro novo (duplicado se junta depois; ficha trocada não)."""
+    cpf = _so_digitos(data.cpf)
+    if len(cpf) == 11:
+        for p in no_escopo(db.query(Patient).filter(Patient.cpf.like(f"%{cpf[:3]}%"))).all():
+            if _so_digitos(p.cpf) == cpf:
+                return p
+    tel = _so_digitos(data.telefone)
+    nome = _primeiro_nome(data.nome)
+    if len(tel) >= 9 and nome:
+        for p in no_escopo(db.query(Patient).filter(Patient.phone.like(f"%{tel[-9:]}%"))).all():
+            if _primeiro_nome(p.name) == nome:
+                return p
+    return None
+
 _RECIFE = timezone(timedelta(hours=-3))
 
 # Colunas que _atualizar_paciente pode escrever.
@@ -271,14 +290,7 @@ def _buscar_paciente_existente(db: Session, data: "PreConsultaPayload") -> Optio
         q = q.filter(Patient.active == True)
         return q.filter(Patient.organization_id == org_id) if org_id else q
 
-    if data.cpf:
-        p = no_escopo(db.query(Patient).filter(Patient.cpf == data.cpf)).first()
-        if p:
-            return p
-    if data.telefone:
-        tel = data.telefone.replace("+", "").replace(" ", "")
-        return no_escopo(db.query(Patient).filter(Patient.phone.like(f"%{tel[-9:]}%"))).first()
-    return None
+    return _achar_paciente(db, data, no_escopo)
 
 
 def _preencher_so_vazios(patient: Patient, data: "PreConsultaPayload") -> None:
