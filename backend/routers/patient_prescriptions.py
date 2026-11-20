@@ -108,9 +108,14 @@ def create_prescription(
         rx_date = today_br()
 
     # 03/11 (Valth): substância de 2 vias na receita = 2 vias, mesmo que venha marcada simples.
+    from routers.medicamentos import tipo_exigido
+    _exigido = tipo_exigido(db, data.instructions, [m.model_dump() for m in data.medications])
+    # 19/11 (revisão): remédio de NOTIFICAÇÃO A/B não sai em papel do sistema (vale só o talão próprio).
+    if _exigido == "notificacao":
+        raise HTTPException(status_code=422, detail="Remédio de notificação (lista A/B, ex.: clonazepam, diazepam, "
+                            "morfina, zolpidem) precisa do talão próprio. Esta receita não foi gravada.")
     if (data.prescription_type or "simples") == "simples":
-        from routers.medicamentos import tipo_exigido
-        data.prescription_type = tipo_exigido(db, data.instructions, [m.model_dump() for m in data.medications]) or "simples"
+        data.prescription_type = _exigido or "simples"
 
     # 13/10 (Valth): a mesma receita aparecia gravada 2x com segundos de
     # diferença (Julio, Fatima, José Francisco). Igual (tipo + texto +

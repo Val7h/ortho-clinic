@@ -69,6 +69,13 @@ def tipo_exigido(db: Session, *partes) -> "str | None":
             return None
     alvo = _sem_acento(" ".join(p if isinstance(p, str) else _json.dumps(p, ensure_ascii=False, default=str) for p in partes))
     tipos = {tp for rx, tp in _CACHE["termos"] if rx.search(alvo)}
+    # 19/11 (revisão): notificação A/B (benzodiazepínico, opioide forte) NÃO vira "controle especial":
+    # precisa do talão próprio. Quem chama decide (a criação de receita recusa).
+    if "notificacao" in tipos:
+        return "notificacao"
+    # antibiótico de uso tópico (pomada/creme): regra do Valth (12/11) = sempre controle especial
+    if _re.search(r"\b(mupirocina|bacrocin|neomicina|nebacetin|bacitracina|acido fusidico|verutex|fucidin)\b", alvo):
+        return "controle_especial"
     if tipos - {"antimicrobiano", "simples"}:
         return "controle_especial"
     return "antimicrobiano" if "antimicrobiano" in tipos else None

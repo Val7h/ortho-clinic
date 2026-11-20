@@ -80,7 +80,9 @@ def create_template(
     # 03/11 (Valth): modelo com substância de 2 vias é salvo em 2 vias.
     if (data.prescription_type or "simples") == "simples":
         from routers.medicamentos import tipo_exigido
-        data.prescription_type = tipo_exigido(db, data.name, data.instructions, [m.model_dump() for m in data.medications]) or "simples"
+        _t = tipo_exigido(db, data.name, data.instructions, [m.model_dump() for m in data.medications])
+        # 19/11: "notificacao" não é tipo de receita do sistema (a receita em si é recusada ao gravar)
+        data.prescription_type = _t if _t in ("controle_especial", "antimicrobiano") else "simples"
 
     template = PrescriptionTemplate(
         name=data.name.strip(),

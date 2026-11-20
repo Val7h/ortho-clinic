@@ -246,7 +246,9 @@ async def gerar_justificativa(
     current_user=Depends(get_current_user),
 ):
     paciente = db.query(Patient).filter(Patient.id == patient_id).first()
-    if not paciente:
+    # 19/11 (revisão): paciente de outra conta não (superadmin continua vendo tudo, como nas outras rotas)
+    if not paciente or (getattr(current_user, "role", "") != "superadmin"
+                        and (paciente.organization_id or 1) != (getattr(current_user, "organization_id", None) or 1)):
         raise HTTPException(404, "Paciente não encontrado")
     if not (data.pedido or "").strip():
         raise HTTPException(422, "Escreva o pedido de exame antes de gerar a justificativa")
@@ -269,12 +271,14 @@ async def gerar_justificativa(
 
     api_key = (os.getenv("ANTHROPIC_API_KEY") or "").strip()
     if not api_key:
-        return {"texto": modelo, "origem": "modelo", "aviso": None}
+        return {"texto": modelo, "origem": "modelo",
+                "aviso": "Texto padrão (IA indisponível): confira cada frase antes de imprimir."}
 
     prompt = (
         "Você é um ortopedista redigindo a JUSTIFICATIVA CLÍNICA que a operadora de "
         "saúde exige para autorizar um exame de imagem.\n\n"
-        f"Anamnese do paciente:\n{anamnese[:4000]}\n\n"
+        # 19/11 (revisão): a anamnese acumula da mais antiga para a mais nova; o FIM é a consulta de hoje.
+        f"Anamnese do paciente (trecho mais recente):\n{anamnese[-4000:]}\n\n"
         f"Exame solicitado:\n{data.pedido.strip()}\n"
         + (f"\nCID-10 registrado: {', '.join(cids)}\n" if cids else "")
         + "\nEscreva a justificativa em português, 3 a 5 parágrafos curtos, na primeira "
