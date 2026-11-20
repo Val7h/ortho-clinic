@@ -103,6 +103,26 @@ app.add_middleware(AuditContextMiddleware)
 os.makedirs("uploads/photos", exist_ok=True)
 
 
+# 19/11/2026 (revisão independente): arquivo enviado (exame, foto) nunca roda como página no domínio do
+# sistema. Tudo em /uploads sai com nosniff; tipo que o navegador executaria (html, svg, xml, js) sai como
+# texto para baixar. Foto e PDF continuam abrindo igual.
+_TIPOS_PERIGOSOS = ("text/html", "image/svg", "application/xhtml", "text/xml", "application/xml",
+                    "javascript", "text/ecmascript")
+
+
+@app.middleware("http")
+async def _uploads_seguros(request, call_next):
+    resp = await call_next(request)
+    if request.url.path.startswith("/uploads/"):
+        resp.headers["X-Content-Type-Options"] = "nosniff"
+        tipo = (resp.headers.get("content-type") or "").lower()
+        if any(t in tipo for t in _TIPOS_PERIGOSOS):
+            resp.headers["content-type"] = "text/plain; charset=utf-8"
+            resp.headers["Content-Disposition"] = "attachment"
+            resp.headers["Content-Security-Policy"] = "default-src 'none'; sandbox"
+    return resp
+
+
 # 07/10/2026 (Valth): anexos sumiam a cada publicação porque o disco do Render
 # é apagado. Os arquivos agora também ficam no banco (services/storage.py); esta
 # rota serve do banco primeiro e só então do disco (arquivos antigos/locais).
