@@ -92,7 +92,8 @@ def bloquear_se_entregue(db: Session, user: User, kind: str, ref_id: int) -> Non
         quando = str(row[0])[:16]
         logger.info("[ENTREGUE] bloqueado apagar %s %s", kind, ref_id)
         raise HTTPException(409, f"Documento já entregue ao paciente ({quando}, {row[1] or 'impresso'}). "
-                                 "É a versão oficial: não pode ser apagado. Para corrigir, gere um documento novo.")
+                                 "É a versão oficial: não pode ser apagado. Para corrigir, gere um documento novo. "
+                                 "(Se a impressão foi cancelada e o papel não saiu, peça ao assistente para desmarcar.)")
 
 
 def _paciente(db: Session, patient_id: int, user: User) -> Patient:

@@ -1,4 +1,5 @@
 import axios from "axios";
+import toast from "react-hot-toast";
 
 // API URL with fallbacks for different environments
 // À PROVA DE BALA: em produção (rodando num host remoto), SEMPRE usa a mesma
@@ -97,6 +98,10 @@ api.interceptors.response.use(
     return r;
   },
   function(err) {
+    // 19/11: documento já entregue não se apaga — mostra o motivo do servidor em qualquer tela de excluir.
+    if (err?.response?.status === 409 && /entregue/i.test(String(err.response.data?.detail || ""))) {
+      try { toast.error(String(err.response.data.detail), { duration: 9000, id: "doc-entregue" }); } catch {}
+    }
     if (err && err.response && err.response.status === 401 && typeof window !== "undefined") {
       if (!isPublicPath(window.location.pathname)) {
         localStorage.removeItem("ortho_token");
