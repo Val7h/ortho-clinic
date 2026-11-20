@@ -31,6 +31,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from database import get_db
+from routers.entregues import marcar as marcar_entregue
 from deps import get_current_user, require_doctor
 from models.clinic import Clinic
 from models.documents import ExamRequest, MedicalReport
@@ -199,11 +200,15 @@ def marcar_impresso(job_id: int, db: Session = Depends(get_db), user: User = Dep
     _garantir_tabela(db)
     r = db.execute(text(
         "update print_jobs set printed_at=coalesce(printed_at, now()) "
-        "where id=:i and organization_id=:o returning id"),
-        {"i": job_id, "o": user.organization_id or 1}).scalar()
-    db.commit()
+        "where id=:i and organization_id=:o returning id, patient_id, kind, ref_id"),
+        {"i": job_id, "o": user.organization_id or 1}).first()
     if not r:
+        db.commit()
         raise HTTPException(404, "Pedido de impressão não encontrado")
+    # 19/11: saiu na impressora da clínica = entregue (versão oficial, não se apaga)
+    marcar_entregue(db, user, r[1], "laudo" if r[2] == "encaminhamento" else r[2],
+                    r[3], "impressora da clinica")
+    db.commit()
     logger.info("[IMPRESSORA] job %s impresso", job_id)
     return {"ok": True}
 

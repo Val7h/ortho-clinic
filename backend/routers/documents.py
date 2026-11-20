@@ -5,6 +5,7 @@ from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 from typing import List
 from datetime import date
+from routers.entregues import bloquear_se_entregue
 from database import get_db
 from models.patient import Patient
 from models.organization import User
@@ -79,6 +80,7 @@ def delete_exam(patient_id: int, doc_id: int, db: Session = Depends(get_db), cur
     obj = db.query(ExamRequest).filter(ExamRequest.id == doc_id, ExamRequest.patient_id == patient_id).first()
     if not obj:
         raise HTTPException(404, "Solicitação não encontrada")
+    bloquear_se_entregue(db, current_user, "exame", doc_id)
     db.delete(obj)
     db.commit()
 
@@ -115,6 +117,7 @@ def delete_physio(patient_id: int, doc_id: int, db: Session = Depends(get_db), c
     obj = db.query(PhysioRequest).filter(PhysioRequest.id == doc_id, PhysioRequest.patient_id == patient_id).first()
     if not obj:
         raise HTTPException(404, "Solicitação não encontrada")
+    bloquear_se_entregue(db, current_user, "fisio", doc_id)
     db.delete(obj)
     db.commit()
 
@@ -160,6 +163,7 @@ def delete_report(patient_id: int, doc_id: int, db: Session = Depends(get_db), c
     obj = db.query(MedicalReport).filter(MedicalReport.id == doc_id, MedicalReport.patient_id == patient_id).first()
     if not obj:
         raise HTTPException(404, "Laudo não encontrado")
+    bloquear_se_entregue(db, current_user, "laudo", doc_id)
     db.delete(obj)
     db.commit()
 

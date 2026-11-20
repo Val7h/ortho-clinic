@@ -11,6 +11,7 @@ from typing import List, Optional, Any
 from datetime import date, datetime
 from pydantic import BaseModel
 
+from routers.entregues import bloquear_se_entregue
 from database import get_db
 from models.patient import Patient
 from models.patient_rx import PatientRx
@@ -158,5 +159,6 @@ def delete_prescription(
     ).first()
     if not rx:
         raise HTTPException(status_code=404, detail="Receita não encontrada")
+    bloquear_se_entregue(db, current_user, "receita", rx_id)
     db.delete(rx)
     db.commit()

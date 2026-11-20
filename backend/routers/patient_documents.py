@@ -28,6 +28,7 @@ from fastapi.responses import StreamingResponse, JSONResponse
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, field_validator
 
+from routers.entregues import bloquear_se_entregue
 from database import get_db
 from deps import require_doctor, get_current_user
 from models.patient import Patient
@@ -423,6 +424,7 @@ def delete_document(
     current_user: User = Depends(require_doctor),
 ):
     doc = _get_doc_or_404(doc_id, patient_id, db)
+    bloquear_se_entregue(db, current_user, "documento", doc_id)
     doc.is_deleted = True
     db.commit()
 

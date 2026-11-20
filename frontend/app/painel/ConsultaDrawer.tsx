@@ -8578,13 +8578,20 @@ function PacoteDoDia({ patientId, patient, clinic, entryId, onClose }: { patient
   const [impressos, setImpressos] = useState<Set<string>>(() => {
     try { return new Set(JSON.parse(localStorage.getItem(chaveImpressos) || "[]")); } catch { return new Set(); }
   });
-  const marcarImpressos = (ids: string[]) => setImpressos((prev) => {
-    const n = new Set(prev); ids.forEach((id) => n.add(id));
-    try { localStorage.setItem(chaveImpressos, JSON.stringify(Array.from(n))); } catch {}
-    // avisa o selo do botão "Tudo de hoje" (fora do painel) para recontar sem F5
-    setTimeout(() => { try { window.dispatchEvent(new Event(EVT_IMPRESSOS)); } catch {} }, 0);
-    return n;
-  });
+  const marcarImpressos = (ids: string[], origem = "tudo de hoje") => {
+    // 19/11 (Valth): o que saiu é a versão OFICIAL entregue — o servidor guarda e passa a recusar apagar.
+    const KIND: Record<string, string> = { rx: "receita", ex: "exame", re: "laudo", dc: "documento" };
+    const itensEntregues = ids.map((id) => ({ kind: KIND[id.slice(0, 2)], ref_id: Number(id.slice(2)) }))
+      .filter((i) => i.kind && Number.isFinite(i.ref_id));
+    if (itensEntregues.length) api.post(`/patients/${patientId}/entregues`, { itens: itensEntregues, origem }).catch(() => {});
+    setImpressos((prev) => {
+      const n = new Set(prev); ids.forEach((id) => n.add(id));
+      try { localStorage.setItem(chaveImpressos, JSON.stringify(Array.from(n))); } catch {}
+      // avisa o selo do botão "Tudo de hoje" (fora do painel) para recontar sem F5
+      setTimeout(() => { try { window.dispatchEvent(new Event(EVT_IMPRESSOS)); } catch {} }, 0);
+      return n;
+    });
+  };
 
   const recarregarPacoteRef = useRef<() => void>(() => {});
   useDocsSozinhos(() => recarregarPacoteRef.current());
@@ -8707,7 +8714,7 @@ function PacoteDoDia({ patientId, patient, clinic, entryId, onClose }: { patient
         try { await enviarParaImpressoraDaClinica(kind, refId, clinic.id); ok++; foram.push(i.id); } catch { /* segue os outros */ }
       }
       if (ok) {
-        marcarImpressos(foram);
+        marcarImpressos(foram, "impressora da clinica");
         toast.success(`${ok} documento(s) na fila da impressora — ${clinic.name || "clínica"}`);
       }
       if (ok < docs.length) toast.error(`${docs.length - ok} documento(s) não foram para a fila`);
@@ -8724,7 +8731,7 @@ function PacoteDoDia({ patientId, patient, clinic, entryId, onClose }: { patient
       const fd = new FormData();
       fd.append("arquivo", blob, "documentos.pdf");
       const r = await api.post(`/patients/${patientId}/enviar-secretaria`, fd, { headers: { "Content-Type": "multipart/form-data" } });
-      marcarImpressos(escolhidos.map((i) => i.id));
+      marcarImpressos(escolhidos.map((i) => i.id), "enviado a secretaria");
       toast.success(`Enviado para ${r.data.secretaria} pelo WhatsApp da clínica`);
     } catch (e: any) {
       toast.error(msgErro(e, "Não consegui mandar para a secretária"));
@@ -8806,7 +8813,7 @@ function PacoteDoDia({ patientId, patient, clinic, entryId, onClose }: { patient
                 <Printer className="w-4 h-4" /> {enviandoImpressora ? "Enviando…" : "Impressora da clínica"}
               </button>
             )}
-            <button onClick={() => { const ids = escolhidos.map((i) => i.id); window.print(); marcarImpressos(ids); }} disabled={!escolhidos.length || guiasCarregando}
+            <button onClick={() => { const ids = escolhidos.map((i) => i.id); window.print(); marcarImpressos(ids, "impresso (tudo de hoje)"); }} disabled={!escolhidos.length || guiasCarregando}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold text-sm disabled:opacity-40">
               <Printer className="w-4 h-4" /> Imprimir
             </button>
