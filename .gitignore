@@ -31,3 +31,4 @@ npm-debug.log*
 Thumbs.db
 .env.development.local
 .env*.local
+backend/response.txt
