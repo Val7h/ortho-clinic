@@ -222,8 +222,12 @@ def paginas_do_job(job_id: int, db: Session = Depends(get_db), user: User = Depe
     """Páginas (PNG) do PDF de um pedido "documento" da fila — a página da clínica imprime como imagem."""
     _garantir_tabela(db)
     linha = db.execute(text(
-        "select kind, ref_id from print_jobs where id=:i and organization_id=:o"),
-        {"i": job_id, "o": user.organization_id or 1}).fetchone()
+        # 19/11 (revisão): só pedido ainda VIVO na fila (até 24 h e não impresso há mais de 1 h). Antes, qualquer
+        # login baixava a guia inteira de qualquer pedido antigo, pelo número.
+        "select kind, ref_id from print_jobs where id=:i and organization_id=:o "
+        "and created_at > now() - make_interval(hours => :h) "
+        "and (printed_at is null or printed_at > now() - make_interval(hours => 1))"),
+        {"i": job_id, "o": user.organization_id or 1, "h": HORAS_VALIDADE}).fetchone()
     if not linha or linha[0] != "documento":
         raise HTTPException(404, "Pedido de impressão não encontrado")
     doc = _registro(db, "documento", linha[1], user)
