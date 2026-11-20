@@ -7,12 +7,13 @@ import main  # noqa
 import routers.medicamentos as M
 
 TERMOS = [("clonazepam", "notificacao"), ("morfina", "notificacao"), ("frontal", "notificacao"), ("turno", "notificacao"),
+          ("valium", "notificacao"), ("ritalina", "notificacao"),
           ("tramadol", "controle_especial"),
           ("codeina", "controle_especial"), ("amoxicilina", "antimicrobiano"), ("dipirona", "simples")]
 
 
 def _carregar():
-    M._CACHE["termos"] = [(re.compile(r"\b" + re.escape(t) + r"\b"), tp) for t, tp in TERMOS]
+    M._CACHE["termos"] = [(re.compile(r"\b" + re.escape(t) + r"\b"), tp, t) for t, tp in TERMOS]
     M._CACHE["em"] = time.time()
 
 
@@ -20,6 +21,8 @@ def test_notificacao_vira_notificacao():
     _carregar()
     assert M.tipo_exigido(None, "CLONAZEPAM 2MG 1 CP A NOITE") == "notificacao"
     assert M.tipo_exigido(None, "tramadol 50mg", "morfina 10mg") == "notificacao"
+    assert M.tipo_exigido(None, "VALIUM 10MG") == "notificacao"      # marca também recusa
+    assert M.tipo_exigido(None, "Ritalina 10mg") == "notificacao"
 
 
 def test_palavra_comum_que_e_marca_nao_bloqueia():

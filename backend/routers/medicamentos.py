@@ -58,9 +58,10 @@ def _sem_acento(s: str) -> str:
     return _ud.normalize("NFKD", s or "").encode("ascii", "ignore").decode().lower()
 
 
-_NOTIFICACAO_SUBSTANCIA = _re.compile(
-    r"\b(clonazepam|diazepam|alprazolam|lorazepam|bromazepam|midazolam|zolpidem|morfina|oxicodona|metadona|"
-    r"fentanila?|tapentadol|hidromorfona|petidina|meperidina|metilfenidato|isotretinoina|acitretina|rivotril)\b")
+# Marcas de notificação que também são palavras comuns de posologia/anatomia: não recusam a receita
+# (seguem 2 vias, como antes). Revisão 19/11: "aplicar na região frontal", "1 cp por turno".
+_NOTIFICACAO_PALAVRA_COMUM = {"frontal", "turno", "soul", "lind", "lune", "opio", "concerta", "ison", "isoy",
+                              "lorax", "medato"}
 
 
 def tipo_exigido(db: Session, *partes) -> "str | None":
@@ -68,17 +69,17 @@ def tipo_exigido(db: Session, *partes) -> "str | None":
     if _time.time() - _CACHE["em"] > 3600:
         try:
             rows = db.execute(text("select termo, tipo from medicamento_termos")).fetchall()
-            _CACHE["termos"] = [(_re.compile(r"\b" + _re.escape(_sem_acento(t)) + r"\b"), tp) for t, tp in rows if t and len(t) > 3]
+            _CACHE["termos"] = [(_re.compile(r"\b" + _re.escape(_sem_acento(t)) + r"\b"), tp, _sem_acento(t))
+                                for t, tp in rows if t and len(t) > 3]
             _CACHE["em"] = _time.time()
         except Exception:
             return None
     alvo = _sem_acento(" ".join(p if isinstance(p, str) else _json.dumps(p, ensure_ascii=False, default=str) for p in partes))
-    tipos = {tp for rx, tp in _CACHE["termos"] if rx.search(alvo)}
+    achados = [(tp, termo) for rx, tp, termo in _CACHE["termos"] if rx.search(alvo)]
+    tipos = {tp for tp, _ in achados}
     # 19/11 (revisão): notificação A/B (benzodiazepínico, opioide forte) NÃO vira "controle especial":
     # precisa do talão próprio. Quem chama decide (a criação de receita recusa).
-    # Só bloqueia pela SUBSTÂNCIA (lista curta): marcas da base batem com palavras comuns ("frontal", "turno",
-    # "soul") e travariam receita sem remédio controlado. Outra marca de notificação segue como antes (2 vias).
-    if "notificacao" in tipos and _NOTIFICACAO_SUBSTANCIA.search(alvo):
+    if any(tp == "notificacao" and termo not in _NOTIFICACAO_PALAVRA_COMUM for tp, termo in achados):
         return "notificacao"
     # antibiótico de uso tópico (pomada/creme): regra do Valth (12/11) = sempre controle especial
     if _re.search(r"\b(mupirocina|bacrocin|neomicina|nebacetin|bacitracina|acido fusidico|verutex|fucidin)\b", alvo):
