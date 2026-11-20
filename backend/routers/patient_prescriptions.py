@@ -112,8 +112,8 @@ def create_prescription(
     _exigido = tipo_exigido(db, data.instructions, [m.model_dump() for m in data.medications])
     # 19/11 (revisão): remédio de NOTIFICAÇÃO A/B não sai em papel do sistema (vale só o talão próprio).
     if _exigido == "notificacao":
-        raise HTTPException(status_code=422, detail="Remédio de notificação (lista A/B, ex.: clonazepam, diazepam, "
-                            "morfina, zolpidem) precisa do talão próprio. Esta receita não foi gravada.")
+        raise HTTPException(status_code=422, detail="Remédio de notificação (ex.: clonazepam, diazepam, morfina, "
+                            "zolpidem, isotretinoína) precisa do talão próprio. Esta receita não foi gravada.")
     if (data.prescription_type or "simples") == "simples":
         data.prescription_type = _exigido or "simples"
 

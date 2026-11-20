@@ -6,7 +6,8 @@ os.environ.setdefault("DATABASE_URL", "sqlite://")
 import main  # noqa
 import routers.medicamentos as M
 
-TERMOS = [("clonazepam", "notificacao"), ("morfina", "notificacao"), ("tramadol", "controle_especial"),
+TERMOS = [("clonazepam", "notificacao"), ("morfina", "notificacao"), ("frontal", "notificacao"), ("turno", "notificacao"),
+          ("tramadol", "controle_especial"),
           ("codeina", "controle_especial"), ("amoxicilina", "antimicrobiano"), ("dipirona", "simples")]
 
 
@@ -19,6 +20,12 @@ def test_notificacao_vira_notificacao():
     _carregar()
     assert M.tipo_exigido(None, "CLONAZEPAM 2MG 1 CP A NOITE") == "notificacao"
     assert M.tipo_exigido(None, "tramadol 50mg", "morfina 10mg") == "notificacao"
+
+
+def test_palavra_comum_que_e_marca_nao_bloqueia():
+    _carregar()
+    # antes desta regra, marca de notificação = 2 vias; continua assim, sem recusar a receita
+    assert M.tipo_exigido(None, "APLICAR NA REGIAO FRONTAL 1 CP POR TURNO") == "controle_especial"
 
 
 def test_controle_e_antimicrobiano_continuam():

@@ -58,6 +58,11 @@ def _sem_acento(s: str) -> str:
     return _ud.normalize("NFKD", s or "").encode("ascii", "ignore").decode().lower()
 
 
+_NOTIFICACAO_SUBSTANCIA = _re.compile(
+    r"\b(clonazepam|diazepam|alprazolam|lorazepam|bromazepam|midazolam|zolpidem|morfina|oxicodona|metadona|"
+    r"fentanila?|tapentadol|hidromorfona|petidina|meperidina|metilfenidato|isotretinoina|acitretina|rivotril)\b")
+
+
 def tipo_exigido(db: Session, *partes) -> "str | None":
     """'controle_especial' ou 'antimicrobiano' se algum termo da base aparece no texto; senão None."""
     if _time.time() - _CACHE["em"] > 3600:
@@ -71,7 +76,9 @@ def tipo_exigido(db: Session, *partes) -> "str | None":
     tipos = {tp for rx, tp in _CACHE["termos"] if rx.search(alvo)}
     # 19/11 (revisão): notificação A/B (benzodiazepínico, opioide forte) NÃO vira "controle especial":
     # precisa do talão próprio. Quem chama decide (a criação de receita recusa).
-    if "notificacao" in tipos:
+    # Só bloqueia pela SUBSTÂNCIA (lista curta): marcas da base batem com palavras comuns ("frontal", "turno",
+    # "soul") e travariam receita sem remédio controlado. Outra marca de notificação segue como antes (2 vias).
+    if "notificacao" in tipos and _NOTIFICACAO_SUBSTANCIA.search(alvo):
         return "notificacao"
     # antibiótico de uso tópico (pomada/creme): regra do Valth (12/11) = sempre controle especial
     if _re.search(r"\b(mupirocina|bacrocin|neomicina|nebacetin|bacitracina|acido fusidico|verutex|fucidin)\b", alvo):
