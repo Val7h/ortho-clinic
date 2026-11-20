@@ -263,9 +263,15 @@ def _achar_paciente(db: Session, data: "PreConsultaPayload", no_escopo) -> Optio
     tel = _so_digitos(data.telefone)
     nome = _primeiro_nome(data.nome)
     if len(tel) >= 9 and nome:
-        for p in no_escopo(db.query(Patient).filter(Patient.phone.like(f"%{tel[-9:]}%"))).all():
-            if _primeiro_nome(p.name) == nome:
-                return p
+        # telefone gravado com ou sem máscara: compara só os dígitos (filtra antes pelos 4 últimos)
+        for p in no_escopo(db.query(Patient).filter(Patient.phone.like(f"%{tel[-4:]}%"))).all():
+            if not _so_digitos(p.phone).endswith(tel[-9:]) or _primeiro_nome(p.name) != nome:
+                continue
+            # mãe "Maria" e filha "Maria Eduarda" no mesmo celular: CPFs diferentes = pessoas diferentes
+            cpf_ficha = _so_digitos(p.cpf)
+            if len(cpf) == 11 and len(cpf_ficha) == 11 and cpf != cpf_ficha:
+                continue
+            return p
     return None
 
 _RECIFE = timezone(timedelta(hours=-3))

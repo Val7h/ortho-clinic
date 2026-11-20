@@ -106,8 +106,8 @@ os.makedirs("uploads/photos", exist_ok=True)
 # 19/11/2026 (revisão independente): arquivo enviado (exame, foto) nunca roda como página no domínio do
 # sistema. Tudo em /uploads sai com nosniff; tipo que o navegador executaria (html, svg, xml, js) sai como
 # texto para baixar. Foto e PDF continuam abrindo igual.
-_TIPOS_PERIGOSOS = ("text/html", "image/svg", "application/xhtml", "text/xml", "application/xml",
-                    "javascript", "text/ecmascript")
+# "/xml" e "+xml" (não "xml" solto: o .docx é "openxmlformats" e tem de continuar abrindo)
+_TIPOS_PERIGOSOS = ("text/html", "image/svg", "xhtml", "/xml", "+xml", "javascript", "ecmascript")
 
 
 @app.middleware("http")

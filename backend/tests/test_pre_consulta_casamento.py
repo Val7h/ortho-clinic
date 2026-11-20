@@ -51,6 +51,17 @@ def test_mesmo_telefone_e_mesmo_primeiro_nome_acha():
     assert p is not None and p.name.startswith("Maria")
 
 
+def test_mesmo_primeiro_nome_mas_cpf_diferente_nao_acha():
+    db = _db()
+    assert _achar_paciente(db, D(cpf="11122233344", telefone="83999990000", nome="Maria Eduarda"), ESC) is None
+
+
+def test_telefone_com_mascara_na_ficha():
+    db = _db()
+    db.add(Patient(name="Ana Ficticia", phone="(83) 97777-6666", organization_id=1, active=True)); db.commit()
+    assert _achar_paciente(db, D(telefone="5583977776666", nome="Ana"), ESC).name.startswith("Ana")
+
+
 def test_telefone_curto_nao_acha():
     db = _db()
     assert _achar_paciente(db, D(telefone="0000", nome="Maria"), ESC) is None
