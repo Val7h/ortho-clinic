@@ -313,8 +313,12 @@ def _ensure_superadmin():
     from models.organization import Organization, User
     from passlib.context import CryptContext as _CryptContext
 
-    admin_email = os.getenv("SEED_ADMIN_EMAIL", "valthguime@gmail.com")
-    admin_pass  = os.getenv("SEED_ADMIN_PASSWORD", "Ortho2026!")
+    admin_email = os.getenv("SEED_ADMIN_EMAIL", "")
+    # 19/11/2026: sem senha padrão no código (o repositório é público). Sem as duas variáveis, não cria ninguém.
+    if not admin_email or not os.getenv("SEED_ADMIN_PASSWORD"):
+        print("! SEED_ADMIN_EMAIL/SEED_ADMIN_PASSWORD não configurados: superadmin padrão não criado")
+        return
+    admin_pass  = os.getenv("SEED_ADMIN_PASSWORD")
 
     db = SessionLocal()
     try:
