@@ -30,6 +30,9 @@ from database import get_db
 from deps import get_current_user, require_doctor
 from models.organization import User
 from models.patient import Patient
+from models.documents import ExamRequest, MedicalReport, PhysioRequest
+from models.patient_documents import PatientDocument
+from models.patient_rx import PatientRx
 
 logger = logging.getLogger("orthoclinic.entregues")
 router = APIRouter(prefix="/patients/{patient_id}/entregues", tags=["Documento entregue"])
@@ -44,6 +47,14 @@ def garantir_tabela(db: Session) -> None:
     global _tabela_ok
     if _tabela_ok:
         return
+    try:
+        _criar(db)
+    except Exception:  # duas chamadas ao mesmo tempo criando a tabela: a outra ganhou
+        db.rollback()
+    _tabela_ok = True
+
+
+def _criar(db: Session) -> None:
     db.execute(text("""create table if not exists documentos_entregues(
         organization_id integer not null,
         patient_id integer not null,
@@ -54,7 +65,6 @@ def garantir_tabela(db: Session) -> None:
         marked_at timestamp not null default CURRENT_TIMESTAMP,
         primary key (organization_id, kind, ref_id))"""))
     db.commit()
-    _tabela_ok = True
 
 
 def _org(user: User) -> int:
@@ -92,6 +102,16 @@ def _paciente(db: Session, patient_id: int, user: User) -> Patient:
     return p
 
 
+_MODELO = {"receita": PatientRx, "exame": ExamRequest, "laudo": MedicalReport, "documento": PatientDocument,
+           "fisio": PhysioRequest}
+
+
+def _do_paciente(db: Session, kind: str, ref_id: int, patient_id: int) -> bool:
+    """Só marca documento que existe e é DESTE paciente (o paciente já foi conferido na organização)."""
+    m = _MODELO.get(kind)
+    return bool(m and db.query(m.id).filter(m.id == ref_id, m.patient_id == patient_id).first())
+
+
 class ItemEntregue(BaseModel):
     kind: Kind
     ref_id: int
@@ -117,11 +137,13 @@ def listar(patient_id: int, db: Session = Depends(get_db), user: User = Depends(
 def marcar_varios(patient_id: int, data: MarcarIn, db: Session = Depends(get_db),
                   user: User = Depends(get_current_user)):
     _paciente(db, patient_id, user)
+    n = 0
     for it in data.itens[:100]:
-        marcar(db, user, patient_id, it.kind, it.ref_id, data.origem or "impresso")
+        if _do_paciente(db, it.kind, it.ref_id, patient_id):
+            marcar(db, user, patient_id, it.kind, it.ref_id, data.origem or "impresso"); n += 1
     db.commit()
-    logger.info("[ENTREGUE] paciente %s: %d marcado(s)", patient_id, len(data.itens))
-    return {"ok": True, "marcados": len(data.itens)}
+    logger.info("[ENTREGUE] paciente %s: %d marcado(s)", patient_id, n)
+    return {"ok": True, "marcados": n}
 
 
 @router.delete("/{kind}/{ref_id}", status_code=204)

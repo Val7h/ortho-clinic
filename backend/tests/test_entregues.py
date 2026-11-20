@@ -84,6 +84,14 @@ def test_desmarcar_libera_e_outra_conta_nao_ve():
     delete_report(p.id, r.id, db, MED)
 
 
+def test_nao_marca_documento_de_outro_paciente():
+    db = _db(); p, r, *_ = _base(db)
+    p2 = Patient(name="Outro Ficticio", organization_id=1); db.add(p2); db.commit()
+    out = E.marcar_varios(p2.id, E.MarcarIn(itens=[E.ItemEntregue(kind="laudo", ref_id=r.id)]), db, MED)
+    assert out["marcados"] == 0
+    delete_report(p.id, r.id, db, MED)
+
+
 if __name__ == "__main__":
     for k, f in list(globals().items()):
         if k.startswith("test_"):

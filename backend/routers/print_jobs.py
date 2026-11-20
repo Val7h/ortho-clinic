@@ -206,9 +206,13 @@ def marcar_impresso(job_id: int, db: Session = Depends(get_db), user: User = Dep
         db.commit()
         raise HTTPException(404, "Pedido de impressão não encontrado")
     # 19/11: saiu na impressora da clínica = entregue (versão oficial, não se apaga)
-    marcar_entregue(db, user, r[1], "laudo" if r[2] == "encaminhamento" else r[2],
-                    r[3], "impressora da clinica")
     db.commit()
+    try:
+        marcar_entregue(db, user, r[1], "laudo" if r[2] == "encaminhamento" else r[2], r[3], "impressora da clinica")
+        db.commit()
+    except Exception:  # a marca nunca derruba o "impresso" (senão a clínica reimprime)
+        db.rollback()
+        logger.exception("[ENTREGUE] falhou marcar job %s", job_id)
     logger.info("[IMPRESSORA] job %s impresso", job_id)
     return {"ok": True}
 

@@ -8578,12 +8578,13 @@ function PacoteDoDia({ patientId, patient, clinic, entryId, onClose }: { patient
   const [impressos, setImpressos] = useState<Set<string>>(() => {
     try { return new Set(JSON.parse(localStorage.getItem(chaveImpressos) || "[]")); } catch { return new Set(); }
   });
-  const marcarImpressos = (ids: string[], origem = "tudo de hoje") => {
+  // servidor=false: só foi para a FILA da impressora da clínica — vira "entregue" quando ela imprime (/done).
+  const marcarImpressos = (ids: string[], origem = "tudo de hoje", servidor = true) => {
     // 19/11 (Valth): o que saiu é a versão OFICIAL entregue — o servidor guarda e passa a recusar apagar.
     const KIND: Record<string, string> = { rx: "receita", ex: "exame", re: "laudo", dc: "documento" };
     const itensEntregues = ids.map((id) => ({ kind: KIND[id.slice(0, 2)], ref_id: Number(id.slice(2)) }))
       .filter((i) => i.kind && Number.isFinite(i.ref_id));
-    if (itensEntregues.length) api.post(`/patients/${patientId}/entregues`, { itens: itensEntregues, origem }).catch(() => {});
+    if (servidor && itensEntregues.length) api.post(`/patients/${patientId}/entregues`, { itens: itensEntregues, origem }).catch(() => {});
     setImpressos((prev) => {
       const n = new Set(prev); ids.forEach((id) => n.add(id));
       try { localStorage.setItem(chaveImpressos, JSON.stringify(Array.from(n))); } catch {}
@@ -8714,7 +8715,7 @@ function PacoteDoDia({ patientId, patient, clinic, entryId, onClose }: { patient
         try { await enviarParaImpressoraDaClinica(kind, refId, clinic.id); ok++; foram.push(i.id); } catch { /* segue os outros */ }
       }
       if (ok) {
-        marcarImpressos(foram, "impressora da clinica");
+        marcarImpressos(foram, "impressora da clinica", false);
         toast.success(`${ok} documento(s) na fila da impressora — ${clinic.name || "clínica"}`);
       }
       if (ok < docs.length) toast.error(`${docs.length - ok} documento(s) não foram para a fila`);
