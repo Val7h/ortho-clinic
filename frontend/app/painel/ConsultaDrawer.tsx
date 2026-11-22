@@ -20,7 +20,7 @@ import { lerCronoLimites, faixaDoCrono, editarCronoLimites, CronoLimites } from 
 import { serverNow } from "@/lib/servertime";
 import { juntarAnamnese, folhaDepoisDaJuncao } from "@/lib/anamneseJuncao";
 import * as escriba from "@/lib/escribaGravador";
-import { anamnesisApi, api, patientsApi, consultationsApi, prescriptionsApi, prescriptionTemplatesApi, referralTemplatesApi, examsApi, evolutionApi, clinicApi, chatApi, reportsApi, leafletsApi, waitingRoomApi, remindersApi, medicamentosApi, printJobsApi, msgErro, escribaApi, EscribaResumo, escribaSugestoesApi, EscribaGerar, assistenteApi } from "@/lib/api";
+import { anamnesisApi, api, patientsApi, consultationsApi, prescriptionsApi, prescriptionTemplatesApi, referralTemplatesApi, examsApi, evolutionApi, clinicApi, chatApi, reportsApi, leafletsApi, waitingRoomApi, remindersApi, medicamentosApi, printJobsApi, msgErro, escribaApi, EscribaResumo, escribaSugestoesApi, EscribaGerar, EscribaGerarItem, assistenteApi } from "@/lib/api";
 import type { EscribaSugestao, EscribaSugestoes, EscribaSugTipo, AssistenteMsg } from "@/lib/api";
 import { formatDate, calcAge, hojeISO } from "@/lib/utils";
 
@@ -8546,17 +8546,54 @@ function PacoteDoDia({ patientId, patient, clinic, entryId, onClose }: { patient
   // 17/11 02h10 (Valth): "todos os botoes eu quero clicar em 'imprimir tudo de hoje' ... se uma das coisas eu nao
   // tiver, ai eu desmarco". Ao abrir, pede ao PC os documentos de TODOS os botoes do Escriba ainda nao feitos
   // e espera (ate ~60 s) antes de montar a lista; os novos entram marcados como qualquer documento de hoje.
-  const [fase, setFase] = useState<"gerando" | "lista">(entryId ? "gerando" : "lista");
+  // 22/11 (revisão 19/11, item 1): com "Conferir antes de gerar" ligado (configuração POR MÉDICO, desligada por
+  // padrão), abre a fase "conferir": a lista dos botões pendentes, caixa marcada só nos conferidos, e só os
+  // marcados viram documento ("Gerar marcados"). Desligado: tudo como antes.
+  const [fase, setFase] = useState<"gerando" | "conferir" | "lista">(entryId ? "gerando" : "lista");
   const [escriba, setEscriba] = useState<EscribaGerar | null>(null);
   const [avisoEscriba, setAvisoEscriba] = useState("");
+  const [conferirLigado, setConferirLigado] = useState<boolean | null>(null);
+  const [aConferir, setAConferir] = useState<EscribaGerarItem[]>([]);
+  const [marcadosEscriba, setMarcadosEscriba] = useState<Set<number>>(new Set());
+  // Lista escolhida em "Gerar marcados": dispara a geração + o acompanhamento (o mesmo de sempre).
+  const [gerarSo, setGerarSo] = useState<number[] | undefined>(undefined);
+  const [rodada, setRodada] = useState(0);
   useEffect(() => {
     if (!entryId) return;
+    let vivo = true;
+    // Configuração que não carregou (servidor antigo, rede) = comportamento de sempre; o servidor
+    // confere de novo e, com a configuração ligada, não gera nada sem a lista de marcados.
+    escribaSugestoesApi.config()
+      .then((c) => { if (vivo) setConferirLigado(!!c?.conferir_antes_de_gerar); })
+      .catch(() => { if (vivo) setConferirLigado(false); });
+    return () => { vivo = false; };
+  }, [entryId]);
+  const trocarConferir = (v: boolean) => {
+    setConferirLigado(v);
+    escribaSugestoesApi.salvarConfig(v).catch(() => setAvisoEscriba("Não consegui salvar a configuração \"Conferir antes de gerar\"."));
+  };
+  useEffect(() => {
+    if (!entryId || conferirLigado === null) return;
     let vivo = true;
     let timer: any = null;
     const t0 = Date.now();
     let progresso = Date.now();
     let ultimo = "";
     const fim = (aviso = "") => { if (!vivo) return; setAvisoEscriba(aviso); setFase("lista"); };
+    if (conferirLigado && gerarSo === undefined) {
+      // Só olha (GET, não gera nada) e mostra os pendentes para conferir.
+      escribaSugestoesApi.estadoGerar(entryId).then((r) => {
+        if (!vivo) return;
+        setEscriba(r);
+        const pend = (r.itens || []).filter((i) => i.pode_gerar);
+        if (!pend.length) return fim();
+        setAConferir(pend);
+        setMarcadosEscriba(new Set(pend.filter((i) => i.conferida).map((i) => i.sugestao_id)));
+        setFase("conferir");
+      }).catch(() => fim("Não consegui ler os botões do Escriba: abrindo com o que já existe."));
+      return () => { vivo = false; };
+    }
+    setFase("gerando");
     const seguir = (r: EscribaGerar) => {
       if (!vivo) return;
       setEscriba(r);
@@ -8573,9 +8610,10 @@ function PacoteDoDia({ patientId, patient, clinic, entryId, onClose }: { patient
         return fim("Alguns documentos do Escriba ainda não ficaram prontos. Feche e abra de novo daqui a pouco.");
       timer = setTimeout(() => { escribaSugestoesApi.estadoGerar(entryId).then(seguir).catch(() => fim()); }, 2000);
     };
-    escribaSugestoesApi.gerarPendentes(entryId).then(seguir).catch(() => fim());
+    escribaSugestoesApi.gerarPendentes(entryId, gerarSo !== undefined ? gerarSo : (conferirLigado ? [] : undefined)).then(seguir).catch(() => fim());
     return () => { vivo = false; if (timer) clearTimeout(timer); };
-  }, [entryId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entryId, conferirLigado === null, rodada]);
   const naoGerados = (escriba?.itens || []).filter((i) => i.estado !== "feita" && (i.pulada || i.pedido?.estado === "falhou"));
   const [itens, setItens] = useState<ItemPacote[] | null>(null);
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
@@ -8791,9 +8829,39 @@ function PacoteDoDia({ patientId, patient, clinic, entryId, onClose }: { patient
               ))}
             </div>
           )}
-          {fase === "gerando" ? (
+          {entryId && conferirLigado !== null && fase !== "gerando" && (
+            <label className="flex items-center gap-2 text-[11px] text-slate-500 select-none cursor-pointer">
+              <input type="checkbox" checked={conferirLigado} onChange={(e) => trocarConferir(e.target.checked)} className="w-3.5 h-3.5 rounded accent-violet-600" />
+              Conferir antes de gerar (Escriba) — vale para as próximas vezes que abrir
+            </label>
+          )}
+          {fase === "conferir" ? (
+            <div className="space-y-2">
+              <p className="text-sm font-semibold text-violet-700 dark:text-violet-300">Botões do Escriba ainda não gerados</p>
+              <p className="text-xs text-slate-500">Marcados = já conferidos na fala. Só os marcados viram documento.</p>
+              {aConferir.map((i) => (
+                <label key={i.sugestao_id} className="flex items-start gap-2 px-3 py-2 border border-violet-200 dark:border-violet-800 rounded-lg cursor-pointer select-none">
+                  <input type="checkbox" checked={marcadosEscriba.has(i.sugestao_id)} className="w-4 h-4 mt-0.5 rounded accent-violet-600"
+                    onChange={() => setMarcadosEscriba((prev) => { const n = new Set(prev); if (n.has(i.sugestao_id)) n.delete(i.sugestao_id); else n.add(i.sugestao_id); return n; })} />
+                  <span className="flex-1 text-sm text-slate-700 dark:text-slate-200">
+                    {i.rotulo}
+                    {!i.conferida && <span className="ml-1 text-[10px] font-semibold text-amber-600">não conferido</span>}
+                    {i.frase && <span className="block text-[11px] text-slate-400 italic">“{i.frase}”</span>}
+                  </span>
+                </label>
+              ))}
+              <div className="flex flex-wrap justify-end gap-2 pt-1">
+                <button onClick={() => { setAvisoEscriba("Abriu sem gerar os botões do Escriba."); setFase("lista"); }} className="text-xs text-slate-400 underline">abrir sem gerar</button>
+                <button disabled={marcadosEscriba.size === 0}
+                  onClick={() => { setGerarSo(Array.from(marcadosEscriba)); setRodada((n) => n + 1); }}
+                  className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-violet-600 text-white disabled:opacity-40">
+                  Gerar marcados ({marcadosEscriba.size})
+                </button>
+              </div>
+            </div>
+          ) : fase === "gerando" ? (
             <div className="text-center py-6 space-y-2">
-              <p className="text-sm font-semibold text-violet-700 dark:text-violet-300">Gerando documentos do Escriba…</p>
+              <p className="text-sm font-semibold text-violet-700 dark:text-violet-300">{conferirLigado === null ? "Carregando…" : "Gerando documentos do Escriba…"}</p>
               {!!escriba?.itens?.length && (
                 <p className="text-xs text-slate-500">
                   {escriba.itens.filter((i) => i.estado === "feita" || i.pedido?.estado === "feito").length} de {escriba.itens.filter((i) => !i.pulada).length} prontos

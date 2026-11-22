@@ -112,20 +112,33 @@ async function esperarImagens(el: HTMLElement | null) {
 }
 
 // window.print() + espera o "afterprint". Com --kiosk-printing o Chrome manda
-// direto para a impressora padrão, sem janela.
-function imprimir(): Promise<void> {
+// direto para a impressora padrão, sem janela, e dispara o "afterprint" logo.
+// 22/11 (revisão 19/11, item 7): devolve SE o evento veio. A espera de 3 s ficou só
+// como reserva para a fila não parar; sem o evento, o pedido NÃO é marcado impresso.
+const ESPERA_IMPRESSAO_MS = 3000;
+function imprimir(): Promise<boolean> {
   return new Promise((res) => {
     let feito = false;
-    const fim = () => {
+    const fim = (veio: boolean) => {
       if (feito) return;
       feito = true;
-      window.removeEventListener("afterprint", fim);
-      res();
+      window.removeEventListener("afterprint", comEvento);
+      res(veio);
     };
-    window.addEventListener("afterprint", fim);
+    const comEvento = () => fim(true);
+    window.addEventListener("afterprint", comEvento);
     window.print();
-    setTimeout(fim, 3000);
+    setTimeout(() => fim(false), ESPERA_IMPRESSAO_MS);
   });
+}
+
+// Marca desta aba: o servidor reserva o pedido para ela (duas abas ou dois PCs não imprimem o mesmo).
+function novaMarca(): string {
+  try {
+    const c: any = (globalThis as any).crypto;
+    if (c?.randomUUID) return c.randomUUID();
+  } catch { /* sem crypto */ }
+  return `aba-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
 export default function ImpressoraPage() {
@@ -148,6 +161,8 @@ export default function ImpressoraPage() {
   const [guia, setGuia] = useState<PaginasGuia | null>(null);
   const [aviso, setAviso] = useState<string>("");
   const jaImpressos = useRef<Set<number>>(new Set());
+  const marca = useRef<string>("");
+  if (!marca.current) marca.current = novaMarca();
 
   // clinic_id: do endereço (?clinic_id=5) ou o último escolhido neste computador.
   useEffect(() => {
@@ -188,7 +203,7 @@ export default function ImpressoraPage() {
       for (const id of Array.from(semConfirmar.current)) {
         try { await printJobsApi.done(id); semConfirmar.current.delete(id); } catch { /* tenta no próximo ciclo */ }
       }
-      const r = await printJobsApi.pending(clinicId);
+      const r = await printJobsApi.pending(clinicId, marca.current);
       const jobs: Job[] = (r?.jobs || []).filter((j: Job) => !jaImpressos.current.has(j.id) && !pulados.current.has(j.id));
       setNomeClinica(r?.clinic?.name || "");
       setFila(jobs);
@@ -240,10 +255,16 @@ export default function ImpressoraPage() {
       await esperarImagens(portalRef.current);
       await new Promise((r) => setTimeout(r, 300));
       if (cancelado) return;
-      await imprimir();
+      const veio = await imprimir();
+      // Nesta aba não reimprime de jeito nenhum (sem o evento, a folha pode ter saído).
       jaImpressos.current.add(atual.id);
-      try { await printJobsApi.done(atual.id); } catch { semConfirmar.current.add(atual.id); }
-      setImpressos((prev) => [{ quando: horaAgora(), tipo: NOME_TIPO[atual.kind] || atual.kind, paciente: atual.patient?.name || "" }, ...prev].slice(0, 10));
+      if (veio) {
+        try { await printJobsApi.done(atual.id); } catch { semConfirmar.current.add(atual.id); }
+      } else {
+        // Sem o "afterprint": não marca impresso/entregue. A reserva vence em 2 min no servidor.
+        setAviso(`${horaAgora()} · A impressão de ${NOME_TIPO[atual.kind] || atual.kind} de ${atual.patient?.name || "paciente"} não confirmou. Se a folha não saiu, imprima pela consulta.`);
+      }
+      if (veio) setImpressos((prev) => [{ quando: horaAgora(), tipo: NOME_TIPO[atual.kind] || atual.kind, paciente: atual.patient?.name || "" }, ...prev].slice(0, 10));
       setFila((prev) => prev.filter((j) => j.id !== atual.id));
       await new Promise((r) => setTimeout(r, 1500));
       if (cancelado) return;

@@ -310,18 +310,25 @@ export const escribaSugestoesApi = {
   guia: (id: number): Promise<EscribaPedidoPC> =>
     api.post(`/escriba/sugestoes/${id}/guia`).then((r) => r.data),
   // 17/11 02h10 (Valth): "Tudo de hoje" gera os documentos de TODOS os botões ainda não feitos (o PC grava).
-  gerarPendentes: (entryId: number): Promise<EscribaGerar> =>
-    api.post(`/escriba/sugestoes/entrada/${entryId}/gerar-pendentes`).then((r) => r.data),
+  // 22/11: sugestaoIds = só os botões marcados ("Conferir antes de gerar"); sem a lista, todos os pendentes.
+  gerarPendentes: (entryId: number, sugestaoIds?: number[]): Promise<EscribaGerar> =>
+    api.post(`/escriba/sugestoes/entrada/${entryId}/gerar-pendentes`, sugestaoIds ? { sugestao_ids: sugestaoIds } : undefined).then((r) => r.data),
+  // 22/11 (revisão 19/11): configuração POR MÉDICO, desligada por padrão.
+  config: (): Promise<{ conferir_antes_de_gerar: boolean }> =>
+    api.get("/escriba/config").then((r) => r.data),
+  salvarConfig: (conferir_antes_de_gerar: boolean): Promise<{ conferir_antes_de_gerar: boolean }> =>
+    api.put("/escriba/config", { conferir_antes_de_gerar }).then((r) => r.data),
   estadoGerar: (entryId: number): Promise<EscribaGerar> =>
     api.get(`/escriba/sugestoes/entrada/${entryId}/gerar-pendentes`).then((r) => r.data),
 };
 export interface EscribaGerarItem {
   sugestao_id: number; tipo: EscribaSugTipo; rotulo: string; estado: string; pulada?: string | null;
+  conferida?: boolean; frase?: string | null; pode_gerar?: boolean;
   pedido?: (EscribaPedidoPC & { documentos?: { kind: string; id: number; ja_existia?: boolean }[] }) | null;
 }
 export interface EscribaGerar {
   entry_id: number; pc_vivo: boolean; terminado: boolean; gerando: number; feitos: number; falhas: number; pulados: number;
-  novos?: number; itens: EscribaGerarItem[];
+  novos?: number; itens: EscribaGerarItem[]; conferir_antes_de_gerar?: boolean;
 }
 
 // 17/11/2026: assistente ao vivo (chat curto por paciente e por dia).
@@ -358,8 +365,9 @@ export type PrintJobKind = "receita" | "exame" | "laudo" | "encaminhamento" | "d
 export const printJobsApi = {
   create: (data: { kind: PrintJobKind; ref_id: number; clinic_id: number; opcoes?: Record<string, any> }) =>
     api.post("/print-jobs", data).then((r) => r.data),
-  pending: (clinicId: number) =>
-    api.get("/print-jobs/pending", { params: { clinic_id: clinicId } }).then((r) => r.data),
+  // 22/11: "marca" = esta aba/PC; o servidor reserva o pedido para ela (outra aba ou PC não imprime o mesmo).
+  pending: (clinicId: number, marca?: string) =>
+    api.get("/print-jobs/pending", { params: { clinic_id: clinicId, ...(marca ? { marca } : {}) } }).then((r) => r.data),
   done: (jobId: number) =>
     api.post(`/print-jobs/${jobId}/done`).then((r) => r.data),
   // 18/11: páginas (imagem) da guia SP/SADT em PDF que está na fila

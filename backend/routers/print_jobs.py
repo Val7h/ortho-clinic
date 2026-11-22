@@ -23,11 +23,14 @@ envio_documentos.py — sem migração. Log só com ids, nunca dado de paciente.
 """
 import json
 import logging
+import re
+from datetime import datetime, timedelta, timezone
 from typing import Any, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from sqlalchemy import text
+from sqlalchemy import bindparam, inspect, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from database import get_db
@@ -46,31 +49,78 @@ router = APIRouter(tags=["Impressora da clínica"])
 # Pedido na fila há mais tempo que isso não sai mais sozinho: evita que um
 # computador desligado por dias, ao voltar, despeje papel velho na clínica.
 HORAS_VALIDADE = 24
+# 22/11 (revisão 19/11, item 6): o GET /pending RESERVA o pedido para a aba/PC que pediu
+# (claimed_by = marca gerada pela página). Sem o /done, a reserva vence nesse prazo e
+# outra aba/PC pode imprimir.
+MINUTOS_RESERVA = 2
 
 _tabela_ok = False
+
+
+def _agora() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _corte_validade() -> datetime:
+    return _agora() - timedelta(hours=HORAS_VALIDADE)
 
 
 def _garantir_tabela(db: Session) -> None:
     global _tabela_ok
     if _tabela_ok:
         return
-    db.execute(text("""create table if not exists print_jobs(
-        id serial primary key,
+    try:
+        _criar_tabela(db)
+    except Exception:  # dois processos criando ao mesmo tempo: o outro ganhou; tenta de novo na próxima chamada
+        db.rollback()
+        logger.exception("[IMPRESSORA] falhou preparar a tabela print_jobs")
+        return
+    _tabela_ok = True
+
+
+def _criar_tabela(db: Session) -> None:
+    # SQL portátil (Postgres em produção, SQLite nos testes); só o tipo do id muda.
+    sqlite = db.get_bind().dialect.name == "sqlite"
+    id_col = "id integer primary key autoincrement" if sqlite else "id serial primary key"
+    db.execute(text(f"""create table if not exists print_jobs(
+        {id_col},
         organization_id int not null,
         clinic_id int not null,
         patient_id int not null,
         kind text not null,
         ref_id int not null,
         opcoes text,
-        created_at timestamptz not null default now(),
+        created_at timestamptz not null default CURRENT_TIMESTAMP,
         printed_at timestamptz,
-        created_by int)"""))
+        created_by int,
+        claimed_at timestamptz,
+        claimed_by text)"""))
+    # Tabela antiga (antes de 22/11) não tem as colunas da reserva.
+    cols = {c["name"] for c in inspect(db.get_bind()).get_columns("print_jobs")} if sqlite else {
+        r[0] for r in db.execute(text(
+            "select column_name from information_schema.columns where table_name='print_jobs'")).fetchall()}
+    if "claimed_at" not in cols:
+        db.execute(text("alter table print_jobs add column claimed_at timestamptz"))
+    if "claimed_by" not in cols:
+        db.execute(text("alter table print_jobs add column claimed_by text"))
     db.execute(text("create index if not exists ix_print_jobs_pendentes "
                     "on print_jobs(organization_id, clinic_id, created_at) where printed_at is null"))
-    # 18/11: a tabela antiga só aceitava 4 tipos; "documento" (guia em PDF) entra também.
-    db.execute(text("alter table print_jobs drop constraint if exists print_jobs_kind_check"))
+    if not sqlite:
+        # 18/11: a tabela antiga só aceitava 4 tipos; "documento" (guia em PDF) entra também.
+        db.execute(text("alter table print_jobs drop constraint if exists print_jobs_kind_check"))
+    # 22/11 (revisão 19/11, item 6): trava de clique duplo NO BANCO. Antes do índice único,
+    # tira da fila o que já não sai (vencido há mais de 24 h, que o /pending já ignora) e as
+    # duplicatas vivas (fica a mais antiga). Mesma regra dos órfãos: sai da fila, nada imprime.
+    agora = _agora()
+    db.execute(text("update print_jobs set printed_at=:a where printed_at is null and created_at <= :c"),
+               {"a": agora, "c": _corte_validade()})
+    db.execute(text(
+        "update print_jobs set printed_at=:a where printed_at is null and id not in ("
+        "select min(id) from print_jobs where printed_at is null "
+        "group by organization_id, clinic_id, kind, ref_id)"), {"a": agora})
+    db.execute(text("create unique index if not exists ux_print_jobs_um_vivo "
+                    "on print_jobs(organization_id, clinic_id, kind, ref_id) where printed_at is null"))
     db.commit()
-    _tabela_ok = True
 
 
 def _mesma_org(org_do_registro: Optional[int], user: User) -> bool:
@@ -146,34 +196,72 @@ def criar_job(data: PrintJobIn, db: Session = Depends(get_db), user: User = Depe
     if r is None:
         raise HTTPException(404, "Documento não encontrado — salve antes de mandar para a impressora.")
     org = user.organization_id or 1
+    chave = {"o": org, "c": data.clinic_id, "k": data.kind, "r": data.ref_id}
+    # O mesmo documento vencido (mais de 24 h, nunca saiu) sai da fila antes, para o índice único
+    # deixar entrar o pedido novo.
+    db.execute(text(
+        "update print_jobs set printed_at=:a where organization_id=:o and clinic_id=:c and kind=:k "
+        "and ref_id=:r and printed_at is null and created_at <= :corte"),
+        {**chave, "a": _agora(), "corte": _corte_validade()})
+
+    def _ja_na_fila():
+        return db.execute(text(
+            "select id from print_jobs where organization_id=:o and clinic_id=:c and kind=:k and ref_id=:r "
+            "and printed_at is null order by id limit 1"), chave).scalar()
+
     # Clique duplo não imprime duas vezes: o mesmo documento ainda na fila da mesma clínica volta o que já existe.
-    ja = db.execute(text(
-        "select id from print_jobs where organization_id=:o and clinic_id=:c and kind=:k and ref_id=:r "
-        "and printed_at is null and created_at > now() - make_interval(hours => :h) order by id limit 1"),
-        {"o": org, "c": data.clinic_id, "k": data.kind, "r": data.ref_id, "h": HORAS_VALIDADE}).scalar()
+    ja = _ja_na_fila()
     if ja:
+        db.commit()
         return {"id": ja, "ja_estava_na_fila": True}
-    novo = db.execute(text(
-        "insert into print_jobs(organization_id,clinic_id,patient_id,kind,ref_id,opcoes,created_by) "
-        "values (:o,:c,:p,:k,:r,:op,:u) returning id"),
-        {"o": org, "c": data.clinic_id, "p": r.patient_id, "k": data.kind, "r": data.ref_id,
-         "op": json.dumps(data.opcoes) if data.opcoes else None, "u": user.id}).scalar()
-    db.commit()
+    try:
+        novo = db.execute(text(
+            "insert into print_jobs(organization_id,clinic_id,patient_id,kind,ref_id,opcoes,created_by) "
+            "values (:o,:c,:p,:k,:r,:op,:u) returning id"),
+            {**chave, "p": r.patient_id, "op": json.dumps(data.opcoes) if data.opcoes else None,
+             "u": user.id}).scalar()
+        db.commit()
+    except IntegrityError:
+        # 22/11: dois cliques ao mesmo tempo — o índice único do banco barrou o segundo.
+        db.rollback()
+        ja = _ja_na_fila()
+        if not ja:
+            raise
+        return {"id": ja, "ja_estava_na_fila": True}
     logger.info("[IMPRESSORA] job %s criado: clinica %s, %s %s", novo, data.clinic_id, data.kind, data.ref_id)
     return {"id": novo, "ja_estava_na_fila": False}
 
 
 @router.get("/print-jobs/pending")
-def pendentes(clinic_id: int = Query(...), db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def pendentes(clinic_id: int = Query(...), marca: Optional[str] = Query(None, max_length=64),
+              db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """22/11 (revisão 19/11, item 6): cada pedido devolvido fica RESERVADO para quem pediu (marca da
+    aba/PC). Outra aba ou outro PC só o recebe se a reserva vencer (2 min sem /done). Página antiga,
+    sem marca, reserva com a marca do login (como antes: ela mesma continua vendo o pedido)."""
     _garantir_tabela(db)
     clinica = _clinica(db, clinic_id, user)
+    org = user.organization_id or 1
+    m = re.sub(r"[^A-Za-z0-9_.:-]", "", marca or "")[:64] or f"usuario:{user.id}"
+    agora = _agora()
+    vence = agora - timedelta(minutes=MINUTOS_RESERVA)
+    livre = "(claimed_at is null or claimed_at <= :vence or claimed_by = :m)"
     rows = db.execute(text(
         "select id, patient_id, kind, ref_id, opcoes, created_at from print_jobs "
         "where organization_id=:o and clinic_id=:c and printed_at is null "
-        "and created_at > now() - make_interval(hours => :h) order by created_at, id limit 50"),
-        {"o": user.organization_id or 1, "c": clinic_id, "h": HORAS_VALIDADE}).fetchall()
+        f"and created_at > :corte and {livre} order by created_at, id limit 50"),
+        {"o": org, "c": clinic_id, "corte": _corte_validade(), "vence": vence, "m": m}).fetchall()
+    # Reserva um a um: o update só pega se ainda estiver livre (duas abas ao mesmo tempo: uma ganha).
+    reservados = []
+    for row in rows:
+        res = db.execute(text(
+            f"update print_jobs set claimed_at=:a, claimed_by=:m where id=:i and organization_id=:o "
+            f"and printed_at is null and {livre}"),
+            {"a": agora, "m": m, "i": row[0], "o": org, "vence": vence})
+        if res.rowcount == 1:
+            reservados.append(row)
+    db.commit()
     saida, orfaos = [], []
-    for job_id, patient_id, kind, ref_id, opcoes, criado in rows:
+    for job_id, patient_id, kind, ref_id, opcoes, criado in reservados:
         r = _registro(db, kind, ref_id, user)
         p = db.query(Patient).filter(Patient.id == patient_id).first() if r is not None else None
         if r is None or p is None or not _mesma_org(p.organization_id, user):
@@ -188,8 +276,9 @@ def pendentes(clinic_id: int = Query(...), db: Session = Depends(get_db), user: 
                       "documento": _documento(kind, r)})
     if orfaos:
         # Sai da fila para não travar a clínica; nada é impresso.
-        db.execute(text("update print_jobs set printed_at=now() where id = any(:ids) and organization_id=:o"),
-                   {"ids": orfaos, "o": user.organization_id or 1})
+        db.execute(text("update print_jobs set printed_at=:a where id in :ids and organization_id=:o")
+                   .bindparams(bindparam("ids", expanding=True)),
+                   {"a": _agora(), "ids": orfaos, "o": org})
         db.commit()
         logger.info("[IMPRESSORA] %d job(s) sem documento retirados da fila: %s", len(orfaos), orfaos)
     return {"clinic": _clinica_dict(clinica), "jobs": saida}
@@ -199,9 +288,9 @@ def pendentes(clinic_id: int = Query(...), db: Session = Depends(get_db), user: 
 def marcar_impresso(job_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     _garantir_tabela(db)
     r = db.execute(text(
-        "update print_jobs set printed_at=coalesce(printed_at, now()) "
+        "update print_jobs set printed_at=coalesce(printed_at, :a) "
         "where id=:i and organization_id=:o returning id, patient_id, kind, ref_id"),
-        {"i": job_id, "o": user.organization_id or 1}).first()
+        {"a": _agora(), "i": job_id, "o": user.organization_id or 1}).first()
     if not r:
         db.commit()
         raise HTTPException(404, "Pedido de impressão não encontrado")
@@ -225,9 +314,10 @@ def paginas_do_job(job_id: int, db: Session = Depends(get_db), user: User = Depe
         # 19/11 (revisão): só pedido ainda VIVO na fila (até 24 h e não impresso há mais de 1 h). Antes, qualquer
         # login baixava a guia inteira de qualquer pedido antigo, pelo número.
         "select kind, ref_id from print_jobs where id=:i and organization_id=:o "
-        "and created_at > now() - make_interval(hours => :h) "
-        "and (printed_at is null or printed_at > now() - make_interval(hours => 1))"),
-        {"i": job_id, "o": user.organization_id or 1, "h": HORAS_VALIDADE}).fetchone()
+        "and created_at > :corte "
+        "and (printed_at is null or printed_at > :uma_hora)"),
+        {"i": job_id, "o": user.organization_id or 1, "corte": _corte_validade(),
+         "uma_hora": _agora() - timedelta(hours=1)}).fetchone()
     if not linha or linha[0] != "documento":
         raise HTTPException(404, "Pedido de impressão não encontrado")
     doc = _registro(db, "documento", linha[1], user)

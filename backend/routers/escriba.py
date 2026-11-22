@@ -21,6 +21,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from fastapi.responses import Response
 from pydantic import BaseModel
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from database import get_db
@@ -608,6 +609,72 @@ def _pedido_ativo(db: Session, sug_id: int) -> Optional[EscribaPedido]:
             .order_by(EscribaPedido.id.desc()).first())
 
 
+def _pode_gerar(db: Session, x: EscribaSugestao) -> bool:
+    """Mesma regra do gerar_pendentes: nova/aberta, sem motivo de pulo e sem pedido andando/feito."""
+    if x.estado not in ("nova", "aberta") or _motivo_pulo(x):
+        return False
+    ja = _pedido_ativo(db, x.id)
+    return not (ja and (ja.estado != "falhou" or (ja.resultado or "").startswith(NAO_GERA)))
+
+
+# ── 22/11 (revisão 19/11, item 1): "Conferir antes de gerar", configuração POR MÉDICO ──
+# Desligada por padrão (o "Tudo de hoje" continua gerando os pendentes ao abrir). Ligada, a tela mostra os
+# botões pendentes, com caixa marcada só nos conferidos, e só os marcados viram documento ("Gerar marcados").
+# O servidor também confere: com a configuração ligada, pedido sem a lista de marcados não gera nada.
+# Tabela criada na primeira chamada (como print_jobs/entregues), SQL portátil.
+_config_ok = False
+
+
+def _garantir_config(db: Session) -> None:
+    global _config_ok
+    if _config_ok:
+        return
+    try:
+        db.execute(text("""create table if not exists escriba_config_medico(
+            user_id integer primary key,
+            organization_id integer not null,
+            conferir_antes_de_gerar boolean not null default false,
+            updated_at timestamp not null default CURRENT_TIMESTAMP)"""))
+        db.commit()
+    except Exception:  # dois processos criando ao mesmo tempo: o outro ganhou
+        db.rollback()
+    _config_ok = True
+
+
+def conferir_antes_de_gerar(db: Session, u: User) -> bool:
+    _garantir_config(db)
+    v = db.execute(text("select conferir_antes_de_gerar from escriba_config_medico where user_id=:u"),
+                   {"u": u.id}).scalar()
+    return bool(v)
+
+
+class ConfigEscribaIn(BaseModel):
+    conferir_antes_de_gerar: bool
+
+
+@router.get("/config")
+def ler_config(db: Session = Depends(get_db), u: User = Depends(require_doctor)):
+    return {"conferir_antes_de_gerar": conferir_antes_de_gerar(db, u)}
+
+
+@router.put("/config")
+def salvar_config(data: ConfigEscribaIn, db: Session = Depends(get_db), u: User = Depends(require_doctor)):
+    _garantir_config(db)
+    params = {"u": u.id, "o": _org(u), "v": bool(data.conferir_antes_de_gerar)}
+    feito = db.execute(text("update escriba_config_medico set conferir_antes_de_gerar=:v, "
+                            "updated_at=CURRENT_TIMESTAMP where user_id=:u"), params).rowcount
+    if not feito:
+        db.execute(text("insert into escriba_config_medico(user_id, organization_id, conferir_antes_de_gerar) "
+                        "values (:u, :o, :v)"), params)
+    db.commit()
+    return {"conferir_antes_de_gerar": params["v"]}
+
+
+class GerarPendentesIn(BaseModel):
+    # None = todos os pendentes (comportamento de sempre); lista = só estes (os que o médico marcou).
+    sugestao_ids: Optional[List[int]] = None
+
+
 def _pc_vivo(org: int) -> bool:
     v = _PONTE_VISTA.get(org)
     return bool(v and (_agora() - v).total_seconds() < PC_VIVO_S)
@@ -632,25 +699,31 @@ def _gerar_out(db: Session, e: WaitingRoomEntry, org: int) -> dict:
         elif motivo:
             cont["pulados"] += 1
         itens.append({"sugestao_id": x.id, "tipo": x.tipo, "rotulo": x.rotulo, "estado": x.estado,
-                      "pedido": _pedido_out(ped), "pulada": motivo})
+                      "pedido": _pedido_out(ped), "pulada": motivo,
+                      # 22/11: para a lista do "Conferir antes de gerar"
+                      "conferida": bool(x.conferida), "frase": x.frase, "pode_gerar": _pode_gerar(db, x)})
     return {"entry_id": e.id, "pc_vivo": _pc_vivo(org), "terminado": not andando, **cont, "itens": itens}
 
 
 @router.post("/sugestoes/entrada/{entry_id}/gerar-pendentes")
-def gerar_pendentes(entry_id: int, db: Session = Depends(get_db), u: User = Depends(require_doctor)):
+def gerar_pendentes(entry_id: int, data: Optional[GerarPendentesIn] = None, db: Session = Depends(get_db),
+                    u: User = Depends(require_doctor)):
     """Abre o "Tudo de hoje": cria 1 pedido gerar_documento por sugestao nova/aberta. Repetir nao duplica:
-    sugestao com pedido andando ou feito fica como esta; falha por erro passageiro tenta de novo."""
+    sugestao com pedido andando ou feito fica como esta; falha por erro passageiro tenta de novo.
+    22/11: com sugestao_ids, so as marcadas. Medico com "Conferir antes de gerar" ligado e sem lista: nada."""
     e, p = _entrada_da_org(db, entry_id, u)
     org = p.organization_id or 1
+    escolhidas = None if data is None or data.sugestao_ids is None else set(data.sugestao_ids)
+    if escolhidas is None and conferir_antes_de_gerar(db, u):
+        return {**_gerar_out(db, e, org), "novos": 0, "conferir_antes_de_gerar": True}
     q = (db.query(EscribaSugestao).filter(EscribaSugestao.entry_id == e.id,
                                           EscribaSugestao.estado.in_(("nova", "aberta")))
          .order_by(EscribaSugestao.id))
     novos = 0
     for x in q.all():
-        if _motivo_pulo(x):
+        if escolhidas is not None and x.id not in escolhidas:
             continue
-        ja = _pedido_ativo(db, x.id)
-        if ja and (ja.estado != "falhou" or (ja.resultado or "").startswith(NAO_GERA)):
+        if not _pode_gerar(db, x):
             continue
         dados = {"sugestao_id": x.id, "tipo": x.tipo, "rotulo": x.rotulo, "frase": x.frase, "conferida": bool(x.conferida),
                  "dados": _json(x.dados), "convenio": p.insurance, "convenio_plano": p.insurance_plan,
