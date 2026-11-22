@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form
 from sqlalchemy.orm import Session
 from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError
@@ -329,12 +329,218 @@ def _cpf_valido(cpf: str) -> bool:
     return True
 
 
+# ── Leitura de DOCUMENTO PESSOAL e CARTEIRINHA (app do celular, 22/11/2026) ──
+# Mesmo sigilo da ficha: a imagem só passa pela memória, nada é gravado.
+# As regras estão no prompt E conferidas aqui no código: o modelo devolve, para
+# cada campo, o valor e o texto da linha de onde tirou; o código descarta o que
+# vem de linha de titular/responsável, CPF sem rótulo, data impossível etc.
+
+LER_DOC_TIPOS = ("identity", "insurance_card")
+LER_DOC_CAMPOS = {
+    "identity": ("name", "birthdate", "cpf", "rg"),
+    "insurance_card": ("insurance", "insurance_plan", "insurance_number", "name", "birthdate", "cpf"),
+}
+LER_DOC_ESPERA_S = 20.0
+
+_LER_DOC_REGRAS = """
+Para CADA campo devolva um objeto com estas chaves:
+  "valor": o dado lido (ou null),
+  "rotulo": o rótulo impresso ao lado ou acima do dado (ex.: "CPF", "NOME", "NASCIMENTO"), ou null,
+  "linha": o texto exato da linha onde o dado está,
+  "linha_abaixo": o texto exato da linha logo abaixo, ou null,
+  "duvidoso": true se você não tem certeza da leitura.
+
+Regras obrigatórias:
+- Responda SOMENTE com um objeto JSON, sem nenhum texto antes ou depois.
+- Use null em todo campo que NÃO estiver claramente visível. NUNCA invente, deduza ou complete.
+- Linha com TITULAR, TIT., RESPONSÁVEL ou RESP. NUNCA é dado do paciente: deixe o campo null.
+- "Dependente" ou "Beneficiário" é o paciente: o nome dele vai em name.
+- name: nome completo em CAIXA ALTA.
+- cpf: somente os 11 dígitos. Só leia o CPF se ele tiver o rótulo "CPF".
+- birthdate: no formato AAAA-MM-DD.
+- Na dúvida, marque "duvidoso": true.
+"""
+
+LER_DOC_PROMPTS = {
+    "identity": (
+        "Você recebe a foto de um documento pessoal brasileiro (RG, CNH ou CPF) de um paciente.\n"
+        "Chaves do JSON: name, birthdate, cpf, rg.\n"
+        "- rg: o número do RG como está escrito (com o órgão emissor, se houver).\n"
+        + _LER_DOC_REGRAS
+    ),
+    "insurance_card": (
+        "Você recebe a foto da carteirinha do plano de saúde de um paciente.\n"
+        "Chaves do JSON: insurance, insurance_plan, insurance_number, name, birthdate, cpf.\n"
+        "- insurance: nome da operadora (ex.: Unimed, Bradesco Saúde, Hapvida).\n"
+        "- insurance_plan: nome do plano ou produto impresso na carteirinha.\n"
+        "- insurance_number: número da carteirinha (do beneficiário), somente dígitos.\n"
+        "- name e birthdate: do beneficiário (o paciente), nunca do titular.\n"
+        "- cpf: só se houver o rótulo \"CPF\" e a linha de baixo não disser TIT. ou RESP.\n"
+        + _LER_DOC_REGRAS
+    ),
+}
+
+_RE_TITULAR = re.compile(r"\b(TITULAR|TIT|RESPONS[AÁ]VEL|RESP)\b\.?", re.I)
+
+_travas_leitura: dict = {}
+
+
+def _trava_leitura():
+    """Uma leitura do celular por vez (uma trava por laço de eventos)."""
+    import asyncio
+    laco = asyncio.get_running_loop()
+    t = _travas_leitura.get(id(laco))
+    if t is None or t[0] is not laco:
+        t = (laco, asyncio.Lock())
+        _travas_leitura[id(laco)] = t
+    return t[1]
+
+
+def _conferir_campo(tipo: str, campo: str, item) -> tuple:
+    """Devolve (valor, motivo). valor None = não entra; motivo explica o porquê."""
+    from datetime import date as _date
+    if isinstance(item, dict):
+        valor, rotulo = item.get("valor"), item.get("rotulo")
+        linha, abaixo, duvidoso = item.get("linha"), item.get("linha_abaixo"), item.get("duvidoso")
+    else:
+        valor, rotulo, linha, abaixo, duvidoso = item, None, None, None, False
+    if valor is None or (isinstance(valor, str) and not valor.strip()):
+        return None, None
+    valor = str(valor).strip()
+    if duvidoso is True:
+        return None, "leitura duvidosa"
+    junto = " ".join(str(x) for x in (rotulo, linha) if x)
+    if _RE_TITULAR.search(junto) or _RE_TITULAR.search(valor):
+        return None, "é do titular ou responsável, não do paciente"
+
+    if campo == "cpf":
+        if tipo == "insurance_card":
+            if not rotulo or "CPF" not in str(rotulo).upper():
+                return None, "CPF sem o rótulo CPF"
+            if abaixo and _RE_TITULAR.search(str(abaixo)):
+                return None, "CPF do titular ou responsável"
+        d = re.sub(r"\D", "", valor)
+        if not _cpf_valido(d):
+            return None, "CPF com dígito errado"
+        return d, None
+    if campo == "birthdate":
+        try:
+            dt = _date.fromisoformat(valor[:10])
+        except ValueError:
+            return None, "data ilegível"
+        if dt < _date(1900, 1, 1) or dt > _date.today():
+            return None, "data impossível"
+        return dt.isoformat(), None
+    if campo == "insurance_number":
+        d = re.sub(r"\D", "", valor)
+        if not (6 <= len(d) <= 20):
+            return None, "número da carteirinha fora do tamanho"
+        return d, None
+    if campo == "name":
+        nome = re.sub(r"\s+", " ", valor).upper()
+        if len(nome) < 3 or re.search(r"\d", nome):
+            return None, "nome ilegível"
+        return nome, None
+    return valor[:100], None
+
+
+async def _ler_documento(file: UploadFile, tipo: str) -> dict:
+    """Leitura de documento pessoal ou carteirinha. NÃO grava nada."""
+    import asyncio
+    if file.content_type not in LER_FOTO_TIPOS:
+        raise HTTPException(422, "Formato não aceito. Envie uma foto PNG, JPG ou WEBP.")
+    conteudo = await file.read()
+    if not conteudo:
+        raise HTTPException(422, "A foto chegou vazia. Tire de novo.")
+    if len(conteudo) > LER_FOTO_MAX_BYTES:
+        raise HTTPException(422, "Foto muito grande (máximo 6 MB).")
+    api_key = (os.getenv("ANTHROPIC_API_KEY") or "").strip()
+    if not api_key:
+        raise HTTPException(503, "Leitura por foto não configurada (ANTHROPIC_API_KEY ausente)")
+
+    trava = _trava_leitura()
+    try:
+        await asyncio.wait_for(trava.acquire(), timeout=LER_DOC_ESPERA_S)
+    except asyncio.TimeoutError:
+        conteudo = b""
+        raise HTTPException(429, "A leitura está ocupada. Tente de novo.")
+    try:
+        payload = {
+            "model": "claude-opus-4-8",
+            "max_tokens": 1500,
+            "messages": [{
+                "role": "user",
+                "content": [
+                    {"type": "image", "source": {
+                        "type": "base64", "media_type": file.content_type,
+                        "data": base64.b64encode(conteudo).decode(),
+                    }},
+                    {"type": "text", "text": LER_DOC_PROMPTS[tipo]},
+                ],
+            }],
+        }
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            resp = await client.post(
+                "https://api.anthropic.com/v1/messages",
+                headers={"x-api-key": api_key, "anthropic-version": "2023-06-01",
+                         "content-type": "application/json"},
+                json=payload,
+            )
+    except httpx.RequestError as exc:
+        logger.error("Erro de rede ao ler documento: %s", type(exc).__name__)
+        raise HTTPException(502, "Não consegui falar com o serviço de leitura. Tente de novo.")
+    finally:
+        conteudo = b""
+        payload = None
+        trava.release()
+
+    if resp.status_code != 200:
+        logger.error("Anthropic retornou %s na leitura de documento", resp.status_code)
+        raise HTTPException(502, "Serviço de leitura indisponível no momento. Tente de novo.")
+
+    vazio = {"tipo": tipo, "campos": {k: None for k in LER_DOC_CAMPOS[tipo]}, "motivos": {},
+             "cpf_valido": None, "lidos": [],
+             "aviso": "Não consegui ler essa foto. Tente uma foto mais nítida."}
+    texto = "".join(b.get("text", "") for b in resp.json().get("content", []) if b.get("type") == "text").strip()
+    achado = re.search(r"\{.*\}", texto, re.S)
+    if not achado:
+        return vazio
+    try:
+        bruto = json.loads(achado.group(0))
+    except json.JSONDecodeError:
+        return vazio
+    if not isinstance(bruto, dict):
+        return vazio
+
+    campos, motivos = {}, {}
+    for k in LER_DOC_CAMPOS[tipo]:
+        valor, motivo = _conferir_campo(tipo, k, bruto.get(k))
+        campos[k] = valor
+        if motivo:
+            motivos[k] = motivo
+    lidos = [k for k, v in campos.items() if v]
+    return {
+        "tipo": tipo,
+        "campos": campos,
+        "motivos": motivos,
+        "cpf_valido": True if campos.get("cpf") else None,
+        "lidos": lidos,
+        "aviso": None if lidos else "Não achei nenhum dado nessa foto. Tente uma foto mais nítida.",
+    }
+
+
 @router.post("/ler-foto")
 async def ler_foto(
     file: UploadFile = File(...),
+    tipo: str = Form("ficha"),
     current_user: User = Depends(get_current_user),
 ):
-    """Lê a ficha de um paciente a partir de uma imagem. NÃO grava nada."""
+    """Lê a ficha de um paciente a partir de uma imagem. NÃO grava nada.
+    tipo=ficha (padrão, o "Cadastro por foto" do PC, intocado), identity ou insurance_card (celular)."""
+    if tipo != "ficha":
+        if tipo not in LER_DOC_TIPOS:
+            raise HTTPException(422, "Tipo de leitura inválido.")
+        return await _ler_documento(file, tipo)
     if file.content_type not in LER_FOTO_TIPOS:
         raise HTTPException(422, "Formato não aceito. Envie uma imagem PNG, JPG ou WEBP.")
 

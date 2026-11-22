@@ -127,14 +127,24 @@ async def _uploads_seguros(request, call_next):
 # é apagado. Os arquivos agora também ficam no banco (services/storage.py); esta
 # rota serve do banco primeiro e só então do disco (arquivos antigos/locais).
 @app.get("/uploads/{folder}/{filename}", include_in_schema=False)
-def servir_upload(folder: str, filename: str):
+def servir_upload(folder: str, filename: str, e: str = None, s: str = None):
     from fastapi import HTTPException
     from fastapi.responses import FileResponse, Response
-    from services.storage import ler_do_banco
+    from services.storage import ler_do_banco, PASTA_PRIVADA, link_privado_valido
 
     for parte in (folder, filename):
         if not parte or parte in (".", "..") or "/" in parte or "\\" in parte:
             raise HTTPException(404, "Arquivo não encontrado")
+    # 22/11/2026 (app do celular): documento pessoal e carteirinha só abrem com link
+    # assinado (2 h), que só sai para quem está logado. Só do banco, nunca do disco.
+    if folder == PASTA_PRIVADA:
+        if not link_privado_valido(f"{folder}/{filename}", e, s):
+            raise HTTPException(404, "Arquivo não encontrado")
+        achado = ler_do_banco(f"{folder}/{filename}")
+        if not achado:
+            raise HTTPException(404, "Arquivo não encontrado")
+        conteudo, mime = achado
+        return Response(content=conteudo, media_type=mime, headers={"Cache-Control": "private, no-store"})
     achado = ler_do_banco(f"{folder}/{filename}")
     if achado:
         conteudo, mime = achado

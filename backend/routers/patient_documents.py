@@ -37,7 +37,7 @@ from models.patient_documents import (
     DOCUMENT_CATEGORIES, ALLOWED_MIME_TYPES, MAX_FILE_SIZE_MB
 )
 from models.organization import User
-from services.storage import upload_file
+from services.storage import upload_file, guardar_privado, assinar_se_privado
 
 
 # ── Schemas ──────────────────────────────────────────────────────────────────
@@ -77,7 +77,7 @@ class DocumentOut(BaseModel):
             description=doc.description,
             date=str(doc.date),
             tags=doc.tags or [],
-            file_url=doc.file_url,
+            file_url=_link_para_tela(doc.file_url),
             file_name=doc.file_name,
             mime_type=doc.mime_type,
             file_size_kb=doc.file_size_kb,
@@ -140,6 +140,15 @@ class LinkGeneratedDocRequest(BaseModel):
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
+
+def _link_para_tela(url):
+    """Foto da pasta protegida sai com link assinado (2 h). Qualquer outro link,
+    ou qualquer erro, volta exatamente como está gravado (aba Documentos intacta)."""
+    try:
+        return assinar_se_privado(url)
+    except Exception:
+        return url
+
 
 def _get_patient_or_404(patient_id: int, db: Session) -> Patient:
     p = db.query(Patient).filter(Patient.id == patient_id, Patient.active == True).first()
@@ -339,6 +348,113 @@ async def upload_camera_photo(
         file_name=file.filename or fname,
         mime_type=file.content_type,
         file_size_kb=len(content) // 1024,
+    )
+    db.add(doc)
+    db.commit()
+    db.refresh(doc)
+    return DocumentOut.from_orm_ext(doc)
+
+
+# ── FOTO DE CADASTRO (app do celular, 22/11/2026) ────────────────────────────
+# Documento pessoal e carteirinha do plano, tirados pela secretária ou pelo
+# médico no celular. Única permissão nova da secretária: enviar nestas 2 pastas.
+# A foto vai para a pasta protegida (só no banco, link assinado de 2 h).
+
+FOTO_CADASTRO_CATEGORIAS = {"identity": "Documento pessoal", "insurance_card": "Carteirinha do plano"}
+FOTO_CADASTRO_MAX_BYTES = 6 * 1024 * 1024
+FOTO_CADASTRO_LADO_MAX = 2000
+
+
+def _tipo_pelos_bytes(b: bytes) -> Optional[str]:
+    """Só JPEG, PNG e WEBP — pelo conteúdo, nunca pelo nome ou tipo informado."""
+    if b[:3] == b"\xff\xd8\xff":
+        return "image/jpeg"
+    if b[:8] == b"\x89PNG\r\n\x1a\n":
+        return "image/png"
+    if len(b) >= 12 and b[:4] == b"RIFF" and b[8:12] == b"WEBP":
+        return "image/webp"
+    return None
+
+
+def _refazer_foto(b: bytes) -> bytes:
+    """Refaz a imagem: gira pela orientação, tira EXIF/GPS, lado maior 2000 px, JPEG 85."""
+    from io import BytesIO
+    from PIL import Image, ImageOps
+    Image.MAX_IMAGE_PIXELS = 60_000_000
+    with Image.open(BytesIO(b)) as im:
+        im.load()
+        im = ImageOps.exif_transpose(im)
+        if im.mode != "RGB":
+            fundo = Image.new("RGB", im.size, (255, 255, 255))
+            if im.mode in ("RGBA", "LA") or (im.mode == "P" and "transparency" in im.info):
+                im = im.convert("RGBA")
+                fundo.paste(im, mask=im.split()[-1])
+            else:
+                fundo.paste(im.convert("RGB"))
+            im = fundo
+        im.thumbnail((FOTO_CADASTRO_LADO_MAX, FOTO_CADASTRO_LADO_MAX))
+        saida = BytesIO()
+        im.save(saida, format="JPEG", quality=85, optimize=True)
+        return saida.getvalue()
+
+
+@router.post("/foto-cadastro", response_model=DocumentOut, status_code=201)
+async def upload_foto_cadastro(
+    patient_id: int,
+    category: str = Form(...),
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    import hashlib
+    if category not in FOTO_CADASTRO_CATEGORIAS:
+        raise HTTPException(422, "Só dá para enviar Documento pessoal ou Carteirinha do plano.")
+    p = _get_patient_or_404(patient_id, db)
+    if current_user.role != "superadmin" and (p.organization_id or 1) != (current_user.organization_id or 1):
+        raise HTTPException(404, "Paciente não encontrado")
+
+    conteudo = await file.read()
+    if not conteudo:
+        raise HTTPException(422, "A foto chegou vazia. Tire de novo.")
+    if len(conteudo) > FOTO_CADASTRO_MAX_BYTES:
+        raise HTTPException(422, "Foto muito grande (máximo 6 MB).")
+    if not _tipo_pelos_bytes(conteudo):
+        raise HTTPException(422, "Isso não é uma foto. Envie JPG, PNG ou WEBP.")
+    try:
+        foto = _refazer_foto(conteudo)
+    except Exception:
+        raise HTTPException(422, "Não consegui abrir a foto. Tire de novo.")
+    finally:
+        conteudo = b""
+
+    marca = "sha256:" + hashlib.sha256(foto).hexdigest()
+    for d in db.query(PatientDocument).filter(
+        PatientDocument.patient_id == patient_id,
+        PatientDocument.category == category,
+        PatientDocument.is_deleted == False,
+    ).all():
+        if marca in (d.tags or []):
+            return JSONResponse(status_code=200, content=DocumentOut.from_orm_ext(d).model_dump())
+
+    fname = f"{category}_{uuid.uuid4().hex}.jpg"
+    try:
+        file_url = guardar_privado(foto, fname)
+    except Exception:
+        raise HTTPException(503, "Não consegui guardar a foto. Tente de novo.")
+
+    from tzutil import today_br
+    doc = PatientDocument(
+        patient_id=patient_id,
+        organization_id=p.organization_id or current_user.organization_id,
+        uploaded_by_id=current_user.id,
+        title=FOTO_CADASTRO_CATEGORIAS[category],
+        category=category,
+        date=today_br(),
+        tags=["celular", marca],
+        file_url=file_url,
+        file_name=fname,
+        mime_type="image/jpeg",
+        file_size_kb=max(1, len(foto) // 1024),
     )
     db.add(doc)
     db.commit()
@@ -566,7 +682,7 @@ def access_shared_document(
         "title": doc.title,
         "category": DOCUMENT_CATEGORIES.get(doc.category, doc.category),
         "date": str(doc.date),
-        "file_url": doc.file_url,
+        "file_url": _link_para_tela(doc.file_url),
         "mime_type": doc.mime_type,
         "expires_at": share.expires_at.isoformat() if share.expires_at else None,
     }
@@ -591,7 +707,7 @@ def get_document_pdf(
 
     if doc.file_url:
         from fastapi.responses import RedirectResponse
-        return RedirectResponse(doc.file_url, status_code=302)
+        return RedirectResponse(_link_para_tela(doc.file_url), status_code=302)
 
     if doc.generated_doc_type and doc.generated_doc_id:
         # Mapeia para endpoint de geração de PDF existente
