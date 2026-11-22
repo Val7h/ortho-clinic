@@ -77,6 +77,11 @@ export async function reduzirFoto(arquivo: File, lado = 1600): Promise<File> {
   return new File([blob], "foto.jpg", { type: "image/jpeg" });
 }
 
+/** Data de hoje no horário do Brasil (AAAA-MM-DD). */
+export function hojeBR(agora: Date = new Date()): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Recife", year: "numeric", month: "2-digit", day: "2-digit" }).format(agora);
+}
+
 /** A tela está visível? (a sala só pergunta ao servidor com a tela à vista) */
 export function telaVisivel(): boolean {
   return typeof document === "undefined" || document.visibilityState === "visible";

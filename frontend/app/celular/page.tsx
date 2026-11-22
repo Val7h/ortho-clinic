@@ -6,8 +6,7 @@
 
 import { useEffect, useState } from "react";
 import { useLoginCelular, pegarPid } from "@/lib/celular";
-
-type Cartao = { href: string; titulo: string; texto: string; emoji: string; cor: string; pronto: boolean; teste: string };
+import { cartoesDoInicio } from "@/lib/celularPapel";
 
 export default function CelularInicio() {
   const { usuario, medico, pronto } = useLoginCelular();
@@ -30,15 +29,7 @@ export default function CelularInicio() {
     return <p className="p-6 text-center text-slate-500">Abrindo…</p>;
   }
 
-  const q = pid ? `?pid=${pid}` : "";
-  const cartoes: Cartao[] = [
-    { href: `/celular/foto${q}`, titulo: "Foto de documento", texto: "Documento pessoal e carteirinha do plano", emoji: "📷", cor: "bg-sky-600", pronto: true, teste: "cartao-foto" },
-    { href: "/celular/agenda", titulo: "Agenda de hoje", texto: "Quem está marcado hoje", emoji: "📅", cor: "bg-emerald-600", pronto: false, teste: "cartao-agenda" },
-    { href: "/celular/sala", titulo: "Sala de espera", texto: "Quem já chegou", emoji: "🪑", cor: "bg-amber-600", pronto: false, teste: "cartao-sala" },
-  ];
-  if (medico) {
-    cartoes.push({ href: "/escriba-gravar", titulo: "Gravar consulta", texto: "Grava a consulta aberta no PC", emoji: "🎙️", cor: "bg-violet-600", pronto: true, teste: "cartao-gravar" });
-  }
+  const cartoes = cartoesDoInicio(usuario.role, pid);
 
   return (
     <div className="max-w-xl mx-auto p-4 flex flex-col gap-4">
@@ -51,27 +42,16 @@ export default function CelularInicio() {
       </header>
 
       <nav className="grid grid-cols-1 gap-3">
-        {cartoes.map((c) =>
-          c.pronto ? (
-            <a key={c.href} href={c.href} data-testid={c.teste}
-              className={`flex items-center gap-4 rounded-2xl ${c.cor} text-white p-5 shadow active:scale-[.99]`}>
-              <span className="text-4xl" aria-hidden>{c.emoji}</span>
-              <span>
-                <span className="block text-lg font-bold">{c.titulo}</span>
-                <span className="block text-sm opacity-90">{c.texto}</span>
-              </span>
-            </a>
-          ) : (
-            <div key={c.href} data-testid={c.teste}
-              className="flex items-center gap-4 rounded-2xl bg-slate-200 dark:bg-slate-800 text-slate-500 p-5">
-              <span className="text-4xl opacity-50" aria-hidden>{c.emoji}</span>
-              <span>
-                <span className="block text-lg font-bold">{c.titulo}</span>
-                <span className="block text-sm">Chega na próxima versão</span>
-              </span>
-            </div>
-          ),
-        )}
+        {cartoes.map((c) => (
+          <a key={c.href} href={c.href} data-testid={c.teste}
+            className={`flex items-center gap-4 rounded-2xl ${c.cor} text-white p-5 shadow active:scale-[.99]`}>
+            <span className="text-4xl" aria-hidden>{c.emoji}</span>
+            <span>
+              <span className="block text-lg font-bold">{c.titulo}</span>
+              <span className="block text-sm opacity-90">{c.texto}</span>
+            </span>
+          </a>
+        ))}
       </nav>
 
       {!instalado && (

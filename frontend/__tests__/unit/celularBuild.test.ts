@@ -24,5 +24,8 @@ const temBuild = fs.existsSync(path.join(out, "celular.html"));
     expect(m).toMatchObject({ id: "/celular", start_url: "/celular", scope: "/", display: "standalone", name: "OrthoMedic" });
     for (const i of m.icons) expect(fs.existsSync(path.join(out, i.src))).toBe(true);
     expect(fs.existsSync(path.join(out, "icons", "apple-touch-icon-180.png"))).toBe(true);
+    for (const f of ["celular/agenda.html", "celular/sala.html", "celular/paciente.html"]) {
+      if (fs.existsSync(path.join(__dirname, "..", "..", "app", f.replace(".html", ""), "page.tsx"))) expect(fs.existsSync(path.join(out, f))).toBe(true);
+    }
   });
 });
