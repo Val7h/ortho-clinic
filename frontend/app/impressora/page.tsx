@@ -113,9 +113,10 @@ async function esperarImagens(el: HTMLElement | null) {
 
 // window.print() + espera o "afterprint". Com --kiosk-printing o Chrome manda
 // direto para a impressora padrão, sem janela, e dispara o "afterprint" logo.
-// 22/11 (revisão 19/11, item 7): devolve SE o evento veio. A espera de 3 s ficou só
-// como reserva para a fila não parar; sem o evento, o pedido NÃO é marcado impresso.
-const ESPERA_IMPRESSAO_MS = 3000;
+// 22/11 (revisão 19/11, item 7): devolve SE o evento veio. Sem o evento em 15 s (antes 3 s),
+// marca impresso do mesmo jeito (como era antes) e registra no console: o pedido nunca fica
+// parado vivo nesta aba.
+const ESPERA_IMPRESSAO_MS = 15000;
 function imprimir(): Promise<boolean> {
   return new Promise((res) => {
     let feito = false;
@@ -256,15 +257,10 @@ export default function ImpressoraPage() {
       await new Promise((r) => setTimeout(r, 300));
       if (cancelado) return;
       const veio = await imprimir();
-      // Nesta aba não reimprime de jeito nenhum (sem o evento, a folha pode ter saído).
       jaImpressos.current.add(atual.id);
-      if (veio) {
-        try { await printJobsApi.done(atual.id); } catch { semConfirmar.current.add(atual.id); }
-      } else {
-        // Sem o "afterprint": não marca impresso/entregue. A reserva vence em 2 min no servidor.
-        setAviso(`${horaAgora()} · A impressão de ${NOME_TIPO[atual.kind] || atual.kind} de ${atual.patient?.name || "paciente"} não confirmou. Se a folha não saiu, imprima pela consulta.`);
-      }
-      if (veio) setImpressos((prev) => [{ quando: horaAgora(), tipo: NOME_TIPO[atual.kind] || atual.kind, paciente: atual.patient?.name || "" }, ...prev].slice(0, 10));
+      if (!veio) console.warn(`[impressora] pedido ${atual.id}: sem "afterprint" em ${ESPERA_IMPRESSAO_MS / 1000} s; marcado impresso do mesmo jeito`);
+      try { await printJobsApi.done(atual.id); } catch { semConfirmar.current.add(atual.id); }
+      setImpressos((prev) => [{ quando: horaAgora(), tipo: NOME_TIPO[atual.kind] || atual.kind, paciente: atual.patient?.name || "" }, ...prev].slice(0, 10));
       setFila((prev) => prev.filter((j) => j.id !== atual.id));
       await new Promise((r) => setTimeout(r, 1500));
       if (cancelado) return;

@@ -642,10 +642,15 @@ def _garantir_config(db: Session) -> None:
 
 
 def conferir_antes_de_gerar(db: Session, u: User) -> bool:
-    _garantir_config(db)
-    v = db.execute(text("select conferir_antes_de_gerar from escriba_config_medico where user_id=:u"),
-                   {"u": u.id}).scalar()
-    return bool(v)
+    """Tabela ausente ou leitura com erro = DESLIGADO (gera como sempre), nunca 500."""
+    try:
+        _garantir_config(db)
+        v = db.execute(text("select conferir_antes_de_gerar from escriba_config_medico where user_id=:u"),
+                       {"u": u.id}).scalar()
+        return bool(v)
+    except Exception:
+        db.rollback()
+        return False
 
 
 class ConfigEscribaIn(BaseModel):

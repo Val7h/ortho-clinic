@@ -111,3 +111,27 @@ def test_rota_aceita_post_sem_corpo_como_a_tela_antiga():
         assert c.get("/escriba/config").json() == {"conferir_antes_de_gerar": False}
     finally:
         main.app.dependency_overrides.clear()
+
+
+def test_sem_tabela_de_configuracao_vale_desligado():
+    db = _db(); e, sugs = _base(db)
+    ES._config_ok = True   # finge que já tentou criar, mas a tabela não existe
+    assert ES.ler_config(db, MED) == {"conferir_antes_de_gerar": False}
+    assert ES.gerar_pendentes(e.id, None, db, MED)["novos"] == 3
+
+
+def test_leitura_com_erro_vale_desligado():
+    db = _db(); e, sugs = _base(db)
+    ES.salvar_config(ES.ConfigEscribaIn(conferir_antes_de_gerar=True), db, MED)
+    orig = db.execute
+
+    def execute(stmt, *a, **k):
+        if "from escriba_config_medico" in str(stmt):
+            raise RuntimeError("falha simulada de leitura")
+        return orig(stmt, *a, **k)
+    db.execute = execute
+    try:
+        assert ES.ler_config(db, MED) == {"conferir_antes_de_gerar": False}
+        assert ES.gerar_pendentes(e.id, None, db, MED)["novos"] == 3
+    finally:
+        db.execute = orig

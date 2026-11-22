@@ -162,3 +162,31 @@ def test_marca_estranha_e_limpa():
     j = _job(db, c, r)["id"]
     PJ.pendentes(c.id, "aba A'; drop", db, SEC)
     assert db.execute(text("select claimed_by from print_jobs where id=:i"), {"i": j}).scalar() == "abaAdrop"
+
+
+def test_sem_colunas_da_reserva_pending_segue_sem_reservar():
+    # Simula a falha do alter das colunas claimed_*: tabela antiga + _criar_reserva quebrando.
+    PJ._tabela_ok = False
+    e = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(e)
+    db = sessionmaker(bind=e)()
+    db.execute(text("""create table print_jobs(id integer primary key autoincrement, organization_id int not null,
+        clinic_id int not null, patient_id int not null, kind text not null, ref_id int not null, opcoes text,
+        created_at timestamptz not null default CURRENT_TIMESTAMP, printed_at timestamptz, created_by int)"""))
+    db.commit()
+    c, p, r = _base(db)
+    orig = PJ._criar_reserva
+
+    def quebra(db_):
+        db_.execute(text("select coluna_que_nao_existe from print_jobs"))
+    PJ._criar_reserva = quebra
+    try:
+        j = _job(db, c, r)["id"]
+        assert PJ._reserva_ok is False
+        assert _ids(PJ.pendentes(c.id, "aba-A", db, SEC)) == [j]
+        assert _ids(PJ.pendentes(c.id, "aba-B", db, SEC)) == [j]      # sem reserva: como era antes
+        PJ.marcar_impresso(j, db, SEC)
+        assert _ids(PJ.pendentes(c.id, "aba-A", db, SEC)) == []
+    finally:
+        PJ._criar_reserva = orig
+        PJ._tabela_ok = False

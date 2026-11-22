@@ -55,6 +55,8 @@ HORAS_VALIDADE = 24
 MINUTOS_RESERVA = 2
 
 _tabela_ok = False
+# 22/11 (ressalva da revisão): sem as colunas claimed_* (alter falhou), o /pending segue sem reserva.
+_reserva_ok = False
 
 
 def _agora() -> datetime:
@@ -66,7 +68,7 @@ def _corte_validade() -> datetime:
 
 
 def _garantir_tabela(db: Session) -> None:
-    global _tabela_ok
+    global _tabela_ok, _reserva_ok
     if _tabela_ok:
         return
     try:
@@ -75,7 +77,26 @@ def _garantir_tabela(db: Session) -> None:
         db.rollback()
         logger.exception("[IMPRESSORA] falhou preparar a tabela print_jobs")
         return
+    # Cada passo novo em transação própria: se falhar, a fila continua como antes.
+    try:
+        _criar_reserva(db)
+        db.commit()
+        _reserva_ok = True
+    except Exception:
+        db.rollback()
+        _reserva_ok = False
+        logger.exception("[IMPRESSORA] sem colunas da reserva: /pending segue sem reservar")
+    try:
+        _criar_trava_duplicata(db)
+        db.commit()
+    except Exception:
+        db.rollback()
+        logger.exception("[IMPRESSORA] sem índice único: clique duplo fica só com a conferência do select")
     _tabela_ok = True
+
+
+def _sqlite(db: Session) -> bool:
+    return db.get_bind().dialect.name == "sqlite"
 
 
 def _criar_tabela(db: Session) -> None:
@@ -95,19 +116,26 @@ def _criar_tabela(db: Session) -> None:
         created_by int,
         claimed_at timestamptz,
         claimed_by text)"""))
+    db.execute(text("create index if not exists ix_print_jobs_pendentes "
+                    "on print_jobs(organization_id, clinic_id, created_at) where printed_at is null"))
+    if not sqlite:
+        # 18/11: a tabela antiga só aceitava 4 tipos; "documento" (guia em PDF) entra também.
+        db.execute(text("alter table print_jobs drop constraint if exists print_jobs_kind_check"))
+    db.commit()
+
+
+def _criar_reserva(db: Session) -> None:
     # Tabela antiga (antes de 22/11) não tem as colunas da reserva.
-    cols = {c["name"] for c in inspect(db.get_bind()).get_columns("print_jobs")} if sqlite else {
+    cols = {c["name"] for c in inspect(db.get_bind()).get_columns("print_jobs")} if _sqlite(db) else {
         r[0] for r in db.execute(text(
             "select column_name from information_schema.columns where table_name='print_jobs'")).fetchall()}
     if "claimed_at" not in cols:
         db.execute(text("alter table print_jobs add column claimed_at timestamptz"))
     if "claimed_by" not in cols:
         db.execute(text("alter table print_jobs add column claimed_by text"))
-    db.execute(text("create index if not exists ix_print_jobs_pendentes "
-                    "on print_jobs(organization_id, clinic_id, created_at) where printed_at is null"))
-    if not sqlite:
-        # 18/11: a tabela antiga só aceitava 4 tipos; "documento" (guia em PDF) entra também.
-        db.execute(text("alter table print_jobs drop constraint if exists print_jobs_kind_check"))
+
+
+def _criar_trava_duplicata(db: Session) -> None:
     # 22/11 (revisão 19/11, item 6): trava de clique duplo NO BANCO. Antes do índice único,
     # tira da fila o que já não sai (vencido há mais de 24 h, que o /pending já ignora) e as
     # duplicatas vivas (fica a mais antiga). Mesma regra dos órfãos: sai da fila, nada imprime.
@@ -120,7 +148,6 @@ def _criar_tabela(db: Session) -> None:
         "group by organization_id, clinic_id, kind, ref_id)"), {"a": agora})
     db.execute(text("create unique index if not exists ux_print_jobs_um_vivo "
                     "on print_jobs(organization_id, clinic_id, kind, ref_id) where printed_at is null"))
-    db.commit()
 
 
 def _mesma_org(org_do_registro: Optional[int], user: User) -> bool:
@@ -244,14 +271,23 @@ def pendentes(clinic_id: int = Query(...), marca: Optional[str] = Query(None, ma
     m = re.sub(r"[^A-Za-z0-9_.:-]", "", marca or "")[:64] or f"usuario:{user.id}"
     agora = _agora()
     vence = agora - timedelta(minutes=MINUTOS_RESERVA)
-    livre = "(claimed_at is null or claimed_at <= :vence or claimed_by = :m)"
-    rows = db.execute(text(
-        "select id, patient_id, kind, ref_id, opcoes, created_at from print_jobs "
-        "where organization_id=:o and clinic_id=:c and printed_at is null "
-        f"and created_at > :corte and {livre} order by created_at, id limit 50"),
-        {"o": org, "c": clinic_id, "corte": _corte_validade(), "vence": vence, "m": m}).fetchall()
+    if not _reserva_ok:
+        # Sem as colunas da reserva: consulta antiga (sem reservar), nunca 500.
+        reservados = db.execute(text(
+            "select id, patient_id, kind, ref_id, opcoes, created_at from print_jobs "
+            "where organization_id=:o and clinic_id=:c and printed_at is null "
+            "and created_at > :corte order by created_at, id limit 50"),
+            {"o": org, "c": clinic_id, "corte": _corte_validade()}).fetchall()
+        rows = []
+    else:
+        livre = "(claimed_at is null or claimed_at <= :vence or claimed_by = :m)"
+        rows = db.execute(text(
+            "select id, patient_id, kind, ref_id, opcoes, created_at from print_jobs "
+            "where organization_id=:o and clinic_id=:c and printed_at is null "
+            f"and created_at > :corte and {livre} order by created_at, id limit 50"),
+            {"o": org, "c": clinic_id, "corte": _corte_validade(), "vence": vence, "m": m}).fetchall()
+        reservados = []
     # Reserva um a um: o update só pega se ainda estiver livre (duas abas ao mesmo tempo: uma ganha).
-    reservados = []
     for row in rows:
         res = db.execute(text(
             f"update print_jobs set claimed_at=:a, claimed_by=:m where id=:i and organization_id=:o "
