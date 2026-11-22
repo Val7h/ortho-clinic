@@ -76,6 +76,7 @@ export default function BottomTabBar() {
   const isPublicRoute = [
     "/login", "/confirmar", "/privacidade", "/termos", "/contrato",
     "/anamnese/", "/pre-consulta", "/agendar", "/documentos/publico",
+    "/celular", // 22/11: o app do celular tem a própria navegação (botão Início)
   ].some((r) => (pathname as string).startsWith(r));
   if (isPublicRoute) return null;
 

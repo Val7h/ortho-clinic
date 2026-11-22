@@ -40,7 +40,9 @@ export default function LoginPage() {
       // 17/11: quem veio da tela de gravar (celular/iPad) volta para ela depois do login.
       let voltar = '';
       try { voltar = sessionStorage.getItem('ortho_voltar_para') || ''; sessionStorage.removeItem('ortho_voltar_para'); } catch {}
-      router.push(voltar === '/escriba-gravar' ? '/escriba-gravar' : '/');
+      // 22/11: o app do celular (/celular...) também volta para onde estava. Só caminho interno conhecido.
+      const celularOk = /^\/celular(\/[a-z-]+)?(\?pid=\d+)?$/.test(voltar);
+      router.push(voltar === '/escriba-gravar' || celularOk ? voltar : '/');
     }
   }, [loading, user, router]);
 
