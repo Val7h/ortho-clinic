@@ -117,7 +117,7 @@ class SignaturePayload(BaseModel):
 class ShareRequest(BaseModel):
     channel: str             # "whatsapp" | "email" | "link"
     recipient: Optional[str] = None   # telefone / e-mail
-    expires_hours: int = 72           # validade do link
+    expires_hours: int = 72           # validade do link (teto: LINK_TETO_HORAS)
 
 
 class ShareOut(BaseModel):
@@ -140,6 +140,23 @@ class LinkGeneratedDocRequest(BaseModel):
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
+
+# 22/11 (revisão 19/11, documentos item 3): link "temporário" tinha validade livre.
+# Teto de 72 h; pedido acima disso vira 72 h, abaixo de 1 vira 1 h.
+LINK_TETO_HORAS = 72
+
+
+def _horas_do_link(pedido) -> int:
+    try:
+        h = int(pedido)
+    except (TypeError, ValueError):
+        h = LINK_TETO_HORAS
+    return max(1, min(LINK_TETO_HORAS, h))
+
+
+def _texto_validade(horas: int) -> str:
+    return "1 hora" if horas == 1 else f"{horas} horas"
+
 
 def _nao_compartilha(doc) -> bool:
     """Documento pessoal e carteirinha (e tudo da pasta protegida) nunca saem por
@@ -608,7 +625,8 @@ def share_document(
 
     # Gera token de compartilhamento
     token = secrets.token_urlsafe(32)
-    expires_at = datetime.now(timezone.utc) + timedelta(hours=req.expires_hours)
+    horas = _horas_do_link(req.expires_hours)
+    expires_at = datetime.now(timezone.utc) + timedelta(hours=horas)
 
     share = DocumentShare(
         document_id=doc.id,
@@ -630,6 +648,7 @@ def share_document(
             phone=req.recipient,
             doc_title=doc.title,
             share_url=share_url,
+            horas=horas,
         )
         message = f"Link enviado via WhatsApp para {req.recipient}"
     elif req.channel == "email" and req.recipient:
@@ -720,24 +739,30 @@ def get_document_pdf(
         return RedirectResponse(_link_para_tela(doc.file_url), status_code=302)
 
     if doc.generated_doc_type and doc.generated_doc_id:
-        # Mapeia para endpoint de geração de PDF existente
-        pdf_endpoints = {
-            "prescription":   f"/patients/{patient_id}/prescriptions/{doc.generated_doc_id}/pdf",
-            "exam_request":   f"/patients/{patient_id}/exams/{doc.generated_doc_id}/pdf",
-            "physio_request": f"/patients/{patient_id}/physio/{doc.generated_doc_id}/pdf",
-            "medical_report": f"/patients/{patient_id}/reports/{doc.generated_doc_id}/pdf",
+        # 22/11 (revisão 19/11, documentos item 7): antes redirecionava para
+        # /patients/{id}/prescriptions/{id}/pdf (e exams/physio/reports), rotas que
+        # NÃO existem -> 404 sem explicação. Documento gerado pelo sistema não tem
+        # PDF próprio: é impresso pela aba dele no atendimento. Erro claro.
+        abas = {
+            "prescription": "Receita",
+            "exam_request": "Exames",
+            "physio_request": "Encaminhamentos",
+            "medical_report": "Laudos",
         }
-        endpoint = pdf_endpoints.get(doc.generated_doc_type)
-        if endpoint:
-            from fastapi.responses import RedirectResponse
-            return RedirectResponse(endpoint, status_code=302)
+        aba = abas.get(doc.generated_doc_type)
+        raise HTTPException(
+            404,
+            f"Este documento foi gerado pelo sistema e não tem PDF próprio. "
+            f"Abra e imprima pela aba {aba} do atendimento." if aba else
+            "Este documento foi gerado pelo sistema e não tem PDF próprio.",
+        )
 
     raise HTTPException(404, "Este documento não possui arquivo associado")
 
 
 # ── BACKGROUND TASKS ──────────────────────────────────────────────────────────
 
-def _send_whatsapp_share(phone: str, doc_title: str, share_url: str):
+def _send_whatsapp_share(phone: str, doc_title: str, share_url: str, horas: int = LINK_TETO_HORAS):
     """
     Envia mensagem WhatsApp via Evolution API com link do documento.
     Usa a mesma infraestrutura de whatsapp.py.
@@ -749,7 +774,8 @@ def _send_whatsapp_share(phone: str, doc_title: str, share_url: str):
         instance = os.getenv("WHATSAPP_INSTANCE", "ortho")
 
         if not wa_url or not wa_key:
-            print(f"[DocumentShare] WhatsApp não configurado — link: {share_url}")
+            # 22/11: o token (link) não vai para o log.
+            print("[DocumentShare] WhatsApp não configurado — link não enviado")
             return
 
         # Normaliza telefone
@@ -760,7 +786,7 @@ def _send_whatsapp_share(phone: str, doc_title: str, share_url: str):
         message = (
             f"Olá! Seu documento *{doc_title}* está disponível para visualização:\n\n"
             f"{share_url}\n\n"
-            f"_Link válido por 72 horas. OrthoClinic._"
+            f"_Link válido por {_texto_validade(_horas_do_link(horas))}. OrthoClinic._"
         )
 
         httpx.post(
@@ -770,7 +796,7 @@ def _send_whatsapp_share(phone: str, doc_title: str, share_url: str):
             timeout=10,
         )
     except Exception as e:
-        print(f"[DocumentShare] Erro ao enviar WhatsApp: {e}")
+        print(f"[DocumentShare] Erro ao enviar WhatsApp: {type(e).__name__}")
 
 
 def _send_email_share(email: str, doc_title: str, share_url: str):
@@ -778,4 +804,5 @@ def _send_email_share(email: str, doc_title: str, share_url: str):
     Placeholder para envio de e-mail.
     Integrar com SendGrid/SMTP quando configurado.
     """
-    print(f"[DocumentShare] E-mail para {email}: {doc_title} — {share_url}")
+    # 22/11: o token (link) não vai para o log.
+    print(f"[DocumentShare] E-mail (não integrado) — documento: {doc_title}")

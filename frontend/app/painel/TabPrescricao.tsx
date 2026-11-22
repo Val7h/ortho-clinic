@@ -212,11 +212,14 @@ export default function TabPrescricao({ patientId, patient, onImprimir }: {
         const doTipo = imprimiveis.filter((i) => i.tipo === tipo);
         if (!doTipo.length) continue;
         const texto = montarTexto(doTipo);
-        await prescriptionsApi.create(patientId, {
+        const salva: any = await prescriptionsApi.create(patientId, {
           date: hojeISO(), prescription_type: tipo, medications: [], instructions: texto,
           patient_address: endereco || undefined, patient_phone: patient?.phone || undefined,
         });
-        jobs.push({ date: hojeISO(), medications: [], instructions: texto, prescription_type: tipo, patientAddress: endereco || undefined, patientPhone: patient?.phone || undefined });
+        // 22/11 (revisão 19/11): o papel sai do tipo que o SERVIDOR gravou (ele pode subir simples -> controle especial).
+        const tipoSalvo = salva?.prescription_type;
+        const tipoPapel: TipoRx = (tipoSalvo === "simples" || tipoSalvo === "controle_especial" || tipoSalvo === "antimicrobiano") ? tipoSalvo : tipo;
+        jobs.push({ date: hojeISO(), medications: [], instructions: texto, prescription_type: tipoPapel, patientAddress: endereco || undefined, patientPhone: patient?.phone || undefined });
       }
       toast.success(jobs.length > 1 ? `${jobs.length} receitas salvas (separadas por tipo)` : "Receita salva");
       setItens([]);

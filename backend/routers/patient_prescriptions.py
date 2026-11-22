@@ -41,7 +41,7 @@ class MedicationIn(BaseModel):
 
 class PatientRxCreate(BaseModel):
     date: str  # ISO date string YYYY-MM-DD
-    prescription_type: str = "simples"  # simples | controle_especial | antimicrobiano | notificacao_ab
+    prescription_type: Optional[str] = "simples"  # simples | controle_especial | antimicrobiano (ver TIPOS_RECEITA)
     medications: List[MedicationIn] = []
     instructions: str = ""
     memed_id: Optional[str] = None
@@ -66,6 +66,12 @@ class PatientRxOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# 22/11 (revisão 19/11, receita item 4): só estes tipos existem no papel. Qualquer outro
+# texto (erro de digitação) imprimia como simples e sumia do "Tudo de hoje" -> 422.
+# Vazio/ausente continua valendo "simples", como antes.
+TIPOS_RECEITA = ("simples", "controle_especial", "antimicrobiano")
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
@@ -100,6 +106,12 @@ def create_prescription(
     patient = db.query(Patient).filter(Patient.id == patient_id).first()
     if not patient:
         raise HTTPException(status_code=404, detail="Paciente não encontrado")
+
+    if data.prescription_type in (None, ""):
+        data.prescription_type = "simples"
+    if data.prescription_type not in TIPOS_RECEITA:
+        raise HTTPException(status_code=422, detail="Tipo de receita inválido: use simples, controle_especial "
+                            "ou antimicrobiano. Esta receita não foi gravada.")
 
     # Parse date
     try:

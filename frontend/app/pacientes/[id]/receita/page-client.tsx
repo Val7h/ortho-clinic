@@ -11,6 +11,7 @@ import NavBar from "@/components/NavBar";
 import { PageWithSidebar } from "@/components/PageWithSidebar";
 import { api, prescriptionsApi, patientsApi } from "@/lib/api";
 import { formatDate, resolveDynamicParam, hojeISO } from "@/lib/utils";
+import { PrintModal as PrintRxTipadaModal, normalizePrescriptionType } from "@/app/painel/ConsultaDrawer";
 
 interface MemedConfig {
   enabled: boolean;
@@ -475,6 +476,9 @@ export default function PrescriptionPage() {
   const [saving, setSaving] = useState(false);
   const [showManual, setShowManual] = useState(false);
   const [printRx, setPrintRx] = useState<{ date: string; medications: Medication[]; instructions: string } | null>(null);
+  // 22/11 (revisão 19/11, receita item 3): receita SALVA como controle especial/antimicrobiano
+  // reimprime no papel do tipo salvo (2 vias), não como simples.
+  const [printRxTipada, setPrintRxTipada] = useState<any>(null);
   const [freeTextMode, setFreeTextMode] = useState(false);
   const [freeText, setFreeText] = useState("");
 
@@ -674,6 +678,18 @@ export default function PrescriptionPage() {
   };
 
   const handlePrintExisting = (rx: any) => {
+    const tipoSalvo = normalizePrescriptionType(rx.prescription_type || "simples");
+    if (tipoSalvo !== "simples") {
+      setPrintRxTipada({
+        date: rx.date,
+        medications: rx.medications || [],
+        instructions: rx.instructions || "",
+        prescription_type: tipoSalvo,
+        patientAddress: rx.patient_address || undefined,
+        patientPhone: rx.patient_phone || undefined,
+      });
+      return;
+    }
     setPrintRx({
       date: rx.date,
       medications: rx.medications || [],
@@ -729,6 +745,9 @@ export default function PrescriptionPage() {
 
       {printRx && (
         <PrintPrescriptionModal rx={printRx} patient={patient} onClose={() => setPrintRx(null)} />
+      )}
+      {printRxTipada && (
+        <PrintRxTipadaModal rx={printRxTipada} patient={patient} collectorId={null} onClose={() => setPrintRxTipada(null)} />
       )}
 
       <div className="max-w-4xl mx-auto px-4 py-6 space-y-4">

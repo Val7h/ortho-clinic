@@ -1432,7 +1432,8 @@ export function RxSheets({ rx, patient, clinic, formato }: { rx: RxImpressao; pa
   return sheetsBody;
 }
 
-function PrintModal({ rx, patient, clinic, onClose, collectorId }: {
+// 22/11: exportado para a página antiga pacientes/[id]/receita reimprimir no papel do tipo salvo.
+export function PrintModal({ rx, patient, clinic, onClose, collectorId }: {
   rx: {
     date: string;
     medications: Medication[];
@@ -3196,6 +3197,12 @@ function TabReceita({ patientId, patient, clinic, rxExterna, prefill, onSalvoEsc
   const [saving, setSaving] = useState(false);
   const [prescriptions, setPrescriptions] = useState<any[]>([]);
   const [loadingRx, setLoadingRx] = useState(true);
+  // 22/11 (revisão 19/11, receita item 3): depois de salvar, a impressão usa o
+  // tipo que o SERVIDOR gravou (ele pode subir simples -> controle especial),
+  // não o calculado na tela. Vale enquanto o texto na tela for o mesmo salvo.
+  const rxSalvaNoServidor = useRef<{ assin: string; tipos: PrescriptionType[] } | null>(null);
+  const assinaturaRx = (meds: Medication[]) =>
+    JSON.stringify([freeTextMode, freeTextMode ? freeText : "", freeTextMode ? [] : meds, freeTextMode ? "" : instructions]);
   type PrintRxJob = {
     date: string; medications: Medication[]; instructions: string;
     prescription_type: PrescriptionType; patientAddress?: string; patientPhone?: string;
@@ -3630,6 +3637,10 @@ function TabReceita({ patientId, patient, clinic, rxExterna, prefill, onSalvoEsc
         toast.success("Receita salva! O texto continua aqui — pode imprimir ou enviar.");
       }
       setPrescriptions((prev) => [...novas, ...prev]);
+      rxSalvaNoServidor.current = {
+        assin: assinaturaRx(validMeds),
+        tipos: novas.map((n: any) => normalizePrescriptionType(n?.prescription_type || "simples")),
+      };
       pendenteEscriba.salvou(freeTextMode ? freeText : "");
       // A14: receita salva → limpa o rascunho persistido (já está salvo "de
       // verdade" no prontuário; o rascunho local perderia sentido)
@@ -3684,6 +3695,11 @@ function TabReceita({ patientId, patient, clinic, rxExterna, prefill, onSalvoEsc
         date: hojeISO(), medications: validMeds, instructions: freeTextMode ? freeText : instructions,
         prescription_type: gruposMeds?.[0]?.tipo ?? gruposTexto?.[0]?.tipo ?? rxType, patientAddress: patientAddress || undefined, patientPhone: patientPhone || undefined,
       }];
+    }
+    // 22/11 (revisão 19/11): receita já salva e sem mudança na tela -> papel do tipo gravado no servidor.
+    const salva = rxSalvaNoServidor.current;
+    if (salva && salva.assin === assinaturaRx(validMeds) && salva.tipos.length === folhas.length) {
+      folhas = folhas.map((f, i) => ({ ...f, prescription_type: salva.tipos[i] }));
     }
     if (folhas.length > 1) {
       toast(`Misturou tipos — gerando ${folhas.length} folhas separadas (${labelGrupos})`, { icon: "📄", duration: 6000 });

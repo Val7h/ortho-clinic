@@ -6,6 +6,7 @@ from pydantic import BaseModel
 import os, uuid
 from database import get_db
 from models.media import ConsultationMedia
+from models.consultation import Consultation
 from deps import require_doctor
 from services.storage import upload_file
 
@@ -47,6 +48,11 @@ async def upload_media(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
 ):
+    # 22/11 (revisão 19/11, documentos item 4): o patient_id vinha do formulário sem
+    # conferência; foto de um paciente podia ir para outro. Havendo consulta, tem de bater.
+    consulta = db.query(Consultation).filter(Consultation.id == consultation_id).first()
+    if consulta is not None and consulta.patient_id is not None and int(consulta.patient_id) != int(patient_id):
+        raise HTTPException(422, "Paciente do formulário não é o paciente desta consulta. A foto não foi gravada.")
     ext = os.path.splitext(file.filename or "file.jpg")[1].lower() or ".jpg"
     fname = str(uuid.uuid4()) + ext
     content = await file.read()
