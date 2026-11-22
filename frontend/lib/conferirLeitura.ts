@@ -29,6 +29,8 @@ export interface Linha {
   opcoes: Opcao[];
   escolha: string | null; // null = falta decidir
   travado?: boolean;
+  /** Amarelo de CPF/nascimento: só entra com "Conferi" (ou corrigindo o valor). */
+  conferir?: boolean;
 }
 
 export const CAMPOS: { campo: string; rotulo: string; de: Origem[] }[] = [
@@ -105,11 +107,14 @@ export function formatar(campo: string, v: string | null | undefined): string {
 export interface Entrada {
   cadastro: Record<string, any>;
   leituras: Partial<Record<Origem, Leitura>>;
-  /** Outro paciente que já tem o CPF lido (a tela confere antes). */
-  cpfDeOutro?: { id: number; name: string } | null;
+  /** CPFs lidos (só dígitos) que já são de OUTRO paciente — a tela confere TODOS antes. */
+  cpfsDeOutros?: Record<string, { id: number; name: string }>;
 }
 
-export function montarLinhas({ cadastro, leituras, cpfDeOutro }: Entrada): Linha[] {
+/** Cadastro vazio nestes campos: não entra sozinho, exige "Conferi" (como no LemonMedic). */
+export const EXIGE_CONFERIR = ["cpf", "birthdate"];
+
+export function montarLinhas({ cadastro, leituras, cpfsDeOutros }: Entrada): Linha[] {
   const linhas: Linha[] = [];
   for (const { campo, rotulo, de } of CAMPOS) {
     const lidas = de.filter((o) => leituras[o]);
@@ -134,11 +139,24 @@ export function montarLinhas({ cadastro, leituras, cpfDeOutro }: Entrada): Linha
       continue;
     }
 
+    // Trava ANTES de qualquer escolha: algum CPF lido (documento OU carteirinha) já é de outro paciente.
+    if (campo === "cpf" && cpfsDeOutros) {
+      const dono = valores.map((v) => cpfsDeOutros[soDigitos(v.valor)]).find(Boolean);
+      if (dono) {
+        linhas.push({
+          campo, rotulo, atual, cor: "laranja", travado: true,
+          motivo: `Este CPF já é de outro paciente (${dono.name}). Não será gravado.`,
+          opcoes: [{ chave: "manter", rotulo: "Manter", valor: atual }], escolha: "manter",
+        });
+        continue;
+      }
+    }
+
     // Documento e carteirinha dizem coisas diferentes: avisa e ela escolhe.
     const distintos = valores.filter((v, i) => valores.findIndex((w) => iguais(campo, w.valor, v.valor)) === i);
     if (distintos.length > 1) {
       const opcoes: Opcao[] = [];
-      if (atual) opcoes.push({ chave: "manter", rotulo: "Manter", valor: atual });
+      opcoes.push(atual ? { chave: "manter", rotulo: "Manter", valor: atual } : { chave: "manter", rotulo: "Deixar vazio", valor: null });
       for (const v of distintos) {
         if (atual && iguais(campo, atual, v.valor)) continue;
         opcoes.push({ chave: v.origem, rotulo: ROTULO_ORIGEM[v.origem], valor: v.valor });
@@ -148,21 +166,18 @@ export function montarLinhas({ cadastro, leituras, cpfDeOutro }: Entrada): Linha
     }
 
     const lido = distintos[0].valor;
-    if (campo === "cpf" && cpfDeOutro) {
-      linhas.push({
-        campo, rotulo, atual, cor: "laranja", travado: true,
-        motivo: `Este CPF já é de outro paciente (${cpfDeOutro.name}). Não será gravado.`,
-        opcoes: [{ chave: "manter", rotulo: "Manter", valor: atual }], escolha: "manter",
-      });
-      continue;
-    }
     if (atual && iguais(campo, atual, lido)) {
       linhas.push({ campo, rotulo, atual, cor: "verde", opcoes: [], escolha: "manter" });
       continue;
     }
     const foto: Opcao = { chave: "foto", rotulo: "Usar o da foto", valor: lido };
     if (!atual) {
-      linhas.push({ campo, rotulo, atual, cor: "amarelo", opcoes: [{ chave: "manter", rotulo: "Deixar vazio", valor: null }, foto], escolha: "foto" });
+      const conferir = EXIGE_CONFERIR.includes(campo);
+      linhas.push({
+        campo, rotulo, atual, cor: "amarelo", conferir,
+        opcoes: [{ chave: "manter", rotulo: "Deixar vazio", valor: null }, foto],
+        escolha: conferir ? null : "foto",
+      });
     } else {
       linhas.push({ campo, rotulo, atual, cor: "laranja", opcoes: [{ chave: "manter", rotulo: "Manter", valor: atual }, foto], escolha: null });
     }
@@ -191,4 +206,45 @@ export function dadosAceitos(linhas: Linha[]): Record<string, string> {
 
 export function escolher(linhas: Linha[], campo: string, chave: string): Linha[] {
   return linhas.map((l) => (l.campo === campo && !l.travado ? { ...l, escolha: chave } : l));
+}
+
+/** Desfaz o "Conferi": volta a pedir decisão. */
+export function desconferir(linhas: Linha[], campo: string): Linha[] {
+  return linhas.map((l) => (l.campo === campo && !l.travado ? { ...l, escolha: null } : l));
+}
+
+/** Data digitada (DD/MM/AAAA ou AAAA-MM-DD) → AAAA-MM-DD, só se for real e entre 1900 e hoje. */
+export function dataDigitada(s: string, hoje: Date = new Date()): string | null {
+  const t = (s || "").trim();
+  let a: number, m: number, d: number;
+  let r = t.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (r) { d = +r[1]; m = +r[2]; a = +r[3]; }
+  else if ((r = t.match(/^(\d{4})-(\d{2})-(\d{2})$/))) { a = +r[1]; m = +r[2]; d = +r[3]; }
+  else return null;
+  const dt = new Date(Date.UTC(a, m - 1, d));
+  if (dt.getUTCFullYear() !== a || dt.getUTCMonth() !== m - 1 || dt.getUTCDate() !== d) return null;
+  if (a < 1900 || dt.getTime() > hoje.getTime()) return null;
+  return `${a}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
+
+/** Corrigir o valor da foto conta como conferido — se o valor corrigido for válido. */
+export function corrigir(linhas: Linha[], campo: string, digitado: string): Linha[] {
+  return linhas.map((l) => {
+    if (l.campo !== campo || l.travado) return l;
+    let valor: string | null = digitado.trim();
+    let motivo: string | undefined;
+    if (campo === "cpf") {
+      valor = cpfValido(valor) ? soDigitos(valor) : null;
+      if (!valor) motivo = "CPF com dígito errado";
+    } else if (campo === "birthdate") {
+      valor = dataDigitada(valor);
+      if (!valor) motivo = "Data impossível. Use DD/MM/AAAA";
+    } else if (!valor) {
+      valor = null;
+    }
+    const opcoes = l.opcoes.some((o) => o.chave === "foto")
+      ? l.opcoes.map((o) => (o.chave === "foto" ? { ...o, rotulo: "Corrigido", valor: valor ?? o.valor } : o))
+      : [...l.opcoes, { chave: "foto", rotulo: "Corrigido", valor: valor ?? "" }];
+    return { ...l, opcoes, escolha: valor ? "foto" : null, motivo: motivo ?? (valor ? undefined : l.motivo) };
+  });
 }

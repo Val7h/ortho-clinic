@@ -176,3 +176,10 @@ def test_fila_cheia_tente_de_novo():
             trava.release()
     e = asyncio.run(cenario())
     assert e is not None and e.status_code == 429 and "Tente de novo" in e.detail
+
+
+def test_rg_maior_que_20_volta_vazio_com_motivo():
+    j = _ler("identity", json.dumps({"rg": {"valor": "1234567890 SSP/PB 2a VIA", "rotulo": "RG", "linha": "x"}})).json()
+    assert j["campos"]["rg"] is None and "20" in j["motivos"]["rg"]
+    j = _ler("identity", json.dumps({"rg": {"valor": "1234567 SSP/PB", "rotulo": "RG", "linha": "x"}})).json()
+    assert j["campos"]["rg"] == "1234567 SSP/PB"

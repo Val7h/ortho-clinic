@@ -1,16 +1,44 @@
-import { montarLinhas, podeUsar, dadosAceitos, escolher, iguais, cpfValido } from "@/lib/conferirLeitura";
+import { montarLinhas, podeUsar, dadosAceitos, escolher, iguais, cpfValido, corrigir, desconferir, dataDigitada } from "@/lib/conferirLeitura";
 
 // Dados 100% fictícios.
 const CPF_OK = "52998224725";
 const CPF_OUTRO_OK = "11144477735";
 
 describe("Confira a leitura (app do celular)", () => {
-  test("cadastro vazio: entra (amarelo, já aceito)", () => {
-    const l = montarLinhas({ cadastro: { name: "FULANO FICTICIO", cpf: null }, leituras: { identity: { campos: { cpf: CPF_OK } } } });
-    const cpf = l.find((x) => x.campo === "cpf")!;
-    expect(cpf.cor).toBe("amarelo");
+  test("cadastro vazio: entra (amarelo, já aceito) nos campos comuns", () => {
+    const l = montarLinhas({ cadastro: { name: "FULANO FICTICIO" }, leituras: { identity: { campos: { rg: "1234567 SSP/PB" } } } })
+      .filter((x) => x.campo === "rg");
+    expect(l[0].cor).toBe("amarelo");
+    expect(podeUsar(l)).toBe(true);
+    expect(dadosAceitos(l)).toEqual({ rg: "1234567 SSP/PB" });
+  });
+
+  test("CPF e nascimento amarelos NÃO entram sozinhos: exigem Conferi", () => {
+    let l = montarLinhas({ cadastro: { cpf: null }, leituras: { identity: { campos: { cpf: CPF_OK, birthdate: "1980-05-17" } } } })
+      .filter((x) => x.campo === "cpf" || x.campo === "birthdate");
+    expect(l.every((x) => x.cor === "amarelo" && x.conferir && x.escolha === null)).toBe(true);
+    expect(podeUsar(l)).toBe(false);
+    expect(dadosAceitos(l)).toEqual({});
+    l = escolher(l, "cpf", "foto");          // marcou "Conferi"
+    l = escolher(l, "birthdate", "manter");  // deixou vazio
     expect(podeUsar(l)).toBe(true);
     expect(dadosAceitos(l)).toEqual({ cpf: CPF_OK });
+    l = desconferir(l, "cpf");
+    expect(podeUsar(l)).toBe(false);
+  });
+
+  test("corrigir o valor conta como conferido (se válido)", () => {
+    let l = montarLinhas({ cadastro: {}, leituras: { identity: { campos: { birthdate: "1980-05-17", cpf: CPF_OK } } } })
+      .filter((x) => x.campo === "cpf" || x.campo === "birthdate");
+    l = corrigir(l, "birthdate", "18/05/1980");
+    l = corrigir(l, "cpf", "52998224726");   // dígito errado: continua sem decidir
+    expect(l.find((x) => x.campo === "cpf")!.escolha).toBeNull();
+    expect(podeUsar(l)).toBe(false);
+    l = corrigir(l, "cpf", "111.444.777-35");
+    expect(podeUsar(l)).toBe(true);
+    expect(dadosAceitos(l)).toEqual({ birthdate: "1980-05-18", cpf: "11144477735" });
+    expect(dataDigitada("30/02/1980")).toBeNull();
+    expect(dataDigitada("01/01/1899")).toBeNull();
   });
 
   test("amarelo desmarcado não entra", () => {
@@ -52,7 +80,7 @@ describe("Confira a leitura (app do celular)", () => {
   });
 
   test("CPF que já é de outro paciente: laranja travado, não entra", () => {
-    let l = montarLinhas({ cadastro: {}, leituras: { identity: { campos: { cpf: CPF_OK } } }, cpfDeOutro: { id: 9, name: "OUTRO FICTICIO" } }).filter((x) => x.campo === "cpf");
+    let l = montarLinhas({ cadastro: {}, leituras: { identity: { campos: { cpf: CPF_OK } } }, cpfsDeOutros: { [CPF_OK]: { id: 9, name: "OUTRO FICTICIO" } } }).filter((x) => x.campo === "cpf");
     expect(l[0].cor).toBe("laranja");
     expect(l[0].travado).toBe(true);
     l = escolher(l, "cpf", "foto");
@@ -67,10 +95,31 @@ describe("Confira a leitura (app do celular)", () => {
     } });
     const nome = l.find((x) => x.campo === "name")!;
     expect(nome.cor).toBe("laranja");
-    expect(nome.opcoes.map((o) => o.chave)).toEqual(["identity", "insurance_card"]);
+    expect(nome.opcoes.map((o) => o.chave)).toEqual(["manter", "identity", "insurance_card"]);
     expect(podeUsar(l)).toBe(false);
     l = escolher(l, "name", "insurance_card");
     expect(dadosAceitos(l)).toEqual({ name: "MARIA FICTICIA SOUZA" });
+  });
+
+  test("CPF de outro paciente vem ANTES da escolha e confere os dois documentos", () => {
+    // documento e carteirinha discordam; o da CARTEIRINHA é de outro paciente
+    let l = montarLinhas({ cadastro: {}, leituras: {
+      identity: { campos: { cpf: CPF_OUTRO_OK } }, insurance_card: { campos: { cpf: CPF_OK } },
+    }, cpfsDeOutros: { [CPF_OK]: { id: 9, name: "OUTRO FICTICIO" } } }).filter((x) => x.campo === "cpf");
+    expect(l[0].travado).toBe(true);
+    expect(l[0].opcoes.map((o) => o.chave)).toEqual(["manter"]);
+    l = escolher(l, "cpf", "insurance_card");
+    expect(dadosAceitos(l)).toEqual({});
+  });
+
+  test("documentos discordam e cadastro vazio: oferece Deixar vazio", () => {
+    let l = montarLinhas({ cadastro: {}, leituras: {
+      identity: { campos: { birthdate: "1980-05-17" } }, insurance_card: { campos: { birthdate: "1980-05-18" } },
+    } }).filter((x) => x.campo === "birthdate");
+    expect(l[0].opcoes.map((o) => o.rotulo)).toEqual(["Deixar vazio", "Do documento", "Da carteirinha"]);
+    l = escolher(l, "birthdate", "manter");
+    expect(podeUsar(l)).toBe(true);
+    expect(dadosAceitos(l)).toEqual({});
   });
 
   test("mesmo CPF nos dois documentos não vira conflito", () => {

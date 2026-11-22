@@ -196,3 +196,67 @@ def test_guardar_privado_erro_sobe_e_nao_grava_em_disco():
         except RuntimeError:
             pass
     assert not os.path.exists(os.path.join("uploads", "cadastro_privado", "a.jpg"))
+
+
+# ── Revisão independente (22/11) ─────────────────────────────────────────────
+MEDICO = SimpleNamespace(id=3, organization_id=1, role="doctor", active=True)
+
+
+def test_documento_pessoal_e_carteirinha_nao_saem_por_link_publico():
+    c = _cliente(); pid = _paciente()
+    doc_id = _enviar(c, pid, _jpeg_com_exif(cor=(120, 5, 5))).json()["id"]
+    USUARIO["u"] = MEDICO
+    try:
+        r = c.post(f"/patients/{pid}/documents/{doc_id}/share", json={"channel": "link"})
+        assert r.status_code == 404
+        # link criado antes da trava (ou por fora) também não abre
+        from models.patient_documents import DocumentShare
+        import datetime as _dt
+        db = Sess()
+        db.add(DocumentShare(document_id=doc_id, channel="link", share_token="tok-privado-teste", expires_at=None))  # sqlite perde o fuso; sem validade
+        comum = PatientDocument(patient_id=pid, title="RNM", category="exam", organization_id=1,
+                                date=_dt.date(2026, 11, 22), tags=[], file_url="/uploads/patient_docs/rnm2.pdf")
+        db.add(comum); db.commit(); cid = comum.id; db.close()
+        assert c.get("/documentos/publico/tok-privado-teste").status_code == 404
+        # documento comum continua compartilhando igual
+        r = c.post(f"/patients/{pid}/documents/{cid}/share", json={"channel": "link"})
+        assert r.status_code == 200
+        token = r.json()["share_url"].rsplit("/", 1)[1]
+        db = Sess(); s = db.query(DocumentShare).filter(DocumentShare.share_token == token).first()
+        s.expires_at = None; db.commit(); db.close()      # sqlite perde o fuso da validade
+        j = c.get(f"/documentos/publico/{token}").json()
+        assert j["file_url"] == "/uploads/patient_docs/rnm2.pdf"
+    finally:
+        USUARIO["u"] = SECRETARIA
+
+
+def _paciente_cpf(cpf, org=1, nome="PACIENTE FICTICIO CPF"):
+    db = Sess()
+    p = Patient(name=nome, organization_id=org, cpf=cpf)
+    db.add(p); db.commit(); pid = p.id; db.close()
+    return pid
+
+
+def test_put_cpf_de_outro_paciente_da_conta_409():
+    c = _cliente()
+    _paciente_cpf("390.533.447-05", nome="DONO FICTICIO DO CPF")
+    pid = _paciente_cpf(None)
+    r = c.put(f"/patients/{pid}", json={"cpf": "39053344705"})
+    assert r.status_code == 409 and "outro paciente" in r.json()["detail"]
+    db = Sess(); assert db.query(Patient).get(pid).cpf is None; db.close()
+
+
+def test_put_sem_mudar_o_cpf_nao_e_afetado():
+    c = _cliente()
+    _paciente_cpf("86288366757", nome="GEMEO FICTICIO")   # duplicado legado já existente
+    pid = _paciente_cpf("862.883.667-57")
+    # salva outro campo, com o mesmo CPF (com ou sem máscara) ou sem mandar CPF
+    assert c.put(f"/patients/{pid}", json={"cpf": "862.883.667-57", "phone": "83999990000"}).status_code == 200
+    assert c.put(f"/patients/{pid}", json={"insurance": "Particular"}).status_code == 200
+
+
+def test_put_cpf_igual_em_outra_conta_passa():
+    c = _cliente()
+    _paciente_cpf("71428793860", org=2)
+    pid = _paciente_cpf(None)
+    assert c.put(f"/patients/{pid}", json={"cpf": "71428793860"}).status_code == 200

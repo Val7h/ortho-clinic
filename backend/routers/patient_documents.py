@@ -141,6 +141,13 @@ class LinkGeneratedDocRequest(BaseModel):
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
+def _nao_compartilha(doc) -> bool:
+    """Documento pessoal e carteirinha (e tudo da pasta protegida) nunca saem por
+    link público de compartilhamento (revisão 22/11)."""
+    return (doc.category in ("identity", "insurance_card")
+            or (doc.file_url or "").startswith("/uploads/cadastro_privado/"))
+
+
 def _link_para_tela(url):
     """Foto da pasta protegida sai com link assinado (2 h). Qualquer outro link,
     ou qualquer erro, volta exatamente como está gravado (aba Documentos intacta)."""
@@ -593,6 +600,8 @@ def share_document(
       - "link": retorna token de acesso temporário
     """
     doc = _get_doc_or_404(doc_id, patient_id, db)
+    if _nao_compartilha(doc):
+        raise HTTPException(404, "Documento pessoal e carteirinha não saem por link público.")
 
     if req.channel not in ("whatsapp", "email", "link"):
         raise HTTPException(400, "Canal inválido. Use: whatsapp, email, link")
@@ -675,7 +684,8 @@ def access_shared_document(
         PatientDocument.is_deleted == False,
     ).first()
 
-    if not doc:
+    if not doc or _nao_compartilha(doc):
+        # link antigo de documento pessoal/carteirinha também não abre (pasta protegida)
         raise HTTPException(404, "Documento não encontrado")
 
     return {

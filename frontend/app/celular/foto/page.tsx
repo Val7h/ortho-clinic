@@ -10,9 +10,10 @@ import { useEffect, useRef, useState } from "react";
 import { api, msgErro, patientsApi, waitingRoomApi } from "@/lib/api";
 import { useLoginCelular, pegarPid, reduzirFoto } from "@/lib/celular";
 import {
-  montarLinhas, podeUsar, dadosAceitos, escolher, formatar, soDigitos, cpfValido,
+  montarLinhas, podeUsar, dadosAceitos, escolher, desconferir, corrigir, formatar, soDigitos, cpfValido,
   type Linha, type Leitura, type Origem,
 } from "@/lib/conferirLeitura";
+import { criarControleDeTentativas } from "@/lib/tentativas";
 
 type Paciente = { id: number; name: string; cpf?: string | null; birthdate?: string | null; [k: string]: any };
 type Foto = { arquivo: File; previa: string; estado: "lendo" | "lida" | "falhou"; leitura?: Leitura; erro?: string };
@@ -36,7 +37,15 @@ export default function CelularFoto() {
   const [erroPaciente, setErroPaciente] = useState("");
   const [fotos, setFotos] = useState<Partial<Record<Origem, Foto>>>({});
   const [linhas, setLinhas] = useState<Linha[]>([]);
-  const [cpfDeOutro, setCpfDeOutro] = useState<{ id: number; name: string } | null>(null);
+  const [cpfsDeOutros, setCpfsDeOutros] = useState<Record<string, { id: number; name: string }>>({});
+  // revisão 22/11: resposta de leitura atrasada nunca cai no paciente errado
+  const controle = useRef(criarControleDeTentativas());
+  const selecionarPaciente = (p: Paciente | null) => {
+    controle.current.trocarPaciente(p ? p.id : null);   // invalida leituras pendentes
+    setFotos((f) => { for (const x of Object.values(f)) if (x?.previa) URL.revokeObjectURL(x.previa); return {}; });
+    setResultado(null);
+    setPaciente(p);
+  };
   const [checandoCpf, setChecandoCpf] = useState(false);
   const [enviando, setEnviando] = useState(false);
   const [resultado, setResultado] = useState<{ ok: boolean; texto: string } | null>(null);
@@ -46,7 +55,7 @@ export default function CelularFoto() {
     if (!pronto) return;
     const pid = pegarPid();
     if (pid) {
-      patientsApi.get(pid).then(setPaciente).catch((e) => setErroPaciente(msgErro(e, "Paciente não encontrado.")));
+      patientsApi.get(pid).then(selecionarPaciente).catch((e) => setErroPaciente(msgErro(e, "Paciente não encontrado.")));
     }
   }, [pronto]);
 
@@ -54,21 +63,24 @@ export default function CelularFoto() {
   for (const d of DOCS) if (fotos[d.tipo]?.leitura) leituras[d.tipo] = fotos[d.tipo]!.leitura;
   const chaveLeituras = JSON.stringify(leituras);
 
-  // CPF lido que já é de OUTRO paciente: confere antes de liberar o botão.
+  // CPFs lidos (documento E carteirinha) que já são de OUTRO paciente: confere TODOS antes de liberar.
   useEffect(() => {
     if (!paciente) return;
-    const lidos = Object.values(leituras).map((l) => soDigitos(l?.campos?.cpf)).filter((c) => cpfValido(c));
-    const cpf = lidos.find((c) => c !== soDigitos(paciente.cpf));
-    if (!cpf) { setCpfDeOutro(null); return; }
+    const proprio = soDigitos(paciente.cpf);
+    const lidos = Array.from(new Set(Object.values(leituras).map((l) => soDigitos(l?.campos?.cpf))))
+      .filter((c) => cpfValido(c) && c !== proprio);
+    if (!lidos.length) { setCpfsDeOutros({}); return; }
     let vivo = true;
     setChecandoCpf(true);
-    patientsApi.list(cpf)
-      .then((lista: Paciente[]) => {
+    Promise.all(lidos.map((cpf) => patientsApi.list(cpf)
+      .then((lista: Paciente[]) => [cpf, (lista || []).find((p) => p.id !== paciente.id && soDigitos(p.cpf) === cpf) || null] as const)
+      .catch(() => [cpf, { id: 0, name: "não deu para conferir" }] as const)))
+      .then((pares) => {
         if (!vivo) return;
-        const outro = (lista || []).find((p) => p.id !== paciente.id && soDigitos(p.cpf) === cpf);
-        setCpfDeOutro(outro ? { id: outro.id, name: outro.name } : null);
+        const mapa: Record<string, { id: number; name: string }> = {};
+        for (const [cpf, outro] of pares) if (outro) mapa[cpf] = { id: outro.id, name: outro.name };
+        setCpfsDeOutros(mapa);
       })
-      .catch(() => { if (vivo) setCpfDeOutro({ id: 0, name: "não deu para conferir" }); })
       .finally(() => { if (vivo) setChecandoCpf(false); });
     return () => { vivo = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -77,25 +89,28 @@ export default function CelularFoto() {
   // monta o "Confira a leitura" de novo quando muda uma leitura (mantém as escolhas já feitas)
   useEffect(() => {
     if (!paciente) { setLinhas([]); return; }
-    const novas = montarLinhas({ cadastro: paciente, leituras, cpfDeOutro });
+    const novas = montarLinhas({ cadastro: paciente, leituras, cpfsDeOutros });
     setLinhas((velhas) => novas.map((n) => {
       const v = velhas.find((x) => x.campo === n.campo);
       return v && !n.travado && v.escolha !== null && n.opcoes.some((o) => o.chave === v.escolha)
         && JSON.stringify(v.opcoes) === JSON.stringify(n.opcoes) ? { ...n, escolha: v.escolha } : n;
     }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chaveLeituras, cpfDeOutro, paciente]);
+  }, [chaveLeituras, cpfsDeOutros, paciente]);
 
   const tirarFoto = async (tipo: Origem, arquivo: File | undefined) => {
     if (!arquivo) return;
     setResultado(null);
+    const tentativa = controle.current.iniciar(tipo);   // guarda o paciente e o número da tentativa
     let pequena: File;
     try {
       pequena = await reduzirFoto(arquivo);
     } catch {
+      if (!controle.current.vale(tentativa)) return;
       setFotos((f) => ({ ...f, [tipo]: { arquivo, previa: "", estado: "falhou", erro: "Não consegui abrir a foto. Tire de novo." } }));
       return;
     }
+    if (!controle.current.vale(tentativa)) return;
     const previa = URL.createObjectURL(pequena);
     setFotos((f) => {
       if (f[tipo]?.previa) URL.revokeObjectURL(f[tipo]!.previa);
@@ -106,8 +121,10 @@ export default function CelularFoto() {
       fd.append("file", pequena);
       fd.append("tipo", tipo);
       const r = await api.post("/patients/ler-foto", fd).then((x) => x.data);
+      if (!controle.current.vale(tentativa)) return;   // trocou de paciente ou tirou outra foto
       setFotos((f) => ({ ...f, [tipo]: { arquivo: pequena, previa, estado: "lida", leitura: { campos: r.campos || {}, motivos: r.motivos || {} } } }));
     } catch (e) {
+      if (!controle.current.vale(tentativa)) return;
       setFotos((f) => ({ ...f, [tipo]: { arquivo: pequena, previa, estado: "falhou", erro: msgErro(e, "A leitura falhou. Tente de novo.") } }));
     }
   };
@@ -165,7 +182,7 @@ export default function CelularFoto() {
       </header>
 
       {!paciente ? (
-        <EscolherPaciente onEscolher={(p) => { setPaciente(p); setFotos({}); setResultado(null); }} erro={erroPaciente} />
+        <EscolherPaciente onEscolher={(p) => selecionarPaciente(p)} erro={erroPaciente} />
       ) : (
         <>
           <section className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-4 flex items-center justify-between gap-3">
@@ -173,7 +190,7 @@ export default function CelularFoto() {
               <p className="text-xs text-slate-500">Paciente</p>
               <p className="text-lg font-bold" data-testid="paciente">{paciente.name}</p>
             </div>
-            <button type="button" onClick={() => { setPaciente(null); setFotos({}); setResultado(null); }}
+            <button type="button" onClick={() => selecionarPaciente(null)}
               className="text-sm text-sky-700 dark:text-sky-300 font-semibold">Trocar</button>
           </section>
 
@@ -187,9 +204,11 @@ export default function CelularFoto() {
           {temFoto && !lendo && algumaLida && linhas.length > 0 && (
             <section className="flex flex-col gap-2" data-testid="confira">
               <h2 className="text-base font-bold">Confira a leitura</h2>
-              <p className="text-xs text-slate-500">Amarelo entra no cadastro vazio. Laranja precisa de um toque.</p>
+              <p className="text-xs text-slate-500">Amarelo entra no cadastro vazio. CPF e nascimento: confira antes. Laranja precisa de um toque.</p>
               {linhas.map((l) => (
-                <LinhaConfira key={l.campo} l={l} onEscolher={(chave) => setLinhas((ls) => escolher(ls, l.campo, chave))} />
+                <LinhaConfira key={l.campo} l={l}
+                  onEscolher={(chave) => setLinhas((ls) => (chave === "" ? desconferir(ls, l.campo) : escolher(ls, l.campo, chave)))}
+                  onCorrigir={(v) => setLinhas((ls) => corrigir(ls, l.campo, v))} />
               ))}
               {checandoCpf && <p className="text-sm text-slate-500">Conferindo o CPF…</p>}
             </section>
@@ -246,8 +265,10 @@ function BotaoFoto({ titulo, emoji, foto, desativado, onArquivo }: {
   );
 }
 
-function LinhaConfira({ l, onEscolher }: { l: Linha; onEscolher: (chave: string) => void }) {
+function LinhaConfira({ l, onEscolher, onCorrigir }: { l: Linha; onEscolher: (chave: string) => void; onCorrigir: (v: string) => void }) {
   const foto = l.opcoes.find((o) => o.chave === "foto");
+  const [editando, setEditando] = useState(false);
+  const [texto, setTexto] = useState("");
   return (
     <div className={`rounded-xl border-2 p-3 ${COR[l.cor]}`} data-testid={`linha-${l.campo}`} data-cor={l.cor}>
       <div className="flex items-center justify-between">
@@ -256,12 +277,39 @@ function LinhaConfira({ l, onEscolher }: { l: Linha; onEscolher: (chave: string)
       </div>
       {l.cor === "verde" && <p className="text-base">{formatar(l.campo, l.atual)}</p>}
       {l.cor === "cinza" && <p className="text-sm text-slate-600 dark:text-slate-300">{l.motivo}</p>}
-      {l.cor === "amarelo" && foto && (
+      {l.cor === "amarelo" && foto && !l.conferir && (
         <label className="flex items-center gap-3 mt-1">
           <input type="checkbox" className="w-6 h-6" checked={l.escolha === "foto"}
             onChange={(e) => onEscolher(e.target.checked ? "foto" : "manter")} />
           <span className="text-base">{formatar(l.campo, foto.valor)}</span>
         </label>
+      )}
+      {l.cor === "amarelo" && foto && l.conferir && (
+        <div className="mt-1 flex flex-col gap-2">
+          <p className="text-base font-semibold">{formatar(l.campo, foto.valor)}</p>
+          {l.motivo && <p className="text-xs text-orange-800 dark:text-orange-300">{l.motivo}</p>}
+          <label className="flex items-center gap-3">
+            <input type="checkbox" className="w-6 h-6" checked={l.escolha === "foto"} data-testid={`conferi-${l.campo}`}
+              onChange={(e) => onEscolher(e.target.checked ? "foto" : "")} />
+            <span className="text-sm font-semibold">Conferi com o documento</span>
+          </label>
+          {editando ? (
+            <div className="flex gap-2">
+              <input value={texto} onChange={(e) => setTexto(e.target.value)} inputMode={l.campo === "cpf" ? "numeric" : "text"}
+                placeholder={l.campo === "birthdate" ? "DD/MM/AAAA" : "Só os números"}
+                className="flex-1 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2" />
+              <button type="button" onClick={() => { onCorrigir(texto); setEditando(false); }}
+                className="px-3 py-2 rounded-lg bg-sky-600 text-white font-semibold">OK</button>
+            </div>
+          ) : (
+            <div className="flex gap-4 text-sm">
+              <button type="button" className="text-sky-700 dark:text-sky-300 font-semibold"
+                onClick={() => { setTexto(formatar(l.campo, foto.valor)); setEditando(true); }}>Corrigir</button>
+              <button type="button" className={`font-semibold ${l.escolha === "manter" ? "text-slate-900 dark:text-white underline" : "text-slate-600"}`}
+                onClick={() => onEscolher("manter")}>Deixar vazio</button>
+            </div>
+          )}
+        </div>
       )}
       {l.cor === "laranja" && (
         <>

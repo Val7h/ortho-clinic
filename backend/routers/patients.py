@@ -441,6 +441,12 @@ def _conferir_campo(tipo: str, campo: str, item) -> tuple:
         if len(nome) < 3 or re.search(r"\d", nome):
             return None, "nome ilegível"
         return nome, None
+    if campo == "rg":
+        # a coluna rg tem 20 caracteres: maior que isso estourava 500 ao salvar
+        rg = re.sub(r"\s+", " ", valor)
+        if len(rg) > 20:
+            return None, "RG maior que 20 caracteres"
+        return rg, None
     return valor[:100], None
 
 
@@ -652,6 +658,31 @@ def get_patient(
     return _redact_clinical_for_secretary(PatientOut.model_validate(patient), current_user)
 
 
+def _cpf_mascarado(d: str) -> str:
+    return f"{d[:3]}.{d[3:6]}.{d[6:9]}-{d[9:]}" if len(d) == 11 else d
+
+
+def _recusar_cpf_de_outro(db: Session, patient: Patient, cpf_novo) -> None:
+    """22/11 (app do celular, revisão): CPF que MUDOU e já é de OUTRO paciente da
+    mesma conta = 409 com mensagem clara (antes estourava 500 na trava do banco).
+    Quem salva sem mudar o CPF não passa por aqui."""
+    novo = re.sub(r"\D", "", cpf_novo or "")
+    if not novo or novo == re.sub(r"\D", "", patient.cpf or ""):
+        return
+    org = patient.organization_id
+    q = db.query(Patient.id, Patient.name).filter(
+        Patient.id != patient.id,
+        Patient.cpf.in_([novo, _cpf_mascarado(novo)]),
+    )
+    if org is None or org == 1:
+        q = q.filter(or_(Patient.organization_id.is_(None), Patient.organization_id == 1))
+    else:
+        q = q.filter(Patient.organization_id == org)
+    outro = q.first()
+    if outro:
+        raise HTTPException(409, f"Este CPF já é de outro paciente ({outro.name}). Confira antes de salvar.")
+
+
 @router.put("/{patient_id}", response_model=PatientOut)
 def update_patient(
     patient_id: int,
@@ -665,7 +696,9 @@ def update_patient(
     if not patient:
         raise HTTPException(404, "Paciente não encontrado")
     _arrumar_telefones(data)
-    for key, value in data.model_dump(exclude_unset=True).items():
+    mudancas = data.model_dump(exclude_unset=True)
+    _recusar_cpf_de_outro(db, patient, mudancas.get("cpf", None) if "cpf" in mudancas else None)
+    for key, value in mudancas.items():
         setattr(patient, key, value)
     db.commit()
     db.refresh(patient)
