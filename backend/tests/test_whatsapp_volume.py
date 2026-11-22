@@ -132,6 +132,12 @@ def test_send_whatsapp_timeout_de_leitura_e_incerto(monkeypatch):
     r = W.send_whatsapp("83999000001", "oi")
     assert r.get("incerto") and W.status_envio(r) == "incerto"
 
+    def escrita_lenta(*a, **k):
+        raise httpx.WriteTimeout("parcial")
+    monkeypatch.setattr(W.httpx, "post", escrita_lenta)
+    r = W.send_whatsapp("83999000001", "oi")
+    assert W.status_envio(r) == "failed"   # pedido não foi inteiro: tenta de novo
+
     def sem_conexao(*a, **k):
         raise httpx.ConnectTimeout("fora")
     monkeypatch.setattr(W.httpx, "post", sem_conexao)
@@ -157,6 +163,12 @@ def test_rota_send_exige_medico():
         c = TestClient(main.app)
         r = c.post("/whatsapp/send", json={"patient_id": 1, "message_type": "custom", "custom_text": "x"})
         assert r.status_code == 403
+        assert "médico" in r.json()["detail"].lower()
+        # modelo pronto (sem texto livre): secretária passa da trava (404 = paciente não existe)
+        r = c.post("/whatsapp/send", json={"patient_id": 999, "message_type": "return_reminder"})
+        assert r.status_code == 404
+        r = c.post("/whatsapp/send", json={"patient_id": 999, "message_type": "post_consultation", "custom_text": "  "})
+        assert r.status_code == 404
         main.app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(
             id=1, role="doctor", organization_id=1, is_active=True)
         r = c.post("/whatsapp/send", json={"patient_id": 999, "message_type": "custom", "custom_text": "x"})

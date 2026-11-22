@@ -136,13 +136,17 @@ def send_whatsapp(phone: str, message: str, instance: str | None = None) -> dict
         r = httpx.post(url, json=body, headers=headers, timeout=10)
         r.raise_for_status()
         return {"sent": True, "demo": False}
-    except (httpx.ReadTimeout, httpx.WriteTimeout):
-        # 19/11 (revisão): o pedido JÁ chegou à Evolution e ela costuma entregar
+    except httpx.ReadTimeout:
+        # 19/11 (revisão): o pedido JÁ chegou inteiro à Evolution e ela costuma entregar
         # mesmo estourando os 10 s. Tratar isso como "failed" fazia o robô repetir
         # a mesma mensagem a cada 30 min. Fica "incerto": não é falha, não repete.
         logger.warning("[WA] sem resposta a tempo ao enviar para %s (envio incerto, não repetir)",
                        _mask_phone(phone))
         return {"sent": False, "demo": False, "incerto": True, "error": "sem resposta a tempo"}
+    except httpx.WriteTimeout:
+        # pedido não foi inteiro: não chegou, é falha (tenta de novo)
+        logger.error("[WA ERROR] WriteTimeout ao enviar para %s", _mask_phone(phone))
+        return {"sent": False, "demo": False, "error": "WriteTimeout"}
     except httpx.HTTPStatusError as e:
         # B4: não logar e.response.text bruto (pode conter dado clínico/PII) nem
         # o telefone cru — só o status e o telefone mascarado.

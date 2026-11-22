@@ -233,8 +233,9 @@ export default function PatientPage() {
       await whatsappApi.send({ patient_id: pid, message_type: waType });
       toast.success(waDemo ? "Mensagem simulada (demo)" : "Mensagem enviada!");
       setWaOpen(false); setWaType(null); setWaPreview(null);
-    } catch {
-      toast.error("Erro ao enviar mensagem");
+    } catch (err: any) {
+      // 403 do servidor (texto livre só por médico) mostra a mensagem dele
+      toast.error(msgErro(err, "Erro ao enviar mensagem"));
     } finally {
       setWaSending(false);
     }

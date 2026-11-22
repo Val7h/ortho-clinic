@@ -262,8 +262,11 @@ def get_dashboard(db: Session = Depends(get_db), current_user: User = Depends(ge
 
 @router.post("/send", response_model=WhatsAppMessageOut, status_code=201)
 def send_message(data: SendMessageIn, db: Session = Depends(get_db),
-                 current_user: User = Depends(require_doctor)):
-    # Revisão 19/11: texto livre pelo WhatsApp da clínica só sai por médico.
+                 current_user: User = Depends(get_current_user)):
+    # Revisão 19/11: modelo pronto (lembrete, pós-consulta...) qualquer login envia;
+    # TEXTO LIVRE pelo WhatsApp da clínica só sai por médico.
+    if (data.custom_text or "").strip():
+        require_doctor(current_user)
     patient = db.query(Patient).filter(Patient.id == data.patient_id).first()
     if not patient:
         raise HTTPException(404, "Paciente não encontrado")

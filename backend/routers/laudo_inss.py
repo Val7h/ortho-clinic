@@ -14,6 +14,7 @@ Travas herdadas da doutrina de laudos do Valth:
   - Prosa corrida técnica (sem bullets), datas por extenso, PT-BR.
 """
 import os
+import re
 import asyncio
 import logging
 import time
@@ -175,6 +176,29 @@ def _sem_acento(t: str) -> str:
 
 
 _LADOS = {"direito": ("direit",), "esquerdo": ("esquerd",)}
+# Lado só conta perto de uma região do corpo ("direito ao benefício" não é lado).
+_REGIAO = re.compile(
+    r"(?:pes?|maos?|mama)$|(?:ombr|joelh|quadril|coxofemoral|tornozel|punh|cotovel|braco|antebraco|perna|coxa|"
+    r"membr|dedo|halux|polegar|calcanh|tendao|tendoes|coluna|lombar|cervical|toracic|sacroiliac|clavicul|"
+    r"escapul|femur|tibia|fibula|umer|radio|ulna|patel|menisc|ligament|nervo|musculo|regiao|lado|hemicorpo|"
+    r"face|olho|ouvido|rins?|pulm|axil|virilha|glute|nadega|costel|hemitorax|carpo|tars|metatars|metacarp)\w*$")
+_PERTO = 4  # palavras antes/depois do lado
+
+
+def _lados_citados(t: str) -> set:
+    """Lados (direito/esquerdo) que aparecem a poucas palavras de uma região do corpo,
+    ou na forma "à direita/à esquerda" (Lasègue positivo à direita). t já sem acento."""
+    pal = re.findall(r"\w+", t)
+    achados = set()
+    for i, w in enumerate(pal):
+        for lado, raizes in _LADOS.items():
+            if not any(w.startswith(r) for r in raizes):
+                continue
+            perto = pal[max(0, i - _PERTO):i] + pal[i + 1:i + 1 + _PERTO]
+            antes = pal[i - 1] if i else ""
+            if antes == "a" or any(_REGIAO.fullmatch(p) for p in perto):
+                achados.add(lado)
+    return achados
 
 
 def conferir_lado(texto: str, ditado: str) -> Optional[str]:
@@ -182,8 +206,9 @@ def conferir_lado(texto: str, ditado: str) -> Optional[str]:
     Se o laudo cita um lado que NÃO aparece no ditado, devolve um aviso para o
     médico conferir. Não bloqueia: só avisa."""
     t, d = _sem_acento(texto), _sem_acento(ditado)
+    no_texto = _lados_citados(t)
     faltando = [lado for lado, raizes in _LADOS.items()
-                if any(r in t for r in raizes) and not any(r in d for r in raizes)]
+                if lado in no_texto and not any(r in d for r in raizes)]
     if not faltando:
         return None
     return ("Conferir o LADO: o laudo cita " + " e ".join(faltando)

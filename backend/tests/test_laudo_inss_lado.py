@@ -73,3 +73,13 @@ def test_prompt_exemplo_nao_deduz_lado_nem_manda_vocabulario():
     assert "A ultrassonografia do ombro evidencia" in sp
     assert "[CONFERIR]" in sp
     assert "use quando o contexto ditado corresponder" not in sp
+
+
+def test_direito_ao_beneficio_nao_e_lado():
+    d = "dor no ombro, sem lado ditado"
+    assert L.conferir_lado("O paciente tem direito ao benefício por incapacidade.", d) is None
+    assert L.conferir_lado("Solicito, por ser seu direito, a avaliação de auxílio-doença.", d) is None
+    assert L.conferir_lado("É direito de o segurado ser reavaliado.", d) is None
+    # perto de região do corpo continua avisando
+    assert L.conferir_lado("Tem direito ao benefício. Dor no ombro direito.", d) is not None
+    assert L.conferir_lado("Teste de Lasègue positivo à direita.", "lasegue positivo") is not None
