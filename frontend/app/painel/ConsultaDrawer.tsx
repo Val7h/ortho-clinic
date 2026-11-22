@@ -17,6 +17,7 @@ import toast from "react-hot-toast";
 import { AppointmentFormModal } from "@/components/AppointmentFormModal";
 import { lerCronoLimites, faixaDoCrono, editarCronoLimites, CronoLimites } from "@/lib/cronoLimites";
 import { serverNow } from "@/lib/servertime";
+import { juntarAnamnese, folhaDepoisDaJuncao } from "@/lib/anamneseJuncao";
 import * as escriba from "@/lib/escribaGravador";
 import { anamnesisApi, api, patientsApi, consultationsApi, prescriptionsApi, prescriptionTemplatesApi, referralTemplatesApi, examsApi, evolutionApi, clinicApi, chatApi, reportsApi, leafletsApi, waitingRoomApi, remindersApi, medicamentosApi, printJobsApi, msgErro, escribaApi, EscribaResumo, escribaSugestoesApi, EscribaGerar, assistenteApi } from "@/lib/api";
 import type { EscribaSugestao, EscribaSugestoes, EscribaSugTipo, AssistenteMsg } from "@/lib/api";
@@ -2053,16 +2054,7 @@ interface BlocoFolha {
   raw?: string;
 }
 
-// 21/10 (Valth): a tela aberta apagava o que entrou por fora (Marinaldo,
-// Lígia, Cleonice). No 409, junta: texto atual do servidor + as linhas que o
-// médico ACRESCENTOU nesta tela (as que não estavam no texto que ela leu).
-// Melhor repetir uma linha do que perder uma.
-function juntarAnamnese(servidor: string, base: string, minha: string): string {
-  const naBase = new Set(base.split("\n").map(l => l.trim()).filter(Boolean));
-  const noServidor = new Set(servidor.split("\n").map(l => l.trim()).filter(Boolean));
-  const novas = minha.split("\n").filter(l => l.trim() && !naBase.has(l.trim()) && !noServidor.has(l.trim()));
-  return novas.length ? `${servidor.trimEnd()}\n${novas.join("\n")}` : servidor;
-}
+// juntarAnamnese e folhaDepoisDaJuncao: lib/anamneseJuncao.ts (testáveis).
 
 function montarFolha(blocos: BlocoFolha[]): string {
   return blocos
@@ -2869,6 +2861,7 @@ function TabProntuario({ patientId, patient, clinic, motivo, entry }: { patientI
     const ref = refBlocos.current;
     const usados = new Set<number>();
     let criados = 0, atualizados = 0;
+    let juntou = false; // houve 409 + junção: a tela precisa passar a mostrar o texto juntado
     const esvaziados: string[] = [];
     try {
       for (let i = 0; i < blocos.length; i++) {
@@ -2894,6 +2887,7 @@ function TabProntuario({ patientId, patient, clinic, motivo, entry }: { patientI
               if (typeof atual !== "string") throw e;
               const juntado = juntarAnamnese(atual, naMesmaPosicao.raw ?? antes, conteudo);
               if (juntado !== atual) await evolutionApi.update(naMesmaPosicao.id!, { content: juntado, base_content: atual });
+              juntou = true;
               toast("A anamnese foi mudada em outro lugar enquanto o senhor escrevia. Juntei o seu texto ao texto novo — confira.",
                     { icon: "⚠️", duration: 10000 });
             }
@@ -2936,7 +2930,12 @@ function TabProntuario({ patientId, patient, clinic, motivo, entry }: { patientI
       // 16/11: autosave NUNCA mexe no que está na tela (comia letras, espaço e
       // Enter do fim). Só o "Salvar" manual remonta a folha, e só se ele não
       // digitou nada enquanto salvava.
-      if (!silencioso && folhaAtualRef.current === folha) setFolha(montarFolha(paraFolha));
+      if (juntou) {
+        // 22/11: depois da junção a tela TEM de mostrar o texto juntado; senão o
+        // próximo autosave grava a tela antiga por cima e apaga o acréscimo de fora.
+        const doServidor = montarFolha(paraFolha);
+        setFolha(f => folhaDepoisDaJuncao(doServidor, folha, f));
+      } else if (!silencioso && folhaAtualRef.current === folha) setFolha(montarFolha(paraFolha));
       if (folhaAtualRef.current === folha) { try { localStorage.removeItem(rascunhoKey); } catch {} }
 
       setSalvoAgora(true);
@@ -7205,6 +7204,7 @@ export function TabLaudos({ patient, clinic }: { patient: any; clinic?: any }) {
       setText(res.texto);
       setTimeout(autoResizeLaudo, 50);
       toast.success("Laudo gerado — revise antes de imprimir");
+      if (res.aviso) toast(res.aviso, { icon: "⚠️", duration: 15000 });
     } catch (e: any) {
       toast.error(msgErro(e, "Erro ao gerar laudo com IA"));
     } finally {

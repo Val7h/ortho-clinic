@@ -11,7 +11,9 @@ procedure_reminders). Este loop, no mesmo molde do parabéns de aniversário
 
 Cada toque sai UMA vez por lembrete (dedup em whatsapp_messages pelo
 message_type "lembrete_<id>_30" / "lembrete_<id>_7"). Falha de envio tenta de novo
-no ciclo seguinte. Lembrete já vencido não recebe mensagem (fica na página
+no ciclo seguinte, no máximo 2 tentativas no total por toque (revisão 19/11: antes
+repetia a cada 30 min o dia todo). Envio "incerto" (a Evolution recebeu o pedido mas
+não respondeu a tempo) conta como enviado e não repete. Lembrete já vencido não recebe mensagem (fica na página
 Retornos para a secretária). Só lembrete "pending" e paciente ativo com telefone.
 
 A página Retornos continua igual: a secretária vê quem foi avisado e marca
@@ -33,6 +35,8 @@ BRT = timezone(timedelta(hours=-3))
 
 TOQUE_1_DIAS = 30
 TOQUE_2_DIAS = 7
+
+MAX_TENTATIVAS = 2   # por toque, no total (revisão 19/11)
 
 # Clínica de alto padrão: sem carinha nem coração. Só a seringa no procedimento (Valth, 12/11/2026).
 TEXTO_TOQUE_1 = (
@@ -138,7 +142,7 @@ def _enviar_lembretes_devidos() -> None:
     from models.procedure_reminder import ProcedureReminder
     from models.whatsapp import WhatsAppMessage
     from routers.procedure_reminders import vencimento, prazo_em_dias
-    from services.whatsapp import DOCTOR_NAME, is_demo, send_whatsapp
+    from services.whatsapp import DOCTOR_NAME, is_demo, send_whatsapp, status_envio
 
     if is_demo():
         return
@@ -167,12 +171,22 @@ def _enviar_lembretes_devidos() -> None:
                 .filter(
                     WhatsAppMessage.patient_id == p.id,
                     WhatsAppMessage.message_type.in_([tipo, f"lembrete_{r.id}_{TOQUE_2_DIAS}"]),
-                    WhatsAppMessage.status == "sent",
+                    WhatsAppMessage.status.in_(["sent", "incerto"]),
                 )
                 .first()
             )
             # Já mandou este toque, ou já mandou o 2º (então o 1º não faz mais sentido)
             if ja:
+                continue
+            tentativas = (
+                db.query(WhatsAppMessage)
+                .filter(
+                    WhatsAppMessage.patient_id == p.id,
+                    WhatsAppMessage.message_type == tipo,
+                )
+                .count()
+            )
+            if tentativas >= MAX_TENTATIVAS:
                 continue
             evo = " ".join(
                 (e.content or "") for e in db.query(ClinicalEvolution).filter(
@@ -181,7 +195,7 @@ def _enviar_lembretes_devidos() -> None:
             texto = montar_texto(toque, p.name, r.procedure, r.applied_on, vence, DOCTOR_NAME,
                                  f"{r.notes or ''} {evo}")
             res = send_whatsapp(p.phone, texto)
-            status = "sent" if res.get("sent") else "failed"
+            status = status_envio(res)
             db.add(WhatsAppMessage(
                 patient_id=p.id,
                 organization_id=p.organization_id,

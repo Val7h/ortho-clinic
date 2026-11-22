@@ -10,7 +10,7 @@ from models.patient import Patient
 from models.consultation import Consultation
 from models.whatsapp import WhatsAppMessage
 from schemas.whatsapp import WhatsAppMessageOut, SendMessageIn
-from deps import get_current_user
+from deps import get_current_user, require_doctor
 from models.organization import User
 from services.whatsapp import send_whatsapp, is_demo as _is_demo, DOCTOR_NAME
 
@@ -261,7 +261,9 @@ def get_dashboard(db: Session = Depends(get_db), current_user: User = Depends(ge
 
 
 @router.post("/send", response_model=WhatsAppMessageOut, status_code=201)
-def send_message(data: SendMessageIn, db: Session = Depends(get_db)):
+def send_message(data: SendMessageIn, db: Session = Depends(get_db),
+                 current_user: User = Depends(require_doctor)):
+    # Revisão 19/11: texto livre pelo WhatsApp da clínica só sai por médico.
     patient = db.query(Patient).filter(Patient.id == data.patient_id).first()
     if not patient:
         raise HTTPException(404, "Paciente não encontrado")
@@ -277,7 +279,7 @@ def send_message(data: SendMessageIn, db: Session = Depends(get_db)):
 
     if not demo and patient.phone:
         result = send_whatsapp(patient.phone, text)
-        status = "sent" if result.get("sent") else "error"
+        status = "sent" if result.get("sent") else ("incerto" if result.get("incerto") else "error")
     else:
         status = "demo"
 

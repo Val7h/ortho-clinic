@@ -86,10 +86,20 @@ para o termo técnico correto pelo contexto ortopédico, sem mudar o sentido cl�
   → "supraespinhal e infraespinhal").
 - Remova repetições e hesitações típicas de fala ("A refere também" → "Refere também").
 
-VOCABULÁRIO CARACTERÍSTICO DO DR. VALTH (use quando o contexto ditado corresponder)
+VOCABULÁRIO CARACTERÍSTICO DO DR. VALTH (só quando o médico DITOU a ideia — nunca acrescentar)
 "trabalhador de alta demanda funcional", "refratariedade ao tratamento clínico",
 "sem indicação cirúrgica no momento", "afastamento para reabilitação e melhora dos sintomas",
 "agravamento recente da doença", "piora progressiva".
+Estas expressões são a forma de ESCREVER o que ele ditou. Se ele não ditou que não há
+indicação cirúrgica, que houve piora, que é trabalhador braçal etc., NÃO use a expressão.
+
+LADO, CID, DIAS E ACHADOS — NUNCA DEDUZIR (trava de 19/11)
+- Lado (direito/esquerdo), CID, número de dias e achados de exame só entram no laudo se
+  estiverem NO DITADO ou no bloco PACIENTE. Não deduza o lado de um segmento pelo lado de
+  outro (ex.: dor no ombro esquerdo ditada NÃO autoriza escrever "ultrassonografia do ombro
+  esquerdo" se o ditado disse só "ultrassonografia do ombro").
+- Se a frase precisar de um desses dados e ele não foi ditado, escreva [CONFERIR] no lugar,
+  para o médico completar. Exceção: CID não ditado continua simplesmente fora do laudo.
 
 EXEMPLO DE REFERÊNCIA (aprovado pelo Dr. Valth — siga este estilo)
 DITADO BRUTO: "paciente, apresentando lombalgia crônica há cinco anos, evoluindo com piora
@@ -124,7 +134,7 @@ partir de 90 graus e limitação da rotação interna.
 
 Quanto aos exames de imagem, a ressonância magnética da coluna lombar evidencia discopatia
 degenerativa em todos os níveis, protrusões discais em L3-L4 e L4-L5 e hérnia de disco em
-L2-L3 com conflito radicular bilateral. A ultrassonografia do ombro esquerdo evidencia
+L2-L3 com conflito radicular bilateral. A ultrassonografia do ombro evidencia
 bursite, artrose acromioclavicular e tendinite dos tendões supraespinhal e infraespinhal.
 
 O paciente encontra-se incapacitado para o exercício de suas atividades laborais devido às
@@ -156,6 +166,28 @@ class LaudoINSSIn(BaseModel):
 class LaudoINSSOut(BaseModel):
     texto: str
     model: str
+    aviso: Optional[str] = None
+
+
+def _sem_acento(t: str) -> str:
+    import unicodedata
+    return "".join(c for c in unicodedata.normalize("NFD", t or "") if unicodedata.category(c) != "Mn").lower()
+
+
+_LADOS = {"direito": ("direit",), "esquerdo": ("esquerd",)}
+
+
+def conferir_lado(texto: str, ditado: str) -> Optional[str]:
+    """19/11 — a IA escreveu "ombro esquerdo" onde o ditado dizia só "do ombro".
+    Se o laudo cita um lado que NÃO aparece no ditado, devolve um aviso para o
+    médico conferir. Não bloqueia: só avisa."""
+    t, d = _sem_acento(texto), _sem_acento(ditado)
+    faltando = [lado for lado, raizes in _LADOS.items()
+                if any(r in t for r in raizes) and not any(r in d for r in raizes)]
+    if not faltando:
+        return None
+    return ("Conferir o LADO: o laudo cita " + " e ".join(faltando)
+            + ", mas o ditado não fala esse lado. Corrija antes de imprimir.")
 
 
 _MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho",
@@ -330,4 +362,7 @@ async def gerar_laudo(
             "O seu ditado NÃO se perdeu — tente gerar de novo; se repetir, marque menos "
             "conclusões de uma vez ou divida o ditado em duas partes.",
         )
-    return LaudoINSSOut(texto=texto, model=LAUDO_MODEL)
+    aviso = conferir_lado(texto, data.ditado)
+    if aviso:
+        logger.warning("Laudo INSS: lado no texto que nao esta no ditado (aviso devolvido)")
+    return LaudoINSSOut(texto=texto, model=LAUDO_MODEL, aviso=aviso)

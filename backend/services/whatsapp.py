@@ -136,6 +136,13 @@ def send_whatsapp(phone: str, message: str, instance: str | None = None) -> dict
         r = httpx.post(url, json=body, headers=headers, timeout=10)
         r.raise_for_status()
         return {"sent": True, "demo": False}
+    except (httpx.ReadTimeout, httpx.WriteTimeout):
+        # 19/11 (revisão): o pedido JÁ chegou à Evolution e ela costuma entregar
+        # mesmo estourando os 10 s. Tratar isso como "failed" fazia o robô repetir
+        # a mesma mensagem a cada 30 min. Fica "incerto": não é falha, não repete.
+        logger.warning("[WA] sem resposta a tempo ao enviar para %s (envio incerto, não repetir)",
+                       _mask_phone(phone))
+        return {"sent": False, "demo": False, "incerto": True, "error": "sem resposta a tempo"}
     except httpx.HTTPStatusError as e:
         # B4: não logar e.response.text bruto (pode conter dado clínico/PII) nem
         # o telefone cru — só o status e o telefone mascarado.
@@ -145,6 +152,17 @@ def send_whatsapp(phone: str, message: str, instance: str | None = None) -> dict
     except Exception as e:
         logger.error("[WA ERROR] %s ao enviar para %s", type(e).__name__, _mask_phone(phone))
         return {"sent": False, "demo": False, "error": type(e).__name__}
+
+
+def status_envio(result: dict) -> str:
+    """Status para gravar em whatsapp_messages: sent | incerto | failed.
+    "incerto" = a Evolution recebeu o pedido mas não respondeu a tempo; conta como
+    enviado para não mandar de novo (revisão 19/11)."""
+    if result.get("sent"):
+        return "sent"
+    if result.get("incerto"):
+        return "incerto"
+    return "failed"
 
 
 # ── Mensagem de confirmação de agendamento ────────────────────────────────────
