@@ -4,6 +4,7 @@ import TabPrescricao, { type JobImpressao } from "./TabPrescricao";
 import ComposicaoDica, { nomeDaLinha, linhaNoCursor } from "./ComposicaoDica";
 
 import { useEffect, useState, useRef, useCallback, useMemo, createContext, useContext } from "react";
+import { tipoReceitaValido } from "@/lib/tipoReceita";
 import { createPortal } from "react-dom";
 import {
   X, Play, CheckCircle, UserX, AlertTriangle, Activity, Pill,
@@ -1013,11 +1014,9 @@ function MedRowInline({ med, index, total, onChange, onRemove, allergyWarning, s
 type PrescriptionType = "simples" | "controle_especial" | "antimicrobiano";
 
 // Alias de compatibilidade com valores antigos do banco
+// 22/11: a lista e a tradução dos legados vêm de lib/tipoReceita (uma regra só no front, igual ao servidor).
 export function normalizePrescriptionType(t: string): PrescriptionType {
-  if (t === "especial_azul") return "controle_especial";
-  if (t === "especial_amarelo") return "controle_especial";
-  if (t === "simples" || t === "controle_especial" || t === "antimicrobiano") return t as PrescriptionType;
-  return "simples";
+  return tipoReceitaValido(t) ?? "simples";
 }
 
 const PRESCRIPTION_TYPE_LABELS: Record<PrescriptionType, string> = {

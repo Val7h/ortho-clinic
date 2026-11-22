@@ -19,6 +19,7 @@ import toast from "react-hot-toast";
 import { Search, X, Pill, AlertTriangle, Printer, Plus } from "lucide-react";
 import { medicamentosApi, prescriptionsApi, msgErro } from "@/lib/api";
 import { controladoCitado } from "@/lib/medicamentosOrtopedia";
+import { tipoReceitaValido } from "@/lib/tipoReceita";
 
 export type TipoRx = "simples" | "controle_especial" | "antimicrobiano";
 
@@ -218,7 +219,7 @@ export default function TabPrescricao({ patientId, patient, onImprimir }: {
         });
         // 22/11 (revisão 19/11): o papel sai do tipo que o SERVIDOR gravou (ele pode subir simples -> controle especial).
         const tipoSalvo = salva?.prescription_type;
-        const tipoPapel: TipoRx = (tipoSalvo === "simples" || tipoSalvo === "controle_especial" || tipoSalvo === "antimicrobiano") ? tipoSalvo : tipo;
+        const tipoPapel: TipoRx = tipoReceitaValido(tipoSalvo) ?? tipo;
         jobs.push({ date: hojeISO(), medications: [], instructions: texto, prescription_type: tipoPapel, patientAddress: endereco || undefined, patientPhone: patient?.phone || undefined });
       }
       toast.success(jobs.length > 1 ? `${jobs.length} receitas salvas (separadas por tipo)` : "Receita salva");

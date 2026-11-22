@@ -77,6 +77,14 @@ def create_template(
     if not data.name.strip():
         raise HTTPException(status_code=422, detail="Nome do modelo é obrigatório")
 
+    # 22/11 (revisão lote 3): mesma lista e mesma tradução da receita; legado traduz, inválido = 422.
+    from routers.patient_prescriptions import tipo_receita_canonico
+    _canon = tipo_receita_canonico(data.prescription_type)
+    if _canon is None:
+        raise HTTPException(status_code=422, detail="Tipo de receita inválido: use simples, controle_especial "
+                            "ou antimicrobiano. O modelo não foi gravado.")
+    data.prescription_type = _canon
+
     # 03/11 (Valth): modelo com substância de 2 vias é salvo em 2 vias.
     if (data.prescription_type or "simples") == "simples":
         from routers.medicamentos import tipo_exigido

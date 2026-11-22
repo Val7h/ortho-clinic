@@ -57,12 +57,53 @@ def test_vazio_continua_simples():
 
 def test_tipo_invalido_422():
     db = _db(); p = _paciente(db)
-    for t in ("controlado", "Simples", "notificacao_ab", "simples ", "antibiotico"):
+    for t in ("controlado", "Simples", "simples ", "antibiotico", "notificacao"):
         try:
             _rx(db, p.id, t); assert False, t
         except HTTPException as e:
             assert e.status_code == 422, t
     assert db.query(RX.PatientRx).count() == 0
+
+
+def _rota(router, metodo):
+    return next(r for r in router.routes if metodo in r.methods and r.path.endswith(("prescriptions", "templates")))
+
+
+def test_tipo_legado_na_receita_vira_controle_especial_201():
+    db = _db(); p = _paciente(db)
+    assert _rota(RX.router, "POST").status_code == 201
+    for i, t in enumerate(("especial_azul", "especial_amarelo", "notificacao_ab")):
+        assert _rx(db, p.id, t, f"REMEDIO LEGADO {i}").prescription_type == "controle_especial", t
+
+
+def test_legado_nao_libera_remedio_de_notificacao():
+    db = _db(); p = _paciente(db)
+    with mock.patch("routers.medicamentos.tipo_exigido", return_value="notificacao"):
+        try:
+            RX.create_prescription(p.id, RX.PatientRxCreate(date=str(D), prescription_type="notificacao_ab",
+                                                            instructions="CLONAZEPAM 2MG"), db, MED)
+            assert False
+        except HTTPException as e:
+            assert e.status_code == 422 and "talão" in e.detail
+
+
+def test_modelo_legado_traduz_e_invalido_422():
+    import routers.prescription_templates as PT
+    from models.prescription_template import PrescriptionTemplate
+    db = _db()
+    assert _rota(PT.router, "POST").status_code == 201
+    with mock.patch("routers.medicamentos.tipo_exigido", return_value=None):
+        for i, t in enumerate(("especial_azul", "especial_amarelo", "notificacao_ab")):
+            m = PT.create_template(PT.TemplateCreate(name=f"Modelo {i}", prescription_type=t, instructions="X"), db, MED)
+            assert m.prescription_type == "controle_especial", t
+        assert PT.create_template(PT.TemplateCreate(name="Simples", prescription_type="simples",
+                                                    instructions="Y"), db, MED).prescription_type == "simples"
+        try:
+            PT.create_template(PT.TemplateCreate(name="Ruim", prescription_type="controlado", instructions="Z"), db, MED)
+            assert False
+        except HTTPException as e:
+            assert e.status_code == 422
+    assert db.query(PrescriptionTemplate).count() == 4
 
 
 def test_servidor_sobe_simples_para_controle():

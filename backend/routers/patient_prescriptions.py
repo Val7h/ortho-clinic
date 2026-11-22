@@ -72,6 +72,18 @@ class PatientRxOut(BaseModel):
 # texto (erro de digitação) imprimia como simples e sumia do "Tudo de hoje" -> 422.
 # Vazio/ausente continua valendo "simples", como antes.
 TIPOS_RECEITA = ("simples", "controle_especial", "antimicrobiano")
+# Valores antigos (banco/modelos/telas velhas) -> tipo atual. Mesma tabela do front (lib/tipoReceita.ts).
+TIPOS_LEGADOS = {"especial_azul": "controle_especial", "especial_amarelo": "controle_especial",
+                 "notificacao_ab": "controle_especial"}
+
+
+def tipo_receita_canonico(t):
+    """Tipo válido (traduzindo o legado); vazio/None = "simples"; inválido = None."""
+    if t in (None, ""):
+        return "simples"
+    if t in TIPOS_RECEITA:
+        return t
+    return TIPOS_LEGADOS.get(t)
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
@@ -107,11 +119,11 @@ def create_prescription(
     if not patient:
         raise HTTPException(status_code=404, detail="Paciente não encontrado")
 
-    if data.prescription_type in (None, ""):
-        data.prescription_type = "simples"
-    if data.prescription_type not in TIPOS_RECEITA:
+    _canon = tipo_receita_canonico(data.prescription_type)
+    if _canon is None:
         raise HTTPException(status_code=422, detail="Tipo de receita inválido: use simples, controle_especial "
                             "ou antimicrobiano. Esta receita não foi gravada.")
+    data.prescription_type = _canon  # legado (especial_azul/amarelo, notificacao_ab) vira controle_especial
 
     # Parse date
     try:
