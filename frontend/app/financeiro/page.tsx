@@ -146,7 +146,9 @@ export default function FinanceiroPage() {
       toast.error(
         e?.response?.status === 423
           ? (e.response.data?.detail || "Registro fechado — só o médico exclui.")
-          : "Erro ao remover"
+          : e?.response?.status === 403
+            ? "Só o médico pode excluir"
+            : "Erro ao remover"
       );
     }
   };
@@ -486,13 +488,14 @@ export default function FinanceiroPage() {
                           >
                             <Pencil className="h-4 w-4" />
                           </button>
-                          <button
+                          {/* 22/11 (Valth): a secretária não apaga nada — lixeira só para médico */}
+                          {privileged && <button
                             onClick={() => handleDelete(r.id)}
                             className="rounded-lg p-2 text-slate-300 transition-colors hover:bg-error-50 hover:text-error-600 focus:outline-none focus:ring-2 focus:ring-error-500 focus:ring-offset-2"
                             aria-label="Remover pagamento"
                           >
                             <Trash2 className="h-4 w-4" />
-                          </button>
+                          </button>}
                         </>
                       )}
                     </div>

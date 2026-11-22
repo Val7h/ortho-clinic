@@ -21,6 +21,7 @@ import {
   Card, CardContent, Badge, Button, Modal, useModal, CardSkeleton,
 } from "@/components/ui";
 import { patientsApi, whatsappApi, anamnesisApi, msgErro } from "@/lib/api";
+import { useAuth } from "@/components/AuthProvider";
 import { calcAge, formatDate, resolveDynamicParam } from "@/lib/utils";
 import { usePatientCache } from "@/hooks/usePatientCache";
 
@@ -93,6 +94,8 @@ export default function PatientPage() {
   const { put, get: getCached, remove: removeFromCache } = usePatientCache();
 
   const [patient, setPatient] = useState<any>(null);
+  // 22/11 (Valth): a secretária não apaga nada — "Desativar paciente" só para médico
+  const { isDoctor } = useAuth();
   const [timeline, setTimeline] = useState<any[]>([]);
   const [tab, setTab] = useState<Tab>("timeline");
   const [loading, setLoading] = useState(true);
@@ -258,7 +261,12 @@ export default function PatientPage() {
 
   const handleDelete = async () => {
     if (!confirm(`Desativar o cadastro de ${patient?.name}?`)) return;
-    await patientsApi.delete(pid);
+    try {
+      await patientsApi.delete(pid);
+    } catch (err) {
+      toast.error(msgErro(err, "Não consegui desativar o paciente"));
+      return;
+    }
     removeFromCache(pid);
     toast.success("Paciente desativado");
     router.push("/pacientes");
@@ -632,7 +640,7 @@ export default function PatientPage() {
               { label: "Telefone", value: patient.emergency_phone },
               { label: "Parentesco", value: patient.emergency_relation },
             ]} />
-            <div className="flex gap-2 pt-4">
+            {isDoctor && <div className="flex gap-2 pt-4">
               <Button
                 onClick={handleDelete}
                 variant="danger"
@@ -641,7 +649,7 @@ export default function PatientPage() {
               >
                 Desativar paciente
               </Button>
-            </div>
+            </div>}
           </div>
         )}
 

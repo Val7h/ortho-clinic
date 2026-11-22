@@ -102,13 +102,17 @@ def test_secretaria_nao_exclui_paciente_e_medico_exclui():
 
 
 def test_secretaria_salva_cadastro_sem_apagar_o_historico_clinico():
-    pid = _paciente(notes="nota do médico", chronic_conditions="HAS", phone="83999990000")
+    clinico = {"notes": "nota do médico", "chronic_conditions": "HAS", "current_medications": "losartana",
+               "surgeries_history": "artroscopia 2019", "family_history": "mãe com artrose"}
+    pid = _paciente(phone="83999990000", **clinico)
     c = _cliente("secretary")
-    r = c.put(f"/patients/{pid}", json={"phone": "83988887777", "notes": None, "chronic_conditions": ""})
+    r = c.put(f"/patients/{pid}", json={"phone": "83988887777", "notes": None, "chronic_conditions": "",
+                                        "current_medications": None, "surgeries_history": "", "family_history": None})
     assert r.status_code == 200
     db = Sess(); p = db.query(Patient).get(pid); db.close()
     assert p.phone == "83988887777"
-    assert p.notes == "nota do médico" and p.chronic_conditions == "HAS"
+    for k, v in clinico.items():
+        assert getattr(p, k) == v, k
     # o médico continua editando
     _cliente("doctor").put(f"/patients/{pid}", json={"notes": "nova"})
     db = Sess(); assert db.query(Patient).get(pid).notes == "nova"; db.close()
