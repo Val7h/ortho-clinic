@@ -14,6 +14,18 @@ const temBuild = fs.existsSync(path.join(out, "celular.html"));
     expect(h).toContain('name="apple-mobile-web-app-capable" content="yes"');
   });
 
+  test("logotipo do app: favicons, cor do topo, nome do app e barra do iPhone", () => {
+    const h = ler("celular.html");
+    expect(h).toContain("/icons/favicon-32.png");
+    expect(h).toContain("/icons/favicon-48.png");
+    expect(h).toMatch(/name="theme-color" content="#12294E"/);
+    expect(h).toContain('name="application-name" content="OrthoMedic"');
+    expect(h).toContain('name="apple-mobile-web-app-title" content="OrthoMedic"');
+    expect(h).toContain('name="apple-mobile-web-app-status-bar-style" content="black-translucent"');
+    // o site do PC segue com o ícone e a cor dele
+    expect(ler("painel.html")).not.toContain("/icons/favicon-32.png");
+  });
+
   test("foto.html existe e o resto do site segue no manifest.json antigo", () => {
     expect(ler("celular/foto.html")).toContain("/manifest-celular.json");
     expect(ler("painel.html")).toContain('rel="manifest" href="/manifest.json"');

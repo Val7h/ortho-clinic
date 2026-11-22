@@ -86,3 +86,12 @@ export function hojeBR(agora: Date = new Date()): string {
 export function telaVisivel(): boolean {
   return typeof document === "undefined" || document.visibilityState === "visible";
 }
+
+/** Mensagem de erro em português: sem resposta do servidor = "sem conexão" (nunca "Network Error"). */
+export function erroCelular(e: any, padrao = "Sem conexão. Tente de novo."): string {
+  if (!e?.response) return padrao;
+  const d = e.response.data?.detail;
+  if (typeof d === "string" && d.trim()) return d;
+  if (Array.isArray(d) && d[0]?.msg) return String(d[0].msg);
+  return padrao;
+}

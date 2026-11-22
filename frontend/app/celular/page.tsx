@@ -4,6 +4,7 @@
 // Um app só; os cartões mudam conforme o login (secretária ou médico).
 // Instalação: site salvo na tela inicial (PWA), sem loja.
 
+import { CabecalhoCelular } from "@/components/celular/CabecalhoCelular";
 import { useEffect, useState } from "react";
 import { useLoginCelular, pegarPid } from "@/lib/celular";
 import { cartoesDoInicio } from "@/lib/celularPapel";
@@ -32,14 +33,8 @@ export default function CelularInicio() {
   const cartoes = cartoesDoInicio(usuario.role, pid);
 
   return (
-    <div className="max-w-xl mx-auto p-4 flex flex-col gap-4">
-      <header className="flex items-center gap-3 pt-2">
-        <img src="/icons/celular-192.png" alt="" width={44} height={44} className="rounded-xl" />
-        <div>
-          <h1 className="text-xl font-bold">OrthoMedic</h1>
-          <p className="text-sm text-slate-500">Olá, {usuario.name?.split(" ")[0] || "bem-vindo"}{medico ? "" : " · secretária"}</p>
-        </div>
-      </header>
+    <div className="max-w-xl mx-auto px-4 pb-4 flex flex-col gap-4">
+      <CabecalhoCelular inicio tela={`Olá, ${usuario.name?.split(" ")[0] || "bem-vindo"}${medico ? "" : " · secretária"}`} />
 
       <nav className="grid grid-cols-1 gap-3">
         {cartoes.map((c) => (
@@ -56,15 +51,32 @@ export default function CelularInicio() {
 
       {!instalado && (
         <section className="rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-4 text-sm leading-relaxed" data-testid="como-instalar">
-          <p className="font-bold mb-1">Como instalar na tela inicial</p>
-          {iphone ? (
-            <p>No Safari, toque em <b>Compartilhar</b> (o quadrado com a seta) e depois em <b>Adicionar à Tela de Início</b>.</p>
-          ) : pedidoInstalar ? (
-            <button type="button" onClick={() => { pedidoInstalar.prompt(); setPedidoInstalar(null); }}
-              className="mt-1 px-4 py-2 rounded-xl bg-sky-600 text-white font-semibold">Instalar o app</button>
-          ) : (
-            <p>No Chrome, toque nos <b>três pontinhos</b> e depois em <b>Adicionar à tela inicial</b>.</p>
-          )}
+          <div className="flex items-center gap-3 mb-3">
+            <img src="/icons/apple-touch-icon-180.png" alt="Ícone do OrthoMedic" width={56} height={56} className="rounded-2xl shadow" />
+            <div>
+              <p className="font-bold text-base">Instale o app OrthoMedic</p>
+              <p className="text-xs text-slate-500">Fica na tela inicial com este ícone, como um aplicativo.</p>
+            </div>
+          </div>
+          <div className={`rounded-xl p-3 mb-2 ${iphone ? "bg-sky-50 dark:bg-sky-950/40 ring-1 ring-sky-300" : "bg-slate-50 dark:bg-slate-800"}`} data-testid="instalar-iphone">
+            <p className="font-semibold mb-1">iPhone (Safari)</p>
+            <ol className="list-decimal pl-5 space-y-0.5">
+              <li>Toque em <b>Compartilhar</b> (o quadrado com a seta para cima).</li>
+              <li>Toque em <b>Adicionar à Tela de Início</b>.</li>
+              <li>Toque em <b>Adicionar</b>.</li>
+            </ol>
+          </div>
+          <div className={`rounded-xl p-3 ${!iphone ? "bg-sky-50 dark:bg-sky-950/40 ring-1 ring-sky-300" : "bg-slate-50 dark:bg-slate-800"}`} data-testid="instalar-android">
+            <p className="font-semibold mb-1">Android (Chrome)</p>
+            {pedidoInstalar ? (
+              <button type="button" onClick={() => { pedidoInstalar.prompt(); setPedidoInstalar(null); }}
+                className="mt-1 mb-2 px-4 py-2 rounded-xl bg-sky-600 text-white font-semibold">Instalar o app</button>
+            ) : null}
+            <ol className="list-decimal pl-5 space-y-0.5">
+              <li>Toque no menu <b>⋮</b> (três pontinhos, no alto).</li>
+              <li>Toque em <b>Instalar app</b> ou <b>Adicionar à tela inicial</b>.</li>
+            </ol>
+          </div>
         </section>
       )}
     </div>

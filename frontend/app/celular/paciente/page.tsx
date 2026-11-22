@@ -4,9 +4,11 @@
 // Secretária: cadastro e as duas pastas (documento pessoal e carteirinha).
 // Médico: cadastro, alergias, 3 últimas anamneses, documentos e Gravar consulta.
 
+import { CabecalhoCelular } from "@/components/celular/CabecalhoCelular";
 import { useEffect, useState } from "react";
-import { consultationsApi, msgErro, patientDocsApi, patientsApi } from "@/lib/api";
+import { consultationsApi, patientDocsApi, patientsApi } from "@/lib/api";
 import { useLoginCelular, pegarPid } from "@/lib/celular";
+import { erroCelular } from "@/lib/celular";
 import { secoesDaFicha, PASTAS_SECRETARIA } from "@/lib/celularPapel";
 import { formatar } from "@/lib/conferirLeitura";
 
@@ -38,7 +40,7 @@ export default function CelularPaciente() {
     const id = pegarPid();
     setPid(id);
     if (!id) { setErro("Paciente não informado."); return; }
-    patientsApi.get(id).then(setP).catch((e) => setErro(msgErro(e, "Paciente não encontrado.")));
+    patientsApi.get(id).then(setP).catch((e) => setErro(erroCelular(e, "Paciente não encontrado.")));
     const s = secoesDaFicha(usuario.role);
     if (s.includes("documentos")) {
       patientDocsApi.list(id, { limit: 30 }).then((l: Doc[]) => setDocs(l || [])).catch(() => setDocs([]));
@@ -56,12 +58,8 @@ export default function CelularPaciente() {
   if (!pronto) return <p className="p-6 text-center text-slate-500">Abrindo…</p>;
 
   return (
-    <div className="max-w-xl mx-auto p-4 flex flex-col gap-3 pb-24">
-      <header className="flex items-center justify-between pt-2">
-        <a href="/celular" className="text-sky-700 dark:text-sky-300 font-semibold">‹ Início</a>
-        <h1 className="text-lg font-bold">Ficha</h1>
-        <span className="w-12" />
-      </header>
+    <div className="max-w-xl mx-auto px-4 pb-24 flex flex-col gap-3">
+      <CabecalhoCelular tela="Ficha do paciente" />
       {erro && <p className="text-sm text-orange-700">{erro}</p>}
       {p && (
         <>

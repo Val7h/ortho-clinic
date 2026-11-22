@@ -4,9 +4,11 @@
 // Cuidado: a rota da sala suspende atendimento parado há 15 min. Por isso o
 // celular só pergunta a cada 60 s e só com a tela à vista.
 
+import { CabecalhoCelular } from "@/components/celular/CabecalhoCelular";
 import { useEffect, useState } from "react";
-import { msgErro, waitingRoomApi } from "@/lib/api";
+import { waitingRoomApi } from "@/lib/api";
 import { useLoginCelular, telaVisivel } from "@/lib/celular";
+import { erroCelular } from "@/lib/celular";
 
 type Entrada = { id: number; patient_id: number; patient_name: string; patient_insurance?: string | null; status: string; waited_minutes?: number | null; arrived_at?: string };
 
@@ -34,7 +36,7 @@ export default function CelularSala() {
       ultima = Date.now();
       waitingRoomApi.today()
         .then((l: Entrada[]) => { if (vivo) { setLista(l || []); setErro(""); setHora(new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })); } })
-        .catch((e) => { if (vivo) setErro(msgErro(e, "Sem conexão. Tento de novo em 1 minuto.")); });
+        .catch((e) => { if (vivo) setErro(erroCelular(e, "Sem conexão. Tento de novo em 1 minuto.")); });
     };
     ler();
     const t = setInterval(ler, SALA_INTERVALO_MS);
@@ -48,12 +50,8 @@ export default function CelularSala() {
   const ordenada = [...(lista || [])].sort((a, b) => ordem.indexOf(a.status) - ordem.indexOf(b.status));
 
   return (
-    <div className="max-w-xl mx-auto p-4 flex flex-col gap-3">
-      <header className="flex items-center justify-between pt-2">
-        <a href="/celular" className="text-sky-700 dark:text-sky-300 font-semibold">‹ Início</a>
-        <h1 className="text-lg font-bold">Sala de espera</h1>
-        <span className="w-12 text-right text-xs text-slate-500">{hora}</span>
-      </header>
+    <div className="max-w-xl mx-auto px-4 pb-4 flex flex-col gap-3">
+      <CabecalhoCelular tela={hora ? `Sala de espera · atualizada ${hora}` : "Sala de espera"} />
       {erro && <p className="text-sm text-orange-700">{erro}</p>}
       {!erro && lista === null && <p className="text-slate-500">Abrindo…</p>}
       {lista && lista.length === 0 && <p className="text-slate-500">Ninguém na sala hoje.</p>}

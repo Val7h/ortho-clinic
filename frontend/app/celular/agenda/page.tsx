@@ -2,9 +2,11 @@
 
 // App do celular (corte 2, 22/11/2026): agenda de HOJE, só leitura, por clínica com a cor dela.
 
+import { CabecalhoCelular } from "@/components/celular/CabecalhoCelular";
 import { useEffect, useState } from "react";
-import { clinicApi, msgErro } from "@/lib/api";
+import { clinicApi } from "@/lib/api";
 import { useLoginCelular, hojeBR } from "@/lib/celular";
+import { erroCelular } from "@/lib/celular";
 
 type Item = {
   source: string; id?: number; patient_id?: number | null; clinic_id: number; clinic_name: string; clinic_color?: string;
@@ -26,7 +28,7 @@ export default function CelularAgenda() {
     const hoje = hojeBR();
     clinicApi.week(hoje, hoje)
       .then((l: Item[]) => setItens((l || []).filter((x) => x.source === "appointment")))
-      .catch((e) => setErro(msgErro(e, "Não consegui abrir a agenda.")));
+      .catch((e) => setErro(erroCelular(e, "Não consegui abrir a agenda.")));
   }, [pronto]);
 
   const porClinica = new Map<number, { nome: string; cor: string; itens: Item[] }>();
@@ -40,12 +42,8 @@ export default function CelularAgenda() {
   }
 
   return (
-    <div className="max-w-xl mx-auto p-4 flex flex-col gap-4">
-      <header className="flex items-center justify-between pt-2">
-        <a href="/celular" className="text-sky-700 dark:text-sky-300 font-semibold">‹ Início</a>
-        <h1 className="text-lg font-bold">Agenda de hoje</h1>
-        <span className="w-12" />
-      </header>
+    <div className="max-w-xl mx-auto px-4 pb-4 flex flex-col gap-4">
+      <CabecalhoCelular tela="Agenda de hoje" />
       {erro && <p className="text-sm text-orange-700">{erro}</p>}
       {!erro && itens === null && <p className="text-slate-500">Abrindo…</p>}
       {itens && itens.length === 0 && <p className="text-slate-500">Ninguém marcado hoje.</p>}

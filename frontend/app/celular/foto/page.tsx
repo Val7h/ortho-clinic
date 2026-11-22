@@ -6,9 +6,11 @@
 // pessoal" e "Carteirinha do plano" da aba Documentos (pasta protegida, só com login)
 // e o cadastro recebe só o que foi aceito.
 
+import { CabecalhoCelular } from "@/components/celular/CabecalhoCelular";
 import { useEffect, useRef, useState } from "react";
-import { api, msgErro, patientsApi, waitingRoomApi } from "@/lib/api";
+import { api, patientsApi, waitingRoomApi } from "@/lib/api";
 import { useLoginCelular, pegarPid, reduzirFoto } from "@/lib/celular";
+import { erroCelular } from "@/lib/celular";
 import {
   montarLinhas, podeUsar, dadosAceitos, escolher, desconferir, corrigir, formatar, soDigitos, cpfValido,
   type Linha, type Leitura, type Origem,
@@ -55,7 +57,7 @@ export default function CelularFoto() {
     if (!pronto) return;
     const pid = pegarPid();
     if (pid) {
-      patientsApi.get(pid).then(selecionarPaciente).catch((e) => setErroPaciente(msgErro(e, "Paciente não encontrado.")));
+      patientsApi.get(pid).then(selecionarPaciente).catch((e) => setErroPaciente(erroCelular(e, "Paciente não encontrado.")));
     }
   }, [pronto]);
 
@@ -125,7 +127,7 @@ export default function CelularFoto() {
       setFotos((f) => ({ ...f, [tipo]: { arquivo: pequena, previa, estado: "lida", leitura: { campos: r.campos || {}, motivos: r.motivos || {} } } }));
     } catch (e) {
       if (!controle.current.vale(tentativa)) return;
-      setFotos((f) => ({ ...f, [tipo]: { arquivo: pequena, previa, estado: "falhou", erro: msgErro(e, "A leitura falhou. Tente de novo.") } }));
+      setFotos((f) => ({ ...f, [tipo]: { arquivo: pequena, previa, estado: "falhou", erro: erroCelular(e, "A leitura falhou. Tente de novo.") } }));
     }
   };
 
@@ -150,7 +152,7 @@ export default function CelularFoto() {
         guardadas.push(d.titulo);
       }
     } catch (e) {
-      setResultado({ ok: false, texto: `Não consegui guardar a foto: ${msgErro(e)}. ${guardadas.length ? `Já guardada: ${guardadas.join(", ")}.` : "Nada foi guardado."}` });
+      setResultado({ ok: false, texto: `Não consegui guardar a foto: ${erroCelular(e)}. ${guardadas.length ? `Já guardada: ${guardadas.join(", ")}.` : "Nada foi guardado."}` });
       setEnviando(false);
       return;
     }
@@ -160,7 +162,7 @@ export default function CelularFoto() {
         const novo = await patientsApi.update(paciente.id, dados);
         setPaciente((p) => ({ ...(p || {}), ...novo }));
       } catch (e) {
-        setResultado({ ok: false, texto: `Fotos guardadas, mas o cadastro não mudou: ${msgErro(e)}` });
+        setResultado({ ok: false, texto: `Fotos guardadas, mas o cadastro não mudou: ${erroCelular(e)}` });
         setEnviando(false);
         return;
       }
@@ -174,12 +176,8 @@ export default function CelularFoto() {
   if (!pronto) return <p className="p-6 text-center text-slate-500">Abrindo…</p>;
 
   return (
-    <div className="max-w-xl mx-auto p-4 flex flex-col gap-4 pb-24">
-      <header className="flex items-center justify-between pt-2">
-        <a href="/celular" className="text-sky-700 dark:text-sky-300 font-semibold">‹ Início</a>
-        <h1 className="text-lg font-bold">Foto de documento</h1>
-        <span className="w-12" />
-      </header>
+    <div className="max-w-xl mx-auto px-4 pb-24 flex flex-col gap-4">
+      <CabecalhoCelular tela="Foto de documento" />
 
       {!paciente ? (
         <EscolherPaciente onEscolher={(p) => selecionarPaciente(p)} erro={erroPaciente} />

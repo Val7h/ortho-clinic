@@ -1,5 +1,5 @@
 import { cartoesDoInicio, secoesDaFicha, ehMedico } from "@/lib/celularPapel";
-import { hojeBR } from "@/lib/celular";
+import { hojeBR, erroCelular } from "@/lib/celular";
 
 describe("App do celular: médico × secretária", () => {
   test("secretária não vê anamnese nem Gravar", () => {
@@ -30,5 +30,10 @@ describe("App do celular: médico × secretária", () => {
 
   test("hoje no horário do Brasil", () => {
     expect(hojeBR(new Date("2026-11-23T02:30:00Z"))).toBe("2026-11-22");
+  });
+
+  test("erro sem resposta do servidor sai em português", () => {
+    expect(erroCelular({ message: "Network Error" })).toBe("Sem conexão. Tente de novo.");
+    expect(erroCelular({ response: { data: { detail: "Este CPF já é de outro paciente (X)." } } })).toContain("outro paciente");
   });
 });
