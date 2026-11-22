@@ -83,3 +83,19 @@ def test_direito_ao_beneficio_nao_e_lado():
     # perto de região do corpo continua avisando
     assert L.conferir_lado("Tem direito ao benefício. Dor no ombro direito.", d) is not None
     assert L.conferir_lado("Teste de Lasègue positivo à direita.", "lasegue positivo") is not None
+
+
+def test_regioes_novas_trocadas_avisam():
+    pares = [("supraespinhal esquerdo", "supraespinhal direito"),
+             ("manguito rotador direito", "manguito rotador esquerdo"),
+             ("epicondilite lateral esquerda", "epicondilite lateral direita"),
+             ("fascite plantar direita", "fascite plantar esquerda"),
+             ("gonartrose esquerda", "gonartrose direita")]
+    for ditado, laudo in pares:
+        assert L.conferir_lado("Apresenta " + laudo + ".", "paciente com " + ditado) is not None, laudo
+
+
+def test_direito_ao_beneficio_no_ditado_nao_esconde_troca():
+    d = "dor no joelho esquerdo, tem direito ao benefício"
+    assert L.conferir_lado("Dor no joelho direito.", d) is not None
+    assert L.conferir_lado("Dor no joelho esquerdo.", d) is None

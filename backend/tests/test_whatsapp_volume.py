@@ -169,9 +169,29 @@ def test_rota_send_exige_medico():
         assert r.status_code == 404
         r = c.post("/whatsapp/send", json={"patient_id": 999, "message_type": "post_consultation", "custom_text": "  "})
         assert r.status_code == 404
+        # data que não é data: secretária leva 422; data de verdade passa
+        r = c.post("/whatsapp/send", json={"patient_id": 999, "message_type": "return_reminder",
+                                            "appointment_date": "amanhã, e traga o dinheiro"})
+        assert r.status_code == 422
+        r = c.post("/whatsapp/send", json={"patient_id": 999, "message_type": "return_reminder",
+                                            "consultation_date": "31/02/2026"})
+        assert r.status_code == 422
+        for d in ("25/12/2026", "2026-12-25", "25/12"):
+            r = c.post("/whatsapp/send", json={"patient_id": 999, "message_type": "return_reminder",
+                                                "appointment_date": d})
+            assert r.status_code == 404, d
         main.app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(
             id=1, role="doctor", organization_id=1, is_active=True)
         r = c.post("/whatsapp/send", json={"patient_id": 999, "message_type": "custom", "custom_text": "x"})
         assert r.status_code == 404   # passou da trava de médico; paciente não existe
+        r = c.post("/whatsapp/send", json={"patient_id": 999, "message_type": "return_reminder",
+                                            "appointment_date": "qualquer coisa"})
+        assert r.status_code == 404   # médico pode tudo
     finally:
         main.app.dependency_overrides.clear()
+
+
+def test_render_template_texto_livre_so_espacos():
+    import routers.whatsapp as RW
+    assert RW._render_template("birthday", "Fulano Teste", None, "   ") == RW._render_template("birthday", "Fulano Teste")
+    assert RW._render_template("birthday", "Fulano Teste", None, "  oi {nome}  ") == "oi Fulano Teste"

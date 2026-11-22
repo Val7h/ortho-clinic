@@ -178,26 +178,40 @@ def _sem_acento(t: str) -> str:
 _LADOS = {"direito": ("direit",), "esquerdo": ("esquerd",)}
 # Lado só conta perto de uma região do corpo ("direito ao benefício" não é lado).
 _REGIAO = re.compile(
-    r"(?:pes?|maos?|mama)$|(?:ombr|joelh|quadril|coxofemoral|tornozel|punh|cotovel|braco|antebraco|perna|coxa|"
+    r"(?:pes?|maos?|mama|lca)$|(?:ombr|joelh|quadril|coxofemoral|tornozel|punh|cotovel|braco|antebraco|perna|coxa|"
     r"membr|dedo|halux|polegar|calcanh|tendao|tendoes|coluna|lombar|cervical|toracic|sacroiliac|clavicul|"
     r"escapul|femur|tibia|fibula|umer|radio|ulna|patel|menisc|ligament|nervo|musculo|regiao|lado|hemicorpo|"
-    r"face|olho|ouvido|rins?|pulm|axil|virilha|glute|nadega|costel|hemitorax|carpo|tars|metatars|metacarp)\w*$")
+    r"face|olho|ouvido|rins?|pulm|axil|virilha|glute|nadega|costel|hemitorax|carpo|tars|metatars|metacarp|"
+    r"supraespinh|infraespinh|subescapul|manguito|epicondil|trocanter|maleol|plantar|fasci|acromi|olecran|"
+    r"calcane|gonartros|coxartros|artelh|quirodactil|pododactil|tendin|bursa|radiculopat)\w*$")
 _PERTO = 4  # palavras antes/depois do lado
+_NAO_E_LADO = {"tem", "ter", "teria", "seu", "sua", "o", "de", "do", "possui"}
 
 
 def _lados_citados(t: str) -> set:
     """Lados (direito/esquerdo) que aparecem a poucas palavras de uma região do corpo,
     ou na forma "à direita/à esquerda" (Lasègue positivo à direita). t já sem acento."""
     pal = re.findall(r"\w+", t)
+    e_lado = [any(w.startswith(r) for raizes in _LADOS.values() for r in raizes) for w in pal]
     achados = set()
     for i, w in enumerate(pal):
         for lado, raizes in _LADOS.items():
             if not any(w.startswith(r) for r in raizes):
                 continue
-            perto = pal[max(0, i - _PERTO):i] + pal[i + 1:i + 1 + _PERTO]
             antes = pal[i - 1] if i else ""
-            if antes == "a" or any(_REGIAO.fullmatch(p) for p in perto):
+            if antes in _NAO_E_LADO:      # "tem direito", "seu direito", "o direito de..."
+                continue
+            if antes == "a":              # "à direita"
                 achados.add(lado)
+                continue
+            # região a poucas palavras, sem outro lado no meio ("joelho esquerdo, tem direito")
+            for j in range(max(0, i - _PERTO), min(len(pal), i + 1 + _PERTO)):
+                if j == i or not _REGIAO.fullmatch(pal[j]):
+                    continue
+                if any(e_lado[k] for k in range(min(i, j) + 1, max(i, j))):
+                    continue
+                achados.add(lado)
+                break
     return achados
 
 
@@ -206,9 +220,9 @@ def conferir_lado(texto: str, ditado: str) -> Optional[str]:
     Se o laudo cita um lado que NÃO aparece no ditado, devolve um aviso para o
     médico conferir. Não bloqueia: só avisa."""
     t, d = _sem_acento(texto), _sem_acento(ditado)
-    no_texto = _lados_citados(t)
-    faltando = [lado for lado, raizes in _LADOS.items()
-                if lado in no_texto and not any(r in d for r in raizes)]
+    # mesmo filtro dos dois lados: "tem direito ao benefício" no ditado não vale como lado ditado
+    no_texto, no_ditado = _lados_citados(t), _lados_citados(d)
+    faltando = [lado for lado in _LADOS if lado in no_texto and lado not in no_ditado]
     if not faltando:
         return None
     return ("Conferir o LADO: o laudo cita " + " e ".join(faltando)

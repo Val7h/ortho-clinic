@@ -4,6 +4,7 @@ from sqlalchemy import func as sql_func
 from typing import List
 from datetime import date, datetime, timedelta, timezone
 import os
+import re
 
 from database import get_db
 from models.patient import Patient
@@ -71,6 +72,22 @@ TEMPLATES = {
 }
 
 
+_DATA_RE = re.compile(r"\d{2}/\d{2}(/\d{4})?|\d{4}-\d{2}-\d{2}")
+
+
+def data_valida(s: str) -> bool:
+    """dd/mm/aaaa, aaaa-mm-dd ou dd/mm, no máximo 10 caracteres, e data que existe."""
+    s = (s or "").strip()
+    if len(s) > 10 or not _DATA_RE.fullmatch(s):
+        return False
+    fmt = "%Y-%m-%d" if "-" in s else ("%d/%m/%Y" if len(s) == 10 else "%d/%m")
+    try:
+        datetime.strptime(s if fmt != "%d/%m" else s + "/2000", fmt if fmt != "%d/%m" else "%d/%m/%Y")
+    except ValueError:
+        return False
+    return True
+
+
 def _render_template(
     msg_type: str,
     patient_name: str,
@@ -79,6 +96,7 @@ def _render_template(
 ) -> str:
     # custom_text vale pra QUALQUER tipo — permite tipos rastreáveis com texto
     # próprio (ex.: "folheto" = oferta de tratamento enviada na consulta, 02/08)
+    custom_text = (custom_text or "").strip()
     if custom_text:
         return custom_text.replace("{nome}", patient_name).replace("{doctor}", DOCTOR_NAME)
     tpl = TEMPLATES.get(msg_type, TEMPLATES["post_consultation"])
@@ -267,6 +285,12 @@ def send_message(data: SendMessageIn, db: Session = Depends(get_db),
     # TEXTO LIVRE pelo WhatsApp da clínica só sai por médico.
     if (data.custom_text or "").strip():
         require_doctor(current_user)
+    # Data do modelo pronto: quem não é médico só manda data de verdade (senão vira texto livre).
+    if current_user.role not in ("doctor", "admin", "superadmin"):
+        for campo in ("appointment_date", "consultation_date"):
+            v = getattr(data, campo)
+            if v is not None and v.strip() and not data_valida(v):
+                raise HTTPException(422, f"{campo}: use uma data (dd/mm/aaaa, aaaa-mm-dd ou dd/mm).")
     patient = db.query(Patient).filter(Patient.id == data.patient_id).first()
     if not patient:
         raise HTTPException(404, "Paciente não encontrado")
