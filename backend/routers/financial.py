@@ -10,7 +10,7 @@ from models.patient import Patient
 from models.financial import FinancialRecord
 from models.clinic import Clinic, ClinicSchedule, Appointment
 from models.queue import WaitingRoomEntry
-from deps import get_current_user
+from deps import get_current_user, require_doctor
 from models.organization import User
 from services.audit_service import AuditLogService
 
@@ -741,7 +741,8 @@ def delete_record(
     record_id: int,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    # 22/11 (Valth): a secretária não apaga nada — apagar lançamento é só do médico.
+    current_user: User = Depends(require_doctor),
 ):
     r = _load_owned(record_id, db, current_user)
     locked = _is_locked(r)

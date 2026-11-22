@@ -7,7 +7,7 @@ describe("App do celular: médico × secretária", () => {
     expect(s).not.toContain("anamneses");
     expect(s).not.toContain("gravar");
     expect(s).not.toContain("alergias");
-    expect(s).toEqual(["cadastro", "pastas"]);
+    expect(s).toEqual(["cadastro", "documentos"]);  // vê a aba Documentos completa
     expect(cartoesDoInicio("secretary").map((c) => c.teste)).toEqual(["cartao-foto", "cartao-agenda", "cartao-sala"]);
   });
 
@@ -20,7 +20,7 @@ describe("App do celular: médico × secretária", () => {
   });
 
   test("papel desconhecido ou vazio = como secretária", () => {
-    expect(secoesDaFicha(undefined)).toEqual(["cadastro", "pastas"]);
+    expect(secoesDaFicha(undefined)).toEqual(["cadastro", "documentos"]);
     expect(cartoesDoInicio(null).some((c) => c.teste === "cartao-gravar")).toBe(false);
   });
 

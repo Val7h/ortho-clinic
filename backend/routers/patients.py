@@ -15,7 +15,7 @@ from services.telefone_br import (
 from models.consultation import Consultation
 from models.organization import User
 from schemas.patient import PatientCreate, PatientUpdate, PatientOut, PatientSummary
-from deps import get_current_user
+from deps import get_current_user, require_doctor
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +39,9 @@ def _normalize_name(name: Optional[str]) -> str:
     nfkd = unicodedata.normalize("NFKD", name)
     sem_acento = "".join(c for c in nfkd if not unicodedata.combining(c))
     return re.sub(r"\s+", " ", sem_acento).strip().lower()
+
+
+CAMPOS_CLINICOS_SO_MEDICO = ("chronic_conditions", "current_medications", "surgeries_history", "family_history", "notes")
 
 
 def _redact_clinical_for_secretary(result: PatientOut, current_user: User) -> PatientOut:
@@ -697,6 +700,11 @@ def update_patient(
         raise HTTPException(404, "Paciente não encontrado")
     _arrumar_telefones(data)
     mudancas = data.model_dump(exclude_unset=True)
+    if current_user.role == "secretary":
+        # 22/11: a secretária não vê o histórico clínico (GET redigido); se a tela dela
+        # mandar esses campos de volta (vazios), não podem apagar o que o médico escreveu.
+        for k in CAMPOS_CLINICOS_SO_MEDICO:
+            mudancas.pop(k, None)
     _recusar_cpf_de_outro(db, patient, mudancas.get("cpf", None) if "cpf" in mudancas else None)
     for key, value in mudancas.items():
         setattr(patient, key, value)
@@ -710,7 +718,8 @@ def update_patient(
 def delete_patient(
     patient_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    # 22/11 (Valth): a secretária não apaga nada — excluir paciente é só do médico.
+    current_user: User = Depends(require_doctor),
 ):
     q = db.query(Patient).filter(Patient.id == patient_id)
     q = _org_filter(q, current_user)

@@ -1,7 +1,7 @@
 "use client";
 
 // App do celular (corte 2, 22/11/2026): ficha do paciente, SÓ LEITURA.
-// Secretária: cadastro e as duas pastas (documento pessoal e carteirinha).
+// Secretária: cadastro e a aba Documentos completa, só leitura (nada de apagar no app).
 // Médico: cadastro, alergias, 3 últimas anamneses, documentos e Gravar consulta.
 
 import { CabecalhoCelular } from "@/components/celular/CabecalhoCelular";
@@ -9,7 +9,7 @@ import { useEffect, useState } from "react";
 import { consultationsApi, patientDocsApi, patientsApi } from "@/lib/api";
 import { useLoginCelular, pegarPid } from "@/lib/celular";
 import { erroCelular } from "@/lib/celular";
-import { secoesDaFicha, PASTAS_SECRETARIA } from "@/lib/celularPapel";
+import { secoesDaFicha } from "@/lib/celularPapel";
 import { formatar } from "@/lib/conferirLeitura";
 
 type Doc = { id: number; title: string; category: string; category_label?: string; date: string; file_url?: string | null; mime_type?: string | null };
@@ -43,10 +43,7 @@ export default function CelularPaciente() {
     patientsApi.get(id).then(setP).catch((e) => setErro(erroCelular(e, "Paciente não encontrado.")));
     const s = secoesDaFicha(usuario.role);
     if (s.includes("documentos")) {
-      patientDocsApi.list(id, { limit: 30 }).then((l: Doc[]) => setDocs(l || [])).catch(() => setDocs([]));
-    } else if (s.includes("pastas")) {
-      Promise.all(PASTAS_SECRETARIA.map((c) => patientDocsApi.list(id, { category: c, limit: 10 }).catch(() => [])))
-        .then((ls) => setDocs(ls.flat() as Doc[]));
+      patientDocsApi.list(id, { limit: 50 }).then((l: Doc[]) => setDocs(l || [])).catch(() => setDocs([]));
     }
     if (s.includes("anamneses")) {
       consultationsApi.list(id)
@@ -98,7 +95,7 @@ export default function CelularPaciente() {
           )}
 
           <section className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-4" data-testid="secao-documentos">
-            <p className="text-sm font-bold mb-2">{secoes.includes("documentos") ? "Documentos" : "Documento pessoal e carteirinha"}</p>
+            <p className="text-sm font-bold mb-2">Documentos</p>
             {docs.length === 0 && <p className="text-sm text-slate-500">Nenhum ainda.</p>}
             <ul className="flex flex-col gap-2">
               {docs.map((d) => (

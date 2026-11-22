@@ -1,5 +1,6 @@
 // O que cada login vê no app do celular (22/11/2026). Regras puras, testadas.
-// Secretária: cadastro e as duas pastas (documento e carteirinha). Nunca anamnese nem Gravar.
+// Secretária: cadastro e a aba Documentos completa, só leitura (22/11: conferir se a foto chegou).
+// Nunca anamnese, alergias de ficha clínica nem Gravar.
 // Médico: tudo da secretária + alergias, 3 últimas anamneses, documentos e Gravar consulta.
 
 export type Papel = "superadmin" | "admin" | "doctor" | "secretary" | string | undefined | null;
@@ -23,13 +24,11 @@ export function cartoesDoInicio(papel: Papel, pid?: number | null): Cartao[] {
   return c;
 }
 
-export type Secao = "cadastro" | "pastas" | "alergias" | "anamneses" | "documentos" | "gravar";
+export type Secao = "cadastro" | "alergias" | "anamneses" | "documentos" | "gravar";
 
 export function secoesDaFicha(papel: Papel): Secao[] {
   return ehMedico(papel)
     ? ["cadastro", "alergias", "anamneses", "documentos", "gravar"]
-    : ["cadastro", "pastas"];
+    : ["cadastro", "documentos"];
 }
 
-/** Pastas que a secretária vê na ficha. */
-export const PASTAS_SECRETARIA = ["identity", "insurance_card"];
