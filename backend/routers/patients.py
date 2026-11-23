@@ -526,7 +526,7 @@ async def _ler_documento(file: UploadFile, tipo: str) -> dict:
 
     # 22/11 (Valth testou com a foto de um comprovante): foto que não é o documento pedido não lê nada
     # e o app não guarda essa foto na pasta.
-    if bruto.get("e_documento") is False:
+    if bruto.get("e_documento") is False or str(bruto.get("e_documento")).strip().lower() in ("false", "nao", "não"):
         qual = "um documento pessoal (RG, CNH ou CPF)" if tipo == "identity" else "uma carteirinha de plano de saúde"
         return {**vazio, "nao_e_documento": True, "aviso": f"Esta foto não parece {qual}."}
     campos, motivos = {}, {}

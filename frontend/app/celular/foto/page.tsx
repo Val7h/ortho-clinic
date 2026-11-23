@@ -55,6 +55,7 @@ export default function CelularFoto() {
     setFotos((f) => { for (const x of Object.values(f)) if (x?.previa) URL.revokeObjectURL(x.previa); return {}; });
     setOutras((o) => { for (const x of o) URL.revokeObjectURL(x.previa); return []; });
     pacienteVivo.current = p ? p.id : null;
+    if (p) jaTentouAuto.current = true;   // escolha manual: "Trocar" nunca reescolhe sozinho (revisão 22/11)
     setAutomatico(false);
     setResultado(null);
     setPaciente(p);
@@ -205,7 +206,7 @@ export default function CelularFoto() {
     }
     const n = Object.keys(dados).length;
     setResultado({ ok: true, texto: `Pronto. ${guardadas.length ? `Foto guardada em Documentos (${guardadas.length > 2 ? `${guardadas.length} fotos` : guardadas.join(" e ")}). ` : ""}${n ? `${n} dado(s) do cadastro atualizado(s).` : "Cadastro sem mudança."}` });
-    setFotos({});
+    setFotos((f) => { for (const x of Object.values(f)) if (x?.previa) URL.revokeObjectURL(x.previa); return {}; });
     setOutras((o) => { for (const x of o) URL.revokeObjectURL(x.previa); return []; });
     setEnviando(false);
   };
@@ -228,7 +229,7 @@ export default function CelularFoto() {
               <p className="text-xs text-slate-500">{automatico ? "Em atendimento agora (escolhido sozinho)" : "Paciente"}</p>
               <p className="text-lg font-bold" data-testid="paciente">{paciente.name}</p>
             </div>
-            <button type="button" onClick={() => selecionarPaciente(null)}
+            <button type="button" disabled={enviando} onClick={() => selecionarPaciente(null)}
               className="text-sm text-sky-700 dark:text-sky-300 font-semibold">Trocar</button>
           </section>
 

@@ -100,7 +100,7 @@ export default function EscribaGravarPage() {
         {doApp && (
           <a href="/celular" data-testid="voltar-inicio"
             onClick={(e) => {
-              if ((gravandoAqui || pausadoAqui) && !window.confirm("Sair desta tela interrompe a gravação. Sair mesmo?")) e.preventDefault();
+              if ((gravandoAqui || pausadoAqui || g.preGravando) && !window.confirm("Sair desta tela interrompe a gravação. Sair mesmo?")) e.preventDefault();
             }}
             className="shrink-0 rounded-full bg-violet-600 text-white px-3 py-1.5 text-sm font-semibold">‹ Início</a>
         )}
