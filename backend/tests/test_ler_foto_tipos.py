@@ -183,3 +183,20 @@ def test_rg_maior_que_20_volta_vazio_com_motivo():
     assert j["campos"]["rg"] is None and "20" in j["motivos"]["rg"]
     j = _ler("identity", json.dumps({"rg": {"valor": "1234567 SSP/PB", "rotulo": "RG", "linha": "x"}})).json()
     assert j["campos"]["rg"] == "1234567 SSP/PB"
+
+
+def test_foto_que_nao_e_o_documento_e_recusada():
+    # 22/11: Valth fotografou um comprovante de compra como "Documento pessoal".
+    for tipo in ("identity", "insurance_card"):
+        r = _ler(tipo, json.dumps({"e_documento": False, "name": {"valor": "LOJA FICTICIA"}}))
+        j = r.json()
+        assert r.status_code == 200 and j["nao_e_documento"] is True
+        assert all(v is None for v in j["campos"].values()) and j["lidos"] == []
+        assert "não parece" in j["aviso"]
+
+
+def test_documento_de_verdade_segue_igual():
+    r = _ler("identity", json.dumps({"e_documento": True, "cpf": {"valor": CPF_OK, "rotulo": "CPF", "linha": "CPF " + CPF_OK}}))
+    j = r.json()
+    assert "nao_e_documento" not in j and j["campos"]["cpf"] == CPF_OK
+

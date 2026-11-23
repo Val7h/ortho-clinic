@@ -384,7 +384,9 @@ async def upload_camera_photo(
 # médico no celular. Única permissão nova da secretária: enviar nestas 2 pastas.
 # A foto vai para a pasta protegida (só no banco, link assinado de 2 h).
 
-FOTO_CADASTRO_CATEGORIAS = {"identity": "Documento pessoal", "insurance_card": "Carteirinha do plano"}
+FOTO_CADASTRO_CATEGORIAS = {"identity": "Documento pessoal", "insurance_card": "Carteirinha do plano",
+                            # 22/11 (Valth): "Outros documentos" do app (exame, laudo de fora, qualquer imagem), sem leitura
+                            "other": "Outro documento (celular)"}
 FOTO_CADASTRO_MAX_BYTES = 6 * 1024 * 1024
 FOTO_CADASTRO_LADO_MAX = 2000
 
@@ -432,7 +434,7 @@ async def upload_foto_cadastro(
 ):
     import hashlib
     if category not in FOTO_CADASTRO_CATEGORIAS:
-        raise HTTPException(422, "Só dá para enviar Documento pessoal ou Carteirinha do plano.")
+        raise HTTPException(422, "Só dá para enviar Documento pessoal, Carteirinha do plano ou Outro documento.")
     p = _get_patient_or_404(patient_id, db)
     if current_user.role != "superadmin" and (p.organization_id or 1) != (current_user.organization_id or 1):
         raise HTTPException(404, "Paciente não encontrado")

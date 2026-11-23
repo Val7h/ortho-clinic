@@ -18,7 +18,9 @@ import {
 import { criarControleDeTentativas } from "@/lib/tentativas";
 
 type Paciente = { id: number; name: string; cpf?: string | null; birthdate?: string | null; [k: string]: any };
-type Foto = { arquivo: File; previa: string; estado: "lendo" | "lida" | "falhou"; leitura?: Leitura; erro?: string };
+// "recusada" (22/11): a leitura disse que a foto NÃO é o documento pedido; essa foto nunca é guardada.
+type Foto = { arquivo: File; previa: string; estado: "lendo" | "lida" | "falhou" | "recusada"; leitura?: Leitura; erro?: string };
+type Outra = { arquivo: File; previa: string };
 
 const DOCS: { tipo: Origem; titulo: string; emoji: string }[] = [
   { tipo: "identity", titulo: "Documento pessoal", emoji: "🪪" },
@@ -38,6 +40,12 @@ export default function CelularFoto() {
   const [paciente, setPaciente] = useState<Paciente | null>(null);
   const [erroPaciente, setErroPaciente] = useState("");
   const [fotos, setFotos] = useState<Partial<Record<Origem, Foto>>>({});
+  // 22/11 (Valth): "Outros documentos" (exame, laudo de fora, qualquer imagem): várias fotos, sem leitura.
+  const [outras, setOutras] = useState<Outra[]>([]);
+  const [veioDaFicha, setVeioDaFicha] = useState(false);
+  const [automatico, setAutomatico] = useState(false);
+  const jaTentouAuto = useRef(false);
+  const pacienteVivo = useRef<number | null>(null);
   const [linhas, setLinhas] = useState<Linha[]>([]);
   const [cpfsDeOutros, setCpfsDeOutros] = useState<Record<string, { id: number; name: string }>>({});
   // revisão 22/11: resposta de leitura atrasada nunca cai no paciente errado
@@ -45,6 +53,9 @@ export default function CelularFoto() {
   const selecionarPaciente = (p: Paciente | null) => {
     controle.current.trocarPaciente(p ? p.id : null);   // invalida leituras pendentes
     setFotos((f) => { for (const x of Object.values(f)) if (x?.previa) URL.revokeObjectURL(x.previa); return {}; });
+    setOutras((o) => { for (const x of o) URL.revokeObjectURL(x.previa); return []; });
+    pacienteVivo.current = p ? p.id : null;
+    setAutomatico(false);
     setResultado(null);
     setPaciente(p);
   };
@@ -57,6 +68,8 @@ export default function CelularFoto() {
     if (!pronto) return;
     const pid = pegarPid();
     if (pid) {
+      jaTentouAuto.current = true;   // paciente escolhido pela ficha: nada automático
+      setVeioDaFicha(true);
       patientsApi.get(pid).then(selecionarPaciente).catch((e) => setErroPaciente(erroCelular(e, "Paciente não encontrado.")));
     }
   }, [pronto]);
@@ -124,6 +137,11 @@ export default function CelularFoto() {
       fd.append("tipo", tipo);
       const r = await api.post("/patients/ler-foto", fd).then((x) => x.data);
       if (!controle.current.vale(tentativa)) return;   // trocou de paciente ou tirou outra foto
+      if (r.nao_e_documento) {
+        setFotos((f) => ({ ...f, [tipo]: { arquivo: pequena, previa, estado: "recusada",
+          erro: `${r.aviso || "Esta foto não parece o documento pedido."} Tire de novo ou use Outros documentos.` } }));
+        return;
+      }
       setFotos((f) => ({ ...f, [tipo]: { arquivo: pequena, previa, estado: "lida", leitura: { campos: r.campos || {}, motivos: r.motivos || {} } } }));
     } catch (e) {
       if (!controle.current.vale(tentativa)) return;
@@ -131,7 +149,18 @@ export default function CelularFoto() {
     }
   };
 
-  const temFoto = DOCS.some((d) => fotos[d.tipo]);
+  const tirarOutra = async (arquivo: File | undefined) => {
+    if (!arquivo || !paciente) return;
+    setResultado(null);
+    const doPaciente = paciente.id;
+    let pequena: File;
+    try { pequena = await reduzirFoto(arquivo); } catch { setResultado({ ok: false, texto: "Não consegui abrir a foto. Tire de novo." }); return; }
+    if (pacienteVivo.current !== doPaciente) return;   // trocou de paciente no meio
+    setOutras((o) => [...o, { arquivo: pequena, previa: URL.createObjectURL(pequena) }]);
+  };
+  const tirarOutraDaLista = (i: number) => setOutras((o) => { if (o[i]) URL.revokeObjectURL(o[i].previa); return o.filter((_, k) => k !== i); });
+
+  const temFoto = DOCS.some((d) => fotos[d.tipo] && fotos[d.tipo]!.estado !== "recusada") || outras.length > 0;
   const lendo = DOCS.some((d) => fotos[d.tipo]?.estado === "lendo");
   const algumaLida = DOCS.some((d) => fotos[d.tipo]?.estado === "lida");
   const liberado = temFoto && !lendo && !checandoCpf && !enviando && podeUsar(linhas);
@@ -144,12 +173,19 @@ export default function CelularFoto() {
     try {
       for (const d of DOCS) {
         const f = fotos[d.tipo];
-        if (!f?.arquivo || !f.previa) continue;
+        if (!f?.arquivo || !f.previa || f.estado === "recusada") continue;
         const fd = new FormData();
         fd.append("category", d.tipo);
         fd.append("file", f.arquivo);
         await api.post(`/patients/${paciente.id}/documents/foto-cadastro`, fd, { timeout: 60_000 });
         guardadas.push(d.titulo);
+      }
+      for (const o of outras) {
+        const fd = new FormData();
+        fd.append("category", "other");
+        fd.append("file", o.arquivo);
+        await api.post(`/patients/${paciente.id}/documents/foto-cadastro`, fd, { timeout: 60_000 });
+        guardadas.push("Outro documento");
       }
     } catch (e) {
       setResultado({ ok: false, texto: `Não consegui guardar a foto: ${erroCelular(e)}. ${guardadas.length ? `Já guardada: ${guardadas.join(", ")}.` : "Nada foi guardado."}` });
@@ -168,8 +204,9 @@ export default function CelularFoto() {
       }
     }
     const n = Object.keys(dados).length;
-    setResultado({ ok: true, texto: `Pronto. ${guardadas.length ? `Foto guardada em Documentos (${guardadas.join(" e ")}). ` : ""}${n ? `${n} dado(s) do cadastro atualizado(s).` : "Cadastro sem mudança."}` });
+    setResultado({ ok: true, texto: `Pronto. ${guardadas.length ? `Foto guardada em Documentos (${guardadas.length > 2 ? `${guardadas.length} fotos` : guardadas.join(" e ")}). ` : ""}${n ? `${n} dado(s) do cadastro atualizado(s).` : "Cadastro sem mudança."}` });
     setFotos({});
+    setOutras((o) => { for (const x of o) URL.revokeObjectURL(x.previa); return []; });
     setEnviando(false);
   };
 
@@ -177,15 +214,18 @@ export default function CelularFoto() {
 
   return (
     <div className="max-w-xl mx-auto px-4 pb-24 flex flex-col gap-4">
-      <CabecalhoCelular tela="Foto de documento" />
+      <CabecalhoCelular tela="Foto de documento" voltar={veioDaFicha && paciente ? `/celular/paciente?pid=${paciente.id}` : undefined} />
 
       {!paciente ? (
-        <EscolherPaciente onEscolher={(p) => selecionarPaciente(p)} erro={erroPaciente} />
+        <EscolherPaciente erro={erroPaciente} onEscolher={(p) => selecionarPaciente(p)}
+          podeAutomatico={!jaTentouAuto.current}
+          onAutomatico={(p) => { jaTentouAuto.current = true; selecionarPaciente(p); setAutomatico(true); }}
+          onSemAutomatico={() => { jaTentouAuto.current = true; }} />
       ) : (
         <>
           <section className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-4 flex items-center justify-between gap-3">
             <div>
-              <p className="text-xs text-slate-500">Paciente</p>
+              <p className="text-xs text-slate-500">{automatico ? "Em atendimento agora (escolhido sozinho)" : "Paciente"}</p>
               <p className="text-lg font-bold" data-testid="paciente">{paciente.name}</p>
             </div>
             <button type="button" onClick={() => selecionarPaciente(null)}
@@ -197,6 +237,7 @@ export default function CelularFoto() {
               <BotaoFoto key={d.tipo} titulo={d.titulo} emoji={d.emoji} foto={fotos[d.tipo]}
                 desativado={enviando} onArquivo={(a) => tirarFoto(d.tipo, a)} />
             ))}
+            <BotaoOutros outras={outras} desativado={enviando} onArquivo={tirarOutra} onTirar={tirarOutraDaLista} />
           </div>
 
           {temFoto && !lendo && algumaLida && linhas.length > 0 && (
@@ -329,14 +370,61 @@ function LinhaConfira({ l, onEscolher, onCorrigir }: { l: Linha; onEscolher: (ch
   );
 }
 
-function EscolherPaciente({ onEscolher, erro }: { onEscolher: (p: Paciente) => void; erro: string }) {
+function BotaoOutros({ outras, desativado, onArquivo, onTirar }: {
+  outras: Outra[]; desativado: boolean; onArquivo: (a: File | undefined) => void; onTirar: (i: number) => void;
+}) {
+  const ref = useRef<HTMLInputElement>(null);
+  return (
+    <div className="rounded-2xl border-2 border-sky-200 dark:border-sky-900 bg-white dark:bg-slate-900 overflow-hidden">
+      <button type="button" disabled={desativado} onClick={() => ref.current?.click()} data-testid="outros"
+        className="w-full flex items-center gap-4 p-5 text-left active:bg-sky-50 dark:active:bg-slate-800 disabled:opacity-50">
+        <span className="text-4xl" aria-hidden>📄</span>
+        <span className="flex-1">
+          <span className="block text-lg font-bold">Outros documentos</span>
+          <span className="block text-sm text-slate-500">
+            {outras.length ? `${outras.length} foto(s). Toque para tirar mais` : "Exame, laudo, receita ou qualquer imagem"}
+          </span>
+        </span>
+      </button>
+      {outras.length > 0 && (
+        <div className="flex gap-2 overflow-x-auto px-5 pb-4">
+          {outras.map((o, i) => (
+            <button key={o.previa} type="button" onClick={() => onTirar(i)} aria-label="Tirar esta foto" className="relative shrink-0">
+              <img src={o.previa} alt="" className="w-16 h-16 object-cover rounded-lg" />
+              <span className="absolute -top-1 -right-1 bg-slate-800 text-white rounded-full w-5 h-5 text-xs leading-5 text-center">×</span>
+            </button>
+          ))}
+        </div>
+      )}
+      <input ref={ref} type="file" accept="image/*" capture="environment" className="hidden"
+        onChange={(e) => { onArquivo(e.target.files?.[0]); e.target.value = ""; }} />
+    </div>
+  );
+}
+
+function EscolherPaciente({ onEscolher, erro, podeAutomatico, onAutomatico, onSemAutomatico }: {
+  onEscolher: (p: Paciente) => void; erro: string;
+  /** 22/11 (Valth): ao abrir, quem está EM ATENDIMENTO (um só) já vem escolhido; "Trocar" volta à lista. */
+  podeAutomatico: boolean; onAutomatico: (p: Paciente) => void; onSemAutomatico: () => void;
+}) {
   const [busca, setBusca] = useState("");
   const [achados, setAchados] = useState<Paciente[]>([]);
   const [sala, setSala] = useState<{ patient_id: number; patient_name: string; status: string }[]>([]);
   const [buscando, setBuscando] = useState(false);
 
   useEffect(() => {
-    waitingRoomApi.today().then((l: any[]) => setSala((l || []).filter((e) => e.status !== "absent"))).catch(() => setSala([]));
+    let vivo = true;
+    waitingRoomApi.today().then((l: any[]) => {
+      if (!vivo) return;
+      const lista = (l || []).filter((e) => e.status !== "absent");
+      setSala(lista);
+      const atendendo = lista.filter((e) => e.status === "attending");
+      if (podeAutomatico && atendendo.length === 1) {
+        patientsApi.get(atendendo[0].patient_id).then((p: Paciente) => { if (vivo) onAutomatico(p); }).catch(() => onSemAutomatico());
+      } else onSemAutomatico();
+    }).catch(() => { if (vivo) { setSala([]); onSemAutomatico(); } });
+    return () => { vivo = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -374,7 +462,7 @@ function EscolherPaciente({ onEscolher, erro }: { onEscolher: (p: Paciente) => v
           {sala.map((e, i) => (
             <button key={`${e.patient_id}-${i}`} type="button" onClick={() => abrir(e.patient_id)}
               className="text-left rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-4 py-3 font-bold">
-              {e.patient_name}
+              {e.patient_name}{e.status === "attending" && <span className="ml-2 text-xs font-semibold text-green-700">● em atendimento</span>}
             </button>
           ))}
         </>

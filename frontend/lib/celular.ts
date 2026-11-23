@@ -30,6 +30,7 @@ export function useLoginCelular(): { usuario: UsuarioCelular | null; medico: boo
       window.location.replace("/login");
       return;
     }
+    try { sessionStorage.setItem("ortho_app_celular", "1"); } catch {}   // a tela de gravar mostra "‹ Início"
     setUsuario(u);
     setPronto(true);
   }, []);

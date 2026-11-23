@@ -27,6 +27,16 @@ export default function EscribaGravarPage() {
   const [logado, setLogado] = useState<boolean | null>(null);
   const [ocupado, setOcupado] = useState(false);
   const barra = useRef<HTMLDivElement>(null);
+  // 22/11 (Valth): aberta pelo app do celular (tela cheia, sem barra do navegador), precisa de "‹ Início".
+  const [doApp, setDoApp] = useState(false);
+  useEffect(() => {
+    let v = false;
+    try {
+      v = window.matchMedia("(display-mode: standalone)").matches || (navigator as any).standalone === true
+        || sessionStorage.getItem("ortho_app_celular") === "1";
+    } catch {}
+    setDoApp(v);
+  }, []);
 
   useEffect(() => {
     const tem = !!localStorage.getItem("ortho_token");
@@ -86,8 +96,15 @@ export default function EscribaGravarPage() {
 
   return (
     <div className="min-h-screen flex flex-col gap-4 p-5 bg-violet-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 max-w-xl mx-auto">
-      <header className="flex items-center justify-between">
-        <h1 className="text-lg font-bold text-violet-900 dark:text-violet-200">🎙️ Gravar consulta</h1>
+      <header className="flex items-center justify-between gap-2">
+        {doApp && (
+          <a href="/celular" data-testid="voltar-inicio"
+            onClick={(e) => {
+              if ((gravandoAqui || pausadoAqui) && !window.confirm("Sair desta tela interrompe a gravação. Sair mesmo?")) e.preventDefault();
+            }}
+            className="shrink-0 rounded-full bg-violet-600 text-white px-3 py-1.5 text-sm font-semibold">‹ Início</a>
+        )}
+        <h1 className="flex-1 text-lg font-bold text-violet-900 dark:text-violet-200">🎙️ Gravar consulta</h1>
         <span className={`text-xs font-bold px-2.5 py-1 rounded-full text-white ${corEstado}`} data-testid="estado">
           {gravandoAqui ? "● Gravando" : pausadoAqui ? "⏸ Pausado" : g.preGravando ? "● Pré-gravando" : "Parado"}
         </span>

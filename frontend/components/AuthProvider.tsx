@@ -83,7 +83,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(USER_KEY, JSON.stringify(u));
     api.defaults.headers.common["Authorization"] = `Bearer ${access_token}`;
     setUser(u);
-    router.push("/");
+    // 22/11: quem veio do app do celular (ou da tela de gravar) volta para lá; a página de login faz o
+    // mesmo e apaga a marca. Aqui só lê, para as duas navegações irem ao MESMO lugar (antes esta ia ao
+    // "/" e disputava com a do login: o médico caía no site do computador).
+    let destino = "/";
+    try {
+      const v = sessionStorage.getItem("ortho_voltar_para") || "";
+      if (v === "/escriba-gravar" || /^\/celular(\/[a-z-]+)?(\?pid=\d+)?$/.test(v)) destino = v;
+    } catch {}
+    router.push(destino);
   }, [router]);
 
   const logout = useCallback(() => {

@@ -98,8 +98,18 @@ def test_carteirinha_e_png_aceitos_e_lado_maior_2000():
 
 def test_outra_categoria_422():
     c = _cliente(); pid = _paciente()
-    for cat in ("exam", "other", "photo"):
+    for cat in ("exam", "photo", "consent"):
         assert _enviar(c, pid, _jpeg_com_exif(), cat=cat).status_code == 422
+
+
+def test_outros_documentos_entra_na_pasta_protegida():
+    # 22/11 (Valth): botao "Outros documentos" do app; secretaria tambem envia.
+    c = _cliente(); pid = _paciente()
+    r = _enviar(c, pid, _jpeg_com_exif(), cat="other")
+    assert r.status_code == 201
+    j = r.json()
+    assert j["category"] == "other" and j["title"] == "Outro documento (celular)"
+    assert j["file_url"].startswith("/uploads/cadastro_privado/") and "s=" in j["file_url"]
 
 
 def test_paciente_de_outra_conta_404():

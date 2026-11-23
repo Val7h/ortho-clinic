@@ -362,18 +362,21 @@ Regras obrigatórias:
 - cpf: somente os 11 dígitos. Só leia o CPF se ele tiver o rótulo "CPF".
 - birthdate: no formato AAAA-MM-DD.
 - Na dúvida, marque "duvidoso": true.
+- "e_documento" é true ou false (sem objeto). Comprovante, nota fiscal, recibo, receita, exame, tela de celular, pessoa ou objeto = false; aí todos os outros campos null.
 """
 
 LER_DOC_PROMPTS = {
     "identity": (
         "Você recebe a foto de um documento pessoal brasileiro (RG, CNH ou CPF) de um paciente.\n"
-        "Chaves do JSON: name, birthdate, cpf, rg.\n"
+        "Chaves do JSON: e_documento, name, birthdate, cpf, rg.\n"
+        "- e_documento: true SOMENTE se a foto for mesmo um RG, CNH, CPF ou outro documento de identidade.\n"
         "- rg: o número do RG como está escrito (com o órgão emissor, se houver).\n"
         + _LER_DOC_REGRAS
     ),
     "insurance_card": (
         "Você recebe a foto da carteirinha do plano de saúde de um paciente.\n"
-        "Chaves do JSON: insurance, insurance_plan, insurance_number, name, birthdate, cpf.\n"
+        "Chaves do JSON: e_documento, insurance, insurance_plan, insurance_number, name, birthdate, cpf.\n"
+        "- e_documento: true SOMENTE se a foto for mesmo uma carteirinha de plano de saúde.\n"
         "- insurance: nome da operadora (ex.: Unimed, Bradesco Saúde, Hapvida).\n"
         "- insurance_plan: nome do plano ou produto impresso na carteirinha.\n"
         "- insurance_number: número da carteirinha (do beneficiário), somente dígitos.\n"
@@ -521,6 +524,11 @@ async def _ler_documento(file: UploadFile, tipo: str) -> dict:
     if not isinstance(bruto, dict):
         return vazio
 
+    # 22/11 (Valth testou com a foto de um comprovante): foto que não é o documento pedido não lê nada
+    # e o app não guarda essa foto na pasta.
+    if bruto.get("e_documento") is False:
+        qual = "um documento pessoal (RG, CNH ou CPF)" if tipo == "identity" else "uma carteirinha de plano de saúde"
+        return {**vazio, "nao_e_documento": True, "aviso": f"Esta foto não parece {qual}."}
     campos, motivos = {}, {}
     for k in LER_DOC_CAMPOS[tipo]:
         valor, motivo = _conferir_campo(tipo, k, bruto.get(k))

@@ -2,7 +2,11 @@
 // nome da tela e o botão de voltar ao início do app. Igual em todas as telas.
 // Azul #12294E até atrás da barra do iPhone (statusBarStyle black-translucent).
 
-export function CabecalhoCelular({ tela, inicio = false, direita }: { tela?: string; inicio?: boolean; direita?: React.ReactNode }) {
+export function CabecalhoCelular({ tela, inicio = false, direita, voltar }: {
+  tela?: string; inicio?: boolean; direita?: React.ReactNode;
+  /** 22/11: tela aberta a partir de outra (ex.: foto pela ficha) ganha "‹ Voltar" para ela. */
+  voltar?: string;
+}) {
   return (
     <header
       className="sticky top-0 z-30 -mx-4 text-white shadow-md"
@@ -20,6 +24,11 @@ export function CabecalhoCelular({ tela, inicio = false, direita }: { tela?: str
           </span>
         </a>
         {direita}
+        {voltar && (
+          <a href={voltar} className="shrink-0 rounded-full bg-white/15 px-3 py-1.5 text-sm font-semibold active:bg-white/25" data-testid="voltar">
+            ‹ Voltar
+          </a>
+        )}
         {!inicio && (
           <a href="/celular" className="shrink-0 rounded-full bg-white/15 px-3 py-1.5 text-sm font-semibold active:bg-white/25" data-testid="voltar-inicio">
             ‹ Início
