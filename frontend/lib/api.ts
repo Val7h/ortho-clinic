@@ -106,6 +106,14 @@ api.interceptors.response.use(
       if (!isPublicPath(window.location.pathname)) {
         localStorage.removeItem("ortho_token");
         localStorage.removeItem("ortho_user");
+        // 22/11: login vencido dentro do app do celular (ou da tela de gravar) volta para lá depois de entrar,
+        // e não para o site do computador. Só caminho interno conhecido (o /login confere de novo).
+        try {
+          const aqui = window.location.pathname.replace(/\/$/, "") + window.location.search;
+          if (/^\/celular(\/[a-z-]+)?(\?pid=\d+)?$/.test(aqui) || aqui === "/escriba-gravar") {
+            sessionStorage.setItem("ortho_voltar_para", aqui);
+          }
+        } catch {}
         window.location.href = "/login";
       }
     }
