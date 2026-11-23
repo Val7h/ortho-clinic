@@ -11,10 +11,13 @@ Regras:
 - So um aparelho grava por vez: quem aperta Gravar por ultimo assume; o outro para.
 - O aviso CFM e registrado uma vez por paciente, e sem ele nao se grava.
 - O audio fica aqui so ate o PC confirmar; a confirmacao apaga o audio.
+- Pericia nunca grava aqui (E1, 23/11/2026): audio de pericia e so da Escriba Pericial e nao sai da maquina.
 """
 import hmac
 import json
 import os
+import re
+import unicodedata
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
@@ -26,6 +29,7 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from deps import require_doctor
+from models.clinic import Appointment
 from models.escriba import EscribaConsentimento, EscribaPedaco, EscribaPedido, EscribaSessao, EscribaSugestao
 from models.organization import User
 from models.patient import Patient
@@ -74,6 +78,43 @@ def _entrada_da_org(db: Session, entry_id: int, u: User):
     return e, p
 
 
+# ── E1 (23/11/2026): trava da pericia ──
+# Se o motivo ou a observacao da entrada da sala de espera, ou do agendamento do dia do mesmo
+# paciente (de onde vem o motivo do bot/secretaria), tiver a PALAVRA "pericia" (sem diferenciar
+# maiuscula nem acento), a Escriba da clinica nao abre sessao nem recebe pedaco.
+# "Tipo": a entrada nao guarda tipo; o procedure_type do caixa e uma lista fechada sem pericia.
+PERICIA_MSG = "Perícia: Escriba da clínica desligada"
+_RE_PERICIA = re.compile(r"(?<![a-z0-9])pericias?(?![a-z0-9])")
+
+
+def _sem_acento(t: str) -> str:
+    return "".join(c for c in unicodedata.normalize("NFKD", t) if not unicodedata.combining(c)).lower()
+
+
+def eh_pericia(*textos: Optional[str]) -> bool:
+    return any(t and _RE_PERICIA.search(_sem_acento(str(t))) for t in textos)
+
+
+def entrada_e_pericia(db: Session, e: Optional[WaitingRoomEntry]) -> bool:
+    if e is None:
+        return False
+    if eh_pericia(e.reason, e.notes):
+        return True
+    ags = (db.query(Appointment.reason, Appointment.notes)
+           .filter(Appointment.patient_id == e.patient_id, Appointment.date == e.entry_date,
+                   Appointment.status.notin_(["cancelled", "blocked"])).all())
+    return any(eh_pericia(a.reason, a.notes) for a in ags)
+
+
+def _barrar_pericia(db: Session, e: Optional[WaitingRoomEntry]) -> None:
+    if entrada_e_pericia(db, e):
+        raise HTTPException(409, PERICIA_MSG)
+
+
+def _sessao_e_pericia(db: Session, s: EscribaSessao) -> bool:
+    return entrada_e_pericia(db, db.query(WaitingRoomEntry).filter(WaitingRoomEntry.id == s.entry_id).first())
+
+
 def _sessao_da_org(db: Session, sid: int, u: User) -> EscribaSessao:
     s = db.query(EscribaSessao).filter(EscribaSessao.id == sid).first()
     if not s or not _mesma_org(u, s.organization_id):
@@ -99,6 +140,7 @@ def _sessao_out(db: Session, s: EscribaSessao, aparelho: Optional[str] = None, e
         "ativo": bool(aparelho and aparelho == s.aparelho_ativo),
         "max_seq": _max_seq(db, s.id, aparelho),
         "entry_status": entry_status,
+        "pericia": _sessao_e_pericia(db, s),
     }
 
 
@@ -143,7 +185,8 @@ def atendimento_atual(db: Session = Depends(get_db), u: User = Depends(require_d
     c = db.query(EscribaConsentimento).filter(EscribaConsentimento.patient_id == p.id,
                                               EscribaConsentimento.organization_id == (p.organization_id or 1)).first()
     return {"entry": {"id": e.id, "patient_id": p.id, "patient_name": p.name, "status": e.status, "clinic_id": e.clinic_id},
-            "sessao": _sessao_out(db, s, None, e.status) if s else None, "consentimento": bool(c)}
+            "sessao": _sessao_out(db, s, None, e.status) if s else None, "consentimento": bool(c),
+            "pericia": entrada_e_pericia(db, e)}
 
 
 @router.get("/consentimento/{patient_id}")
@@ -199,6 +242,7 @@ def ligar_sessao(body: SessaoIn, db: Session = Depends(get_db), u: User = Depend
     e, p = _entrada_da_org(db, body.entry_id, u)
     if e.status != "attending":
         raise HTTPException(409, "A consulta não está em andamento. Inicie ou continue a consulta antes de gravar.")
+    _barrar_pericia(db, e)  # antes do aviso CFM: pericia nao pede aviso, so recusa
     org = p.organization_id or 1
     if not db.query(EscribaConsentimento).filter(EscribaConsentimento.patient_id == p.id,
                                                  EscribaConsentimento.organization_id == org).first():
@@ -243,6 +287,10 @@ def sinal(sid: int, body: SinalIn, db: Session = Depends(get_db), u: User = Depe
     s = _sessao_da_org(db, sid, u)
     status = _status_da_entrada(db, s.entry_id)
     mudou = _seguir_status(s, status)
+    if s.estado != "parada" and _sessao_e_pericia(db, s):  # virou pericia no meio: so PARA
+        s.estado = "parada"
+        s.finalizada_em = _agora()
+        mudou = True
     if body.aparelho == s.aparelho_ativo and body.gravando and s.estado == "gravando":
         s.ultimo_sinal = _agora()
         mudou = True
@@ -282,6 +330,8 @@ async def receber_pedaco(sid: int, request: Request, aparelho: str = Query(...),
     """Um pedaco de audio. Mandar o mesmo (sessao, aparelho, seq) de novo devolve o mesmo id, sem duplicar.
     Aceita pedaco atrasado (gravado offline) mesmo com a sessao parada."""
     s = _sessao_da_org(db, sid, u)
+    if _sessao_e_pericia(db, s):
+        raise HTTPException(409, PERICIA_MSG)
     ext = ext.lower().strip(".")
     if ext not in EXTENSOES:
         raise HTTPException(422, "Formato de áudio não aceito")
@@ -340,6 +390,7 @@ def ponte_pendentes(apos: int = 0, horas: int = 14, limite: int = 100, db: Sessi
         conv = " ".join(x for x in (p.insurance, p.insurance_plan) if x) or None
         sessoes.append({"id": s.id, "entry_id": s.entry_id, "patient_id": p.id, "nome": p.name, "nascimento": nasc,
                         "convenio": conv, "clinic_id": e.clinic_id if e else None, "estado": s.estado,
+                        "pericia": entrada_e_pericia(db, e),
                         "criada_em": _iso(s.criada_em), "finalizada_em": _iso(s.finalizada_em)})
     ped = (db.query(EscribaPedaco.id, EscribaPedaco.sessao_id, EscribaPedaco.aparelho, EscribaPedaco.seq,
                     EscribaPedaco.ext, EscribaPedaco.t_ms, EscribaPedaco.criado_em)

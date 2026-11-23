@@ -70,10 +70,13 @@ export default function EscribaGravarPage() {
   const pausadoAqui = g.estado === "pausado" && entry && g.entryId === entry.id;
   const outroAparelho = !!(atual?.sessao && atual.sessao.estado === "gravando" && atual.sessao.sinal_vivo
     && atual.sessao.aparelho_ativo !== escriba.aparelhoId() && !gravandoAqui);
-  const precisaAviso = !!entry && !atual?.consentimento;
+  // E1 (23/11/2026): perícia não grava na Escriba da clínica; o servidor diz (atendimento-atual.pericia).
+  const pericia = !!atual?.pericia || !!atual?.sessao?.pericia;
+  const precisaAviso = !!entry && !atual?.consentimento && !pericia;
+  useEffect(() => { if (pericia) escriba.bloquearPericia(entry?.id ?? null); }, [pericia, entry?.id]);
 
   const gravar = async () => {
-    if (!entry || ocupado) return;
+    if (!entry || ocupado || pericia) return;
     setOcupado(true);
     try {
       if (precisaAviso) await escriba.aviseiEGravar(entry.id, entry.patient_id);
@@ -125,6 +128,12 @@ export default function EscribaGravarPage() {
         )}
       </section>
 
+      {entry && pericia && (
+        <p className="rounded-xl border-2 border-orange-400 bg-white dark:bg-slate-900 p-4 text-base font-bold text-orange-700 dark:text-orange-300" data-testid="pericia">
+          {escriba.PERICIA_MSG}
+        </p>
+      )}
+
       {outroAparelho && (
         <p className="text-sm text-violet-800 dark:text-violet-300">
           Esta consulta já está gravando em outro aparelho. Se tocar em Gravar aqui, este aparelho assume e o outro para.
@@ -145,7 +154,7 @@ export default function EscribaGravarPage() {
         <button
           type="button"
           onClick={gravar}
-          disabled={!entry || ocupado}
+          disabled={!entry || ocupado || pericia}
           data-testid="gravar"
           className="w-full py-5 rounded-2xl bg-red-600 text-white text-xl font-bold disabled:opacity-40 active:scale-[.99]"
         >

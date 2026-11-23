@@ -35,6 +35,7 @@ export interface WaitingRoomEntry {
   patient_insurance: string | null;
   clinic_id: number | null;
   reason: string | null;
+  notes?: string | null;
   position: number;
   arrived_at: string;
   called_at?: string | null;
@@ -2101,7 +2102,11 @@ const TEXTO_AVISO_CFM =
   "Uma inteligência artificial ajuda a organizar o texto, e tudo é conferido pelo médico. " +
   "Quem não quiser ser gravado pode pedir para parar a qualquer momento.";
 
+// E1 (23/11/2026): perícia não grava na Escriba da clínica (motivo ou observação com a palavra).
+const ehPericiaEntrada = (entry: WaitingRoomEntry) => escriba.ehPericia(entry.reason, entry.notes);
+
 async function escribaLigarComAviso(entry: WaitingRoomEntry, perguntarNaHora: boolean) {
+  if (ehPericiaEntrada(entry)) { await escriba.bloquearPericia(entry.id); return; }
   try {
     const c = await escriba.escribaGravarApi.consentimento(entry.patient_id);
     if (!c.tem) {
@@ -2132,6 +2137,7 @@ export function escribaAposStatus(entry: WaitingRoomEntry, novo: QueueStatus) {
     if (g.avisoPendente === entry.id) escriba.cancelarAviso();
     return;
   }
+  if (novo === "attending" && ehPericiaEntrada(entry)) { escriba.bloquearPericia(entry.id); return; }
   if (novo === "attending" && escriba.autoLigarAtivo()) {
     (async () => {
       // Se o celular/iPad já grava esta consulta, o PC não liga o microfone.
@@ -2167,6 +2173,9 @@ function BotaoGravarEscriba({ entry }: { entry: WaitingRoomEntry }) {
   const aqui = g.entryId === entry.id && g.estado === "gravando";
   if (entry.status !== "attending" && !aqui) return null;
   const cls = "text-[10.5px] px-1.5 py-0.5 rounded border font-semibold";
+  if (!aqui && ehPericiaEntrada(entry)) {
+    return <span className={`${cls} border-orange-300 text-orange-700 dark:text-orange-300`} data-testid="escriba-pericia">{escriba.PERICIA_MSG}</span>;
+  }
   return aqui ? (
     <button type="button" onClick={() => escriba.parar()} className={`${cls} border-red-300 bg-red-600 text-white hover:bg-red-700`} title="Parar a gravação desta consulta">
       ■ Parar
@@ -2215,7 +2224,9 @@ function EstadoGravacaoEscriba({ entry }: { entry: WaitingRoomEntry }) {
   const pedeAviso = g.avisoPendente === entry.id;
   let linha = "";
   let cor = "text-violet-500 dark:text-violet-400";
-  if (aqui && g.estado === "gravando") { linha = `● Gravando neste aparelho${g.pendentes > 1 ? ` · ${g.pendentes} pendente(s)` : ""}`; cor = "text-red-600 dark:text-red-400"; }
+  const pericia = ehPericiaEntrada(entry) || !!s?.pericia;
+  if (pericia && !(aqui && g.estado === "gravando")) { linha = escriba.PERICIA_MSG; cor = "text-orange-700 dark:text-orange-300"; }
+  else if (aqui && g.estado === "gravando") { linha = `● Gravando neste aparelho${g.pendentes > 1 ? ` · ${g.pendentes} pendente(s)` : ""}`; cor = "text-red-600 dark:text-red-400"; }
   else if (remoto) { linha = `📱 Gravando ${nomeDoAparelho(s!.aparelho_tipo)}`; cor = "text-red-600 dark:text-red-400"; }
   else if (aqui && g.estado === "pausado") linha = "⏸ Gravação pausada";
   else if (aqui && g.msg && (g.cor === "r" || g.semMicrofone)) { linha = g.msg; cor = "text-orange-700 dark:text-orange-300"; }

@@ -48,6 +48,30 @@ export interface SessaoServidor {
   ativo: boolean;
   max_seq: number;
   entry_status: string | null;
+  pericia?: boolean;
+}
+
+// ── E1 (23/11/2026): trava da pericia ──
+// Audio de pericia e so da Escriba Pericial e nunca sai da maquina. Motivo/observacao com a
+// PALAVRA "pericia" (sem maiuscula nem acento): nao liga, apaga a pre-gravacao e avisa.
+// O servidor confere de novo (409) e e quem manda; esta conferencia so evita pedir aviso/microfone.
+export const PERICIA_MSG = "Perícia: Escriba da clínica desligada";
+export function ehPericia(...textos: (string | null | undefined)[]): boolean {
+  return textos.some((t) => !!t && /(^|[^a-z0-9])pericias?($|[^a-z0-9])/.test(
+    t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()));
+}
+const ehRecusaPericia = (e: any) => e?.response?.status === 409 && /per[ií]cia/i.test(String(e?.response?.data?.detail || ""));
+
+/** Pericia: para o que estiver gravando aqui, apaga a pre-gravacao e mostra o aviso. Nunca liga nada. */
+export async function bloquearPericia(entryId?: number | null) {
+  if (pre || E.preGravando) await descartarPre();
+  if (E.estado !== "parado" && (entryId == null || E.entryId === entryId)) {
+    const sid = E.sessaoId;
+    await pararLocal(PERICIA_MSG);
+    if (sid != null) escribaGravarApi.estado(sid, "parada").catch(() => {});
+  }
+  if (entryId != null && E.avisoPendente === entryId) muda({ avisoPendente: null });
+  luz("r", PERICIA_MSG);
 }
 
 const SEG_MS = 10_000;
@@ -126,7 +150,7 @@ export const lerEstado = () => E;
 export const escribaGravarApi = {
   atendimentoAtual: () => api.get("/escriba/atendimento-atual").then((r) => r.data as {
     entry: { id: number; patient_id: number; patient_name: string; status: string; clinic_id: number | null } | null;
-    sessao: SessaoServidor | null; consentimento: boolean;
+    sessao: SessaoServidor | null; consentimento: boolean; pericia?: boolean;
   }),
   consentimento: (patientId: number) =>
     api.get(`/escriba/consentimento/${patientId}`).then((r) => r.data as { tem: boolean; criado_em: string | null }),
@@ -244,7 +268,10 @@ export async function enviaFila(): Promise<void> {
         } catch (e: any) {
           const st = e?.response?.status;
           // 404 (sessao de outra conta ou apagada), 413 e 422: nunca vai entrar; nao trava a fila por isso.
-          if (!(st === 404 || st === 413 || st === 422)) break;
+          // 409 de pericia (E1): o audio nao pode sair daqui; apaga o pedaco e para a gravacao desta sessao.
+          const pericia = ehRecusaPericia(e);
+          if (pericia && E.sessaoId === it.sid && E.estado !== "parado") bloquearPericia(E.entryId);
+          if (!(st === 404 || st === 413 || st === 422 || pericia)) break;
         }
         if (it.mem) memoria = memoria.filter((x) => x !== it);
         else await apaga(it.k);
@@ -478,6 +505,7 @@ async function darSinal() {
 /** O que vem do servidor so pode pausar ou parar. */
 function seguirServidor(s: SessaoServidor | null) {
   if (!s || s.id !== E.sessaoId || E.estado === "parado") return;
+  if (s.pericia) { bloquearPericia(s.entry_id); return; }
   if (!s.ativo && s.estado === "gravando") {
     const onde = s.aparelho_tipo === "pc" ? "no PC" : s.aparelho_tipo === "ipad" ? "no iPad" : "no celular";
     pararLocal(`A gravação passou para outro aparelho (${onde}).`);
@@ -506,7 +534,7 @@ async function pausarLocal(msg: string) {
 
 async function pararLocal(msg: string, preGravar = false) {
   // pre-gravacao so como continuacao de uma gravacao que ESTE aparelho fazia (clique), e com "ligar sozinho"
-  const continua = preGravar && E.estado === "gravando" && autoLigarAtivo() && micVivo() && !(temJanela && ehIos() && document.hidden);
+  const continua = preGravar && msg !== PERICIA_MSG && E.estado === "gravando" && autoLigarAtivo() && micVivo() && !(temJanela && ehIos() && document.hidden);
   const corte = Date.now(); // tudo o que foi gravado antes daqui e do paciente que saiu
   paraTimers();
   const r = rec; rec = null;
@@ -645,6 +673,12 @@ export async function ligarPorClique(entryId: number, patientId: number): Promis
     return true;
   } catch (e: any) {
     const st = e?.response?.status;
+    if (ehRecusaPericia(e)) {
+      if (pre || E.preGravando) await descartarPre();
+      muda({ religando: false, avisoPendente: null });
+      luz("r", PERICIA_MSG);
+      return false;
+    }
     if (st === 409 && /aviso/i.test(e?.response?.data?.detail || "")) {
       muda({ avisoPendente: entryId, entryId, patientId });
       luz("c", "Falta o aviso de gravação deste paciente.");
@@ -709,6 +743,7 @@ async function autoRetoma() {
   if (document.hidden) { autoPendente = true; return; }
   try {
     const s = await escribaGravarApi.sinal(f.sessaoId, false);
+    if (s.pericia) { tiraFlag(); await bloquearPericia(); return; }
     if (s.estado !== "gravando" || !s.ativo || s.entry_status !== "attending") { tiraFlag(); return; }
     luz("a", "A página recarregou: religando a gravação…");
     await comeca(s);
