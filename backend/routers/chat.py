@@ -6,6 +6,7 @@ Sem acesso a prontuário, anamnese, exames ou histórico clínico do paciente.
 """
 import logging
 import os
+import json
 import re
 import unicodedata
 from collections import Counter
@@ -27,6 +28,7 @@ from models.organization import User
 from models.patient import Patient
 from models.queue import WaitingRoomEntry
 from models.chat_usage import ChatUsage
+from services.ia_limits import AnthropicBloqueado, permitir, registrar_falha, registrar_uso
 from services.whatsapp import send_whatsapp, format_phone, DOCTOR_NAME
 
 logger = logging.getLogger(__name__)
@@ -481,6 +483,11 @@ async def chat(
     }
 
     try:
+        try:
+            permitir("chat", f"chat:{getattr(current_user, 'id', 0)}",
+                     json.dumps(clean_messages, ensure_ascii=False))
+        except AnthropicBloqueado as e:
+            raise HTTPException(status_code=e.http, detail=str(e))
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.post(
                 ANTHROPIC_API_URL,
@@ -495,10 +502,12 @@ async def chat(
         # NUNCA logar str(exc) aqui: para erros de header inválido (ex.: chave
         # com espaço/quebra de linha), httpx/httpcore embutem o valor do
         # header — incluindo a própria API key — na mensagem da exceção.
+        registrar_falha("chat", type(exc).__name__)
         logger.error(f"Erro de rede ao chamar Anthropic API: {type(exc).__name__}")
         raise HTTPException(status_code=502, detail="Falha ao conectar com o serviço de IA")
 
     if resp.status_code != 200:
+        registrar_falha("chat", f"http {resp.status_code}")
         logger.error(f"Anthropic API retornou {resp.status_code}: {resp.text[:500]}")
         raise HTTPException(status_code=502, detail="Serviço de IA indisponível no momento")
 
@@ -510,6 +519,8 @@ async def chat(
     # resposta pro médico — o chat continua funcionando mesmo se o log falhar.
     try:
         usage = data.get("usage") or {}
+        registrar_uso("chat", ANTHROPIC_MODEL, int(usage.get("input_tokens") or 0),
+                      int(usage.get("output_tokens") or 0))
         db.add(ChatUsage(
             organization_id=current_user.organization_id,
             user_id=current_user.id,

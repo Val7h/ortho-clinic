@@ -2414,7 +2414,7 @@ function useDocsSozinhos(recarregar: () => void) {
 
 // 17/11 (Valth): "IA ajudando na hora". Chat curto do paciente no dia: a sessão de atendimento
 // escreve (consulta.assistente) e o médico pergunta na caixinha. Lê a cada 5 s.
-function AssistenteAoVivo({ patientId }: { patientId: number }) {
+function AssistenteAoVivo({ patientId, status }: { patientId: number; status: QueueStatus }) {
   const [msgs, setMsgs] = useState<AssistenteMsg[]>([]);
   const [texto, setTexto] = useState("");
   const [mandando, setMandando] = useState(false);
@@ -2424,19 +2424,28 @@ function AssistenteAoVivo({ patientId }: { patientId: number }) {
     let ultimoId: any = undefined;
     let tick = 0;
     setMsgs([]);
-    const ler = () => assistenteApi.listar(patientId).then((r) => {
-      if (!vivo) return;
-      setMsgs((v) => (v.length === r.length && v[v.length - 1]?.id === r[r.length - 1]?.id ? v : r));
-      // mensagem nova do assistente => recarrega as listas de documentos; senão, a cada ~20 s por garantia
-      const novoId = r[r.length - 1]?.id;
-      tick++;
-      if ((ultimoId !== undefined && novoId !== ultimoId) || tick % 4 === 0) pedirAtualizacaoDeDocs();
-      ultimoId = novoId;
-    }).catch(() => {});
+    const ler = () => {
+      if (typeof document !== "undefined" && document.hidden) return;
+      assistenteApi.listar(patientId).then((r) => {
+        if (!vivo) return;
+        setMsgs((v) => (v.length === r.length && v[v.length - 1]?.id === r[r.length - 1]?.id ? v : r));
+        const novoId = r[r.length - 1]?.id;
+        tick++;
+        if ((ultimoId !== undefined && novoId !== ultimoId) || tick % 4 === 0) pedirAtualizacaoDeDocs();
+        ultimoId = novoId;
+      }).catch(() => {});
+    };
     ler();
+    // Só fica em loop enquanto a consulta está em atendimento. Suspensa/finalizada: um único GET.
+    if (status !== "attending") {
+      return () => { vivo = false; };
+    }
     const t = setInterval(ler, 5000);
-    return () => { vivo = false; clearInterval(t); };
-  }, [patientId]);
+    const paraIdle = setTimeout(() => { vivo = false; clearInterval(t); }, 45 * 60 * 1000);
+    const onVis = () => { if (!document.hidden) ler(); };
+    document.addEventListener("visibilitychange", onVis);
+    return () => { vivo = false; clearInterval(t); clearTimeout(paraIdle); document.removeEventListener("visibilitychange", onVis); };
+  }, [patientId, status]);
   useEffect(() => { fimRef.current?.scrollIntoView({ block: "end" }); }, [msgs.length]);
   const mandar = async () => {
     const t = texto.trim();
@@ -2497,7 +2506,7 @@ function ColunaDireitaEscriba({ entry, onAbrirSugestao }: { entry: WaitingRoomEn
       </div>
       <EstadoGravacaoEscriba entry={entry} />
       {/* 17/11 02h45 (Valth): o resumo do Escriba foi para a coluna do meio, abaixo da anamnese. O assistente ganha a altura. */}
-      <AssistenteAoVivo patientId={entry.patient_id} />
+      <AssistenteAoVivo patientId={entry.patient_id} status={entry.status} />
       <BotoesEscriba entry={entry} onAbrir={onAbrirSugestao} />
     </aside>
   );

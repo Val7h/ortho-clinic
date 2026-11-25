@@ -5,9 +5,11 @@ from sqlalchemy.exc import IntegrityError
 from typing import List, Optional
 import os, uuid, re, unicodedata, base64, json, logging
 import httpx
+import json
 from services.storage import upload_file
 from database import get_db
 from models.patient import Patient
+from services.ia_limits import AnthropicBloqueado, permitir, registrar_falha, registrar_uso
 from services.telefone_br import (
     normalizar as normalizar_telefone,
     validar as validar_telefone,
@@ -491,6 +493,14 @@ async def _ler_documento(file: UploadFile, tipo: str) -> dict:
                 ],
             }],
         }
+        try:
+            permitir("ler_foto", f"foto:{getattr(current_user, 'id', 0)}", "foto")
+        except AnthropicBloqueado as e:
+            raise HTTPException(e.http, str(e))
+        try:
+            permitir("ler_foto", f"foto:{getattr(current_user, 'id', 0)}", "foto2")
+        except AnthropicBloqueado as e:
+            raise HTTPException(e.http, str(e))
         async with httpx.AsyncClient(timeout=60.0) as client:
             resp = await client.post(
                 "https://api.anthropic.com/v1/messages",
