@@ -21,6 +21,7 @@ import { serverNow } from "@/lib/servertime";
 import { juntarAnamnese, folhaDepoisDaJuncao } from "@/lib/anamneseJuncao";
 import * as escriba from "@/lib/escribaGravador";
 import { anamnesisApi, api, patientsApi, consultationsApi, prescriptionsApi, prescriptionTemplatesApi, referralTemplatesApi, examsApi, evolutionApi, clinicApi, chatApi, reportsApi, leafletsApi, waitingRoomApi, remindersApi, medicamentosApi, printJobsApi, msgErro, escribaApi, EscribaResumo, escribaSugestoesApi, EscribaGerar, EscribaGerarItem, assistenteApi } from "@/lib/api";
+import { baixarGuiaComVaga, baixarPaginasDaGuia } from "@/lib/paginasPdf";
 import type { EscribaSugestao, EscribaSugestoes, EscribaSugTipo, AssistenteMsg } from "@/lib/api";
 import { formatDate, calcAge, hojeISO } from "@/lib/utils";
 
@@ -8665,6 +8666,7 @@ function PacoteDoDia({ patientId, patient, clinic, entryId, onClose }: { patient
     if (fase !== "lista") return;
     let vivo = true;
     let primeira = true;
+    const sinal = { cancelado: false };
     const carregar = () => {
     const silencioso = !primeira;
     primeira = false;
@@ -8687,15 +8689,17 @@ function PacoteDoDia({ patientId, patient, clinic, entryId, onClose }: { patient
       for (const g of lista) {
         if (g.tipo !== "guia") continue;
         if (silencioso && paginasRef.current[g.docId] !== undefined) continue;
-        api.get(`/patients/${patientId}/documents/${g.docId}/paginas`)
-          .then((r) => { if (vivo) setPaginas((p) => ({ ...p, [g.docId]: { imgs: r.data.paginas || [], deitada: (r.data.largura_mm || 0) > (r.data.altura_mm || 0) } })); })
-          .catch(() => { if (vivo) setPaginas((p) => ({ ...p, [g.docId]: { imgs: [], deitada: false } })); });
+        const docId = g.docId;
+        // No máximo 2 guias ao mesmo tempo; cada uma pede lotes de 5 páginas.
+        baixarGuiaComVaga(() => baixarPaginasDaGuia(patientId, docId, sinal))
+          .then((r) => { if (vivo && r) setPaginas((p) => ({ ...p, [docId]: r })); })
+          .catch(() => { if (vivo) setPaginas((p) => ({ ...p, [docId]: { imgs: [], deitada: false } })); });
       }
     });
     };
     carregar();
     recarregarPacoteRef.current = carregar;
-    return () => { vivo = false; recarregarPacoteRef.current = () => {}; };
+    return () => { vivo = false; sinal.cancelado = true; recarregarPacoteRef.current = () => {}; };
   }, [patientId, hoje, fase]);
 
   const escolhidos = (itens || []).filter((i) => selecionados.has(i.id));

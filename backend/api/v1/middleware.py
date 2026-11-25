@@ -12,6 +12,10 @@ Rate-limit fallback:
   When Redis is unavailable we fall back to an in-process sliding window using
   a collections.deque so the API keeps working without a hard dependency on Redis.
 
+These are pure ASGI middleware. They used to extend BaseHTTPMiddleware, which
+buffers the entire body and re-sends it — that both inflated RAM on the page
+renders and raised `Response content longer than Content-Length`.
+
 Usage:
     from api.v1.middleware import attach_public_api_middleware
     attach_public_api_middleware(app)
@@ -24,11 +28,13 @@ import os
 import time
 import uuid
 from collections import defaultdict, deque
-from typing import Callable, Deque, Dict
+from typing import Deque, Dict
 
-from fastapi import FastAPI, Request, Response
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.types import ASGIApp
+from fastapi import FastAPI, Request
+from starlette.datastructures import MutableHeaders
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
+
+from middleware.asgi_util import client_host, header
 
 logger = logging.getLogger("orthoclinic.api.v1")
 
@@ -65,7 +71,7 @@ def _get_redis():
 # 1. Request ID Middleware
 # ---------------------------------------------------------------------------
 
-class RequestIDMiddleware(BaseHTTPMiddleware):
+class RequestIDMiddleware:
     """
     Attach a unique request ID to every request.
 
@@ -74,41 +80,62 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
     - The ID is set on request.state.request_id and echoed in the response header.
     """
 
-    async def dispatch(self, request: Request, call_next: Callable) -> Response:
-        incoming = request.headers.get("X-Request-ID", "").strip()
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        incoming = header(scope, b"x-request-id").strip()
         # Accept caller-supplied ID if it looks safe (no injection risk)
         if incoming and len(incoming) <= 64 and incoming.replace("-", "").isalnum():
             request_id = incoming
         else:
             request_id = f"req_{uuid.uuid4().hex[:16]}"
 
-        request.state.request_id = request_id
+        scope.setdefault("state", {})["request_id"] = request_id
 
-        response = await call_next(request)
-        response.headers["X-Request-ID"] = request_id
-        return response
+        async def send_com_id(message: Message) -> None:
+            if message["type"] == "http.response.start":
+                MutableHeaders(scope=message)["X-Request-ID"] = request_id
+            await send(message)
+
+        await self.app(scope, receive, send_com_id)
 
 
 # ---------------------------------------------------------------------------
 # 2. Response Time Middleware
 # ---------------------------------------------------------------------------
 
-class ResponseTimeMiddleware(BaseHTTPMiddleware):
+class ResponseTimeMiddleware:
     """Append X-Response-Time: <N>ms to every response."""
 
-    async def dispatch(self, request: Request, call_next: Callable) -> Response:
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
         t0 = time.perf_counter()
-        response = await call_next(request)
-        elapsed_ms = int((time.perf_counter() - t0) * 1000)
-        response.headers["X-Response-Time"] = f"{elapsed_ms}ms"
-        return response
+
+        async def send_com_tempo(message: Message) -> None:
+            if message["type"] == "http.response.start":
+                elapsed_ms = int((time.perf_counter() - t0) * 1000)
+                MutableHeaders(scope=message)["X-Response-Time"] = f"{elapsed_ms}ms"
+            await send(message)
+
+        await self.app(scope, receive, send_com_tempo)
 
 
 # ---------------------------------------------------------------------------
 # 3. Rate Limit Middleware
 # ---------------------------------------------------------------------------
 
-class RateLimitMiddleware(BaseHTTPMiddleware):
+class RateLimitMiddleware:
     """
     Sliding-window rate limiter scoped to /api/v1/*.
 
@@ -127,21 +154,28 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     """
 
     def __init__(self, app: ASGIApp) -> None:
-        super().__init__(app)
+        self.app = app
         self._redis = _get_redis()
 
-    async def dispatch(self, request: Request, call_next: Callable) -> Response:
-        # Only rate-limit the public API
-        if not request.url.path.startswith("/api/v1/"):
-            return await call_next(request)
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
 
+        path = scope.get("path") or ""
+        # Only rate-limit the public API
+        if not path.startswith("/api/v1/"):
+            await self.app(scope, receive, send)
+            return
+
+        raw = scope.setdefault("state", {})
         limit = DEFAULT_RATE_LIMIT_RPM
         # Allow per-key override set by auth dependency
-        key_limit = getattr(request.state, "rate_limit_rpm", None)
+        key_limit = raw.get("rate_limit_rpm")
         if key_limit is not None:
             limit = int(key_limit)
 
-        identity = self._identity(request)
+        identity = self._identity(scope)
         now = time.time()
         window_start = now - RATE_WINDOW_SECONDS
         reset_at = int(now) + RATE_WINDOW_SECONDS
@@ -157,25 +191,36 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
         if count > limit:
             from api.v1.errors import err_rate_limit
+            request = Request(scope)
             resp = err_rate_limit(request, retry_after=RATE_WINDOW_SECONDS)
             resp.headers.update(headers)
-            return resp
+            await resp(scope, receive, send)
+            return
 
-        response = await call_next(request)
-        response.headers.update(headers)
-        return response
+        async def send_com_limite(message: Message) -> None:
+            if message["type"] == "http.response.start":
+                destino = MutableHeaders(scope=message)
+                for chave, valor in headers.items():
+                    destino[chave] = valor
+            await send(message)
+
+        await self.app(scope, receive, send_com_limite)
 
     # ------------------------------------------------------------------
 
-    def _identity(self, request: Request) -> str:
-        key_id = getattr(request.state, "api_key_id", None)
+    def _identity(self, scope: Scope) -> str:
+        raw = scope.get("state") or {}
+        key_id = raw.get("api_key_id")
         if key_id:
             return f"apikey:{key_id}"
-        client_id = getattr(request.state, "oauth_client_id", None)
+        client_id = raw.get("oauth_client_id")
         if client_id:
             return f"oauth:{client_id}"
-        forwarded = request.headers.get("X-Forwarded-For", "")
-        ip = forwarded.split(",")[0].strip() if forwarded else request.client.host
+        forwarded = header(scope, b"x-forwarded-for")
+        if forwarded:
+            ip = forwarded.split(",")[0].strip()
+        else:
+            ip = client_host(scope) or ""
         return f"ip:{ip}"
 
     def _count(self, identity: str, now: float, window_start: float, limit: int) -> int:
@@ -211,7 +256,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 # 4. Audit Log Middleware
 # ---------------------------------------------------------------------------
 
-class AuditLogMiddleware(BaseHTTPMiddleware):
+class AuditLogMiddleware:
     """
     Structured audit log for every /api/v1/* request.
 
@@ -220,39 +265,53 @@ class AuditLogMiddleware(BaseHTTPMiddleware):
       response_time_ms, api_key_id, oauth_client_id, user_id, ip
     """
 
-    async def dispatch(self, request: Request, call_next: Callable) -> Response:
-        if not request.url.path.startswith("/api/v1/"):
-            return await call_next(request)
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        path = scope.get("path") or ""
+        if not path.startswith("/api/v1/"):
+            await self.app(scope, receive, send)
+            return
 
         t0 = time.perf_counter()
-        response = await call_next(request)
+        status_code = 500
+
+        async def send_capturando(message: Message) -> None:
+            nonlocal status_code
+            if message["type"] == "http.response.start":
+                status_code = int(message["status"])
+            await send(message)
+
+        await self.app(scope, receive, send_capturando)
         elapsed_ms = int((time.perf_counter() - t0) * 1000)
 
-        request_id   = getattr(request.state, "request_id", "")
-        api_key_id   = getattr(request.state, "api_key_id", None)
-        oauth_client = getattr(request.state, "oauth_client_id", None)
-        user_id      = getattr(request.state, "public_api_user_id", None)
-        forwarded    = request.headers.get("X-Forwarded-For", "")
-        ip           = forwarded.split(",")[0].strip() if forwarded else (
-            request.client.host if request.client else "unknown"
-        )
+        raw = scope.get("state") or {}
+        forwarded = header(scope, b"x-forwarded-for")
+        ip = forwarded.split(",")[0].strip() if forwarded else (client_host(scope) or "unknown")
+        query = scope.get("query_string") or b""
+        if isinstance(query, bytes):
+            query = query.decode("latin-1")
 
         logger.info(
             "api_audit",
             extra={
-                "request_id":      request_id,
-                "method":          request.method,
-                "path":            request.url.path,
-                "query":           str(request.url.query),
-                "status_code":     response.status_code,
+                "request_id":      raw.get("request_id", ""),
+                "method":          scope.get("method", ""),
+                "path":            path,
+                "query":           query,
+                "status_code":     status_code,
                 "response_time_ms": elapsed_ms,
-                "api_key_id":      api_key_id,
-                "oauth_client_id": oauth_client,
-                "user_id":         user_id,
+                "api_key_id":      raw.get("api_key_id"),
+                "oauth_client_id": raw.get("oauth_client_id"),
+                "user_id":         raw.get("public_api_user_id"),
                 "ip":              ip,
             },
         )
-        return response
 
 
 # ---------------------------------------------------------------------------

@@ -19,13 +19,14 @@ Usage in main.py:
 from __future__ import annotations
 
 import uuid
-from typing import Callable
 
-from fastapi import Request, Response
-from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.datastructures import MutableHeaders
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
+
+from middleware.asgi_util import client_host, header
 
 
-class AuditContextMiddleware(BaseHTTPMiddleware):
+class AuditContextMiddleware:
     """
     Attach audit context to every request so downstream code can call
     AuditLogService.from_request(request, ...) without extracting headers.
@@ -35,31 +36,43 @@ class AuditContextMiddleware(BaseHTTPMiddleware):
       - session_id   : str   (X-Session-ID header, if present)
       - actor_ip     : str   (X-Forwarded-For first hop or direct IP)
       - actor_ua     : str   (User-Agent)
+
+    ASGI puro: não bufferiza o corpo (o BaseHTTPMiddleware copiava a resposta
+    inteira e, em payload grande, disparava Content-Length maior que o header).
     """
 
-    async def dispatch(self, request: Request, call_next: Callable) -> Response:
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
         # Request ID (honour incoming header from load balancer / gateway)
-        incoming_rid = request.headers.get("X-Request-ID", "").strip()
+        incoming_rid = header(scope, b"x-request-id").strip()
         if incoming_rid and len(incoming_rid) <= 64 and incoming_rid.replace("-", "").isalnum():
             rid = incoming_rid
         else:
             rid = str(uuid.uuid4())
 
-        request.state.request_id = rid
-
-        # Session ID (set by frontend after login)
-        request.state.session_id = request.headers.get("X-Session-ID") or None
+        bag = scope.setdefault("state", {})
+        bag["request_id"] = rid
+        sessao = header(scope, b"x-session-id")
+        bag["session_id"] = sessao or None
 
         # IP — honour X-Forwarded-For (first hop = real client)
-        forwarded = request.headers.get("X-Forwarded-For", "")
-        request.state.actor_ip = (
+        forwarded = header(scope, b"x-forwarded-for")
+        bag["actor_ip"] = (
             forwarded.split(",")[0].strip()
             if forwarded
-            else (request.client.host if request.client else None)
+            else client_host(scope)
         )
+        bag["actor_ua"] = header(scope, b"user-agent") or None
 
-        request.state.actor_ua = request.headers.get("User-Agent")
+        async def send_com_id(message: Message) -> None:
+            if message["type"] == "http.response.start":
+                MutableHeaders(scope=message)["X-Request-ID"] = rid
+            await send(message)
 
-        response = await call_next(request)
-        response.headers["X-Request-ID"] = rid
-        return response
+        await self.app(scope, receive, send_com_id)

@@ -359,18 +359,15 @@ def paginas_do_job(job_id: int, db: Session = Depends(get_db), user: User = Depe
     doc = _registro(db, "documento", linha[1], user)
     if doc is None:
         raise HTTPException(404, "Documento não encontrado")
-    import base64
     from routers.envio_documentos import _bytes_do_documento
     conteudo = _bytes_do_documento(doc)
     if not conteudo:
         raise HTTPException(404, "Arquivo não encontrado")
-    import fitz  # pymupdf
+    from services.pdf_paginas import PdfGrandeDemais, PdfInvalido, renderizar_paginas
     try:
-        pdf = fitz.open(stream=conteudo, filetype="pdf")
-    except Exception:
-        raise HTTPException(422, "O arquivo não é um PDF")
-    if pdf.page_count == 0 or pdf.page_count > 12:
+        # Teto de 12 páginas, igual a antes. Por dentro sai em lotes de 5 e solta o pixmap.
+        return renderizar_paginas(conteudo, max_paginas=12)
+    except PdfGrandeDemais:
         raise HTTPException(422, "PDF vazio ou grande demais para a impressora da clínica")
-    paginas = ["data:image/png;base64," + base64.b64encode(p.get_pixmap(dpi=170).tobytes("png")).decode() for p in pdf]
-    return {"paginas": paginas, "largura_mm": round(pdf[0].rect.width / 72 * 25.4, 1),
-            "altura_mm": round(pdf[0].rect.height / 72 * 25.4, 1)}
+    except PdfInvalido:
+        raise HTTPException(422, "O arquivo não é um PDF")
