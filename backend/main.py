@@ -61,6 +61,8 @@ from routers.billing import router as billing_router
 # Immutable Audit Log (Sprint 8)
 from routers.audit import router as audit_router
 from middleware.audit_middleware import AuditContextMiddleware
+from middleware.asgi_util import header as _asgi_header
+from starlette.datastructures import MutableHeaders
 
 # Public REST API v1 (Sprint 7)
 from api.v1.router import public_api_v1_router
@@ -110,17 +112,36 @@ os.makedirs("uploads/photos", exist_ok=True)
 _TIPOS_PERIGOSOS = ("text/html", "image/svg", "xhtml", "/xml", "+xml", "javascript", "ecmascript")
 
 
-@app.middleware("http")
-async def _uploads_seguros(request, call_next):
-    resp = await call_next(request)
-    if request.url.path.startswith("/uploads/"):
-        resp.headers["X-Content-Type-Options"] = "nosniff"
-        tipo = (resp.headers.get("content-type") or "").lower()
-        if any(t in tipo for t in _TIPOS_PERIGOSOS):
-            resp.headers["content-type"] = "text/plain; charset=utf-8"
-            resp.headers["Content-Disposition"] = "attachment"
-            resp.headers["Content-Security-Policy"] = "default-src 'none'; sandbox"
-    return resp
+class UploadsSegurosMiddleware:
+    """nosniff (e download forçado) em /uploads, sem copiar o arquivo para a RAM.
+
+    O @app.middleware("http") usa BaseHTTPMiddleware e bufferiza o corpo inteiro.
+    """
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        caminho = scope.get("path") or ""
+
+        async def send_wrapper(message):
+            if message["type"] == "http.response.start" and caminho.startswith("/uploads/"):
+                headers = MutableHeaders(scope=message)
+                headers["X-Content-Type-Options"] = "nosniff"
+                tipo = (headers.get("content-type") or "").lower()
+                if any(t in tipo for t in _TIPOS_PERIGOSOS):
+                    headers["content-type"] = "text/plain; charset=utf-8"
+                    headers["Content-Disposition"] = "attachment"
+                    headers["Content-Security-Policy"] = "default-src 'none'; sandbox"
+            await send(message)
+
+        await self.app(scope, receive, send_wrapper)
+
+
+app.add_middleware(UploadsSegurosMiddleware)
 
 
 # 07/10/2026 (Valth): anexos sumiam a cada publicação porque o disco do Render
@@ -175,34 +196,51 @@ def _is_frontend_conflict(path: str) -> bool:
                 return True
     return False
 
-@app.middleware("http")
-async def serve_frontend_for_browser(request, call_next):
-    path = request.url.path.lstrip("/")
-    accept = request.headers.get("accept", "")
-    if (
-        request.method == "GET"
-        and "text/html" in accept
-        and _is_frontend_conflict(path)
-        and out_dir is not None
-    ):
-        # 1) Arquivo literal primeiro — rotas ESTÁTICAS que colidem com a API
-        # (ex.: /agenda → out/agenda.html). Sem isso, "agenda" caía direto no
-        # placeholder "_" (que não existe pra ela) e servia o index (home) —
-        # a Agenda "não abria": redirecionava pro dashboard.
-        for candidate in [out_dir / f"{path}.html", out_dir / path / "index.html"]:
+def _arquivo_frontend(path: str):
+    """HTML do Next para rotas que colidem com a API. None = segue o handler."""
+    if out_dir is None:
+        return None
+    # 1) Arquivo literal primeiro — rotas ESTÁTICAS que colidem com a API
+    # (ex.: /agenda → out/agenda.html). Sem isso, "agenda" caía direto no
+    # placeholder "_" (que não existe pra ela) e servia o index (home) —
+    # a Agenda "não abria": redirecionava pro dashboard.
+    for candidate in [out_dir / f"{path}.html", out_dir / path / "index.html"]:
+        if candidate.is_file():
+            return FileResponse(str(candidate), media_type="text/html")
+    # 2) Rotas dinâmicas: substitui cada segmento por "_" (ex.: anamnese/<token>)
+    parts = [p for p in path.split("/") if p]
+    for i in range(len(parts)):
+        test = parts.copy(); test[i] = "_"
+        for candidate in [out_dir / f"{'/'.join(test)}.html", out_dir / "/".join(test) / "index.html"]:
             if candidate.is_file():
                 return FileResponse(str(candidate), media_type="text/html")
-        # 2) Rotas dinâmicas: substitui cada segmento por "_" (ex.: anamnese/<token>)
-        parts = [p for p in path.split("/") if p]
-        for i in range(len(parts)):
-            test = parts.copy(); test[i] = "_"
-            for candidate in [out_dir / f"{'/'.join(test)}.html", out_dir / "/".join(test) / "index.html"]:
-                if candidate.is_file():
-                    return FileResponse(str(candidate), media_type="text/html")
-        root = out_dir / "index.html"
-        if root.exists():
-            return FileResponse(str(root), media_type="text/html")
-    return await call_next(request)
+    root = out_dir / "index.html"
+    if root.exists():
+        return FileResponse(str(root), media_type="text/html")
+    return None
+
+
+class FrontendHtmlMiddleware:
+    """Serve o HTML do Next em rotas que colidem com a API, sem bufferizar o resto."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        if scope.get("method") == "GET" and out_dir is not None:
+            path = (scope.get("path") or "/").lstrip("/")
+            if "text/html" in _asgi_header(scope, b"accept") and _is_frontend_conflict(path):
+                resposta = _arquivo_frontend(path)
+                if resposta is not None:
+                    await resposta(scope, receive, send)
+                    return
+        await self.app(scope, receive, send)
+
+
+app.add_middleware(FrontendHtmlMiddleware)
 
 # Auth (público: /auth/login)
 app.include_router(auth_router)

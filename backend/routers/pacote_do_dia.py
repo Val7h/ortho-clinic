@@ -7,6 +7,8 @@ para o celular da Neide imprimir.
 
 - GET  /patients/{id}/documents/{doc_id}/paginas  -> páginas do PDF anexado
   (guia SP/SADT) como imagem, para a tela juntar ao pacote de impressão.
+  Devolve no máximo 5 páginas por chamada (?offset=&limite=); a tela pede
+  o próximo lote. Assim um PDF longo não fica inteiro na RAM.
 - POST /patients/{id}/enviar-secretaria           -> recebe o PDF montado pela
   tela e manda à secretária da cidade do atendimento, pelo WhatsApp DA CLÍNICA
   (nunca pelo pessoal do Valth — regra dele para dado de paciente).
@@ -19,7 +21,7 @@ from tzutil import today_br
 from typing import Optional
 
 import httpx
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -55,7 +57,15 @@ def _cidade(nome: str) -> Optional[str]:
 
 
 @router.get("/patients/{patient_id}/documents/{doc_id}/paginas")
-def paginas_do_documento(patient_id: int, doc_id: int, db: Session = Depends(get_db), user: User = Depends(require_doctor)):
+def paginas_do_documento(
+    patient_id: int,
+    doc_id: int,
+    offset: int = Query(0, ge=0),
+    limite: int = Query(5, ge=1, le=5),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_doctor),
+):
+    """Até 5 páginas por resposta. `total` diz quantas o PDF tem; a tela pede o resto."""
     doc = (db.query(PatientDocument)
            .join(Patient, Patient.id == PatientDocument.patient_id)
            .filter(PatientDocument.id == doc_id, PatientDocument.patient_id == patient_id,
@@ -66,17 +76,11 @@ def paginas_do_documento(patient_id: int, doc_id: int, db: Session = Depends(get
     conteudo = _bytes_do_documento(doc)
     if not conteudo:
         raise HTTPException(404, "Arquivo não encontrado")
-    import fitz  # pymupdf
+    from services.pdf_paginas import PdfInvalido, renderizar_paginas
     try:
-        pdf = fitz.open(stream=conteudo, filetype="pdf")
-    except Exception:
+        return renderizar_paginas(conteudo, offset=offset, limite=limite)
+    except PdfInvalido:
         raise HTTPException(422, "O arquivo não é um PDF")
-    paginas = []
-    for p in pdf:
-        png = p.get_pixmap(dpi=170).tobytes("png")
-        paginas.append("data:image/png;base64," + base64.b64encode(png).decode())
-    return {"paginas": paginas, "largura_mm": round(pdf[0].rect.width / 72 * 25.4, 1),
-            "altura_mm": round(pdf[0].rect.height / 72 * 25.4, 1)}
 
 
 @router.post("/patients/{patient_id}/enviar-secretaria")
