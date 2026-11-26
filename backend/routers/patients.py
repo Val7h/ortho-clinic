@@ -5,7 +5,7 @@ from sqlalchemy.exc import IntegrityError
 from typing import List, Optional
 import os, uuid, re, unicodedata, base64, json, logging
 import httpx
-import json
+import hashlib
 from services.storage import upload_file
 from database import get_db
 from models.patient import Patient
@@ -494,11 +494,8 @@ async def _ler_documento(file: UploadFile, tipo: str) -> dict:
             }],
         }
         try:
-            permitir("ler_foto", f"foto:{getattr(current_user, 'id', 0)}", "foto")
-        except AnthropicBloqueado as e:
-            raise HTTPException(e.http, str(e))
-        try:
-            permitir("ler_foto", f"foto:{getattr(current_user, 'id', 0)}", "foto2")
+            # 1 vaga por foto; dedupe pelos bytes da imagem (a mesma foto 2x em 30 s)
+            permitir("ler_foto", "foto", hashlib.sha256(conteudo).hexdigest())
         except AnthropicBloqueado as e:
             raise HTTPException(e.http, str(e))
         async with httpx.AsyncClient(timeout=60.0) as client:

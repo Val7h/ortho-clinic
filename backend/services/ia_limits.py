@@ -10,14 +10,14 @@ uma instancia, estes tetos passam a ser por instancia (ainda assim cortam um loo
 
 Variaveis (todas opcionais):
   IA_KILL_SWITCH=1          recusa tudo (503)
-  IA_MAX_CALLS_PER_HOUR     padrao 40
-  IA_MAX_CALLS_PER_DAY      padrao 120
-  IA_MAX_TOKENS_PER_DAY     padrao 2000000 (entrada+saida)
-  IA_MAX_CALLS_PER_SESSION  padrao 10
+  IA_MAX_CALLS_PER_HOUR     padrao 150
+  IA_MAX_CALLS_PER_DAY      padrao 800
+  IA_MAX_TOKENS_PER_DAY     padrao 6000000 (entrada+saida)
+  IA_MAX_CALLS_PER_SESSION  padrao 150
   IA_MAX_INPUT_CHARS        padrao 120000  (~30 mil tokens, folga para foto)
-  IA_CIRCUIT_FAILURES       padrao 5
+  IA_CIRCUIT_FAILURES       padrao 10
   IA_CIRCUIT_SECONDS        padrao 300
-  IA_DEDUPE_SECONDS         padrao 30
+  IA_DEDUPE_SECONDS         padrao 10
 """
 from __future__ import annotations
 
@@ -80,14 +80,14 @@ def permitir(rota: str, sessao: str, corpo: str = "") -> None:
         raise AnthropicBloqueado("IA temporariamente desligada (IA_KILL_SWITCH).", 503)
 
     agora = time.time()
-    max_hora = _int("IA_MAX_CALLS_PER_HOUR", 40)
-    max_dia = _int("IA_MAX_CALLS_PER_DAY", 120)
-    max_tok = _int("IA_MAX_TOKENS_PER_DAY", 2_000_000)
-    max_ses = _int("IA_MAX_CALLS_PER_SESSION", 10)
+    max_hora = _int("IA_MAX_CALLS_PER_HOUR", 150)
+    max_dia = _int("IA_MAX_CALLS_PER_DAY", 800)
+    max_tok = _int("IA_MAX_TOKENS_PER_DAY", 6_000_000)
+    max_ses = _int("IA_MAX_CALLS_PER_SESSION", 150)
     max_chars = _int("IA_MAX_INPUT_CHARS", 120_000)
-    circ_n = _int("IA_CIRCUIT_FAILURES", 5)
+    circ_n = _int("IA_CIRCUIT_FAILURES", 10)
     circ_s = _int("IA_CIRCUIT_SECONDS", 300)
-    dedupe_s = _int("IA_DEDUPE_SECONDS", 30)
+    dedupe_s = _int("IA_DEDUPE_SECONDS", 10)
 
     if corpo and len(corpo) > max_chars:
         raise AnthropicBloqueado(
@@ -95,7 +95,7 @@ def permitir(rota: str, sessao: str, corpo: str = "") -> None:
         )
 
     chave_dedupe = hashlib.sha256(
-        f"{rota}|{sessao}|{corpo[:4000]}".encode("utf-8", "ignore")
+        f"{rota}|{sessao}|{corpo}".encode("utf-8", "ignore")
     ).hexdigest()
 
     with _lock:
@@ -160,7 +160,7 @@ def registrar_uso(rota: str, modelo: str, input_tokens: int = 0, output_tokens: 
 def registrar_falha(rota: str, motivo: str) -> None:
     global _circuit_until
     agora = time.time()
-    circ_n = _int("IA_CIRCUIT_FAILURES", 5)
+    circ_n = _int("IA_CIRCUIT_FAILURES", 10)
     circ_s = _int("IA_CIRCUIT_SECONDS", 300)
     with _lock:
         _fails.append(agora)

@@ -297,7 +297,9 @@ async def gerar_justificativa(
         try:
             permitir("justificativa", f"justificativa:{patient_id}", (data.pedido if data else "") or "")
         except AnthropicBloqueado as e:
-            raise HTTPException(e.http, str(e))
+            _log.warning("Justificativa: IA barrada pela trava de gasto (%s)", e)
+            return {"texto": modelo, "origem": "modelo",
+                    "aviso": "IA em pausa pela trava de gasto: usei o modelo padrão."}
         async with httpx.AsyncClient(timeout=45.0) as client:
             resp = await client.post(
                 "https://api.anthropic.com/v1/messages",

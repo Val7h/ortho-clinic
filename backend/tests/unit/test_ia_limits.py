@@ -82,3 +82,16 @@ def test_circuito_abre_apos_falhas(monkeypatch):
     with pytest.raises(AnthropicBloqueado) as e:
         permitir("chat", "s1", "depois")
     assert e.value.http == 503
+
+
+def test_dedupe_olha_o_pedido_inteiro():
+    # historico longo de chat: o comeco igual nao pode barrar a pergunta nova
+    base = "x" * 5000
+    permitir("chat", "s1", base + "pergunta 1")
+    permitir("chat", "s1", base + "pergunta 2")
+
+
+def test_padroes_nao_barram_dia_normal():
+    # 120 chamadas numa sessao (dia cheio de consultas) passam com os padroes
+    for i in range(120):
+        permitir("ler_foto", "foto", f"img{i}")
