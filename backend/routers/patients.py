@@ -494,7 +494,7 @@ async def _ler_documento(file: UploadFile, tipo: str) -> dict:
             }],
         }
         try:
-            # 1 vaga por foto; dedupe pelos bytes da imagem (a mesma foto 2x em 30 s)
+            # 1 vaga por foto; dedupe pelos bytes da imagem (a mesma foto 2x em 10 s)
             permitir("ler_foto", "foto", hashlib.sha256(conteudo).hexdigest())
         except AnthropicBloqueado as e:
             raise HTTPException(e.http, str(e))
