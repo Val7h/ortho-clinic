@@ -14,6 +14,7 @@ Travas herdadas da doutrina de laudos do Valth:
   - Prosa corrida técnica (sem bullets), datas por extenso, PT-BR.
 """
 import os
+import json
 import re
 import asyncio
 import logging
@@ -30,6 +31,7 @@ from database import get_db
 from deps import require_doctor
 from models.organization import User
 from models.patient import Patient
+from services.ia_limits import AnthropicBloqueado, permitir, registrar_falha, registrar_uso
 
 logger = logging.getLogger("orthoclinic.laudo_inss")
 
@@ -326,6 +328,10 @@ async def gerar_laudo(
     ultimo_erro_rede = None
     ultimo_status = None
 
+    try:
+        permitir("laudo_inss", f"laudo:{patient_id}", json.dumps(payload, ensure_ascii=False))
+    except AnthropicBloqueado as e:
+        raise HTTPException(e.http, str(e))
     for tentativa in range(1, MAX_TENTATIVAS + 1):
         restante = ORCAMENTO_TOTAL_S - (time.monotonic() - inicio)
         if restante <= 5:
@@ -342,10 +348,12 @@ async def gerar_laudo(
                     json=payload,
                 )
         except httpx.TimeoutException:
+            registrar_falha("laudo_inss", "timeout")
             logger.warning(f"Anthropic API: tentativa {tentativa}/{MAX_TENTATIVAS} sem resposta a tempo")
             resp = None
         except httpx.RequestError as exc:
             # Não logar str(exc): pode embutir header (inclusive a API key) na mensagem.
+            registrar_falha("laudo_inss", type(exc).__name__)
             logger.warning(f"Anthropic API: erro de rede na tentativa {tentativa}/{MAX_TENTATIVAS}: {type(exc).__name__}")
             ultimo_erro_rede = exc
             resp = None
@@ -404,4 +412,7 @@ async def gerar_laudo(
     aviso = conferir_lado(texto, data.ditado)
     if aviso:
         logger.warning("Laudo INSS: lado no texto que nao esta no ditado (aviso devolvido)")
+    uso = (resp_json.get("usage") or {}) if isinstance(resp_json, dict) else {}
+    registrar_uso("laudo_inss", LAUDO_MODEL, int(uso.get("input_tokens") or 0),
+                  int(uso.get("output_tokens") or 0))
     return LaudoINSSOut(texto=texto, model=LAUDO_MODEL, aviso=aviso)

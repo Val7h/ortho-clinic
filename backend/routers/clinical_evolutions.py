@@ -7,6 +7,7 @@ from database import get_db
 from models.clinical_evolution import ClinicalEvolution, EscribaResumo
 import json as _json
 from models.patient import Patient
+from services.ia_limits import AnthropicBloqueado, permitir, registrar_falha, registrar_uso
 from routers.auth import get_current_user
 from deps import require_doctor
 
@@ -196,6 +197,7 @@ def delete_evolution(
 # ficar sem papel na mão.
 
 import os
+import json
 import re
 import logging as _logging
 
@@ -292,6 +294,12 @@ async def gerar_justificativa(
     )
 
     try:
+        try:
+            permitir("justificativa", f"justificativa:{patient_id}", (data.pedido if data else "") or "")
+        except AnthropicBloqueado as e:
+            _log.warning("Justificativa: IA barrada pela trava de gasto (%s)", e)
+            return {"texto": modelo, "origem": "modelo",
+                    "aviso": "IA em pausa pela trava de gasto: usei o modelo padrão."}
         async with httpx.AsyncClient(timeout=45.0) as client:
             resp = await client.post(
                 "https://api.anthropic.com/v1/messages",
