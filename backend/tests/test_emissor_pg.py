@@ -139,4 +139,6 @@ def test_pg_dois_gravar_no_mesmo_lote(pg):
 @pytest.mark.parametrize("nome", [n for n in dir(T) if n.startswith("test_rev")])
 def test_pg_revisao(pg, nome):
     """As regressoes da revisao independente (27/11) tambem em Postgres."""
-    getattr(T, nome)(pg)
+    import inspect
+    f = getattr(T, nome)
+    f(pg) if inspect.signature(f).parameters else f()

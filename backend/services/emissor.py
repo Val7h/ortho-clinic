@@ -39,8 +39,12 @@ from models.emissor import ESTADOS_ATIVOS, EmissorChave
 from services import regua as G
 from tzutil import BR_TZ, today_br
 
+import logging
+_log = logging.getLogger("emissor")
+
 PRAZO_DOC_S = 90          # receita, pedido, encaminhamento, atestado, justificativa
 PRAZO_GUIA_S = 6 * 60     # guia: o PC leva ate 5 min no pior caso
+TETO_GUIA_S = 30 * 60     # guia sem renovar por 30 min (PC morreu e perdeu o token): o proximo pedido assume
 MAX_ITENS_GUIA = 5        # a guia SP/SADT tem 5 linhas: 1 lote = 1 guia
 ESPERA_FILA_S = 30
 DONOS = {"sessao", "atendente", "escriba", "tela", "ponte"}
@@ -312,9 +316,9 @@ def _docs_de_hoje(db: Session, org: int, pid: int, dia: date, tipo: str) -> List
             continue
         titulo = r.title or ""
         if tipo == "atestado" and r.report_type == "atestado":
-            primeira = next((l for l in (r.content or "").splitlines() if l.strip()), "")
+            # revisao 27/11: o tipo sai do texto INTEIRO ("Atesto que compareceu" = comparecimento)
             out.append({"kind": "atestado", "id": r.id, "criado": r.created_at,
-                        "linhas": [f"{titulo} {primeira}".strip() or "atestado"]})
+                        "linhas": [f"{titulo} {r.content or ''}".strip()[:2000] or "atestado"]})
         elif tipo == "encaminhamento" and r.report_type == "encaminhamento":
             primeira = next((l for l in (r.content or "").splitlines() if l.strip()), "")
             if not G.eh_fisio(f"{titulo} {primeira}"):
@@ -336,7 +340,11 @@ def _vencida(r: EmissorChave, agora: datetime) -> bool:
     """Reserva vencida que o proximo pedido pode assumir. GUIA nunca vence sozinha (revisao 27/11): o PC renova
     enquanto desenha; so 'falhou' (ou o dono renovando) libera."""
     v = _utc(r.vence_em)
-    return r.estado == "reservado" and r.formato != "guia" and v is not None and v <= agora
+    if r.estado != "reservado" or v is None:
+        return False
+    if r.formato == "guia":   # vence_em = ultimo renovar + 6 min; 30 min sem renovar = vencida
+        return v + timedelta(seconds=TETO_GUIA_S - PRAZO_GUIA_S) <= agora
+    return v <= agora
 
 
 def _avaliar(db: Session, org: int, pid: int, dia: date, itens: List[Item], troca: bool, agora: datetime) -> None:
@@ -627,20 +635,31 @@ def _linhas_do_token(db: Session, org: int, lote: str, token: str) -> List[Emiss
     return linhas
 
 
-def falhou(db: Session, org: int, lote: str, token: str, motivo: str = "") -> dict:
-    """Libera a chave. A troca que este lote pedia volta atras (o documento antigo volta a valer)."""
+def falhou(db: Session, org: int, lote: str, token: Optional[str], motivo: str = "",
+           liberado_por: Optional[int] = None) -> dict:
+    """Libera a chave. A troca que este lote pedia volta atras (o documento antigo volta a valer).
+    token=None so pela rota do MEDICO (liberar): o PC morreu e perdeu o token; fica registrado quem liberou."""
     pre = db.query(EmissorChave).filter(EmissorChave.lote == lote, EmissorChave.organization_id == org).first()
     if not pre:
         raise HTTPException(409, "Reserva inexistente")
     with fila_do_paciente(db, org, pre.patient_id):
-        linhas = _linhas_do_token(db, org, lote, token)
+        if token is None:
+            linhas = db.query(EmissorChave).filter(EmissorChave.lote == lote,
+                                                   EmissorChave.organization_id == org).all()
+        else:
+            linhas = _linhas_do_token(db, org, lote, token)
         if any(r.estado == "pronto" for r in linhas):
             raise HTTPException(409, "O documento deste lote já foi gravado; não dá para marcar falha")
         n = 0
         for r in linhas:
             if r.estado == "reservado":
                 r.estado = "falhou"
-                r.origem = ((r.origem or "") + f" | falhou: {motivo}")[:120] if motivo else r.origem
+                if liberado_por is not None:
+                    r.origem = (f"liberado pelo usuario {liberado_por}"
+                                + (f" ({motivo})" if motivo else "") + " | " + (r.origem or ""))[:120]
+                    _log.warning("emissor: lote %s liberado sem token pelo usuario %s", lote, liberado_por)
+                elif motivo:
+                    r.origem = ((r.origem or "") + f" | falhou: {motivo}")[:120]
                 n += 1
         db.flush()
         if n:   # so desfaz a troca se ESTE lote ainda estava reservado (nao vencido e assumido/liberado por outro)
@@ -679,9 +698,23 @@ def renovar(db: Session, org: int, lote: str, token: str) -> dict:
     return {"ok": True, "vence_em": vence.isoformat()}
 
 
+def _idade_s(d: Optional[datetime], agora: datetime) -> Optional[int]:
+    d = _utc(d)
+    return max(0, int((agora - d).total_seconds())) if d else None
+
+
 def hoje(db: Session, org: int, pid: int, dia: Optional[date] = None) -> List[dict]:
-    return [{"id": r.id, "tipo": r.tipo, "chave": r.chave, "item": r.texto, "estado": r.estado, "dono": r.dono,
-             "origem": r.origem, "doc": {"kind": r.doc_kind, "id": r.doc_id} if r.doc_id else None,
-             "hora": hora_br(r.feito_em or r.atualizado_em or r.criado_em), "lote": r.lote,
-             "substituido_por": r.substituido_por}
-            for r in _linhas_do_dia(db, org, pid, dia or today_br())]
+    """Tudo do dia do paciente, com lote, dono e idade (para o medico liberar uma reserva presa)."""
+    agora = _agora()
+    out = []
+    for r in _linhas_do_dia(db, org, pid, dia or today_br()):
+        ultimo = (_utc(r.vence_em) - timedelta(seconds=PRAZO_GUIA_S if r.formato == "guia" else PRAZO_DOC_S)) \
+            if r.vence_em else None
+        out.append({"id": r.id, "tipo": r.tipo, "chave": r.chave, "item": r.texto, "estado": r.estado, "dono": r.dono,
+                    "origem": r.origem, "doc": {"kind": r.doc_kind, "id": r.doc_id} if r.doc_id else None,
+                    "hora": hora_br(r.feito_em or r.atualizado_em or r.criado_em), "lote": r.lote,
+                    "formato": r.formato, "substituido_por": r.substituido_por,
+                    "idade_s": _idade_s(r.criado_em, agora),
+                    "sem_renovar_s": _idade_s(ultimo, agora) if r.estado == "reservado" else None,
+                    "vencida": _vencida(r, agora)})
+    return out

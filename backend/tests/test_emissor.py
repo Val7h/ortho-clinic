@@ -709,3 +709,65 @@ def test_rev7_situacao_em_savepoint_e_falhou_nao_ressuscita(amb):
     db = S()
     ativos = db.query(EmissorChave).filter(EmissorChave.estado.in_(("reservado", "pronto"))).all()
     assert len(ativos) == 1 and ativos[0].lote == e2["lote"]
+
+
+# ---------------------------------------------------------------- ressalva da aprovacao (27/11) ----------------------
+def test_rev8_guia_presa_medico_libera_sem_token_e_hoje_mostra(amb):
+    """PC morreu e perdeu o token: o medico ve o lote em /hoje e libera; fica 'falhou' com quem liberou."""
+    c, S, (pid, _p2, _p3) = amb
+    g = reservar(c, pid, "exame", ["USG DO OMBRO ESQUERDO"], guia=True, h=PONTE, dono="escriba")
+    h = c.get(f"/emissor/paciente/{pid}/hoje", headers=MEDICO).json()
+    assert h[0]["lote"] == g["lote"] and h[0]["dono"] == "escriba" and h[0]["formato"] == "guia"
+    assert h[0]["idade_s"] is not None and h[0]["sem_renovar_s"] is not None and h[0]["vencida"] is False
+    # outra conta nao libera; secretaria nao libera
+    assert c.post(f"/emissor/lotes/{g['lote']}/liberar", headers=MEDICO_OUTRA_ORG).status_code == 409
+    r = c.post(f"/emissor/lotes/{g['lote']}/liberar", json={"motivo": "PC caiu"}, headers=MEDICO)
+    assert r.status_code == 200 and r.json()["liberadas"] == 1
+    linha = S().query(EmissorChave).one()
+    assert linha.estado == "falhou" and "liberado pelo usuario 10" in linha.origem and "PC caiu" in linha.origem
+    assert subir_guia(c, pid, g, [NOME.upper(), "USG DO OMBRO ESQUERDO"]).status_code == 409   # o PC velho nao grava
+    assert reservar(c, pid, "exame", ["USG DO OMBRO ESQUERDO"], guia=True)["reservado"]
+    # lote ja gravado nao se libera
+    r2 = reservar(c, pid, "receita", conteudo=CELECOXIBE)
+    gravar_receita(c, pid, r2)
+    assert c.post(f"/emissor/lotes/{r2['lote']}/liberar", headers=MEDICO).status_code == 409
+
+
+def test_rev8_guia_sem_renovar_por_30_min_e_assumida(amb):
+    c, S, (pid, _p2, _p3) = amb
+    g = reservar(c, pid, "exame", ["USG DO OMBRO ESQUERDO"], guia=True)
+    db = S()
+    agora = datetime.now(timezone.utc)
+    # renovou ha 20 min (vence_em = renovar + 6 min): ainda em andamento
+    db.query(EmissorChave).update({"vence_em": agora - timedelta(minutes=14)})
+    db.commit()
+    assert reservar(c, pid, "exame", ["USG DO OMBRO ESQUERDO"], guia=True, h=PONTE)["itens"][0]["situacao"] == "em_andamento"
+    # 31 min sem renovar: o proximo pedido assume
+    db.query(EmissorChave).update({"vence_em": agora - timedelta(minutes=25)})
+    db.commit()
+    db.close()
+    r = reservar(c, pid, "exame", ["USG DO OMBRO ESQUERDO"], guia=True, h=PONTE)
+    assert r["reservado"] and r["lote"] != g["lote"]
+    assert subir_guia(c, pid, g, [NOME.upper(), "USG DO OMBRO ESQUERDO"]).status_code == 409
+
+
+def test_rev9_encaminhamento_pelo_destino_nunca_pelo_nome():
+    a = G.chave_encaminhamento("Encaminho o paciente Fulano de Tal ao cardiologista")
+    b = G.chave_encaminhamento("Encaminho o paciente Fulano de Tal ao neurologista")
+    assert a == "enc|cardiologista" and b == "enc|neurologista" and a != b
+    assert not G.mesmo_item("encaminhamento", "Encaminho o paciente Fulano de Tal ao cardiologista",
+                            "Encaminho o paciente Fulano de Tal ao neurologista")
+    assert "fulano" not in G.chave_encaminhamento("Encaminho o paciente Fulano de Tal")
+    assert G.chave_encaminhamento("Encaminho a paciente Beltrana Ficticia para avaliação com reumatologista") == \
+        "enc|reumatologista"
+    assert G.chave_encaminhamento("Encaminhamento — Reumatologia") == "enc|reumatologia"
+
+
+def test_rev10_atestado_tipo_pelo_texto_inteiro(amb):
+    c, S, (pid, _p2, _p3) = amb
+    assert G.tipo_atestado("Atestado em acompanhamento ortopédico, afastar 3 dias") == "afastamento"
+    # feito pela tela, titulo generico: o tipo sai do corpo
+    c.post(f"/patients/{pid}/reports", headers=MEDICO, json={"date": today_br().isoformat(), "report_type": "atestado",
+           "title": "Atestado", "content": "Paciente ficticio.\nAtesto que compareceu a esta consulta das 9h as 10h."})
+    assert reservar(c, pid, "atestado", conteudo="Declaração de comparecimento")["itens"][0]["situacao"] == "existe"
+    assert reservar(c, pid, "atestado", conteudo="Atestado de afastamento do trabalho")["reservado"]

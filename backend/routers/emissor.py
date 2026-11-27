@@ -39,6 +39,10 @@ class TokenIn(BaseModel):
     motivo: str = ""
 
 
+class LiberarIn(BaseModel):
+    motivo: str = ""
+
+
 def _org_do_paciente(db: Session, pid: int, org: Optional[int], superadmin: bool = False) -> int:
     p = db.query(Patient).filter(Patient.id == pid).first()
     if not p or (not superadmin and (p.organization_id or 1) != org):
@@ -66,6 +70,13 @@ def reservar(body: ReservaIn, db: Session = Depends(get_db), u: User = Depends(r
 @router.post("/lotes/{lote}/falhou")
 def lote_falhou(lote: str, body: TokenIn, db: Session = Depends(get_db), u: User = Depends(require_doctor)):
     return E.falhou(db, _org(u), lote, body.token, body.motivo[:60])
+
+
+@router.post("/lotes/{lote}/liberar")
+def lote_liberar(lote: str, body: Optional[LiberarIn] = None, db: Session = Depends(get_db),
+                 u: User = Depends(require_doctor)):
+    """O PC morreu e perdeu o token: o MEDICO (mesma conta) libera a reserva presa. Fica "falhou", com quem liberou."""
+    return E.falhou(db, _org(u), lote, None, ((body.motivo if body else "") or "")[:60], liberado_por=u.id)
 
 
 @router.post("/lotes/{lote}/renovar")

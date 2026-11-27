@@ -469,11 +469,26 @@ _ENC_FORA = {"encaminhamento", "encaminho", "encaminhar", "para", "ao", "aos", "
              "senhor", "senhora", "paciente", "atenciosamente", "bom", "boa", "dia", "tarde", "c", "ac"}
 
 
+_ENC_PREP = {"ao", "aos", "a", "as", "para", "pra", "com"}
+_ENC_PACIENTE = {"paciente", "pcte", "pct"}
+
+
 def chave_encaminhamento(texto) -> str:
-    """Destino do encaminhamento: a 1a linha que diz algo alem de cabecalho/saudacao. Sem destino: 'enc|?', que
-    NUNCA casa com nada (o emissor troca por uma chave unica)."""
+    """Destino do encaminhamento: as palavras DEPOIS de ao/a/para/com (revisao 27/11), nunca o nome do paciente.
+    Linha que cita "o paciente" sem preposicao depois dele e pulada (o que vem ali e o nome). Linha sem preposicao
+    nem paciente ("Encaminhamento — Reumatologia") vale inteira. Cabecalho/saudacao nao contam.
+    Sem destino: 'enc|?', que NUNCA casa com nada (o emissor troca por uma chave unica)."""
     for l in str(texto or "").splitlines():
-        pal = [w for w in norm(l).split() if w not in _ENC_FORA and not w.isdigit()][:3]
+        ws = norm(l).split()
+        ini = max((i + 1 for i, w in enumerate(ws) if w in _ENC_PACIENTE), default=0)
+        prep = next((i for i in range(ini, len(ws)) if ws[i] in _ENC_PREP), None)
+        if prep is not None:
+            resto = ws[prep + 1:]
+        elif ini:
+            continue   # "encaminho o paciente FULANO" sem destino: nao usa o nome
+        else:
+            resto = ws
+        pal = [w for w in resto if w not in _ENC_FORA and w not in _ENC_PREP and not w.isdigit()][:3]
         if pal:
             return "enc|" + "_".join(pal)
     return "enc|?"
@@ -499,7 +514,7 @@ def chaves_item(tipo: str, item) -> list:
 def tipo_atestado(texto) -> str:
     """afastamento | comparecimento | acompanhante (revisao 27/11: um por TIPO, nao um por dia)."""
     t = norm(texto)
-    if re.search(r"acompanha", t):
+    if re.search(r"acompanhante", t):   # "acompanhamento ortopedico" nao e atestado de acompanhante
         return "acompanhante"
     if re.search(r"comparec|declaracao", t):
         return "comparecimento"
