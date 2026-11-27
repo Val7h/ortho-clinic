@@ -462,15 +462,21 @@ def chaves_exame(item) -> list:
     return [f"{base}|{l}" for l in sorted(e["lados"])]
 
 
-_ENC_FORA = {"encaminhamento", "encaminho", "encaminhar", "para", "ao", "a", "o", "de", "da", "do", "dr", "dra",
-             "servico", "avaliacao", "e", "conduta", "com", "especialista", "em", "medico", "medica", "consulta"}
+_ENC_FORA = {"encaminhamento", "encaminho", "encaminhar", "para", "ao", "aos", "a", "o", "de", "da", "do", "dr", "dra",
+             "servico", "avaliacao", "e", "conduta", "com", "especialista", "em", "medico", "medica", "consulta",
+             # cabecalho e saudacao (revisao 27/11): "ENCAMINHAMENTO", "Ao Dr(a).", "Prezado colega" nao sao destino
+             "prezado", "prezada", "prezados", "colega", "colegas", "caro", "cara", "ilmo", "ilma", "sr", "sra",
+             "senhor", "senhora", "paciente", "atenciosamente", "bom", "boa", "dia", "tarde", "c", "ac"}
 
 
 def chave_encaminhamento(texto) -> str:
-    linhas = [l for l in str(texto or "").splitlines() if l.strip()]
-    t = re.sub(r"^\s*encaminhamento\s*[^a-zA-Z0-9]+\s*", "", linhas[0] if linhas else "", flags=re.I)
-    pal = [w for w in norm(t).split() if w not in _ENC_FORA][:3]
-    return "enc|" + ("_".join(pal) or "?")
+    """Destino do encaminhamento: a 1a linha que diz algo alem de cabecalho/saudacao. Sem destino: 'enc|?', que
+    NUNCA casa com nada (o emissor troca por uma chave unica)."""
+    for l in str(texto or "").splitlines():
+        pal = [w for w in norm(l).split() if w not in _ENC_FORA and not w.isdigit()][:3]
+        if pal:
+            return "enc|" + "_".join(pal)
+    return "enc|?"
 
 
 def chaves_item(tipo: str, item) -> list:
@@ -480,7 +486,7 @@ def chaves_item(tipo: str, item) -> list:
         k = " + ".join(sorted(principios(item)))
         return [("receita", "rx|" + (k or _slug(item)[:60]))]
     if tipo == "atestado":
-        return [("atestado", "atestado")]
+        return [("atestado", "atestado|" + tipo_atestado(item))]
     if tipo == "fisio" or (tipo in ("exame", "encaminhamento") and eh_fisio(item)):
         return [("fisio", chave_fisio(item))]
     if tipo == "encaminhamento":
@@ -488,6 +494,24 @@ def chaves_item(tipo: str, item) -> list:
     if tipo == "justificativa":
         return [("justificativa", "just|" + k) for k in chaves_exame(item)]
     return [("exame", k) for k in chaves_exame(item)]
+
+
+def tipo_atestado(texto) -> str:
+    """afastamento | comparecimento | acompanhante (revisao 27/11: um por TIPO, nao um por dia)."""
+    t = norm(texto)
+    if re.search(r"acompanha", t):
+        return "acompanhante"
+    if re.search(r"comparec|declaracao", t):
+        return "comparecimento"
+    return "afastamento"
+
+
+def _tuss_difere(a, b) -> bool:
+    """Laboratorio com TUSS dos dois lados e codigos diferentes = exames diferentes (TESTOSTERONA x LIVRE, PSA x LIVRE)."""
+    if classe(a) != "Laboratório" or classe(b) != "Laboratório":
+        return False
+    x, y = tuss_lab(a), tuss_lab(b)
+    return bool(x and y and x != y)
 
 
 def mesma_fisio(a, b) -> bool:
@@ -504,13 +528,17 @@ def mesmo_item(tipo: str, a, b) -> bool:
     if tipo == "receita":
         return mesmo_remedio(a, b)
     if tipo == "atestado":
-        return True
+        return tipo_atestado(a) == tipo_atestado(b)
     if tipo == "fisio":
         return mesma_fisio(a, b)
     if tipo == "encaminhamento":
         x, y = chave_encaminhamento(a), chave_encaminhamento(b)
+        if x == "enc|?" or y == "enc|?":
+            return False
         if x == y:
             return True
         sx, sy = set(x[4:].split("_")) - {"?"}, set(y[4:].split("_")) - {"?"}
         return bool(sx and sy) and (sx <= sy or sy <= sx)
+    if _tuss_difere(a, b):
+        return False
     return mesmo_exame(a, b)  # exame e justificativa

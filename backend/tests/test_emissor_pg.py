@@ -134,3 +134,9 @@ def test_pg_dois_gravar_no_mesmo_lote(pg):
     T.test_dois_gravar_no_mesmo_lote_dao_um(pg)
     _c, S, (pid, _p2, _p3) = pg
     assert S().query(PatientRx).count() == 1
+
+
+@pytest.mark.parametrize("nome", [n for n in dir(T) if n.startswith("test_rev")])
+def test_pg_revisao(pg, nome):
+    """As regressoes da revisao independente (27/11) tambem em Postgres."""
+    getattr(T, nome)(pg)

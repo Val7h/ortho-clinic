@@ -44,7 +44,8 @@ PRAZO_GUIA_S = 6 * 60     # guia: o PC leva ate 5 min no pior caso
 MAX_ITENS_GUIA = 5        # a guia SP/SADT tem 5 linhas: 1 lote = 1 guia
 ESPERA_FILA_S = 30
 DONOS = {"sessao", "atendente", "escriba", "tela", "ponte"}
-_RE_TROCA = re.compile(r"(?<![a-z])(troca|trocar|troque|nova|novo)(?![a-z])")
+# 27/11 (revisao): so "troca/trocar/troque" ou "nova receita". "de novo", "novo" e "nova" sozinhos NAO trocam.
+_RE_TROCA = re.compile(r"(?<![a-z])(troca|trocar|troque)(?![a-z])|(?<![a-z])nova\s+receita(?![a-z])")
 
 
 # ------------------------------------------------------------------ fila por paciente ---------------------------------
@@ -125,7 +126,8 @@ def _sem_acento(t: str) -> str:
 
 
 def pediu_troca(troca: bool, ordem: Optional[str]) -> bool:
-    """Decisao 1 (27/11): so troca com a palavra "troca"/"nova" na ordem, ou com a marca explicita."""
+    """Decisao 1 (27/11): so troca com "troca/trocar/troque"/"nova receita" na ordem, ou com a marca explicita.
+    Vale SO para receita (reservar ignora a troca nos outros tipos)."""
     return bool(troca) or bool(ordem and _RE_TROCA.search(_sem_acento(ordem)))
 
 
@@ -178,7 +180,7 @@ def _itens_do_conteudo(tipo: str, conteudo: str) -> List[str]:
     if tipo in ("exame", "justificativa"):
         return G.itens_do_pedido(c)
     if tipo == "atestado":
-        return ["atestado"]
+        return [c.strip()[:300] or "atestado"]
     linhas = [l.strip() for l in c.splitlines() if l.strip()]
     if tipo == "fisio":
         return [" ".join(linhas)[:300] or "FISIOTERAPIA"]
@@ -201,6 +203,8 @@ def montar_itens(tipo: str, itens: Iterable[str], conteudo: Optional[str]) -> Li
         return [Item((conteudo or "").strip()[:300], tipo, k)]
     for b in brutos:
         for t, k in G.chaves_item(tipo, b):
+            if k == "enc|?":   # destino nao reconhecido: chave unica, nunca casa com nada
+                k = "enc|?" + uuid.uuid4().hex[:16]
             if (t, k) in vistas:
                 continue
             vistas.add((t, k))
@@ -212,6 +216,10 @@ def _so_exato(chave: str) -> bool:
     return "|txt:" in chave or "|?" in chave
 
 
+def _nunca_casa(chave: Optional[str]) -> bool:
+    return bool(chave) and chave.startswith("enc|?")
+
+
 def _lado_da_chave(tipo: str, chave: Optional[str]) -> Optional[str]:
     """Lado gravado na chave do exame (D, E ou *); None se a chave nao tem lado (lab, fisio, remedio...)."""
     if tipo not in ("exame", "justificativa") or not chave or chave.startswith(("lab|", "just|lab|")):
@@ -221,6 +229,8 @@ def _lado_da_chave(tipo: str, chave: Optional[str]) -> Optional[str]:
 
 
 def _casa(it_tipo: str, it_texto: str, it_chave: str, outro_texto: str, outro_chave: Optional[str]) -> bool:
+    if _nunca_casa(it_chave) or _nunca_casa(outro_chave):
+        return False
     if outro_chave is not None and outro_chave == it_chave:
         return True
     if _so_exato(it_chave) or (outro_chave and _so_exato(outro_chave)):
@@ -302,7 +312,9 @@ def _docs_de_hoje(db: Session, org: int, pid: int, dia: date, tipo: str) -> List
             continue
         titulo = r.title or ""
         if tipo == "atestado" and r.report_type == "atestado":
-            out.append({"kind": "atestado", "id": r.id, "criado": r.created_at, "linhas": ["atestado"]})
+            primeira = next((l for l in (r.content or "").splitlines() if l.strip()), "")
+            out.append({"kind": "atestado", "id": r.id, "criado": r.created_at,
+                        "linhas": [f"{titulo} {primeira}".strip() or "atestado"]})
         elif tipo == "encaminhamento" and r.report_type == "encaminhamento":
             primeira = next((l for l in (r.content or "").splitlines() if l.strip()), "")
             if not G.eh_fisio(f"{titulo} {primeira}"):
@@ -321,8 +333,10 @@ def _linhas_do_dia(db: Session, org: int, pid: int, dia: date) -> List[EmissorCh
 
 
 def _vencida(r: EmissorChave, agora: datetime) -> bool:
+    """Reserva vencida que o proximo pedido pode assumir. GUIA nunca vence sozinha (revisao 27/11): o PC renova
+    enquanto desenha; so 'falhou' (ou o dono renovando) libera."""
     v = _utc(r.vence_em)
-    return r.estado == "reservado" and v is not None and v <= agora
+    return r.estado == "reservado" and r.formato != "guia" and v is not None and v <= agora
 
 
 def _avaliar(db: Session, org: int, pid: int, dia: date, itens: List[Item], troca: bool, agora: datetime) -> None:
@@ -377,7 +391,8 @@ def situacao(db: Session, org: int, pid: int, tipo: str, itens: Iterable[str] = 
              dia: Optional[date] = None) -> List[dict]:
     """So le (sem fila, sem gravar): a situacao de cada item hoje. Usado pelo "Tudo de hoje" e pelo botao da guia."""
     its = montar_itens(tipo, itens, conteudo)
-    _avaliar(db, org, pid, dia or today_br(), its, False, _agora())
+    with db.begin_nested():   # so le; um erro aqui nao derruba a transacao de quem chamou
+        _avaliar(db, org, pid, dia or today_br(), its, False, _agora())
     return [i.out() for i in its]
 
 
@@ -396,6 +411,7 @@ def reservar(db: Session, org: int, pid: int, tipo: str, itens: Iterable[str] = 
     if guia and len({i.texto for i in its}) > MAX_ITENS_GUIA:
         raise HTTPException(422, f"A guia tem {MAX_ITENS_GUIA} linhas: reserve de {MAX_ITENS_GUIA} em {MAX_ITENS_GUIA}")
     dono = dono if dono in DONOS else "sessao"
+    troca = bool(troca) and tipos == {"receita"}   # troca so de receita; nos outros tipos vale "ja existe"
     dia = dia or today_br()
     prazo = PRAZO_GUIA_S if guia else PRAZO_DOC_S
     h = _hash(conteudo or "\n".join(i.texto for i in its))
@@ -411,6 +427,22 @@ def reservar(db: Session, org: int, pid: int, tipo: str, itens: Iterable[str] = 
             # o que achamos gravado hoje sem chave ganha a chave "pronto" (a proxima conferencia ja ve aqui)
             for i in its:
                 if i.situacao == "existe" and i.linha is None and i.doc:
+                    # revisao 27/11: reserva VENCIDA da mesma chave + documento feito pela tela = a linha vira "pronto"
+                    # com esse documento (antes: a linha nova batia no indice e dava 409 para sempre)
+                    mesma = None
+                    for r in i.vencidas:
+                        if r.estado != "reservado":
+                            continue
+                        if mesma is None and r.chave == i.chave:
+                            mesma = r
+                        else:
+                            r.estado = "falhou"
+                    if mesma is not None:
+                        mesma.estado, mesma.token, mesma.doc_kind, mesma.doc_id = "pronto", "-", i.doc["kind"], i.doc["id"]
+                        mesma.feito_em, mesma.origem = agora, "documento de hoje (reserva vencida)"
+                        i.linha = mesma
+                        continue
+                    db.flush()
                     db.add(EmissorChave(organization_id=org, patient_id=pid, dia=dia, tipo=i.tipo, chave=i.chave,
                                         texto=i.texto, lote=uuid.uuid4().hex, token="-", estado="pronto", dono="tela",
                                         origem="documento de hoje", doc_kind=i.doc["kind"], doc_id=i.doc["id"],
@@ -548,7 +580,7 @@ _PALAVRAS_FISIO = {"motora": r"fisioterap", "rpg": r"\brpg\b|reeducacao postural
                    "acupuntura": r"acupunt"}
 
 
-def conferir_pdf(texto_pdf: str, nome_paciente: str, lote: Lote) -> None:
+def conferir_pdf(texto_pdf: str, nome_paciente: str, lote: Lote) -> Optional[str]:
     """A guia enviada tem o NOME do paciente e CADA item reservado (caso de 27/11: a guia da fisio subiu com o
     conteudo da USG). Descricao cortada pela guia: basta o comeco (20 letras) ou as 3 primeiras palavras longas."""
     t = G.norm(texto_pdf)
@@ -557,21 +589,28 @@ def conferir_pdf(texto_pdf: str, nome_paciente: str, lote: Lote) -> None:
     pal = set(t.split())
     nome = G.norm(nome_paciente)
     partes = [w for w in nome.split() if len(w) >= 3]
+    aviso = None
     if not nome or not (nome in t or (partes and partes[0] in pal and partes[-1] in pal)):
-        raise HTTPException(422, "A guia enviada não é deste paciente (o nome não confere). Nada foi gravado.")
+        # revisao 27/11: nome divergente (cadastro abreviado, nome social...) com os itens certos = grava COM aviso
+        aviso = "O nome do paciente não foi encontrado no PDF da guia: confira antes de entregar."
     faltam = []
-    for item in lote.itens():
-        n = G.norm(item)
+    linhas_pdf = [l for l in str(texto_pdf or "").splitlines() if l.strip()]
+    for r in lote.linhas:
+        item = r.texto or ""
         if lote.tipo == "fisio":
             ok = bool(re.search(_PALAVRAS_FISIO.get(G.tipo_fisio(item), r"fisioterap"), t))
         else:
-            longas = [w for w in n.split() if len(w) >= 4][:3]
-            ok = n[:20] in t or (bool(longas) and all(w in pal for w in longas))
+            # revisao 27/11: o comeco da descricao nao basta ("ULTRASSONOGRAFIA DO " casava joelho D com ombro E).
+            # Alguma linha da guia tem de ser o MESMO exame (classe + regiao + lado, pela regua), ou o texto inteiro.
+            # Descricao cortada pela guia ("OMBRO E...") continua valendo: a regua le o "E" final como lado.
+            ok = G.norm(item) in t or any(_casa(r.tipo, item, r.chave, l, None) for l in linhas_pdf)
         if not ok:
             faltam.append(item)
+    faltam = list(dict.fromkeys(faltam))
     if faltam:
         raise HTTPException(422, "A guia enviada não traz o que foi reservado (" + "; ".join(faltam)[:200]
                             + "). Nada foi gravado.")
+    return aviso
 
 
 def texto_historico_guia(itens: List[str], hd: str) -> str:
@@ -603,10 +642,18 @@ def falhou(db: Session, org: int, lote: str, token: str, motivo: str = "") -> di
                 r.estado = "falhou"
                 r.origem = ((r.origem or "") + f" | falhou: {motivo}")[:120] if motivo else r.origem
                 n += 1
-        for r in db.query(EmissorChave).filter(EmissorChave.substituido_por == lote,
-                                               EmissorChave.estado == "substituido").all():
-            if r.doc_id:   # o documento antigo continua gravado: volta a valer
-                r.estado, r.substituido_por = "pronto", None
+        db.flush()
+        if n:   # so desfaz a troca se ESTE lote ainda estava reservado (nao vencido e assumido/liberado por outro)
+            ativas = db.query(EmissorChave).filter(
+                EmissorChave.organization_id == org, EmissorChave.patient_id == pre.patient_id,
+                EmissorChave.dia == pre.dia, EmissorChave.estado.in_(ESTADOS_ATIVOS)).all()
+            for r in db.query(EmissorChave).filter(EmissorChave.substituido_por == lote,
+                                                   EmissorChave.estado == "substituido").all():
+                if not r.doc_id:
+                    continue
+                if any(a.tipo == r.tipo and _casa(r.tipo, r.texto or "", r.chave, a.texto or "", a.chave) for a in ativas):
+                    continue   # ja ha outro documento valendo para esta chave: o antigo fica substituido
+                r.estado, r.substituido_por = "pronto", None   # o documento antigo continua gravado: volta a valer
         db.flush()
         try:
             db.commit()

@@ -37,6 +37,7 @@ from tzutil import today_br  # noqa: E402
 PONTE = {"X-Escriba-Ponte": os.environ["ESCRIBA_PONTE_TOKEN"]}
 MEDICO = {"X-Teste-Usuario": "10"}
 MEDICO_OUTRA_ORG = {"X-Teste-Usuario": "20"}
+SUPERADMIN = {"X-Teste-Usuario": "30"}
 NOME = "Paciente Inventado Da Silva"
 CELECOXIBE = "USO ORAL\n\nCELECOXIBE 200MG ------------ 1CX\n\nTOMAR 1 CP DE 12 EM 12H."
 
@@ -64,7 +65,9 @@ def montar(url):
     db.add_all([User(id=10, organization_id=1, name="Dr Teste", email="dr@x.test", password_hash="x", role="doctor",
                      active=True),
                 User(id=20, organization_id=2, name="Dr Outro", email="dr2@x.test", password_hash="x", role="doctor",
-                     active=True)])
+                     active=True),
+                User(id=30, organization_id=1, name="Dono Teste", email="su@x.test", password_hash="x",
+                     role="superadmin", active=True)])
     p = Patient(name=NOME, organization_id=1, active=True, insurance="UNIMED TESTE")
     p2 = Patient(name="Outro Paciente Ficticio", organization_id=1, active=True)
     p3 = Patient(name="Paciente Da Outra Conta", organization_id=2, active=True)
@@ -365,13 +368,11 @@ def test_upload_confere_nome_e_itens_e_grava_historico(amb):
     # PDF com o conteudo da USG (caso de 27/11) no lote da fisio: 422, nada gravado
     usg = subir_guia(c, pid, r, [NOME.upper(), "ULTRASSONOGRAFIA DO OMBRO ESQUERDO"])
     assert usg.status_code == 422 and "não traz" in usg.json()["detail"]
-    # PDF de outro paciente: 422
-    outro = subir_guia(c, pid, r, ["FULANO FICTICIO DE TAL", "FISIOTERAPIA MOTORA|10"])
-    assert outro.status_code == 422 and "nome" in usg.json()["detail"] + outro.json()["detail"]
     db = S()
     assert db.query(PatientDocument).count() == 0 and db.query(ExamRequest).count() == 0
     ok = subir_guia(c, pid, r, [NOME.upper(), "FISIOTERAPIA MOTORA", "10"])
     assert ok.status_code == 201, ok.text
+    assert "aviso" not in ok.json()
     doc_id = ok.json()["id"]
     assert subir_guia(c, pid, r, [NOME.upper(), "FISIOTERAPIA MOTORA"]).json()["id"] == doc_id   # mesmo lote: o mesmo
     db = S()
@@ -544,9 +545,167 @@ def test_contagem_da_ia_so_numeros(amb):
     IA.registrar_falha("chat", "timeout")
     with pytest.raises(IA.AnthropicBloqueado):
         IA.permitir("chat", "sessao-a", "texto qualquer 2")   # repetido: barrado (regra de sempre)
-    n = c.get("/ia/contagem", headers=MEDICO).json()
+    assert c.get("/ia/contagem", headers=MEDICO).status_code == 403          # so superadmin (contador e global)
+    n = c.get("/ia/contagem", headers=SUPERADMIN).json()
     assert n["por_rota"]["chat"] == {"autorizadas": 2, "barradas": 1, "ok": 1, "falhas": 1, "tokens_entrada": 100,
                                      "tokens_saida": 20}
     assert n["sessoes"] == 1 and n["chamadas_por_sessao_mediana"] == 2
     assert "texto" not in str(n) and "sessao-a" not in str(n)
     IA.reset_para_teste()
+
+
+# ---------------------------------------------------------------- revisao independente (27/11) -----------------------
+def _vencer(S, **filtro):
+    db = S()
+    q = db.query(EmissorChave)
+    for k, v in filtro.items():
+        q = q.filter(getattr(EmissorChave, k) == v)
+    q.update({"vence_em": datetime.now(timezone.utc) - timedelta(seconds=1)})
+    db.commit()
+    db.close()
+
+
+def test_rev1_reserva_vencida_mais_documento_da_tela_nao_trava(amb):
+    """ALTA 1: reserva vencida + o mesmo documento feito pela tela davam 409 para sempre."""
+    c, S, (pid, _p2, _p3) = amb
+    velho = reservar(c, pid, "receita", conteudo=CELECOXIBE)
+    _vencer(S)
+    rx = gravar_receita(c, pid, None).json()["id"]                 # a tela, sem reserva
+    r = reservar(c, pid, "receita", conteudo=CELECOXIBE)
+    assert not r["reservado"] and r["itens"][0]["situacao"] == "existe" and r["itens"][0]["doc"]["id"] == rx
+    # lote tudo-ou-nada com o item da tela + um novo: diz existe/novo (nao 409), e com parcial reserva o novo
+    t2 = CELECOXIBE + "\n\nDIPIRONA 1G ---- 1CX\nTOMAR SE DOR"
+    r = reservar(c, pid, "receita", conteudo=t2)
+    assert [i["situacao"] for i in r["itens"]] == ["existe", "novo"]
+    assert reservar(c, pid, "receita", conteudo=t2, parcial=True)["reservado"]
+    assert gravar_receita(c, pid, velho).status_code == 409          # o dono antigo nao grava
+    db = S()
+    assert db.query(EmissorChave).filter(EmissorChave.chave == "rx|celecoxibe").one().doc_id == rx
+
+
+def test_rev2_troca_so_receita_e_so_com_a_palavra(amb):
+    c, S, (pid, _p2, _p3) = amb
+    assert E.pediu_troca(False, "troque por 400") and E.pediu_troca(False, "faz uma nova receita")
+    for ordem in ("faz de novo", "passa novo", "a nova dose", "nova", "novo"):
+        assert not E.pediu_troca(False, ordem), ordem
+    r = reservar(c, pid, "receita", conteudo=CELECOXIBE)
+    gravar_receita(c, pid, r)
+    assert not reservar(c, pid, "receita", conteudo=CELECOXIBE, ordem="faz de novo")["reservado"]
+    # exame com troca=True: ignorado, devolve "existe"
+    r = reservar(c, pid, "exame", ["RNM DO JOELHO DIREITO"])
+    c.post(f"/patients/{pid}/exams", headers=lote_h(r), json={"date": today_br().isoformat(), "exams": [],
+           "free_text": "SOLICITO: \n\n\nRNM DO JOELHO DIREITO\n\nHD: DOR"})
+    r = reservar(c, pid, "exame", ["RNM DO JOELHO DIREITO"], troca=True, ordem="troca")
+    assert not r["reservado"] and r["itens"][0]["situacao"] == "existe"
+    assert S().query(EmissorChave).filter(EmissorChave.estado == "substituido").count() == 0
+
+
+def test_rev3_lote_feito_em_outra_rota_da_409_e_nao_cria(amb):
+    c, S, (pid, _p2, _p3) = amb
+    r = reservar(c, pid, "encaminhamento", ["Encaminhamento — Reumatologia"])
+    corpo = {"date": today_br().isoformat(), "report_type": "encaminhamento", "title": "Encaminhamento — Reumatologia",
+             "content": "Encaminho (ficticio)."}
+    assert c.post(f"/patients/{pid}/reports", headers=lote_h(r), json=corpo).status_code == 201
+    # o mesmo lote, ja feito como encaminhamento, numa rota de outro tipo: 409
+    assert c.post(f"/patients/{pid}/physio", headers=lote_h(r),
+                  json={"date": today_br().isoformat(), "diagnosis": "x"}).status_code == 409
+    db = S()
+    db.query(EmissorChave).update({"doc_kind": "laudo"})   # finge que virou outro documento
+    db.commit()
+    assert c.post(f"/patients/{pid}/reports", headers=lote_h(r), json=corpo).status_code == 409
+    db = S()
+    assert db.query(MedicalReport).count() == 1
+    from models.documents import PhysioRequest
+    assert db.query(PhysioRequest).count() == 0
+    # receita: lote feito com outro doc_kind tambem 409
+    rr = reservar(c, pid, "receita", conteudo=CELECOXIBE)
+    gravar_receita(c, pid, rr)
+    db.query(EmissorChave).filter(EmissorChave.lote == rr["lote"]).update({"doc_kind": "exame"})
+    db.commit()
+    assert gravar_receita(c, pid, rr).status_code == 409 and S().query(PatientRx).count() == 1
+
+
+def test_rev4a_laboratorio_com_tuss_diferente_nao_e_o_mesmo(amb):
+    assert not G.mesmo_item("exame", "TESTOSTERONA", "TESTOSTERONA LIVRE")
+    assert not G.mesmo_item("exame", "PSA", "PSA LIVRE")
+    assert G.mesmo_item("exame", "HEMOGRAMA", "HEMOGRAMA COMPLETO")
+    c, S, (pid, _p2, _p3) = amb
+    r = reservar(c, pid, "exame", ["TESTOSTERONA TOTAL"])
+    c.post(f"/patients/{pid}/exams", headers=lote_h(r), json={"date": today_br().isoformat(), "exams": [],
+           "free_text": "SOLICITO: \n\n\nTESTOSTERONA TOTAL\n\nHD: X"})
+    assert reservar(c, pid, "exame", ["TESTOSTERONA LIVRE"])["reservado"]
+
+
+def test_rev4b_encaminhamento_ignora_cabecalho_e_sem_destino_nunca_casa(amb):
+    assert G.chave_encaminhamento("ENCAMINHAMENTO\nAo Dr(a).\nPrezado colega,\nEncaminho para Reumatologia") == \
+        "enc|reumatologia"
+    assert G.chave_encaminhamento("ENCAMINHAMENTO\nAo Dr(a).\nPrezado colega,") == "enc|?"
+    assert not G.mesmo_item("encaminhamento", "ENCAMINHAMENTO", "Ao Dr(a).")
+    c, S, (pid, _p2, _p3) = amb
+    r1 = reservar(c, pid, "encaminhamento", conteudo="ENCAMINHAMENTO\nAo Dr(a).")
+    r2 = reservar(c, pid, "encaminhamento", conteudo="ENCAMINHAMENTO\nPrezado colega")
+    assert r1["reservado"] and r2["reservado"]                       # sem destino: nunca "ja existe"
+
+
+def test_rev4c_atestado_por_tipo(amb):
+    c, S, (pid, _p2, _p3) = amb
+    r = reservar(c, pid, "atestado", conteudo="Atestado — afastamento de atividades de trabalho")
+    assert c.post(f"/patients/{pid}/reports", headers=lote_h(r), json={"date": today_br().isoformat(),
+                  "report_type": "atestado", "title": "Atestado — Atividades de trabalho",
+                  "content": "Atesto (ficticio)."}).status_code == 201
+    assert reservar(c, pid, "atestado", conteudo="atestado de afastamento")["itens"][0]["situacao"] == "existe"
+    assert reservar(c, pid, "atestado", conteudo="Declaração de comparecimento")["reservado"]
+    assert reservar(c, pid, "atestado", conteudo="Atestado de acompanhante")["reservado"]
+
+
+def test_rev5_guia_vencida_nao_e_assumida(amb):
+    c, S, (pid, _p2, _p3) = amb
+    g = reservar(c, pid, "exame", ["USG DO OMBRO ESQUERDO"], guia=True)
+    _vencer(S)
+    r = reservar(c, pid, "exame", ["USG DO OMBRO ESQUERDO"], guia=True, h=PONTE)
+    assert not r["reservado"] and r["itens"][0]["situacao"] == "em_andamento"
+    # o dono renova e continua valendo; so o "falhou" libera
+    assert c.post(f"/emissor/lotes/{g['lote']}/renovar", json={"token": g["token"]}, headers=MEDICO).status_code == 200
+    c.post(f"/emissor/lotes/{g['lote']}/falhou", json={"token": g["token"]}, headers=MEDICO)
+    assert reservar(c, pid, "exame", ["USG DO OMBRO ESQUERDO"], guia=True, h=PONTE)["reservado"]
+
+
+def test_rev6_guia_com_nome_divergente_grava_com_aviso(amb):
+    c, S, (pid, _p2, _p3) = amb
+    r = reservar(c, pid, "exame", ["ULTRASSONOGRAFIA DO OMBRO ESQUERDO"], guia=True)
+    up = subir_guia(c, pid, r, ["NOME ABREVIADO FICTICIO", "ULTRASSONOGRAFIA DO OMBRO ESQUERDO"])
+    assert up.status_code == 201 and "nome" in up.json()["aviso"]
+    doc = S().query(PatientDocument).one()
+    assert "AVISO" in (doc.description or "")
+    # item que nao confere continua 422
+    r2 = reservar(c, pid, "exame", ["ULTRASSONOGRAFIA DO JOELHO DIREITO"], guia=True)
+    assert subir_guia(c, pid, r2, [NOME.upper(), "ULTRASSONOGRAFIA DO OMBRO ESQUERDO"]).status_code == 422
+
+
+def test_rev7_situacao_em_savepoint_e_falhou_nao_ressuscita(amb):
+    c, S, (pid, _p2, _p3) = amb
+    db = S()
+    assert E.situacao(db, 1, pid, "receita", conteudo=CELECOXIBE)[0]["situacao"] == "novo"
+    db.close()
+    # A gravada; troca B; B vence e e assumida por C (mesma chave); o falhou tardio de B nao revive A
+    r = reservar(c, pid, "receita", conteudo=CELECOXIBE)
+    rx1 = gravar_receita(c, pid, r).json()["id"]
+    b = reservar(c, pid, "receita", conteudo=CELECOXIBE, troca=True)
+    _vencer(S, lote=b["lote"])
+    cc = reservar(c, pid, "receita", conteudo=CELECOXIBE)
+    assert cc["reservado"]
+    assert c.post(f"/emissor/lotes/{b['lote']}/falhou", json={"token": b["token"]}, headers=MEDICO).status_code == 409
+    rx3 = gravar_receita(c, pid, cc).json()["id"]
+    db = S()
+    est = sorted((x.estado, x.doc_id) for x in db.query(EmissorChave).all())
+    assert est == [("pronto", rx3), ("substituido", rx1)]
+    # e se B tivesse sido liberado (falhou) por outro lote antes: o falhou dele nao revive A
+    d = reservar(c, pid, "receita", conteudo=CELECOXIBE, troca=True)            # substitui rx3
+    db.query(EmissorChave).filter(EmissorChave.lote == d["lote"]).update({"estado": "falhou"})
+    db.commit()
+    e2 = reservar(c, pid, "receita", conteudo=CELECOXIBE)
+    assert e2["reservado"]
+    c.post(f"/emissor/lotes/{d['lote']}/falhou", json={"token": d["token"]}, headers=MEDICO)
+    db = S()
+    ativos = db.query(EmissorChave).filter(EmissorChave.estado.in_(("reservado", "pronto"))).all()
+    assert len(ativos) == 1 and ativos[0].lote == e2["lote"]

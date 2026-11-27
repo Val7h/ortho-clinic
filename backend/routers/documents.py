@@ -48,10 +48,12 @@ def _gravar_com_lote(db: Session, patient: Patient, cab, modelo, campos: dict, t
     org = patient.organization_id or 1
     with _E.fila_do_paciente(db, org, patient.id):
         lote = _E.abrir_lote(db, org, patient.id, cab, tipos)
-        if lote.feito:
-            ja = db.query(modelo).filter(modelo.id == lote.doc_id, modelo.patient_id == patient.id).first()
-            if ja:
-                return ja
+        if lote.feito:   # o mesmo lote de novo: o MESMO documento; reserva que virou outro tipo: 409, nunca cria
+            ja = db.query(modelo).filter(modelo.id == lote.doc_id, modelo.patient_id == patient.id).first() \
+                if lote.doc_kind == kind else None
+            if ja is None:
+                raise HTTPException(409, "Esta reserva já virou outro documento. Nada foi gravado.")
+            return ja
         if linhas_doc is not None:
             _E.conferir_conteudo(lote, linhas_doc)
         obj = modelo(patient_id=patient.id, organization_id=org, **campos)

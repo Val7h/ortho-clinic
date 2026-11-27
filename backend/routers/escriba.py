@@ -684,7 +684,7 @@ def itens_emissor(tipo: str, d: dict):
         t = (d.get("texto") or "").strip()
         return "encaminhamento", [t] if t else [], t
     if tipo == "atestado":
-        return "atestado", ["atestado"], None
+        return "atestado", [(d.get("texto") or "atestado").strip()], None
     return None, [], None
 
 

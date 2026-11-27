@@ -155,10 +155,12 @@ def create_prescription(
         org = patient.organization_id or 1
         with _E.fila_do_paciente(db, org, patient_id):
             lote = _E.abrir_lote(db, org, patient_id, cab, {"receita"})
-            if lote.feito:   # o mesmo lote gravado de novo: a MESMA receita
-                ja = db.query(PatientRx).filter(PatientRx.id == lote.doc_id).first()
-                if ja:
-                    return ja
+            if lote.feito:   # o mesmo lote gravado de novo: a MESMA receita; outro documento: 409, nunca cria
+                ja = db.query(PatientRx).filter(PatientRx.id == lote.doc_id, PatientRx.patient_id == patient_id).first() \
+                    if lote.doc_kind == "receita" else None
+                if ja is None:
+                    raise HTTPException(status_code=409, detail="Esta reserva já virou outro documento. Nada foi gravado.")
+                return ja
             texto_meds = "\n".join(f"{m['name']} {m.get('dose') or ''} ----" for m in meds_novos if m.get("name"))
             _E.conferir_conteudo(lote, _E.G.remedios_da_receita(data.instructions or "")
                                  + _E.G.remedios_da_receita(texto_meds))

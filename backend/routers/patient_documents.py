@@ -282,8 +282,7 @@ def _lote_upload_conferir(db: Session, paciente: Patient, cab, texto_pdf: str):
             if lote.doc_kind != "guia":
                 raise HTTPException(409, "Esta reserva já virou outro documento. Nada foi gravado.")
             return _get_doc_or_404(lote.doc_id, paciente.id, db)
-        _E.conferir_pdf(texto_pdf, paciente.name or "", lote)
-        return None
+        return _E.conferir_pdf(texto_pdf, paciente.name or "", lote)   # aviso (nome divergente) ou None
 
 
 def _lote_upload_gravar(db: Session, paciente: Patient, cab, campos: dict, indicacao: Optional[str]):
@@ -323,8 +322,11 @@ async def _upload_com_lote(db, paciente, cab, content, file, title, category, da
         raise HTTPException(422, "Não consegui abrir o PDF da guia. Nada foi gravado.")
     # a fila do paciente e trava de thread: roda fora do laco assincrono (nunca bloqueia o servidor)
     ja = await run_in_threadpool(_lote_upload_conferir, db, paciente, cab, texto_pdf)
-    if ja is not None:
+    if isinstance(ja, PatientDocument):
         return DocumentOut.from_orm_ext(ja)
+    aviso = ja   # nome do paciente nao achado no PDF (itens conferem): grava, com o aviso na descricao e na resposta
+    if aviso:
+        description = ((description or "") + f" [AVISO: {aviso}]").strip()
     ext = os.path.splitext(file.filename or "doc.pdf")[1].lower() or ".pdf"
     file_url = upload_file(content, f"{uuid.uuid4().hex}{ext}", folder="patient_docs")   # rede: FORA da fila
     try:
@@ -336,6 +338,8 @@ async def _upload_com_lote(db, paciente, cab, content, file, title, category, da
                   file_name=file.filename, mime_type=file.content_type or "application/pdf",
                   file_size_kb=len(content) // 1024)
     doc = await run_in_threadpool(_lote_upload_gravar, db, paciente, cab, campos, indicacao)
+    if aviso:
+        return JSONResponse(status_code=201, content={**DocumentOut.from_orm_ext(doc).model_dump(), "aviso": aviso})
     return DocumentOut.from_orm_ext(doc)
 
 

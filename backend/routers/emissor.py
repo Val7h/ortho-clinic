@@ -12,7 +12,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from database import get_db
-from deps import require_doctor
+from deps import require_doctor, require_superadmin
 from models.organization import User
 from models.patient import Patient
 from routers.escriba import exigir_ponte
@@ -105,7 +105,8 @@ ia_router = APIRouter(prefix="/ia", tags=["ia"])
 
 
 @ia_router.get("/contagem")
-def ia_contagem(u: User = Depends(require_doctor)):
-    """Numeros do dia por rota + chamadas por sessao (mediana e p90). Sem texto de paciente, sem identificador."""
+def ia_contagem(u: User = Depends(require_superadmin)):
+    """Numeros do dia por rota + chamadas por sessao (mediana e p90). Sem texto de paciente, sem identificador.
+    So superadmin: o contador e do processo inteiro (todas as contas)."""
     from services.ia_limits import contagem
     return contagem()
