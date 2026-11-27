@@ -14,7 +14,8 @@ pymupdf==1.24.10               # páginas da guia SP/SADT no pacote do dia (21/1
 Pillow==10.4.0
 httpx==0.27.2
 python-jose[cryptography]==3.3.0
-passlib>=1.7.4
+passlib==1.7.4                  # 26/11: fixado; bcrypt 5 quebra o verify do passlib 1.7.4 (login 500)
+bcrypt==4.0.1
 argon2-cffi>=23.1.0
 jinja2==3.1.4
 psycopg2-binary==2.9.9
