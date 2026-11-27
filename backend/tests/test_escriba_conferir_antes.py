@@ -1,5 +1,5 @@
 """Escriba, "Tudo de hoje", revisão 19/11 item 1 (lote 4, 22/11/2026).
-- Padrão (configuração desligada): abrir gera TODOS os pendentes, como sempre.
+- 27/11 (emissor único): a conferência fica SEMPRE ligada; sem a lista de marcados, nada vira documento.
 - "Conferir antes de gerar" é POR MÉDICO e começa desligada.
 - Ligada: sem lista de marcados não gera nada; com a lista, só os marcados viram pedido.
 Dados fictícios. Roda isolado: python -m pytest -q --noconftest tests/test_escriba_conferir_antes.py"""
@@ -52,12 +52,12 @@ def _pedidos(db):
     return sorted(p.sugestao_id for p in db.query(EscribaPedido).filter(EscribaPedido.tipo == "gerar_documento"))
 
 
-def test_padrao_continua_gerando_todos_os_pendentes():
+def test_27nov_conferir_sempre_ligado_sem_lista_nao_gera():
+    """27/11 (emissor unico, "o Escriba so sugere"): a conferencia vale para todos, sempre; sem lista, nada."""
     db = _db(); e, sugs = _base(db)
-    assert ES.ler_config(db, MED) == {"conferir_antes_de_gerar": False}
+    assert ES.ler_config(db, MED) == {"conferir_antes_de_gerar": True}
     r = ES.gerar_pendentes(e.id, None, db, MED)
-    # atestado sem os dias ditos fica de fora (regra de sempre)
-    assert r["novos"] == 3 and _pedidos(db) == sorted(x.id for x in sugs[:3])
+    assert r["novos"] == 0 and r["conferir_antes_de_gerar"] is True and _pedidos(db) == []
 
 
 def test_ligada_sem_lista_nao_gera_nada_e_mostra_a_lista():
@@ -88,16 +88,17 @@ def test_lista_vazia_nao_gera_nada():
     assert r["novos"] == 0 and _pedidos(db) == []
 
 
-def test_configuracao_e_por_medico():
+def test_configuracao_desligada_nao_desliga_mais_a_conferencia():
+    """27/11: o PUT continua aceitando (a tela antiga manda), mas nao desliga a conferencia de ninguem."""
     db = _db(); e, sugs = _base(db)
-    ES.salvar_config(ES.ConfigEscribaIn(conferir_antes_de_gerar=True), db, MED)
-    assert ES.ler_config(db, MED2) == {"conferir_antes_de_gerar": False}
-    assert ES.gerar_pendentes(e.id, None, db, MED2)["novos"] == 3
     ES.salvar_config(ES.ConfigEscribaIn(conferir_antes_de_gerar=False), db, MED)
-    assert ES.ler_config(db, MED) == {"conferir_antes_de_gerar": False}
+    assert ES.ler_config(db, MED) == {"conferir_antes_de_gerar": True}
+    assert ES.ler_config(db, MED2) == {"conferir_antes_de_gerar": True}
+    assert ES.gerar_pendentes(e.id, None, db, MED2)["novos"] == 0 and _pedidos(db) == []
 
 
 def test_rota_aceita_post_sem_corpo_como_a_tela_antiga():
+    """A tela antiga (POST sem corpo) recebe 200 e a lista para conferir; nada vira documento."""
     from fastapi.testclient import TestClient
     from database import get_db
     from deps import require_doctor
@@ -107,31 +108,9 @@ def test_rota_aceita_post_sem_corpo_como_a_tela_antiga():
     try:
         c = TestClient(main.app)
         r = c.post(f"/escriba/sugestoes/entrada/{e.id}/gerar-pendentes")
-        assert r.status_code == 200 and r.json()["novos"] == 3
-        assert c.get("/escriba/config").json() == {"conferir_antes_de_gerar": False}
+        assert r.status_code == 200 and r.json()["novos"] == 0 and r.json()["conferir_antes_de_gerar"] is True
+        assert c.get("/escriba/config").json() == {"conferir_antes_de_gerar": True}
+        r = c.post(f"/escriba/sugestoes/entrada/{e.id}/gerar-pendentes", json={"sugestao_ids": [sugs[0].id]})
+        assert r.status_code == 200 and r.json()["novos"] == 1
     finally:
         main.app.dependency_overrides.clear()
-
-
-def test_sem_tabela_de_configuracao_vale_desligado():
-    db = _db(); e, sugs = _base(db)
-    ES._config_ok = True   # finge que já tentou criar, mas a tabela não existe
-    assert ES.ler_config(db, MED) == {"conferir_antes_de_gerar": False}
-    assert ES.gerar_pendentes(e.id, None, db, MED)["novos"] == 3
-
-
-def test_leitura_com_erro_vale_desligado():
-    db = _db(); e, sugs = _base(db)
-    ES.salvar_config(ES.ConfigEscribaIn(conferir_antes_de_gerar=True), db, MED)
-    orig = db.execute
-
-    def execute(stmt, *a, **k):
-        if "from escriba_config_medico" in str(stmt):
-            raise RuntimeError("falha simulada de leitura")
-        return orig(stmt, *a, **k)
-    db.execute = execute
-    try:
-        assert ES.ler_config(db, MED) == {"conferir_antes_de_gerar": False}
-        assert ES.gerar_pendentes(e.id, None, db, MED)["novos"] == 3
-    finally:
-        db.execute = orig

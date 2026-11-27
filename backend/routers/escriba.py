@@ -604,6 +604,12 @@ def pedir_guia(sug_id: int, db: Session = Depends(get_db), u: User = Depends(req
     ja = _ultimo_pedido(db, x.id)
     if ja and ja.estado != "falhou":
         return _pedido_out(ja)
+    # 27/11 (emissor unico): a guia ja saiu hoje (ou esta saindo por outro gerador): nao cria pedido
+    emi = emissor_da_sugestao(db, x)
+    if emi:
+        feito = emi["situacao"] == "existe"
+        return {"id": None, "tipo": "guia", "estado": "feito" if feito else "pego", "resultado": emi.get("aviso"),
+                "criado_em": None, "feito_em": None, "documentos": emi.get("documentos") or []}
     d = _json(x.dados)
     if d.get("pendente_confirmacao"):
         raise HTTPException(422, "Aguardando sua resposta no assistente (lado ou convênio conflitante)")
@@ -660,12 +666,60 @@ def _pedido_ativo(db: Session, sug_id: int) -> Optional[EscribaPedido]:
             .order_by(EscribaPedido.id.desc()).first())
 
 
-def _pode_gerar(db: Session, x: EscribaSugestao) -> bool:
-    """Mesma regra do gerar_pendentes: nova/aberta, sem motivo de pulo e sem pedido andando/feito."""
+# ── 27/11 (emissor unico, P4): o Escriba so SUGERE. Antes de virar pedido, cada botao pergunta ao emissor
+# (services/emissor.py): item com chave PRONTA hoje = botao "feito" com o MESMO documento; chave EM ANDAMENTO (a sessao
+# ou outro gerador esta fazendo) = "gerando", sem pedido novo. A chave e a mesma que o PC reserva (consulta.py, P5).
+
+def itens_emissor(tipo: str, d: dict):
+    """(tipo do emissor, itens, conteudo) de um botao. O PC (P5) manda o MESMO texto ao reservar."""
+    if tipo == "exame":
+        return "exame", [str(i).strip() for i in (d.get("itens") or []) if str(i).strip()], None
+    if tipo == "fisio":
+        desc = (d.get("descricao_guia") or "FISIOTERAPIA").strip()
+        hip = (d.get("hipotese") or d.get("diagnostico") or "").strip()
+        return "fisio", [f"{desc} {hip}".strip()], None
+    if tipo == "receita":
+        return "receita", [], d.get("texto") or ""
+    if tipo == "encaminhamento":
+        t = (d.get("texto") or "").strip()
+        return "encaminhamento", [t] if t else [], t
+    if tipo == "atestado":
+        return "atestado", ["atestado"], None
+    return None, [], None
+
+
+def emissor_da_sugestao(db: Session, x: EscribaSugestao) -> Optional[dict]:
+    """{situacao: existe|em_andamento, documentos, aviso} ou None (novo, ou nao deu para conferir). So le."""
+    from services import emissor as E
+    tipo, itens, conteudo = itens_emissor(x.tipo, _json(x.dados))
+    if not tipo or not (itens or (conteudo or "").strip()):
+        return None
+    try:
+        sit = E.situacao(db, x.organization_id or 1, x.patient_id, tipo, itens, conteudo)
+    except Exception:  # regua/tabela fora: o botao segue o caminho de sempre (o PC confere de novo ao reservar)
+        return None   # sem rollback: nao pode desfazer os pedidos ja montados no gerar_pendentes
+    andando = [s for s in sit if s["situacao"] == "em_andamento"]
+    if andando:
+        return {"situacao": "em_andamento", "documentos": [], "aviso": andando[0].get("aviso")}
+    if sit and all(s["situacao"] == "existe" for s in sit):
+        docs = list({(s["doc"]["kind"], s["doc"]["id"]): {**s["doc"], "ja_existia": True}
+                     for s in sit if s.get("doc")}.values())
+        return {"situacao": "existe", "documentos": docs, "aviso": "; ".join(dict.fromkeys(s["aviso"] for s in sit))}
+    return None
+
+
+_CALCULAR = object()
+
+
+def _pode_gerar(db: Session, x: EscribaSugestao, emi=_CALCULAR) -> bool:
+    """Mesma regra do gerar_pendentes: nova/aberta, sem motivo de pulo, sem pedido andando/feito e (27/11) sem
+    documento pronto ou em andamento no emissor."""
     if x.estado not in ("nova", "aberta") or _motivo_pulo(x):
         return False
     ja = _pedido_ativo(db, x.id)
-    return not (ja and (ja.estado != "falhou" or (ja.resultado or "").startswith(NAO_GERA)))
+    if ja and (ja.estado != "falhou" or (ja.resultado or "").startswith(NAO_GERA)):
+        return False
+    return (emissor_da_sugestao(db, x) if emi is _CALCULAR else emi) is None
 
 
 # ── 22/11 (revisão 19/11, item 1): "Conferir antes de gerar", configuração POR MÉDICO ──
@@ -693,15 +747,9 @@ def _garantir_config(db: Session) -> None:
 
 
 def conferir_antes_de_gerar(db: Session, u: User) -> bool:
-    """Tabela ausente ou leitura com erro = DESLIGADO (gera como sempre), nunca 500."""
-    try:
-        _garantir_config(db)
-        v = db.execute(text("select conferir_antes_de_gerar from escriba_config_medico where user_id=:u"),
-                       {"u": u.id}).scalar()
-        return bool(v)
-    except Exception:
-        db.rollback()
-        return False
+    """27/11 (emissor unico, "o Escriba so sugere"): SEMPRE ligado. Sem a lista de marcados, nada vira documento.
+    A tabela da configuracao fica (o PUT continua aceitando), mas nao desliga mais a conferencia."""
+    return True
 
 
 class ConfigEscribaIn(BaseModel):
@@ -744,20 +792,28 @@ def _gerar_out(db: Session, e: WaitingRoomEntry, org: int) -> dict:
         if x.estado == "descartada":
             continue
         ped = _pedido_ativo(db, x.id)
-        motivo = None if (ped or x.estado == "feita") else _motivo_pulo(x)
+        # 27/11 (emissor): so pergunta ao emissor o que ainda nao esta feito nem andando por pedido
+        # (o botao "feito" sem pedido tambem mostra o documento que o emissor ja tem)
+        emi = None if (ped and ped.estado in ("pendente", "pego", "feito")) else emissor_da_sugestao(db, x)
+        motivo = None if (ped or x.estado == "feita" or emi) else _motivo_pulo(x)
         if ped and ped.estado in ("pendente", "pego"):
             andando = True
             cont["gerando"] += 1
-        elif ped and ped.estado == "falhou" and x.estado != "feita":
-            cont["falhas"] += 1
         elif (ped and ped.estado == "feito") or x.estado == "feita":
             cont["feitos"] += 1
+        elif emi and emi["situacao"] == "em_andamento":
+            andando = True
+            cont["gerando"] += 1
+        elif emi and emi["situacao"] == "existe":
+            cont["feitos"] += 1
+        elif ped and ped.estado == "falhou":
+            cont["falhas"] += 1
         elif motivo:
             cont["pulados"] += 1
         itens.append({"sugestao_id": x.id, "tipo": x.tipo, "rotulo": x.rotulo, "estado": x.estado,
-                      "pedido": _pedido_out(ped), "pulada": motivo,
+                      "pedido": _pedido_out(ped), "pulada": motivo, "emissor": emi,
                       # 22/11: para a lista do "Conferir antes de gerar"
-                      "conferida": bool(x.conferida), "frase": x.frase, "pode_gerar": _pode_gerar(db, x)})
+                      "conferida": bool(x.conferida), "frase": x.frase, "pode_gerar": _pode_gerar(db, x, emi)})
     return {"entry_id": e.id, "pc_vivo": _pc_vivo(org), "terminado": not andando, **cont, "itens": itens}
 
 
@@ -766,7 +822,9 @@ def gerar_pendentes(entry_id: int, data: Optional[GerarPendentesIn] = None, db: 
                     u: User = Depends(require_doctor)):
     """Abre o "Tudo de hoje": cria 1 pedido gerar_documento por sugestao nova/aberta. Repetir nao duplica:
     sugestao com pedido andando ou feito fica como esta; falha por erro passageiro tenta de novo.
-    22/11: com sugestao_ids, so as marcadas. Medico com "Conferir antes de gerar" ligado e sem lista: nada."""
+    22/11: com sugestao_ids, so as marcadas. Medico com "Conferir antes de gerar" ligado e sem lista: nada.
+    27/11 (emissor unico): "Conferir antes de gerar" SEMPRE ligado (sem lista, nada); botao com documento pronto hoje
+    vira "feito" com o mesmo documento; documento em andamento conta como "gerando" e nao vira pedido."""
     e, p = _entrada_da_org(db, entry_id, u)
     org = p.organization_id or 1
     escolhidas = None if data is None or data.sugestao_ids is None else set(data.sugestao_ids)
@@ -775,11 +833,17 @@ def gerar_pendentes(entry_id: int, data: Optional[GerarPendentesIn] = None, db: 
     q = (db.query(EscribaSugestao).filter(EscribaSugestao.entry_id == e.id,
                                           EscribaSugestao.estado.in_(("nova", "aberta")))
          .order_by(EscribaSugestao.id))
-    novos = 0
+    novos, mudou = 0, False
     for x in q.all():
         if escolhidas is not None and x.id not in escolhidas:
             continue
-        if not _pode_gerar(db, x):
+        emi = emissor_da_sugestao(db, x)
+        if emi and emi["situacao"] == "existe" and x.estado in ("nova", "aberta") and not _motivo_pulo(x):
+            # 27/11: o documento ja saiu hoje (sessao, tela ou outro botao): o botao fica "feito", sem pedido novo
+            x.estado, x.feita_em, x.sem_mudanca = "feita", _agora(), True
+            mudou = True
+            continue
+        if not _pode_gerar(db, x, emi):
             continue
         dados = {"sugestao_id": x.id, "tipo": x.tipo, "rotulo": x.rotulo, "frase": x.frase, "conferida": bool(x.conferida),
                  "dados": _json(x.dados), "convenio": p.insurance, "convenio_plano": p.insurance_plan,
@@ -788,7 +852,7 @@ def gerar_pendentes(entry_id: int, data: Optional[GerarPendentesIn] = None, db: 
         db.add(EscribaPedido(organization_id=x.organization_id or org, patient_id=p.id, entry_id=e.id, sugestao_id=x.id,
                              tipo="gerar_documento", dados=json.dumps(dados, ensure_ascii=False), doctor_user_id=u.id))
         novos += 1
-    if novos:
+    if novos or mudou:
         db.commit()
     return {**_gerar_out(db, e, org), "novos": novos}
 

@@ -18,7 +18,21 @@ ENC = {"chave": "encaminhamento:reumato", "tipo": "encaminhamento", "rotulo": "E
 
 
 def _gerar(c, eid, h=MEDICO):
-    return c.post(f"/escriba/sugestoes/entrada/{eid}/gerar-pendentes", headers=h)
+    """27/11 (emissor unico): sem a lista de marcados nada e gerado. Aqui o medico marca TODOS os botoes da consulta
+    ("Gerar marcados" com tudo marcado), que era o que a tela antiga fazia sozinha."""
+    r = c.get(f"/escriba/sugestoes/entrada/{eid}", headers=h)
+    ids = [x["id"] for x in r.json()["sugestoes"]] if r.status_code == 200 else None
+    return c.post(f"/escriba/sugestoes/entrada/{eid}/gerar-pendentes", headers=h,
+                  json={"sugestao_ids": ids} if ids is not None else None)
+
+
+def test_27nov_sem_lista_nao_gera_nada(ambiente):
+    c, _S, pid, eid = ambiente
+    s = _ligar(c, pid, eid)
+    _mandar(c, s["id"], [EXAME, FISIO, RX])
+    j = c.post(f"/escriba/sugestoes/entrada/{eid}/gerar-pendentes", headers=MEDICO).json()
+    assert j["novos"] == 0 and j["conferir_antes_de_gerar"] is True
+    assert c.get("/escriba/ponte/pedidos", headers=PONTE).json() == []
 
 
 def test_cria_um_pedido_por_sugestao_e_nao_duplica(ambiente):
