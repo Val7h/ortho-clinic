@@ -40,6 +40,10 @@ _sessao_day: dict[str, str] = {}
 _fails: deque[float] = deque()
 _circuit_until = 0.0
 _recent: dict[str, float] = {}
+# 27/11/2026 (P6, so MEDIR): contagem de chamadas de IA do site por rota, no dia. Nao muda quando nem quantas vezes a
+# IA e chamada; nao guarda texto nenhum (so numeros). Base para decidir "IA so no fim" com numero, nao estimativa.
+_contagem: dict[str, dict[str, int]] = {}
+_contagem_dia = ""
 
 
 class AnthropicBloqueado(Exception):
@@ -73,8 +77,47 @@ def _conta_dia() -> int:
     return sum(_sessao_calls.values())
 
 
+def _contar(rota: str, campo: str, n: int = 1) -> None:
+    """Chamar com _lock tomado."""
+    global _contagem_dia
+    h = _hoje()
+    if _contagem_dia != h:
+        _contagem_dia = h
+        _contagem.clear()
+    c = _contagem.setdefault(rota or "?", {"autorizadas": 0, "barradas": 0, "ok": 0, "falhas": 0,
+                                             "tokens_entrada": 0, "tokens_saida": 0})
+    c[campo] = c.get(campo, 0) + max(0, int(n))
+
+
+def contagem() -> dict:
+    """Numeros do dia (UTC): por rota e chamadas por sessao (mediana e p90). Sem texto, sem identificador."""
+    with _lock:
+        _contar("_", "autorizadas", 0)  # vira o dia, se for o caso
+        _contagem.pop("_", None)
+        por_rota = {k: dict(v) for k, v in _contagem.items()}
+        por_sessao = sorted(v for k, v in _sessao_calls.items() if _sessao_day.get(k) == _day and v > 0)
+    def _q(p):
+        if not por_sessao:
+            return 0
+        return por_sessao[min(len(por_sessao) - 1, int(round(p * (len(por_sessao) - 1))))]
+    return {"dia": _contagem_dia or _hoje(), "por_rota": por_rota,
+            "total_autorizadas": sum(v["autorizadas"] for v in por_rota.values()),
+            "sessoes": len(por_sessao), "chamadas_por_sessao_mediana": _q(0.5), "chamadas_por_sessao_p90": _q(0.9)}
+
+
 def permitir(rota: str, sessao: str, corpo: str = "") -> None:
     """Recusa com AnthropicBloqueado se a chamada nao deve sair."""
+    try:
+        _permitir(rota, sessao, corpo)
+    except AnthropicBloqueado:
+        with _lock:
+            _contar(rota, "barradas")
+        raise
+    with _lock:
+        _contar(rota, "autorizadas")
+
+
+def _permitir(rota: str, sessao: str, corpo: str = "") -> None:
     global _circuit_until
     if (os.getenv("IA_KILL_SWITCH") or "").strip().lower() in {"1", "true", "yes"}:
         raise AnthropicBloqueado("IA temporariamente desligada (IA_KILL_SWITCH).", 503)
@@ -151,6 +194,9 @@ def registrar_uso(rota: str, modelo: str, input_tokens: int = 0, output_tokens: 
     with _lock:
         _reset_se_novo_dia()
         _tokens_day += max(0, int(input_tokens)) + max(0, int(output_tokens))
+        _contar(rota, "ok")
+        _contar(rota, "tokens_entrada", input_tokens)
+        _contar(rota, "tokens_saida", output_tokens)
     logger.info(
         "ia.anthropic ok rota=%s modelo=%s input=%s output=%s dia_tokens=%s",
         rota, modelo, input_tokens, output_tokens, _tokens_day,
@@ -163,6 +209,7 @@ def registrar_falha(rota: str, motivo: str) -> None:
     circ_n = _int("IA_CIRCUIT_FAILURES", 10)
     circ_s = _int("IA_CIRCUIT_SECONDS", 300)
     with _lock:
+        _contar(rota, "falhas")
         _fails.append(agora)
         while _fails and _fails[0] < agora - circ_s:
             _fails.popleft()
@@ -187,3 +234,4 @@ def reset_para_teste() -> None:
         _fails.clear()
         _circuit_until = 0.0
         _recent.clear()
+        _contagem.clear()
