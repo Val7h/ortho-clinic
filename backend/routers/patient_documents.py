@@ -22,7 +22,7 @@ from typing import List, Optional
 
 from fastapi import (
     APIRouter, Depends, HTTPException, UploadFile, File,
-    Form, Query, BackgroundTasks
+    Form, Header, Query, BackgroundTasks
 )
 from fastapi.responses import StreamingResponse, JSONResponse
 from sqlalchemy.orm import Session
@@ -269,6 +269,76 @@ def list_categories():
     return [{"value": k, "label": v} for k, v in DOCUMENT_CATEGORIES.items()]
 
 
+# ── UPLOAD DA GUIA COM A RESERVA DO EMISSOR (27/11) ───────────────────────────
+
+def _lote_upload_conferir(db: Session, paciente: Patient, cab, texto_pdf: str):
+    """Dentro da fila do paciente: o lote ainda e nosso e o PDF traz o nome e os itens reservados.
+    Devolve o documento ja gravado (mesmo lote duas vezes) ou None."""
+    from services import emissor as _E
+    org = paciente.organization_id or 1
+    with _E.fila_do_paciente(db, org, paciente.id):
+        lote = _E.abrir_lote(db, org, paciente.id, cab, {"exame", "fisio"})
+        if lote.feito:
+            if lote.doc_kind != "guia":
+                raise HTTPException(409, "Esta reserva já virou outro documento. Nada foi gravado.")
+            return _get_doc_or_404(lote.doc_id, paciente.id, db)
+        _E.conferir_pdf(texto_pdf, paciente.name or "", lote)
+        return None
+
+
+def _lote_upload_gravar(db: Session, paciente: Patient, cab, campos: dict, indicacao: Optional[str]):
+    """Dentro da fila: grava o documento + o historico da aba Exames + a chave "pronto" no MESMO commit."""
+    from models.documents import ExamRequest
+    from services import emissor as _E
+    org = paciente.organization_id or 1
+    with _E.fila_do_paciente(db, org, paciente.id):
+        lote = _E.abrir_lote(db, org, paciente.id, cab, {"exame", "fisio"})   # tomada no meio do envio: 409
+        if lote.feito:
+            if lote.doc_kind != "guia":
+                raise HTTPException(409, "Esta reserva já virou outro documento. Nada foi gravado.")
+            return _get_doc_or_404(lote.doc_id, paciente.id, db)
+        doc = PatientDocument(patient_id=paciente.id, organization_id=org, **campos)
+        db.add(doc)
+        hist = ExamRequest(patient_id=paciente.id, organization_id=org, date=campos["date"], exams=[],
+                           urgency="eletivo", free_text=_E.texto_historico_guia(lote.itens(), indicacao or ""))
+        db.add(hist)
+        db.flush()
+        _E.marcar_pronto(lote, "guia", doc.id)
+        db.commit()
+        db.refresh(doc)
+        return doc
+
+
+async def _upload_com_lote(db, paciente, cab, content, file, title, category, date, description, tags,
+                           consultation_id, indicacao, current_user):
+    from fastapi.concurrency import run_in_threadpool
+    from services import emissor as _E
+    import json as _json
+    from datetime import date as _date
+    if (file.content_type or "application/pdf") != "application/pdf" and not content.startswith(b"%PDF"):
+        raise HTTPException(422, "Com a reserva do emissor, só guia em PDF. Nada foi gravado.")
+    try:
+        texto_pdf = _E.texto_do_pdf(content)
+    except Exception:
+        raise HTTPException(422, "Não consegui abrir o PDF da guia. Nada foi gravado.")
+    # a fila do paciente e trava de thread: roda fora do laco assincrono (nunca bloqueia o servidor)
+    ja = await run_in_threadpool(_lote_upload_conferir, db, paciente, cab, texto_pdf)
+    if ja is not None:
+        return DocumentOut.from_orm_ext(ja)
+    ext = os.path.splitext(file.filename or "doc.pdf")[1].lower() or ".pdf"
+    file_url = upload_file(content, f"{uuid.uuid4().hex}{ext}", folder="patient_docs")   # rede: FORA da fila
+    try:
+        tag_list = _json.loads(tags)
+    except Exception:
+        tag_list = []
+    campos = dict(consultation_id=consultation_id, uploaded_by_id=current_user.id, title=title, category=category,
+                  description=description or None, date=_date.fromisoformat(date), tags=tag_list, file_url=file_url,
+                  file_name=file.filename, mime_type=file.content_type or "application/pdf",
+                  file_size_kb=len(content) // 1024)
+    doc = await run_in_threadpool(_lote_upload_gravar, db, paciente, cab, campos, indicacao)
+    return DocumentOut.from_orm_ext(doc)
+
+
 # ── UPLOAD DE ARQUIVO ─────────────────────────────────────────────────────────
 
 @router.post("/upload", response_model=DocumentOut, status_code=201)
@@ -281,20 +351,33 @@ async def upload_document(
     tags: str = Form("[]"),       # JSON string: '["tag1","tag2"]'
     consultation_id: Optional[int] = Form(None),
     file: UploadFile = File(...),
+    indicacao: Optional[str] = Form(None),   # 27/11 (emissor): HD da guia, para o historico da aba Exames
     db: Session = Depends(get_db),
     current_user: User = Depends(require_doctor),
+    x_emissor_lote: Optional[str] = Header(None),
 ):
     """
     Upload de arquivo (PDF, imagem de exame, etc.).
     Suporta arquivos de até 25 MB.
+
+    27/11 (emissor unico, caso da guia da fisio que subiu com o conteudo da USG): com X-Emissor-Lote, o PDF tem de
+    trazer o NOME do paciente e CADA item reservado (senao 422, nada gravado); o documento, o historico da aba Exames
+    e a chave "pronto" entram no MESMO commit; o mesmo lote duas vezes devolve o MESMO documento. Sem o cabecalho,
+    fica tudo como antes.
     """
-    _get_patient_or_404(patient_id, db)
+    from services import emissor as _E
+    cab = _E.ler_cabecalho(x_emissor_lote)
+    paciente = _get_patient_or_404(patient_id, db)
 
     if category not in DOCUMENT_CATEGORIES:
         raise HTTPException(400, f"Categoria inválida: {category}")
 
     content = await file.read()
     _validate_upload(file, content)
+
+    if cab:
+        return await _upload_com_lote(db, paciente, cab, content, file, title, category, date, description, tags,
+                                      consultation_id, indicacao, current_user)
 
     # Faz upload para Cloudinary ou storage local
     ext = os.path.splitext(file.filename or "doc.pdf")[1].lower() or ".pdf"

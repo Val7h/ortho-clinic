@@ -1,9 +1,9 @@
 import base64
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, UploadFile
 from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 from datetime import date
 from routers.entregues import bloquear_se_entregue
 from database import get_db
@@ -38,6 +38,31 @@ def _get_patient_or_404(db: Session, patient_id: int, current_user: User) -> Pat
     return patient
 
 
+# 27/11 (emissor unico): com X-Emissor-Lote o documento so e gravado com a reserva e a chave fica "pronto" no MESMO
+# commit; o mesmo lote duas vezes devolve o MESMO documento; lote de outro/tomado/falhado = 409 e nada e criado.
+# Sem o cabecalho, as rotas ficam exatamente como antes.
+
+
+def _gravar_com_lote(db: Session, patient: Patient, cab, modelo, campos: dict, tipos: set, kind: str, linhas_doc=None):
+    from services import emissor as _E
+    org = patient.organization_id or 1
+    with _E.fila_do_paciente(db, org, patient.id):
+        lote = _E.abrir_lote(db, org, patient.id, cab, tipos)
+        if lote.feito:
+            ja = db.query(modelo).filter(modelo.id == lote.doc_id, modelo.patient_id == patient.id).first()
+            if ja:
+                return ja
+        if linhas_doc is not None:
+            _E.conferir_conteudo(lote, linhas_doc)
+        obj = modelo(patient_id=patient.id, organization_id=org, **campos)
+        db.add(obj)
+        db.flush()
+        _E.marcar_pronto(lote, kind, obj.id)
+        db.commit()
+        db.refresh(obj)
+        return obj
+
+
 # ── RECEITAS ──────────────────────────────────────────────────────────────────
 # O presc_router que vivia aqui foi REMOVIDO (auditoria 02/08): registrava o
 # mesmo prefixo /patients/{id}/prescriptions de routers/patient_prescriptions.py
@@ -55,11 +80,18 @@ def list_exams(patient_id: int, db: Session = Depends(get_db), current_user: Use
     return db.query(ExamRequest).filter(ExamRequest.patient_id == patient_id).order_by(ExamRequest.date.desc()).all()
 
 @exam_router.post("", response_model=ExamRequestOut, status_code=201)
-def create_exam(patient_id: int, data: ExamRequestCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def create_exam(patient_id: int, data: ExamRequestCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user),
+                x_emissor_lote: Optional[str] = Header(None)):
     # Aceita texto livre OU lista estruturada de exames (retrocompatibilidade)
     if not data.exams and not (data.free_text and data.free_text.strip()):
         raise HTTPException(422, "Informe o texto da solicitação ou ao menos um exame")
-    _get_patient_or_404(db, patient_id, current_user)
+    from services import emissor as _E
+    cab = _E.ler_cabecalho(x_emissor_lote)
+    patient = _get_patient_or_404(db, patient_id, current_user)
+    if cab:
+        linhas = _E.G.itens_do_pedido(data.free_text) + [str(x.get("name") if isinstance(x, dict) else x)
+                                                         for x in (data.exams or [])]
+        return _gravar_com_lote(db, patient, cab, ExamRequest, data.model_dump(), {"exame", "fisio"}, "exame", linhas)
     obj = ExamRequest(patient_id=patient_id, **data.model_dump())
     db.add(obj)
     db.commit()
@@ -95,8 +127,13 @@ def list_physio(patient_id: int, db: Session = Depends(get_db), current_user: Us
     return db.query(PhysioRequest).filter(PhysioRequest.patient_id == patient_id).order_by(PhysioRequest.date.desc()).all()
 
 @physio_router.post("", response_model=PhysioRequestOut, status_code=201)
-def create_physio(patient_id: int, data: PhysioRequestCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    _get_patient_or_404(db, patient_id, current_user)
+def create_physio(patient_id: int, data: PhysioRequestCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user),
+                  x_emissor_lote: Optional[str] = Header(None)):
+    from services import emissor as _E
+    cab = _E.ler_cabecalho(x_emissor_lote)
+    patient = _get_patient_or_404(db, patient_id, current_user)
+    if cab:
+        return _gravar_com_lote(db, patient, cab, PhysioRequest, data.model_dump(), {"fisio"}, "fisio")
     obj = PhysioRequest(patient_id=patient_id, **data.model_dump())
     db.add(obj)
     db.commit()
@@ -141,8 +178,16 @@ def list_reports(patient_id: int, db: Session = Depends(get_db), current_user: U
     return db.query(MedicalReport).filter(MedicalReport.patient_id == patient_id).order_by(MedicalReport.date.desc()).all()
 
 @report_router.post("", response_model=MedicalReportOut, status_code=201)
-def create_report(patient_id: int, data: MedicalReportCreate, db: Session = Depends(get_db), current_user: User = Depends(require_doctor)):
-    _get_patient_or_404(db, patient_id, current_user)
+def create_report(patient_id: int, data: MedicalReportCreate, db: Session = Depends(get_db), current_user: User = Depends(require_doctor),
+                  x_emissor_lote: Optional[str] = Header(None)):
+    from services import emissor as _E
+    cab = _E.ler_cabecalho(x_emissor_lote)
+    patient = _get_patient_or_404(db, patient_id, current_user)
+    if cab:
+        rt = (data.report_type or "").lower()
+        kind = rt if rt in ("encaminhamento", "atestado") else "laudo"
+        tipos = {"encaminhamento", "fisio"} if rt == "encaminhamento" else {"atestado"} if rt == "atestado" else {"justificativa"}
+        return _gravar_com_lote(db, patient, cab, MedicalReport, data.model_dump(), tipos, kind)
     obj = MedicalReport(patient_id=patient_id, **data.model_dump())
     db.add(obj)
     db.commit()

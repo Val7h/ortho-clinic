@@ -5,7 +5,7 @@ Prefixo: /patients/{patient_id}/prescriptions
 Estas rotas são usadas pelo frontend (prescriptionsApi) para listar,
 criar e excluir receitas manuais e via Memed.
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy.orm import Session
 from typing import List, Optional, Any
 from datetime import date, datetime
@@ -113,8 +113,13 @@ def create_prescription(
     data: PatientRxCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    x_emissor_lote: Optional[str] = Header(None),
 ):
-    """Cria nova receita para o paciente."""
+    """Cria nova receita para o paciente.
+    27/11 (emissor unico): com X-Emissor-Lote, so grava com a reserva e marca a chave "pronto" no mesmo commit;
+    o mesmo lote duas vezes devolve a MESMA receita. Sem o cabecalho, fica tudo como antes."""
+    from services import emissor as _E
+    cab = _E.ler_cabecalho(x_emissor_lote)
     patient = db.query(Patient).filter(Patient.id == patient_id).first()
     if not patient:
         raise HTTPException(status_code=404, detail="Paciente não encontrado")
@@ -146,6 +151,27 @@ def create_prescription(
     # remédios) para o mesmo paciente nos últimos 3 minutos = devolve a que já existe.
     from datetime import timedelta, timezone
     meds_novos = [m.model_dump() for m in data.medications]
+    if cab:
+        org = patient.organization_id or 1
+        with _E.fila_do_paciente(db, org, patient_id):
+            lote = _E.abrir_lote(db, org, patient_id, cab, {"receita"})
+            if lote.feito:   # o mesmo lote gravado de novo: a MESMA receita
+                ja = db.query(PatientRx).filter(PatientRx.id == lote.doc_id).first()
+                if ja:
+                    return ja
+            texto_meds = "\n".join(f"{m['name']} {m.get('dose') or ''} ----" for m in meds_novos if m.get("name"))
+            _E.conferir_conteudo(lote, _E.G.remedios_da_receita(data.instructions or "")
+                                 + _E.G.remedios_da_receita(texto_meds))
+            rx = PatientRx(patient_id=patient_id, date=rx_date, prescription_type=data.prescription_type or "simples",
+                           medications=meds_novos, instructions=data.instructions or "", memed_id=data.memed_id,
+                           patient_address=data.patient_address, patient_phone=data.patient_phone,
+                           organization_id=org)
+            db.add(rx)
+            db.flush()
+            _E.marcar_pronto(lote, "receita", rx.id)
+            db.commit()
+            db.refresh(rx)
+            return rx
     limite = datetime.now(timezone.utc) - timedelta(minutes=3)
     for antiga in (
         db.query(PatientRx)

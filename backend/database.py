@@ -34,6 +34,7 @@ def init_db():
     from models import escriba  # noqa — 17/11: sessoes, pedacos e aviso CFM do Escriba integrado; sugestoes e pedidos (fatia 3)
     from models import assistente  # noqa — 17/11: assistente ao vivo (chat da coluna Escriba + IA)
     from models import messages  # noqa — DirectMessage (chat medico <-> secretaria)
+    from models import emissor  # noqa — 27/11: emissor unico de documentos (chave reservada antes de gerar)
     Base.metadata.create_all(bind=engine)
     # Register SQLAlchemy event hooks for automatic webhook fan-out
     try:
