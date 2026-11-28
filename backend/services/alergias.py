@@ -61,7 +61,8 @@ _FIM = re.compile(r"[.;\n?!()\[\]|]")
 # corte do trecho extraido: virgula, " - ", como, apos, nega e as frases de relato
 _CORTE = re.compile(
     r"(,|\s+-\s+|\s+\b(?:como|apos|após|nega|negou|e\s+nega|refere|relata|informa|diz|desde|ha|há|faz|tem|teve|"
-    r"com|que|quando|mas|porem|porém|no|na|nos|nas|em|ja|já|durante|ao\s+uso)\b).*$",
+    r"com|que|quando|mas|porem|porém|no|na|nos|nas|em|ja|já|durante|ao\s+uso|uso|diario|diário|diaria|diária|"
+    r"continuo|contínuo|dose)\b).*$",
     re.I | re.S,
 )
 # palavras que nao sao a substancia
@@ -138,13 +139,25 @@ def extrair(texto: str) -> list[str]:
 _PARA_LISTA = {"nega", "negou", "refere", "relata", "informa", "diz", "desde", "com", "que", "quando", "leve",
                "grave", "previa", "previas", "outras", "outros", "outra", "outro", "ha", "por", "em", "no", "na",
                "mas", "porem", "sem", "nao", "tem", "teve", "faz", "apos", "como", "durante", "ja", "e", "ou",
-               "evitar", "orientado", "orientada", "uso", "usa", "fez", "cursa", "evoluiu", "evolui"}
+               "evitar", "orientado", "orientada", "uso", "usa", "fez", "cursa", "evoluiu", "evolui",
+               "diario", "diaria", "continuo", "dose"}
 # o que nao e remedio mas e alergia comum (e classes que a tabela da ANVISA nao traz como principio)
 _NAO_REMEDIO = {"latex", "iodo", "contraste", "contraste iodado", "esparadrapo", "frutos do mar", "camarao",
                 "picada de inseto", "abelha", "niquel",
                 "penicilina", "penicilinas", "sulfa", "aine", "aines", "anti-inflamatorio", "anti-inflamatorios",
                 "antiinflamatorio", "antiinflamatorios", "corticoide", "corticoides", "cefalosporina",
-                "cefalosporinas", "antibiotico", "antibioticos"}
+                "cefalosporinas", "antibiotico", "antibioticos",
+                # marcas curtas (ate 6 letras) so contam depois da virgula se estiverem aqui (revisao 28/11)
+                "aas", "plasil", "advil", "aine"}
+# palavras comuns que a tabela da ANVISA traz como marca ou principio: nunca contam como alergia na lista
+_LEXICO_FORA = {"agua", "calcio", "ferro", "zinco", "sodio", "potassio", "magnesio", "lactose", "cobre", "colina",
+                "ureia", "tibial", "tibial posterior", "rosa", "rosa mosqueta", "amido", "oxido", "mentol", "timol",
+                "fenol", "amora", "astro", "aura", "brisa", "dupla", "dual", "turno", "versa", "perola", "prumo",
+                "beca", "bario", "next", "nice", "still", "soul", "level", "label", "enjoy", "runner", "jogger",
+                "motore", "sonic"}
+# forma farmaceutica no fim do item: "Plasil gotas" -> PLASIL
+_FORMA = {"gotas", "gota", "comprimido", "comprimidos", "cp", "cps", "xarope", "injetavel", "pomada", "gel"}
+_DOSE = re.compile(r"\d|\b(?:mg|ml|g|ui|mcg)\b")
 _LEXICO = {"carregado": False, "nomes": set()}
 
 
@@ -162,21 +175,29 @@ def _lexico() -> set[str]:
             for v in marcas.values():
                 for c in ([v] if isinstance(v, str) else list(v)):
                     nomes.update(x.strip() for x in str(c).split("+") if x.strip())
-            _LEXICO["nomes"] = {_norm(n) for n in nomes}
+            _LEXICO["nomes"] = {_norm(n) for n in nomes} - _LEXICO_FORA
         except Exception:
             _LEXICO["nomes"] = set()
     return _LEXICO["nomes"]
 
 
-def _item_da_lista(nome: str) -> bool:
+def _item_da_lista(nome: str) -> str | None:
+    """Portao do item depois da virgula. Devolve o nome a gravar (sem a forma farmaceutica) ou None.
+    So passa o item INTEIRO que e termo da lista curta ou da tabela da ANVISA (com a lista de fora tirada);
+    marca de ate 6 letras so pela lista curta. Digito ou dose (mg, ml, g, ui) reprova."""
     k = _norm(nome)
     pal = k.split()
-    if not pal or pal[0] in _PARA_LISTA or len(pal) > 3 or len(k) < 3:
-        return False
-    if k in _NAO_REMEDIO or k in _lexico():
-        return True
-    # "AAS 100 mg", "Plasil gotas": a primeira palavra e o remedio
-    return len(pal[0]) >= 4 and pal[0] in _lexico()
+    if not pal or pal[0] in _PARA_LISTA or len(pal) > 3 or len(k) < 3 or _DOSE.search(k):
+        return None
+    if len(pal) >= 2 and pal[-1] in _FORMA:
+        pal = pal[:-1]
+        nome = " ".join(nome.split()[:-1])
+        k = " ".join(pal)
+    if k in _NAO_REMEDIO:
+        return nome
+    if k in _LEXICO_FORA or len(k.replace(" ", "")) <= 6:
+        return None
+    return nome if k in _lexico() else None
 
 
 def _itens_depois_da_virgula(segmentos: list[str]) -> list[str]:
@@ -185,15 +206,13 @@ def _itens_depois_da_virgula(segmentos: list[str]) -> list[str]:
         bruto = seg.strip(" :-*\"'")
         if not bruto or (_norm(bruto).split() or [""])[0] in _PARA_LISTA:
             break
-        cortado = _CORTE.sub("", bruto)
-        parou = len(cortado) < len(bruto)
-        for parte in _SEPARA.split(cortado.strip(" :-*\"'")):
-            nome = parte.strip(" :-*\"'")
-            if not _item_da_lista(nome):
+        if _CORTE.sub("", bruto) != bruto:
+            break   # o segmento foi cortado ("losartana em uso"): para sem aceitar o item dele
+        for parte in _SEPARA.split(bruto):
+            nome = _item_da_lista(parte.strip(" :-*\"'"))
+            if not nome:
                 return nomes
             nomes.append(nome)
-        if parou:
-            break
     return nomes
 
 

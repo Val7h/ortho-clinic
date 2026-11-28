@@ -265,8 +265,8 @@ def test_ficha_nega_alergias_medicamentosas_e_trocada():
     ("alergia a dipirona, iodo, frutos do mar", ["DIPIRONA", "IODO", "FRUTOS DO MAR"]),
     ("alergia a dipirona, sulfa e contraste iodado", ["DIPIRONA", "SULFA", "CONTRASTE IODADO"]),
     ("Alergia a dipirona, penicilina. Nega outras.", ["DIPIRONA", "PENICILINA"]),
-    ("alergia a dipirona, aas - nega outras", ["DIPIRONA", "AAS"]),
-    ("alergia a dipirona, aas desde criança", ["DIPIRONA", "AAS"]),
+    ("alergia a sulfa, Tylenol, Advil e Buscopan", ["SULFA", "TYLENOL", "ADVIL", "BUSCOPAN"]),
+    ("alergia a sulfa, Plasil gotas", ["SULFA", "PLASIL"]),
 ])
 def test_lista_com_virgula(frase, esperado):
     assert extrair(frase) == esperado
@@ -283,3 +283,32 @@ def test_lista_com_virgula(frase, esperado):
 ])
 def test_lista_para_no_primeiro_item_que_falha(frase, esperado):
     assert extrair(frase) == esperado
+
+
+# revisao 28/11 (DEVOLVER f8348b24): item depois da virgula so passa INTEIRO; segmento cortado para sem aceitar
+@pytest.mark.parametrize("frase,esperado", [
+    ("alergia a dipirona, losartana 50mg/dia", ["DIPIRONA"]),
+    ("alergia a dipirona, Tramal piora", ["DIPIRONA"]),
+    ("alergia a dipirona, ferro baixo", ["DIPIRONA"]),
+    ("alergia a dipirona, tibial posterior encurtado", ["DIPIRONA"]),
+    ("alergia a dipirona, rosa mosqueta", ["DIPIRONA"]),
+    ("alergia a dipirona, Plasil gotas", ["DIPIRONA", "PLASIL"]),
+    ("Alergia a dipirona, losartana em uso", ["DIPIRONA"]),
+    ("Alergia a sulfa, zinco e cálcio em uso", ["SULFA"]),
+    ("alergia a dipirona, aas - nega outras", ["DIPIRONA"]),
+    ("alergia a dipirona, aas desde criança", ["DIPIRONA"]),
+    ("alergia a sulfa, ferro", ["SULFA"]),
+    ("alergia a sulfa, losartana uso diário", ["SULFA"]),
+    ("alergia a sulfa, AAS 100 mg", ["SULFA"]),
+])
+def test_item_depois_da_virgula_so_inteiro(frase, esperado):
+    assert extrair(frase) == esperado
+
+
+def test_marcas_que_precisam_passar_na_lista():
+    from services.alergias import _item_da_lista
+    for nome in ["Dipirona", "AAS", "Plasil", "Tylenol", "Advil", "Buscopan"]:
+        assert _item_da_lista(nome) == nome
+    assert _item_da_lista("Plasil gotas") == "Plasil"
+    for nome in ["agua", "calcio", "rosa", "next", "sonic", "tramal"]:
+        assert _item_da_lista(nome) is None
