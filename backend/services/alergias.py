@@ -105,20 +105,96 @@ def extrair(texto: str) -> list[str]:
             continue  # pergunta, nao afirmacao
         if _NEGADO_NO_TRECHO.search(_norm(trecho)):
             continue
-        trecho = _CORTE.sub("", trecho[:80]).strip(" ,:-*\"'")
-        if not trecho or (_norm(trecho).split() or [""])[0] in _PRIMEIRA_RUIM:
+        segmentos = trecho[:160].split(",")
+        primeiro = segmentos[0]
+        cortado = _CORTE.sub("", primeiro)
+        parou = len(cortado) < len(primeiro)   # cortou em " - ", nega, refere...: a lista acaba aqui
+        primeiro = cortado.strip(" ,:-*\"'")
+        if not primeiro or (_norm(primeiro).split() or [""])[0] in _PRIMEIRA_RUIM:
             continue
-        for parte in _SEPARA.split(trecho):
+        nomes: list[str] = []
+        for parte in _SEPARA.split(primeiro):
             nome = parte.strip(" ,:-*\"'")
             k = _norm(nome)
             if k in _VAZIO or len(k) < 3 or len(nome.split()) > 4:
                 continue
             if _NEGA_DEPOIS.search(nome):
                 continue
+            nomes.append(nome)
+        # 28/11 (revisao): lista separada por virgula. Cada item depois da virgula passa pelo portao
+        # (_item_da_lista) e a lista PARA no primeiro que falhar: "penicilina, controlada" -> so PENICILINA.
+        if nomes and not parou:
+            nomes += _itens_depois_da_virgula(segmentos[1:])
+        for nome in nomes:
+            k = _norm(nome)
             if k not in vistos:
                 vistos.add(k)
                 achadas.append(nome.upper())
     return achadas
+
+
+# ── lista separada por virgula: portao de cada item ────────────────────────────
+# item que comeca com uma destas palavras encerra a lista
+_PARA_LISTA = {"nega", "negou", "refere", "relata", "informa", "diz", "desde", "com", "que", "quando", "leve",
+               "grave", "previa", "previas", "outras", "outros", "outra", "outro", "ha", "por", "em", "no", "na",
+               "mas", "porem", "sem", "nao", "tem", "teve", "faz", "apos", "como", "durante", "ja", "e", "ou",
+               "evitar", "orientado", "orientada", "uso", "usa", "fez", "cursa", "evoluiu", "evolui"}
+# o que nao e remedio mas e alergia comum (e classes que a tabela da ANVISA nao traz como principio)
+_NAO_REMEDIO = {"latex", "iodo", "contraste", "contraste iodado", "esparadrapo", "frutos do mar", "camarao",
+                "picada de inseto", "abelha", "niquel",
+                "penicilina", "penicilinas", "sulfa", "aine", "aines", "anti-inflamatorio", "anti-inflamatorios",
+                "antiinflamatorio", "antiinflamatorios", "corticoide", "corticoides", "cefalosporina",
+                "cefalosporinas", "antibiotico", "antibioticos"}
+_LEXICO = {"carregado": False, "nomes": set()}
+
+
+def _lexico() -> set[str]:
+    """Marcas e principios ativos da tabela da ANVISA (data/medicamentos_anvisa.json, a mesma do Escriba).
+    Sem a tabela, o conjunto fica vazio: os itens depois da virgula so passam pela lista curta."""
+    if not _LEXICO["carregado"]:
+        _LEXICO["carregado"] = True
+        try:
+            import json
+            from pathlib import Path
+            arq = Path(__file__).resolve().parent.parent / "data" / "medicamentos_anvisa.json"
+            marcas = json.loads(arq.read_text(encoding="utf-8")).get("marcas") or {}
+            nomes = set(marcas)
+            for v in marcas.values():
+                for c in ([v] if isinstance(v, str) else list(v)):
+                    nomes.update(x.strip() for x in str(c).split("+") if x.strip())
+            _LEXICO["nomes"] = {_norm(n) for n in nomes}
+        except Exception:
+            _LEXICO["nomes"] = set()
+    return _LEXICO["nomes"]
+
+
+def _item_da_lista(nome: str) -> bool:
+    k = _norm(nome)
+    pal = k.split()
+    if not pal or pal[0] in _PARA_LISTA or len(pal) > 3 or len(k) < 3:
+        return False
+    if k in _NAO_REMEDIO or k in _lexico():
+        return True
+    # "AAS 100 mg", "Plasil gotas": a primeira palavra e o remedio
+    return len(pal[0]) >= 4 and pal[0] in _lexico()
+
+
+def _itens_depois_da_virgula(segmentos: list[str]) -> list[str]:
+    nomes: list[str] = []
+    for seg in segmentos:
+        bruto = seg.strip(" :-*\"'")
+        if not bruto or (_norm(bruto).split() or [""])[0] in _PARA_LISTA:
+            break
+        cortado = _CORTE.sub("", bruto)
+        parou = len(cortado) < len(bruto)
+        for parte in _SEPARA.split(cortado.strip(" :-*\"'")):
+            nome = parte.strip(" :-*\"'")
+            if not _item_da_lista(nome):
+                return nomes
+            nomes.append(nome)
+        if parou:
+            break
+    return nomes
 
 
 def chave(nome: str) -> str:

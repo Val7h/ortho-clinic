@@ -257,3 +257,29 @@ def test_erro_inesperado_na_conferencia_deixa_finalizar(ambiente, monkeypatch):
 def test_ficha_nega_alergias_medicamentosas_e_trocada():
     from services.alergias import _FICHA_SO_NEGA, _norm
     assert _FICHA_SO_NEGA.fullmatch(_norm("Nega alergias medicamentosas"))
+
+
+# ── lista separada por virgula (28/11): cada item passa pelo portao; a lista para no primeiro que falha ──
+@pytest.mark.parametrize("frase,esperado", [
+    ("Alérgica a Dipirona, AAS e Buscopan", ["DIPIRONA", "AAS", "BUSCOPAN"]),
+    ("alergia a dipirona, iodo, frutos do mar", ["DIPIRONA", "IODO", "FRUTOS DO MAR"]),
+    ("alergia a dipirona, sulfa e contraste iodado", ["DIPIRONA", "SULFA", "CONTRASTE IODADO"]),
+    ("Alergia a dipirona, penicilina. Nega outras.", ["DIPIRONA", "PENICILINA"]),
+    ("alergia a dipirona, aas - nega outras", ["DIPIRONA", "AAS"]),
+    ("alergia a dipirona, aas desde criança", ["DIPIRONA", "AAS"]),
+])
+def test_lista_com_virgula(frase, esperado):
+    assert extrair(frase) == esperado
+
+
+@pytest.mark.parametrize("frase,esperado", [
+    ("alergia a penicilina, controlada", ["PENICILINA"]),
+    ("Alergia a látex, refere coceira", ["LÁTEX"]),
+    ("alergia: dipirona, nega outras", ["DIPIRONA"]),
+    ("alergia a dipirona, dor lombar há 3 meses", ["DIPIRONA"]),
+    ("alergia a dipirona, HAS, DM", ["DIPIRONA"]),
+    ("alergia a plasil, em uso de losartana", ["PLASIL"]),
+    ("alergia a medicamentos como dipirona, aas", []),
+])
+def test_lista_para_no_primeiro_item_que_falha(frase, esperado):
+    assert extrair(frase) == esperado
