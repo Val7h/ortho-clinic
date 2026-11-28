@@ -30,6 +30,8 @@ export const API_URL = (() => {
 export function msgErro(err: any, padrao = "Não foi possível concluir"): string {
   const d = err?.response?.data?.detail ?? err?.response?.data?.message;
   if (typeof d === "string" && d.trim()) return d;
+  // 28/11: detail como OBJETO (ex.: 409 ALERGIA_PENDENTE) traz o texto em `msg`
+  if (d && typeof d === "object" && !Array.isArray(d) && typeof d.msg === "string" && d.msg.trim()) return d.msg;
   if (Array.isArray(d)) {
     const primeiro = d[0];
     if (typeof primeiro === "string") return primeiro;
@@ -647,8 +649,46 @@ export const waitingRoomApi = {
   today: (clinic_id?: number) =>
     api.get("/api/clinic/waiting-room/today", { params: clinic_id ? { clinic_id } : {} }).then((r) => r.data),
 
-  updateStatus: (entry_id: number, status: "waiting" | "attending" | "suspended" | "attended" | "absent") =>
-    api.patch(`/api/clinic/waiting-room/${entry_id}/status`, { status }).then((r) => r.data),
+  // 27/11 (Valth): TRAVA DE ALERGIA no Finalizar. Se a consulta cita uma alergia que não está na
+  // ficha, o servidor devolve 409 ALERGIA_PENDENTE com a lista e aqui o médico escolhe.
+  // 28/11 (revisão): o OK/Enter NUNCA grava na ficha. 1ª pergunta: OK = finalizar sem gravar
+  // (fica guardado e não pergunta de novo para este paciente). Adicionar é a 2ª pergunta, explícita.
+  // A escolha vale só para os itens mostrados; se aparecer outro, pergunta de novo.
+  updateStatus: async (
+    entry_id: number,
+    status: "waiting" | "attending" | "suspended" | "attended" | "absent",
+  ): Promise<any> => {
+    let body: Record<string, any> = { status };
+    for (let tentativa = 0; tentativa < 3; tentativa++) {
+      try {
+        const r = await api.patch(`/api/clinic/waiting-room/${entry_id}/status`, body);
+        if (body.alergias_acao === "adicionar" && typeof window !== "undefined") {
+          // a ficha mudou: a gaveta da consulta recarrega o paciente
+          window.dispatchEvent(new CustomEvent("ortho:patient-changed", { detail: { patientId: r.data?.patient_id } }));
+        }
+        return r.data;
+      } catch (err: any) {
+        const d = err?.response?.data?.detail;
+        if (!(status === "attended" && err?.response?.status === 409
+              && d?.codigo === "ALERGIA_PENDENTE" && typeof window !== "undefined")) {
+          throw err;
+        }
+        const itens: string[] = Array.isArray(d.alergias) ? d.alergias : [];
+        const lista = itens.join(", ");
+        if (window.confirm(`⚠️ ALERGIA citada na consulta e fora da ficha: ${lista}\n\n`
+            + `OK = finalizar SEM gravar na ficha (não é alergia; não pergunta mais deste paciente)\n`
+            + `Cancelar = ver a opção de ADICIONAR à ficha`)) {
+          body = { status, alergias_acao: "ignorar", alergias_itens: itens };
+        } else if (window.confirm(`ADICIONAR à ficha de alergias do paciente: ${lista}?\n\n`
+            + `OK = adicionar e finalizar\nCancelar = não finalizar agora`)) {
+          body = { status, alergias_acao: "adicionar", alergias_itens: itens };
+        } else {
+          throw new Error(d.msg || "Consulta não finalizada: alergia pendente na ficha.");
+        }
+      }
+    }
+    throw new Error("Consulta não finalizada: alergia pendente na ficha.");
+  },
 
   remove: (entry_id: number) =>
     api.delete(`/api/clinic/waiting-room/${entry_id}`),

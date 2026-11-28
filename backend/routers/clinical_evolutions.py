@@ -410,7 +410,10 @@ def apagar_escriba_resumo(patient_id: int, data: Optional[date] = None, db: Sess
 
 @router.put("/{patient_id}/escriba-resumo", response_model=EscribaResumoOut)
 def put_escriba_resumo(patient_id: int, body: EscribaResumoIn, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
-    if not db.query(Patient).filter(Patient.id == patient_id).first():
+    # 28/11 (revisao): paciente de outra organizacao = 404, igual ao GET/DELETE
+    p = db.query(Patient).filter(Patient.id == patient_id).first()
+    org = getattr(current_user, "organization_id", None) or 1
+    if not p or (getattr(current_user, "role", "") != "superadmin" and (p.organization_id or 1) != org):
         raise HTTPException(status_code=404, detail="Paciente não encontrado")
     linhas = [l.strip()[:500] for l in body.linhas if l and l.strip()][:30]
     faltas = [l.strip()[:500] for l in body.faltas if l and l.strip()][:15]
@@ -420,6 +423,7 @@ def put_escriba_resumo(patient_id: int, body: EscribaResumoIn, db: Session = Dep
                           organization_id=getattr(current_user, "organization_id", None) or 1)
         db.add(r)
     nl, nf = _json.dumps(linhas, ensure_ascii=False), _json.dumps(faltas, ensure_ascii=False)
+    # 28/11 (revisao): o resumo NAO grava na ficha; alergia citada vira sugestao na trava do Finalizar
     # 17/11 tarde: a sessao grava na coluna dela e nao trava o automatico. Sem automatico no dia,
     # 'linhas' tambem recebe (a tela de hoje continua mostrando o que a sessao escreveu).
     r.linhas_sessao, r.faltas_sessao, r.sessao_em = nl, nf, datetime.now(timezone.utc)

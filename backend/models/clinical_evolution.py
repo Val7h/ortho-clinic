@@ -32,3 +32,16 @@ class EscribaResumo(Base):
     faltas_sessao = Column(Text, nullable=True)
     sessao_em = Column(DateTime(timezone=True), nullable=True)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+# 28/11/2026 (Valth, revisao da trava de alergia): o medico disse "nao e alergia" no Finalizar.
+# Guarda paciente + item normalizado para nunca mais perguntar o mesmo item desse paciente.
+class AlergiaIgnorada(Base):
+    __tablename__ = "alergias_ignoradas"
+    __table_args__ = (UniqueConstraint("patient_id", "item", name="uq_alergia_ignorada"),)
+    id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, default=1, index=True)
+    patient_id = Column(Integer, ForeignKey("patients.id"), nullable=False, index=True)
+    item = Column(String(200), nullable=False)          # nome normalizado (sem acento, minusculo)
+    user_id = Column(Integer, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())

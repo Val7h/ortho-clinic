@@ -715,6 +715,10 @@ class WaitingRoomEntryOut(BaseModel):
 
 class WaitingStatusUpdate(BaseModel):
     status: str  # waiting | attending | suspended | attended | absent
+    # 27/11 (Valth): trava de alergia no Finalizar. None = conferir; 'adicionar' = grava na ficha; 'ignorar' = nao e alergia
+    alergias_acao: Optional[str] = None
+    # itens que a tela MOSTROU ao medico (lista do 409); 'adicionar'/'ignorar' valem so para eles
+    alergias_itens: Optional[List[str]] = None
 
 
 def _minutes_between(start: Optional[datetime], end: Optional[datetime]) -> Optional[int]:
@@ -1244,6 +1248,19 @@ async def update_waiting_status(
     elif request.status == "suspended":
         _fechar_trecho()                            # congela o cronômetro na hora
     elif request.status == "attended":
+        # 27/11 (Valth): alergia citada na consulta e fora da ficha trava o Finalizar.
+        # 28/11 (revisao): so o 409 sobe; qualquer outro erro da conferencia e registrado e a consulta finaliza.
+        try:
+            from services.alergias import conferir_finalizacao
+            pend = conferir_finalizacao(db, entry_patient, entry.entry_date, request.alergias_acao,
+                                        request.alergias_itens, getattr(current_user, "id", None))
+            if pend:
+                logger.info("alergia no finalizar: paciente=%s acao=%s itens=%s", entry_patient.id, request.alergias_acao, len(pend))
+        except HTTPException:
+            raise
+        except Exception:
+            logger.exception("alergia no finalizar: conferencia falhou (paciente=%s); finaliza sem conferir",
+                             getattr(entry_patient, "id", None))
         _fechar_trecho()
         entry.attended_at = now                     # re-finalização sobrescreve
     else:  # waiting | absent

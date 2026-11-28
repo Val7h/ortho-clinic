@@ -1006,6 +1006,7 @@ def ponte_resumo(sid: int, body: ResumoPonteIn, db: Session = Depends(get_db), o
         # linha antiga: o que esta em 'linhas' e da sessao; guarda antes de o automatico ocupar 'linhas'
         r.linhas_sessao, r.faltas_sessao = r.linhas, r.faltas
     r.linhas, r.faltas, r.fonte = nl, nf, "auto"
+    # 28/11 (revisao): o resumo automatico NAO grava na ficha; alergia citada vira sugestao no Finalizar
     try:
         db.commit()
     except Exception:

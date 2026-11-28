@@ -9126,6 +9126,24 @@ export default function ConsultaDrawer({ entry, onClose, onStatusChange }: Consu
     return () => { vivo = false; };
   }, [entry.patient_id]);
 
+  // 28/11 (trava de alergia): "adicionar à ficha" no Finalizar muda o paciente no servidor;
+  // recarrega aqui para o campo Alergias (e os alertas da receita) não ficarem com o valor antigo.
+  useEffect(() => {
+    const h = (e: Event) => {
+      const id = (e as CustomEvent).detail?.patientId;
+      if (id && id !== entry.patient_id) return;
+      patientsApi.get(entry.patient_id)
+        .then((p: any) => setPatient((atual: any) => ({
+          ...(atual || {}),
+          ...p,
+          birth_date: p?.birth_date || p?.birthdate || p?.date_of_birth || null,
+        })))
+        .catch(() => {});
+    };
+    window.addEventListener("ortho:patient-changed", h);
+    return () => window.removeEventListener("ortho:patient-changed", h);
+  }, [entry.patient_id]);
+
   useEffect(() => {
     setLoadingPatient(true);
     setPatient(null);
