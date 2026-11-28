@@ -8,14 +8,20 @@
 // Regras (revisao independente de 28/11):
 //  - linha que comeca com numero ("1- ", "2) ", "3. ") abre item NOVO, mesmo
 //    sem quantidade; o numero digitado e mantido;
-//  - quantidade so e aceita se comecar por algarismo ou UM/UMA/DOIS/DUAS e nao
-//    parecer posologia ("3x ao dia", "7 DIAS", "8/8H"): assim "TOMAR 1 CP ----
-//    SE DOR" e "12/12H ---- 7 DIAS" continuam posologia;
+//  - nome de remedio (comeca com letra, 3+ letras, nao comeca com verbo de
+//    posologia) + tracejado + qualquer coisa ate 40 caracteres = item, seja qual
+//    for a quantidade ("QSP 30 DIAS", "60 CP/MES", "uso continuo");
+//  - se o "nome" nao e de remedio, so vira item quando a quantidade comeca por
+//    algarismo ou UM/UMA/DOIS/DUAS e nao parece posologia ("3x ao dia",
+//    "7 DIAS", "8/8H"): assim "TOMAR 1 CP DE 8/8H ---- SE DOR" e
+//    "12/12H ---- 7 DIAS" continuam posologia;
+//  - o tracejado precisa de 4+ marcas (o emissor e o site gravam "----");
 //  - linha em branco depois de uma posologia fecha o item (o que vem depois,
 //    como "Orientacoes: retorno em 30 dias", e texto livre, sem recuo); a
 //    linha em branco entre o remedio e a PRIMEIRA linha da posologia nao fecha
 //    (e o formato do emissor: "NOME ---- 1CX\n\nTOMAR 1 CP");
-//  - "USO ORAL", "USO TOPICO"... viram titulo de grupo; "Uso continuo" nao.
+//  - "USO ORAL", "USO TOPICO"... (mesmo seguidos de tracejado) viram titulo de
+//    grupo; "Uso continuo" nao.
 
 export type BlocoReceita =
   | { tipo: "via"; texto: string }
@@ -23,9 +29,10 @@ export type BlocoReceita =
   | { tipo: "texto"; linhas: string[] };
 
 const NUMERO = /^(\d{1,2})\s*[.)\-–]\s+/;
-// Tracejado de 3+ marcas (aceita "- - - -"), separando nome e o resto.
-const TRACEJADO = /^(.*?\S)\s*[-–—_.·](?:\s*[-–—_.·]){2,}\s*(.*)$/;
-const TRACEJADO_NO_MEIO = /\s*[-–—_.·](?:\s*[-–—_.·]){2,}\s*/;
+// Tracejado de 4+ marcas (aceita "- - - -"), separando nome e o resto.
+const TRACEJADO = /^(.*?\S)\s*[-–—_.·](?:\s*[-–—_.·]){3,}\s*(.*)$/;
+const TRACEJADO_NO_MEIO = /\s*[-–—_.·](?:\s*[-–—_.·]){3,}\s*/;
+const TRACEJADO_NO_FIM = /[\s\-–—_.·]+$/;
 const VIA = /^uso\s+(oral|t[oó]pico|externo|interno|sublingual|retal|vaginal|nasal|oft[aá]lmico|ocular|otol[oó]gico|auricular|intramuscular|intravenoso|endovenoso|subcut[aâ]neo|injet[aá]vel|inalat[oó]rio|local|dermatol[oó]gico|im|ev|iv|sc)\b[^\d]{0,30}$/i;
 const VERBO_POSOLOGIA = /^(tomar|aplicar|usar|passar|fazer|colocar|ingerir|pingar|massagear|manter|tomar,|diluir|dissolver|mastigar|repetir)\b/i;
 const NAO_E_POSOLOGIA = /^(orienta[cç][oõ]es|obs\b|observa[cç]|retorno|retornar)/i;
@@ -37,11 +44,12 @@ function letras(s: string): number {
 }
 
 function nomeValido(nome: string): boolean {
-  return letras(nome) >= 3 && !VERBO_POSOLOGIA.test(nome);
+  return /^[A-Za-zÀ-ÿ]/.test(nome) && letras(nome) >= 3 && !VERBO_POSOLOGIA.test(nome);
 }
 
-function qtdValida(qtd: string): boolean {
-  return qtd.length <= 40 && QTD_INICIO.test(qtd) && !QTD_PARECE_POSOLOGIA.test(qtd);
+// Quantidade de quem NAO tem nome de remedio: tem de parecer quantidade.
+function qtdValidaSemNome(qtd: string): boolean {
+  return QTD_INICIO.test(qtd) && !QTD_PARECE_POSOLOGIA.test(qtd);
 }
 
 // Uma linha de remedio: { numero, nome, qtd, resto } ou null.
@@ -65,7 +73,7 @@ export function linhaDeItem(l: string): { numero: number | null; nome: string; q
       if (numero !== null || nomeValido(nome)) return { numero, nome, qtd: "", resto };
       return null;
     }
-    if (qtdValida(depois) && (numero !== null || nomeValido(nome))) return { numero, nome, qtd: depois, resto };
+    if (depois.length <= 40 && (nomeValido(nome) || qtdValidaSemNome(depois))) return { numero, nome, qtd: depois, resto };
     // quantidade que nao e quantidade: so e item se veio numerado (a linha inteira e o nome)
     if (numero !== null) return { numero, nome: corpo, qtd: "", resto: "" };
     return null;
@@ -88,14 +96,14 @@ export function blocosDaReceita(texto: string): BlocoReceita[] | null {
       if (item && item.posologia.length > 0) item = null;
       continue;
     }
+    if (VIA.test(l.replace(TRACEJADO_NO_FIM, ""))) {
+      blocos.push({ tipo: "via", texto: l.replace(TRACEJADO_NO_FIM, "") }); item = null; livre = null; emBranco = false;
+      continue;
+    }
     const it = linhaDeItem(l);
     if (it) {
       item = { tipo: "item", numero: it.numero, nome: it.nome, qtd: it.qtd, posologia: it.resto ? [it.resto] : [] };
       blocos.push(item); livre = null; temItem = true; emBranco = false;
-      continue;
-    }
-    if (VIA.test(l)) {
-      blocos.push({ tipo: "via", texto: l }); item = null; livre = null; emBranco = false;
       continue;
     }
     if (item && !NAO_E_POSOLOGIA.test(l) && !(emBranco && item.posologia.length > 0)) {
