@@ -310,5 +310,10 @@ def test_marcas_que_precisam_passar_na_lista():
     for nome in ["Dipirona", "AAS", "Plasil", "Tylenol", "Advil", "Buscopan"]:
         assert _item_da_lista(nome) == nome
     assert _item_da_lista("Plasil gotas") == "Plasil"
-    for nome in ["agua", "calcio", "rosa", "next", "sonic", "tramal"]:
+    for nome in ["agua", "calcio", "rosa", "next", "sonic"]:
         assert _item_da_lista(nome) is None
+
+
+def test_tramal_e_codein_depois_da_virgula():
+    assert extrair("alergia a sulfa, tramal") == ["SULFA", "TRAMAL"]
+    assert extrair("alergia a sulfa, codein") == ["SULFA", "CODEIN"]

@@ -148,7 +148,7 @@ _NAO_REMEDIO = {"latex", "iodo", "contraste", "contraste iodado", "esparadrapo",
                 "antiinflamatorio", "antiinflamatorios", "corticoide", "corticoides", "cefalosporina",
                 "cefalosporinas", "antibiotico", "antibioticos",
                 # marcas curtas (ate 6 letras) so contam depois da virgula se estiverem aqui (revisao 28/11)
-                "aas", "plasil", "advil", "aine"}
+                "aas", "plasil", "advil", "aine", "tramal", "codein"}
 # palavras comuns que a tabela da ANVISA traz como marca ou principio: nunca contam como alergia na lista
 _LEXICO_FORA = {"agua", "calcio", "ferro", "zinco", "sodio", "potassio", "magnesio", "lactose", "cobre", "colina",
                 "ureia", "tibial", "tibial posterior", "rosa", "rosa mosqueta", "amido", "oxido", "mentol", "timol",
