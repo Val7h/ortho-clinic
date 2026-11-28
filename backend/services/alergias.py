@@ -25,7 +25,7 @@ _MED = r"(?:\s+(?:medicamentos[ao]s?|alimentar(?:es)?|de\s+contato))?"
 _GATILHO = re.compile(
     rf"\b(?:(?P<subst>{_SUBST}){_MED}(?P<csub>{_CONECTOR})?"
     rf"|(?P<adj>{_ADJ}){_MED}(?P<cadj>{_CONECTOR})"
-    rf"|(?P<outro>intoler[aâ]ncia|rea[cç][aã]o(?:\s+(?:al[eé]rgica|adversa))?)(?P<cout>\s+(?:a|ao|aos|à|às)\b\s*))",
+    rf"|(?P<outro>rea[cç][aã]o(?:\s+(?:al[eé]rgica|adversa))?)(?P<cout>\s+(?:a|ao|aos|à|às)\b\s*))",
     re.I,
 )
 # o adjetivo sem conector ("rinite alergica controlada") nao e alergia a uma substancia: o regex exige conector.
@@ -140,7 +140,7 @@ def faltando(texto: str, ficha: str) -> list[str]:
 
 # ficha que so diz "nao tem alergia": ao acrescentar uma alergia confirmada, o texto antigo sai
 _FICHA_SO_NEGA = re.compile(
-    r"\W*(?:nega\w*(?:\s+alergias?)?|nenhuma(?:\s+conhecida)?|sem\s+alergias?(?:\s+(?:conhecidas?|medicamentosas?))?"
+    r"\W*(?:nega\w*(?:\s+alergias?(?:\s+medicamentos\w*)?)?|nenhuma(?:\s+conhecida)?|sem\s+alergias?(?:\s+(?:conhecidas?|medicamentosas?))?"
     r"|nkda|nda|ndn|nao|desconhece|nada\s+consta)\W*",
     re.I,
 )

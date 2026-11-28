@@ -84,7 +84,9 @@ def test_aceita_erro_de_digitacao_alegia():
 
 
 def test_intolerancia_e_reacao_a():
-    assert extrair("intolerância a lactose") == ["LACTOSE"]
+    # 28/11 (revisao): "intolerancia a" saiu do gatilho (ortopedia: exercicio, carga, marcha)
+    assert extrair("Intolerância ao exercício") == []
+    assert extrair("intolerância à marcha prolongada") == []
     assert extrair("reação a dipirona") == ["DIPIRONA"]
     assert extrair("boa reação ao tratamento") == []
 
@@ -250,3 +252,8 @@ def test_erro_inesperado_na_conferencia_deixa_finalizar(ambiente, monkeypatch):
     r = _finalizar(c, eid)
     assert r.status_code == 200, r.text
     assert r.json()["status"] == "attended"
+
+
+def test_ficha_nega_alergias_medicamentosas_e_trocada():
+    from services.alergias import _FICHA_SO_NEGA, _norm
+    assert _FICHA_SO_NEGA.fullmatch(_norm("Nega alergias medicamentosas"))

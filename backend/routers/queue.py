@@ -1252,8 +1252,9 @@ async def update_waiting_status(
         # 28/11 (revisao): so o 409 sobe; qualquer outro erro da conferencia e registrado e a consulta finaliza.
         try:
             from services.alergias import conferir_finalizacao
-            pend = conferir_finalizacao(db, entry_patient, entry.entry_date, request.alergias_acao,
-                                        request.alergias_itens, getattr(current_user, "id", None))
+            with db.begin_nested():  # erro de banco aqui nao aborta a transacao do Finalizar
+                pend = conferir_finalizacao(db, entry_patient, entry.entry_date, request.alergias_acao,
+                                            request.alergias_itens, getattr(current_user, "id", None))
             if pend:
                 logger.info("alergia no finalizar: paciente=%s acao=%s itens=%s", entry_patient.id, request.alergias_acao, len(pend))
         except HTTPException:
