@@ -1084,6 +1084,103 @@ function textoReceitaFormatado(texto: string): React.ReactNode {
   return partes.length ? partes : texto;
 }
 
+// ── Itens alinhados da receita (regra permanente do Dr. Valth, 27/11) ────────
+// Item numerado, nome em negrito à esquerda, pontilhado FLEXÍVEL e a quantidade
+// numa coluna à direita; a posologia logo abaixo do nome. Nunca o tracejado
+// digitado à mão ("CELECOXIBE 200MG ------- 1CX"): o texto guardado continua
+// igual no banco, e só na hora de desenhar a folha a linha é separada em nome e
+// quantidade. Se o texto não tiver nenhuma linha nesse formato, a folha mostra
+// o texto como sempre mostrou.
+type BlocoReceita =
+  | { tipo: "via"; texto: string }
+  | { tipo: "item"; nome: string; qtd: string; posologia: string[] }
+  | { tipo: "texto"; linhas: string[] };
+
+// "1- NOME 50MG ------ 1CX", "NOME 50MG---------- 120 CP", "NOME .... 1 FR"
+const LINHA_ITEM_RECEITA = /^\s*(?:\d{1,2}\s*[.)\-–]\s+)?(.*?\S)\s*[-–—_.·]{4,}\s*([^-–—_.·\s].{0,24})$/;
+const LINHA_VIA_RECEITA = /^uso\s+[a-zà-ú]+(\s+[a-zà-ú]+)?\s*:?$/i;
+
+export function blocosDaReceita(texto: string): BlocoReceita[] | null {
+  const blocos: BlocoReceita[] = [];
+  let item: Extract<BlocoReceita, { tipo: "item" }> | null = null;
+  let livre: Extract<BlocoReceita, { tipo: "texto" }> | null = null;
+  let temItem = false;
+  for (const bruta of (texto || "").replace(/\r/g, "").split("\n")) {
+    const l = bruta.trim();
+    if (!l) { livre = null; continue; }
+    const m = l.match(LINHA_ITEM_RECEITA);
+    if (m) {
+      item = { tipo: "item", nome: m[1].trim(), qtd: m[2].trim(), posologia: [] };
+      blocos.push(item); livre = null; temItem = true;
+      continue;
+    }
+    if (LINHA_VIA_RECEITA.test(l)) {
+      blocos.push({ tipo: "via", texto: l }); item = null; livre = null;
+      continue;
+    }
+    if (item) { item.posologia.push(l); continue; }
+    if (!livre) { livre = { tipo: "texto", linhas: [] }; blocos.push(livre); }
+    livre.linhas.push(l);
+  }
+  return temItem ? blocos : null;
+}
+
+function ItemReceitaLinha({ n, nome, qtd, posologia }: { n: number; nome: React.ReactNode; qtd?: string; posologia?: React.ReactNode[] }) {
+  return (
+    <div className="rx-item" style={{ display: "flex", marginBottom: "1.2em", breakInside: "avoid", pageBreakInside: "avoid" } as React.CSSProperties}>
+      <span style={{ width: "1.9em", flexShrink: 0, fontWeight: 700 }}>{n}.</span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "baseline", fontWeight: 700 }}>
+          <span>{nome}</span>
+          {qtd ? (
+            <>
+              <span style={{ flex: 1, minWidth: "8mm", borderBottom: "1.5px dotted #888", margin: "0 2.5mm", position: "relative", top: "-0.3em" }} />
+              <span style={{ minWidth: "16mm", textAlign: "right", whiteSpace: "nowrap" }}>{qtd}</span>
+            </>
+          ) : null}
+        </div>
+        {posologia && posologia.filter(Boolean).map((p, k) => (
+          <div key={k} style={{ marginTop: k === 0 ? "0.45em" : "0.15em", color: "#333", fontWeight: 400 }}>{p}</div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ListaItensReceita({ blocos, justificar }: { blocos: BlocoReceita[]; justificar?: boolean }) {
+  let n = 0;
+  return (
+    <div style={{ textAlign: justificar ? "justify" : "left" }}>
+      {blocos.map((b, i) => {
+        if (b.tipo === "via") return <p key={i} style={{ fontWeight: 700, margin: "0 0 1.1em" }}>{textoReceitaFormatado(b.texto)}</p>;
+        if (b.tipo === "texto") return <p key={i} style={{ whiteSpace: "pre-wrap", margin: "0 0 1.1em", lineHeight: 1.5 }}>{textoReceitaFormatado(b.linhas.join("\n"))}</p>;
+        n += 1;
+        return <ItemReceitaLinha key={i} n={n} nome={textoReceitaFormatado(b.nome)} qtd={b.qtd} posologia={b.posologia.map((p) => textoReceitaFormatado(p))} />;
+      })}
+    </div>
+  );
+}
+
+// Remédios estruturados (lista da tela) no mesmo desenho alinhado.
+function ListaMedicamentos({ meds }: { meds: Medication[] }) {
+  return (
+    <div>
+      {meds.map((m, i) => (
+        <ItemReceitaLinha
+          key={i}
+          n={i + 1}
+          nome={`${m.name}${m.dose ? ` — ${m.dose}` : ""}`}
+          qtd={(m.quantity || "").trim()}
+          posologia={[
+            [m.route && `Via ${m.route}`, m.frequency, m.duration].filter(Boolean).join(" · "),
+            m.instructions ? <em key="o" style={{ color: "#555" }}>Obs: {m.instructions}</em> : "",
+          ]}
+        />
+      ))}
+    </div>
+  );
+}
+
 // 21/10: as folhas da receita saíram de dentro do PrintModal para o pacote
 // "Tudo de hoje" usar exatamente o mesmo papel.
 export type RxImpressao = {
@@ -1132,6 +1229,7 @@ export function RxSheets({ rx, patient, clinic, formato }: { rx: RxImpressao; pa
   const textoRce = (rx.instructions || "").replace(/\n{3,}/g, "\n\n").trim();
   const linhasRce = textoRce.split("\n").length;
   const rceLonga = linhasRce > 16;
+  const blocosRce = rx.medications.length > 0 ? null : blocosDaReceita(textoRce);
   const RCESheet = ({ viaLabel, viaIndex }: { viaLabel: string; viaIndex: number }) => (
     <div style={{
       background: "white",
@@ -1140,6 +1238,7 @@ export function RxSheets({ rx, patient, clinic, formato }: { rx: RxImpressao; pa
       fontSize: "12px",
       color: "#111",
       minHeight: "248mm",            // ocupa a A4 inteira (E1), com folga para não vazar
+      flex: 1,                       // 27/11: na folha A4 (margem 0) estica até o pé da página
       display: "flex",
       flexDirection: "column",
       boxSizing: "border-box",
@@ -1198,19 +1297,19 @@ export function RxSheets({ rx, patient, clinic, formato }: { rx: RxImpressao; pa
         <p style={{ fontWeight: 700, fontSize: "8.5px", color: "#555", textTransform: "uppercase", letterSpacing: "0.5px", margin: "0 0 8px 0" }}>Prescrição</p>
         {rx.medications.length > 0 ? (
           <>
-            {rx.medications.map((m, i) => (
-              <div key={i} style={{ marginBottom: "12px" }}>
-                <p style={{ fontWeight: 700, margin: "0 0 2px 0", fontSize: "12.5px" }}>{i + 1}. {m.name}{m.dose ? ` — ${m.dose}` : ""}</p>
-                <p style={{ color: "#333", fontSize: "11px", margin: "0 0 1px 14px" }}>{[m.route && `Via ${m.route}`, m.frequency, m.duration].filter(Boolean).join(" · ")}</p>
-                {m.instructions && <p style={{ color: "#555", fontSize: "10.5px", fontStyle: "italic", margin: "0 0 0 14px" }}>{m.instructions}</p>}
-              </div>
-            ))}
+            <div style={{ fontSize: "12.5px" }}><ListaMedicamentos meds={rx.medications} /></div>
             {rx.instructions && (
               <p style={{ color: "#333", fontSize: "11px", marginTop: "8px", fontStyle: "italic" }}>Orientações: {rx.instructions}</p>
             )}
           </>
         ) : (
+          blocosRce ? (
+            <div style={{ fontSize: rceLonga ? `${Math.min(fmtReceita.tamanho ?? 13, 11.5)}px` : `${fmtReceita.tamanho ?? 13.5}px`, lineHeight: rceLonga ? 1.3 : 1.45 }}>
+              <ListaItensReceita blocos={blocosRce} justificar={fmtReceita.justificar} />
+            </div>
+          ) : (
           <p style={{ whiteSpace: "pre-wrap", fontSize: rceLonga ? `${Math.min(fmtReceita.tamanho ?? 12.5, 11)}px` : `${fmtReceita.tamanho ?? 12.5}px`, textAlign: fmtReceita.justificar ? "justify" : "left", margin: 0, lineHeight: rceLonga ? 1.35 : 1.7 }}>{textoReceitaFormatado(textoRce)}</p>
+          )
         )}
       </div>
 
@@ -1338,55 +1437,52 @@ export function RxSheets({ rx, patient, clinic, formato }: { rx: RxImpressao; pa
   );
 
   // Folha para Receita Simples
+  // Folha para Receita Simples — 27/11 (Valth): A4 inteira, sem cabeçalho/rodapé
+  // do navegador, itens alinhados com pontilhado e data+assinatura no pé.
+  // Modelo aprovado: receita v2 (só o desenho; nenhum dado do modelo vem pra cá).
+  const blocosSimples = rx.medications.length > 0 ? null : blocosDaReceita(rx.instructions);
+  const rotuloDado: React.CSSProperties = { fontWeight: 700, color: "#777", textTransform: "uppercase", fontSize: "10.5px", letterSpacing: "0.5px", marginRight: "1.5mm" };
   const SimplesSheet = () => (
-    <div style={{
+    <div className="folha-a4" style={{
       background: "white",
       padding: "0",
       fontSize: "13px",
-      color: "#1a1a1a",
+      color: "#222",
       fontFamily: "Arial, Helvetica, sans-serif",
     }}>
-      {/* 10/08: mesmo papel timbrado do laudo, a pedido do Valth. */}
       <TimbradoOficial clinic={clinic} />
-      <p style={{ textAlign: "center", fontFamily: DOC_SERIF, fontSize: "13px", fontWeight: 700, letterSpacing: "3px", textTransform: "uppercase", color: "#0F2D5E", margin: "0 0 16px" }}>
+      <p style={{ textAlign: "center", fontFamily: DOC_SERIF, fontSize: "17px", fontWeight: 700, letterSpacing: "5px", textTransform: "uppercase", color: "#0F2D5E", margin: "1mm 0 5mm" }}>
         Receita
       </p>
 
       {/* Dados do paciente */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "14px", fontSize: "12px" }}>
-        <div><span style={{ fontWeight: 700, color: "#666", textTransform: "uppercase", fontSize: "10px" }}>Paciente: </span><span style={{ fontWeight: 600 }}>{patient?.name}</span></div>
-        <div><span style={{ fontWeight: 700, color: "#666", textTransform: "uppercase", fontSize: "10px" }}>Data: </span><span>{dateStr}</span></div>
-        {patient?.cpf && <div><span style={{ fontWeight: 700, color: "#666", textTransform: "uppercase", fontSize: "10px" }}>CPF: </span><span style={{ fontFamily: "monospace" }}>{patient.cpf}</span></div>}
-        {patient?.birth_date && <div><span style={{ fontWeight: 700, color: "#666", textTransform: "uppercase", fontSize: "10px" }}>Nasc.: </span><span>{new Date(patient.birth_date + "T12:00:00").toLocaleDateString("pt-BR")}</span></div>}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", rowGap: "3mm", columnGap: "6mm", fontSize: "14px" }}>
+        <div><span style={rotuloDado}>Paciente:</span><strong>{patient?.name}</strong></div>
+        <div><span style={rotuloDado}>Data:</span><span>{dateStr}</span></div>
+        {patient?.cpf && <div><span style={rotuloDado}>CPF:</span><span>{patient.cpf}</span></div>}
+        {patient?.birth_date && <div><span style={rotuloDado}>Nasc.:</span><span>{new Date(patient.birth_date + "T12:00:00").toLocaleDateString("pt-BR")}</span></div>}
       </div>
 
       {/* Medicamentos */}
-      <div style={{ marginBottom: "14px" }}>
-        <p style={{ fontWeight: 700, color: "#444", textTransform: "uppercase", fontSize: "10px", letterSpacing: "1px", borderBottom: "1px solid #ddd", paddingBottom: "4px", marginBottom: "10px" }}>Prescrição</p>
+      <p style={{ fontWeight: 700, color: "#777", textTransform: "uppercase", fontSize: "10.5px", letterSpacing: "2px", borderBottom: "1px solid #ddd", paddingBottom: "1.5mm", margin: "7mm 0 5mm" }}>Prescrição</p>
+      <div style={{ fontSize: `${fmtReceita.tamanho ?? 15}px`, lineHeight: 1.45 }}>
         {rx.medications.length > 0 ? (
-          <ol style={{ margin: 0, padding: 0, listStyle: "none" }}>
-            {rx.medications.map((m, i) => (
-              <li key={i} style={{ marginBottom: "10px", paddingLeft: "4px" }}>
-                <p style={{ fontWeight: 600, margin: "0 0 2px 0" }}>{i + 1}. {m.name}{m.dose ? ` — ${m.dose}` : ""}</p>
-                <p style={{ color: "#555", fontSize: "11px", margin: "0 0 2px 0" }}>{[m.route && `Via ${m.route}`, m.frequency, m.duration].filter(Boolean).join(" · ")}</p>
-                {m.instructions && <p style={{ color: "#777", fontSize: "11px", fontStyle: "italic", margin: "0" }}>Obs: {m.instructions}</p>}
-              </li>
-            ))}
-          </ol>
+          <ListaMedicamentos meds={rx.medications} />
+        ) : blocosSimples ? (
+          <ListaItensReceita blocos={blocosSimples} justificar={fmtReceita.justificar} />
         ) : (
-          <p style={{ whiteSpace: "pre-wrap", fontSize: `${fmtReceita.tamanho ?? 13}px`, textAlign: fmtReceita.justificar ? "justify" : "left", margin: 0, lineHeight: 1.6 }}>{textoReceitaFormatado(rx.instructions)}</p>
+          <p style={{ whiteSpace: "pre-wrap", textAlign: fmtReceita.justificar ? "justify" : "left", margin: 0, lineHeight: 1.6 }}>{textoReceitaFormatado(rx.instructions)}</p>
         )}
       </div>
 
       {rx.medications.length > 0 && rx.instructions && (
-        <div style={{ background: "#f8f8f8", borderRadius: "4px", padding: "10px", marginBottom: "14px" }}>
-          <p style={{ fontWeight: 700, color: "#444", textTransform: "uppercase", fontSize: "10px", marginBottom: "4px" }}>Orientações</p>
-          <p style={{ fontSize: "11px", color: "#555", margin: 0 }}>{rx.instructions}</p>
+        <div style={{ background: "#f8f8f8", borderRadius: "4px", padding: "10px", margin: "2mm 0 6mm" }}>
+          <p style={{ fontWeight: 700, color: "#444", textTransform: "uppercase", fontSize: "10px", margin: "0 0 4px" }}>Orientações</p>
+          <p style={{ fontSize: "12px", color: "#555", margin: 0 }}>{rx.instructions}</p>
         </div>
       )}
 
-      <p style={{ fontSize: "10px", color: "#999", margin: "10px 0 0", textAlign: "right" }}>Válido por 30 dias</p>
-      <FechoOficial clinic={clinic} />
+      <FechoOficial clinic={clinic} nota="Válido por 30 dias" />
     </div>
   );
 
@@ -1403,7 +1499,7 @@ export function RxSheets({ rx, patient, clinic, formato }: { rx: RxImpressao; pa
       {type === "controle_especial" && viaLabels.map((label, idx) => (
         <div key={idx}>
           <div className={idx < vias - 1 ? "rx-via rx-via-break" : "rx-via"}>
-            <RCESheet viaLabel={label} viaIndex={idx} />
+            <div className="folha-a4"><RCESheet viaLabel={label} viaIndex={idx} /></div>
           </div>
           {idx < vias - 1 && (
             <div className="rx-cut-line" style={{ textAlign: "center", color: "#aaa", fontSize: "10px", margin: "4px 0", letterSpacing: "2px", borderTop: "1px dashed #ccc", paddingTop: "4px" }}>
@@ -1418,7 +1514,7 @@ export function RxSheets({ rx, patient, clinic, formato }: { rx: RxImpressao; pa
       {type === "antimicrobiano" && viaLabels.map((label, idx) => (
         <div key={idx}>
           <div className={idx < vias - 1 ? "rx-via rx-via-break" : "rx-via"}>
-            <RCESheet viaLabel={label} viaIndex={idx} />
+            <div className="folha-a4"><RCESheet viaLabel={label} viaIndex={idx} /></div>
           </div>
           {idx < vias - 1 && (
             <div className="rx-cut-line" style={{ textAlign: "center", color: "#aaa", fontSize: "10px", margin: "4px 0", letterSpacing: "2px", borderTop: "1px dashed #ccc", paddingTop: "4px" }}>
@@ -1483,7 +1579,7 @@ export function PrintModal({ rx, patient, clinic, onClose, collectorId }: {
              inline — o pior caso vira papel a mais, nunca folha em branco. */
           body > *:not([data-print-portal]) { display: none !important; }
           #rx-print-portal { display: block !important; position: static !important; width: 100% !important; background: #fff !important; }
-          @page { size: A4 portrait; margin: 10mm 12mm; }
+          @page { size: A4 portrait; margin: 0; } /* 27/11: margem dentro da .folha-a4 — sem cabeçalho/rodapé do navegador */
           .rx-via-break { page-break-after: always; break-after: page; margin-bottom: 0 !important; }
           .rx-cut-line { display: none !important; }
         }
@@ -4362,12 +4458,13 @@ export function ExamSheet({ text, patientName, patient, clinic, fontSize = 14, l
 }) {
   const nasc = patient?.birth_date || patient?.birthdate || patient?.date_of_birth || null;
   const cids: string[] = Array.isArray(patient?.cids) ? patient.cids.filter(Boolean) : [];
+  const blocosExame = blocosDaReceita(text);
 
   // A folha de verdade — vai por portal no body para o navegador paginar.
   // Dentro do modal (absolute + flex) a folha herdava a altura do app inteiro
   // e saía uma SEGUNDA página em branco (reclamação do Valth em 10/08).
   const folha = (
-    <div style={{ background: "#fff", padding: "0", fontFamily: "Arial, Helvetica, sans-serif", color: "#1a1a1a" }}>
+    <div className="folha-a4" style={{ background: "#fff", padding: "0", fontFamily: "Arial, Helvetica, sans-serif", color: "#1a1a1a" }}>
       <TimbradoOficial clinic={clinic} />
 
       <p style={{ textAlign: "center", fontFamily: DOC_SERIF, fontSize: "13px", fontWeight: 700, letterSpacing: "3px", textTransform: "uppercase", color: "#0F2D5E", margin: "0 0 16px" }}>
@@ -4382,9 +4479,16 @@ export function ExamSheet({ text, patientName, patient, clinic, fontSize = 14, l
         </div>
       </div>
 
+      {/* 27/11: linha com tracejado digitado ("RNM ---- 1") sai alinhada, com pontilhado. */}
+      {blocosExame ? (
+        <div style={{ minHeight: "150px", lineHeight: lineHeight === "relaxed" ? 1.7 : 1.45, fontSize: `${fontSize}px`, marginBottom: "8px" }}>
+          <ListaItensReceita blocos={blocosExame} />
+        </div>
+      ) : (
       <div style={{ minHeight: "150px", whiteSpace: "pre-wrap", lineHeight: lineHeight === "relaxed" ? 1.9 : 1.6, fontSize: `${fontSize}px`, marginBottom: "8px" }}>
         {text}
       </div>
+      )}
 
       {cids.length > 0 && (
         <p style={{ fontSize: "11.5px", color: "#444", margin: "14px 0 0" }}>
@@ -4426,7 +4530,7 @@ function PrintExamModal({ text, patientName, patient, clinic, onClose, fontSize 
           html, body { height: auto !important; overflow: visible !important; background: #fff !important; }
           body > *:not([data-print-portal]) { display: none !important; }
           #exam-print-portal { display: block !important; position: static !important; width: 100% !important; background: #fff !important; }
-          @page { size: A4 portrait; margin: 14mm 15mm; }
+          @page { size: A4 portrait; margin: 0; } /* 27/11: margem dentro da .folha-a4 — sem cabeçalho/rodapé do navegador */
         }
       `}</style>
       {typeof document !== "undefined" && createPortal(
@@ -4966,7 +5070,7 @@ function TabExames({ patientId, patient, clinic, prefill, onSalvoEscriba }: { pa
             </div>
           }
           content={
-            <div style={{ fontFamily: "Arial, Helvetica, sans-serif", color: "#1a1a1a", fontSize: "13px" }}>
+            <div className="folha-a4" style={{ fontFamily: "Arial, Helvetica, sans-serif", color: "#1a1a1a", fontSize: "13px" }}>
               <TimbradoOficial clinic={clinic} />
               <p style={{ textAlign: "center", fontFamily: DOC_SERIF, fontSize: "13px", fontWeight: 700, letterSpacing: "3px", textTransform: "uppercase", color: "#0F2D5E", margin: "0 0 16px" }}>
                 Justificativa clínica
@@ -5417,6 +5521,7 @@ function PrintDocModal({ title, content, onClose, extraHeader }: { title: string
     try {
       const [{ default: html2canvas }, { jsPDF }] = await Promise.all([import("html2canvas"), import("jspdf")]);
       folha = fonte.cloneNode(true) as HTMLElement;
+      folha.classList.add("modo-a4"); // 27/11: folha A4 inteira, margem dentro dela
       Object.assign(folha.style, {
         display: "block", position: "fixed", left: "-10000px", top: "0",
         width: "794px", padding: "0", background: "#fff", boxSizing: "border-box",
@@ -5425,12 +5530,12 @@ function PrintDocModal({ title, content, onClose, extraHeader }: { title: string
       const canvas = await html2canvas(folha, { scale: 2, backgroundColor: "#ffffff", useCORS: true });
 
       const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
-      const margem = 12;
+      const margem = 0; // 27/11: a margem já está dentro da .folha-a4
       const larguraUtil = 210 - margem * 2;
       const alturaUtil = 297 - margem * 2;
       const pxPorMm = canvas.width / larguraUtil;
       const alturaPaginaPx = Math.floor(alturaUtil * pxPorMm);
-      for (let y = 0, pagina = 0; y < canvas.height; y += alturaPaginaPx, pagina++) {
+      for (let y = 0, pagina = 0; y < canvas.height - 4; y += alturaPaginaPx, pagina++) {
         const fatia = document.createElement("canvas");
         fatia.width = canvas.width;
         fatia.height = Math.min(alturaPaginaPx, canvas.height - y);
@@ -5456,7 +5561,7 @@ function PrintDocModal({ title, content, onClose, extraHeader }: { title: string
       <style>{`
         @media print {
           /* Papel A4 retrato com margens de documento oficial (pedido do Dr. Valth) */
-          @page { size: A4 portrait; margin: 16mm 15mm 18mm; }
+          @page { size: A4 portrait; margin: 0; } /* 27/11: margem dentro da .folha-a4 — sem cabeçalho/rodapé do navegador */
           /* 10/08 — mesmo conserto do pedido de exame: escondido por
              visibility o app some mas MANTÉM o espaço, e sobrava folha em
              branco. O papel sai por portal filho direto do body. */
@@ -5554,13 +5659,13 @@ function TimbradoOficial({ clinic }: { clinic?: any }) {
   return (
     <>
       <div style={{ textAlign: "center", paddingBottom: "10px" }}>
-        <OrthoMedicLogo size={46} />
+        <OrthoMedicLogo size={54} />
         <p style={{ fontSize: "12px", fontWeight: 700, letterSpacing: "4px", margin: "6px 0 8px" }}>
           <span style={{ color: OM_NAVY }}>ORTHO</span><span style={{ color: OM_TEAL }}>MEDIC</span>
         </p>
-        <p style={{ fontFamily: DOC_SERIF, fontSize: "18px", fontWeight: 700, letterSpacing: "1px", margin: 0, color: "#0F2D5E" }}>Dr. Valth Menezes Guimarães</p>
+        <p style={{ fontFamily: DOC_SERIF, fontSize: "24px", fontWeight: 700, letterSpacing: "1px", margin: 0, color: "#0F2D5E" }}>Dr. Valth Menezes Guimarães</p>
         <p style={{ fontSize: "10px", textTransform: "uppercase", letterSpacing: "3px", color: "#555", margin: "3px 0 0" }}>Ortopedia e Traumatologia</p>
-        <p style={{ fontSize: "9.5px", color: "#777", margin: "3px 0 0", letterSpacing: "0.5px" }}>{crmComTeot(clinic)}</p>
+        <p style={{ fontSize: "11.5px", color: "#333", margin: "5px 0 0", letterSpacing: "0.5px" }}>{crmComTeot(clinic)}</p>
         {clinic && (
           <p style={{ fontSize: "9px", color: "#999", margin: "4px 0 0" }}>
             {/* 07/10 (Valth): a cidade e a data ficam SÓ no fecho do documento; no alto, sem cidade. */}
@@ -5624,7 +5729,7 @@ function EncaminhamentoFolha({ clinic, patient, dataISO, destino, colega, texto,
   const solicitacao = c.solicitacao.length ? c.solicitacao.join("\n") : (destino ? `Encaminho para: ${destino}` : "");
   const nasc = patient?.birth_date ? new Date(patient.birth_date + "T12:00:00").toLocaleDateString("pt-BR") : "";
   return (
-    <div style={{ fontFamily: "Arial, Helvetica, sans-serif", color: "#1a1a1a" }}>
+    <div className="folha-a4" style={{ fontFamily: "Arial, Helvetica, sans-serif", color: "#1a1a1a" }}>
       <TimbradoOficial clinic={clinic} />
       <div style={{ background: ENC_AZUL, color: "#fff", textAlign: "center", padding: "9px 0", borderRadius: "3px", margin: "0 0 3px" }}>
         <span style={{ fontFamily: DOC_SERIF, fontSize: "19pt", fontWeight: 700, letterSpacing: "6px" }}>ENCAMINHAMENTO</span>
@@ -5649,19 +5754,36 @@ function EncaminhamentoFolha({ clinic, patient, dataISO, destino, colega, texto,
   );
 }
 
-function FechoOficial({ clinic, dataISO }: { clinic?: any; dataISO?: string }) {
+function FechoOficial({ clinic, dataISO, nota, children }: { clinic?: any; dataISO?: string; nota?: string; children?: React.ReactNode }) {
+  // 27/11 (Valth): data e assinatura ANCORADAS no pé da folha A4 (margin-top
+  // auto dentro da .folha-a4) e rodapé discreto da clínica embaixo de tudo.
   return (
-    <div style={{ pageBreakInside: "avoid", breakInside: "avoid" } as any}>
-      <p style={{ fontFamily: DOC_SERIF, fontSize: "12.5px", color: "#1a1a1a", margin: "30px 0 44px", textAlign: "right", fontStyle: "italic" }}>{cidadeUf(clinic)}, {dataExtensoHoje(dataISO)}.</p>
+    <div className="folha-a4-fecho" style={{ marginTop: "auto", paddingTop: "4mm", pageBreakInside: "avoid", breakInside: "avoid" } as any}>
+      {nota && <p style={{ fontFamily: "Arial, Helvetica, sans-serif", fontSize: "10.5px", color: "#666", margin: "0", textAlign: "right" }}>{nota}</p>}
+      <p style={{ fontFamily: DOC_SERIF, fontSize: "14px", color: "#1a1a1a", margin: "3mm 0 15mm", textAlign: "right", fontStyle: "italic" }}>{cidadeUf(clinic)}, {dataExtensoHoje(dataISO)}.</p>
       <div style={{ display: "flex", justifyContent: "center" }}>
         <div style={{ textAlign: "center", width: "310px" }}>
           <div style={{ borderTop: "1px solid #1a1a1a", paddingTop: "9px" }}>
-            <p style={{ fontFamily: DOC_SERIF, fontSize: "13.5px", fontWeight: 700, margin: 0, letterSpacing: "0.5px" }}>Dr. Valth Menezes Guimarães</p>
-            <p style={{ fontSize: "10.5px", color: "#444", margin: "2px 0 0", textTransform: "uppercase", letterSpacing: "1.5px" }}>Ortopedista e Traumatologista</p>
-            <p style={{ fontSize: "10.5px", color: "#444", margin: "2px 0 0", letterSpacing: "0.5px" }}>{crmComTeot(clinic)}</p>
+            <p style={{ fontFamily: DOC_SERIF, fontSize: "14.5px", fontWeight: 700, margin: 0, letterSpacing: "0.5px" }}>Dr. Valth Menezes Guimarães</p>
+            <p style={{ fontFamily: "Arial, Helvetica, sans-serif", fontSize: "10.5px", color: "#555", margin: "3px 0 0", textTransform: "uppercase", letterSpacing: "2px" }}>Ortopedista e Traumatologista</p>
+            <p style={{ fontFamily: "Arial, Helvetica, sans-serif", fontSize: "11px", color: "#333", margin: "3px 0 0", letterSpacing: "0.5px" }}>{crmComTeot(clinic)}</p>
           </div>
         </div>
       </div>
+      {children}
+      <RodapeOficial clinic={clinic} />
+    </div>
+  );
+}
+
+// Rodapé discreto da clínica, no pé da folha (27/11). Só dado da clínica.
+function RodapeOficial({ clinic }: { clinic?: any }) {
+  const partes = ["OrthoMedic", "Dr. Valth Menezes Guimarães", "Ortopedia e Traumatologia"];
+  if (clinic?.name) partes.push(clinic.name);
+  if (clinic?.phone) partes.push(clinic.phone);
+  return (
+    <div className="folha-a4-rodape" style={{ marginTop: "6mm", borderTop: "1px solid #ddd", paddingTop: "2mm", textAlign: "center", fontFamily: "Arial, Helvetica, sans-serif", fontSize: "9.5px", color: "#888", lineHeight: 1.4 }}>
+      {partes.join(" · ")}
     </div>
   );
 }
@@ -5739,7 +5861,7 @@ function ConsultaPrintCenter({ docs, onRemove, onClose }: {
           #pc-print-portal { display: block !important; position: static !important; width: 100% !important; background: #fff !important; }
           /* 27/10: sem @page aqui a impressora usava o papel e a margem dela (Carta em
              Palmares?) e a via de 2 folhas não cabia. Mesma A4 da janela da receita. */
-          @page { size: A4 portrait; margin: 10mm 12mm; }
+          @page { size: A4 portrait; margin: 0; } /* 27/11: margem dentro da .folha-a4 — sem cabeçalho/rodapé do navegador */
           .pc-doc { page-break-after: always; }
           .pc-doc:last-child { page-break-after: auto; }
           /* 2 vias de RCE/ATB quebram de página tambem na impressão em lote (M9) */
@@ -6461,7 +6583,7 @@ function TabProcedimentos({ patientId, patient, clinic, prefill, onSalvoEscriba 
 
   const printContent = printData && (
     // 10/08: mesmo papel timbrado dos demais documentos.
-    <div style={{ fontFamily: "Arial, Helvetica, sans-serif", color: "#1a1a1a", fontSize: "13px" }}>
+    <div className="folha-a4" style={{ fontFamily: "Arial, Helvetica, sans-serif", color: "#1a1a1a", fontSize: "13px" }}>
       <TimbradoOficial clinic={clinic} />
 
       <p style={{ textAlign: "center", fontFamily: DOC_SERIF, fontSize: "13px", fontWeight: 700, letterSpacing: "3px", textTransform: "uppercase", color: "#0F2D5E", margin: "0 0 16px" }}>
@@ -6490,14 +6612,14 @@ function TabProcedimentos({ patientId, patient, clinic, prefill, onSalvoEscriba 
         </p>
       )}
 
-      <FechoOficial clinic={clinic} />
-
-      {/* Ciência do paciente — exigência do próprio documento, fica após o fecho. */}
-      <div style={{ display: "flex", justifyContent: "center", marginTop: "26px", pageBreakInside: "avoid" } as any}>
-        <div style={{ textAlign: "center", width: "310px", borderTop: "1px solid #999", paddingTop: "7px" }}>
-          <p style={{ fontSize: "10.5px", color: "#666", margin: 0 }}>Paciente — ciente e de acordo</p>
+      <FechoOficial clinic={clinic}>
+        {/* Ciência do paciente — exigência do próprio documento, fica após o fecho. */}
+        <div style={{ display: "flex", justifyContent: "center", marginTop: "26px", pageBreakInside: "avoid" } as any}>
+          <div style={{ textAlign: "center", width: "310px", borderTop: "1px solid #999", paddingTop: "7px" }}>
+            <p style={{ fontSize: "10.5px", color: "#666", margin: 0 }}>Paciente — ciente e de acordo</p>
+          </div>
         </div>
-      </div>
+      </FechoOficial>
     </div>
   );
 
@@ -6805,7 +6927,7 @@ export function TabAtestados({ patient, clinic, prefill, onSalvoEscriba }: { pat
     const startFormatted = formatDateBR(printData.startDate);
     const retDate = calcReturnDate(printData.startDate, printData.days) ?? "";
     return (
-      <div style={{ fontFamily: DOC_SERIF, color: "#1a1a1a", fontSize: "12.5px", lineHeight: 1.75 }}>
+      <div className="folha-a4" style={{ fontFamily: DOC_SERIF, color: "#1a1a1a", fontSize: "12.5px", lineHeight: 1.75 }}>
         <TimbradoOficial clinic={clinic} />
         <div style={{ textAlign: "center", margin: "0 0 22px" }}>
           <p style={{ fontFamily: DOC_SERIF, fontWeight: 700, fontSize: "17px", textTransform: "uppercase", letterSpacing: "7px", color: "#1a1a1a", margin: 0 }}>Atestado Médico</p>
@@ -6852,7 +6974,7 @@ export function TabAtestados({ patient, clinic, prefill, onSalvoEscriba }: { pat
     if (!compPrintData) return null;
     const startFormatted = formatDateBR(compPrintData.compDate);
     return (
-      <div style={{ fontFamily: DOC_SERIF, color: "#1a1a1a", fontSize: "12.5px", lineHeight: 1.75 }}>
+      <div className="folha-a4" style={{ fontFamily: DOC_SERIF, color: "#1a1a1a", fontSize: "12.5px", lineHeight: 1.75 }}>
         <TimbradoOficial clinic={clinic} />
         <div style={{ textAlign: "center", margin: "0 0 22px" }}>
           <p style={{ fontFamily: DOC_SERIF, fontWeight: 700, fontSize: "16px", textTransform: "uppercase", letterSpacing: "5px", color: "#1a1a1a", margin: 0 }}>Declaração de Comparecimento</p>
@@ -6877,7 +6999,7 @@ export function TabAtestados({ patient, clinic, prefill, onSalvoEscriba }: { pat
   const reimprimirContent = useMemo(() => {
     if (!reimprimir) return null;
     return (
-      <div style={{ fontFamily: DOC_SERIF, color: "#1a1a1a", fontSize: "12.5px", lineHeight: 1.75 }}>
+      <div className="folha-a4" style={{ fontFamily: DOC_SERIF, color: "#1a1a1a", fontSize: "12.5px", lineHeight: 1.75 }}>
         <TimbradoOficial clinic={clinic} />
         <div style={{ textAlign: "center", margin: "0 0 22px" }}>
           <p style={{ fontFamily: DOC_SERIF, fontWeight: 700, fontSize: "17px", textTransform: "uppercase", letterSpacing: "7px", color: "#1a1a1a", margin: 0 }}>{reimprimir.title}</p>
@@ -7336,7 +7458,7 @@ export function TabLaudos({ patient, clinic }: { patient: any; clinic?: any }) {
       .trimEnd();
     const serif = DOC_SERIF;
     return (
-      <div style={{ fontFamily: serif, color: "#1a1a1a", fontSize: "12.5px", lineHeight: 1.75 }}>
+      <div className="folha-a4" style={{ fontFamily: serif, color: "#1a1a1a", fontSize: "12.5px", lineHeight: 1.75 }}>
         <TimbradoOficial clinic={clinic} />
 
         {/* ── Identificação do paciente ── */}
@@ -7390,7 +7512,7 @@ export function TabLaudos({ patient, clinic }: { patient: any; clinic?: any }) {
     if (!reimprimir) return null;
     const age = patient?.birth_date ? calcAge(patient.birth_date) : "";
     return (
-      <div style={{ fontFamily: DOC_SERIF, color: "#1a1a1a", fontSize: "12.5px", lineHeight: 1.75 }}>
+      <div className="folha-a4" style={{ fontFamily: DOC_SERIF, color: "#1a1a1a", fontSize: "12.5px", lineHeight: 1.75 }}>
         <TimbradoOficial clinic={clinic} />
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "3px 18px", margin: "0 0 20px", fontSize: "11.5px", padding: "10px 14px", background: "#f8f7f4", border: "1px solid #e3e0d8", borderRadius: "2px" }}>
           <p style={{ margin: 0 }}><strong>Paciente:</strong> {patient?.name}</p>
@@ -8452,7 +8574,7 @@ export function ReportSheet({ item, patient, clinic }: { item: Extract<ItemPacot
   if (item.reportType === "laudo" || item.reportType === "laudo_medico") {
     const age = patient?.birth_date ? calcAge(patient.birth_date) : "";
     return (
-      <div style={{ fontFamily: DOC_SERIF, color: "#1a1a1a", fontSize: "12.5px", lineHeight: 1.75 }}>
+      <div className="folha-a4" style={{ fontFamily: DOC_SERIF, color: "#1a1a1a", fontSize: "12.5px", lineHeight: 1.75 }}>
         <TimbradoOficial clinic={clinic} />
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "3px 18px", margin: "0 0 20px", fontSize: "11.5px", padding: "10px 14px", background: "#f8f7f4", border: "1px solid #e3e0d8", borderRadius: "2px" }}>
           <p style={{ margin: 0 }}><strong>Paciente:</strong> {patient?.name}</p>
@@ -8470,7 +8592,7 @@ export function ReportSheet({ item, patient, clinic }: { item: Extract<ItemPacot
     );
   }
   return (
-    <div style={{ fontFamily: DOC_SERIF, color: "#1a1a1a", fontSize: "12.5px", lineHeight: 1.75 }}>
+    <div className="folha-a4" style={{ fontFamily: DOC_SERIF, color: "#1a1a1a", fontSize: "12.5px", lineHeight: 1.75 }}>
       <TimbradoOficial clinic={clinic} />
       <div style={{ textAlign: "center", margin: "0 0 22px" }}>
         <p style={{ fontFamily: DOC_SERIF, fontWeight: 700, fontSize: "17px", textTransform: "uppercase", letterSpacing: "7px", color: "#1a1a1a", margin: 0 }}>{item.titulo}</p>
@@ -8732,7 +8854,7 @@ function PacoteDoDia({ patientId, patient, clinic, entryId, onClose }: { patient
     const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
     let primeira = true;
     const novaPagina = () => { if (!primeira) pdf.addPage("a4", "portrait"); primeira = false; };
-    const margem = 12, larguraUtil = 210 - margem * 2, alturaUtil = 297 - margem * 2;
+    const margem = 0, larguraUtil = 210 - margem * 2, alturaUtil = 297 - margem * 2; // 27/11: margem dentro da .folha-a4
     for (const i of escolhidos) {
       if (i.tipo === "guia") {
         const g = paginas[i.docId];
@@ -8751,6 +8873,7 @@ function PacoteDoDia({ patientId, patient, clinic, entryId, onClose }: { patient
       const partes = i.tipo === "receita" && vias.length ? vias : [fonte];
       for (const parte of partes) {
         const clone = parte.cloneNode(true) as HTMLElement;
+        clone.classList.add("modo-a4");
         Object.assign(clone.style, { display: "block", position: "fixed", left: "-10000px", top: "0", width: "794px", background: "#fff", boxSizing: "border-box" });
         clone.querySelectorAll(".rx-cut-line").forEach((n) => n.remove());
         document.body.appendChild(clone);
@@ -8825,7 +8948,7 @@ function PacoteDoDia({ patientId, patient, clinic, entryId, onClose }: { patient
           html, body { height: auto !important; overflow: visible !important; background: #fff !important; }
           body > *:not([data-print-portal]) { display: none !important; }
           #pd-print-portal { display: block !important; position: static !important; width: 100% !important; background: #fff !important; }
-          @page { size: A4 portrait; margin: 10mm 12mm; }
+          @page { size: A4 portrait; margin: 0; } /* 27/11: margem dentro da .folha-a4 — sem cabeçalho/rodapé do navegador */
           @page guia { size: A4 portrait; margin: 0; }
           @page guiadeitada { size: A4 landscape; margin: 0; }
           .pd-guia { page: guia; }

@@ -440,6 +440,39 @@
   .card { box-shadow: none !important; border: 1px solid #e2e8f0; }
 }
 
+/* ── Folha A4 dos documentos (regra permanente do Dr. Valth, 27/11) ─────────
+   Receita, pedido de exame, encaminhamento, atestado e laudo.
+   1. @page { margin: 0 } em toda janela de impressão: sem data/hora, título,
+      endereço ou "1/5" do navegador. A margem fica DENTRO da folha (padding).
+   2. A folha ocupa a A4 inteira: coluna flex com altura mínima de uma página;
+      o fecho (data + assinatura + rodapé) tem margin-top: auto e cai no pé.
+   3. Documento longo (laudo) continua na folha seguinte com a mesma margem
+      (box-decoration-break: clone repete o padding em cada página).
+   Na tela (prévia) a folha é só o conteúdo, sem tamanho fixo. */
+.folha-a4 {
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  background: #fff;
+}
+@media print {
+  .folha-a4 {
+    width: 210mm;
+    min-height: 296mm; /* 1 mm de folga: 297 exatos às vezes empurram uma folha em branco */
+    padding: 13mm 17mm 9mm !important; /* vence o padding: 0 inline de folhas antigas */
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
+/* Exportação "Baixar PDF" (html2canvas): mesma folha A4 da impressão. */
+.modo-a4 .folha-a4 {
+  width: 210mm;
+  min-height: 297mm;
+  padding: 13mm 17mm 9mm !important;
+}
+
 /* ── Mobile Navigation ──────────────────────────────────────────────────── */
 
 /**

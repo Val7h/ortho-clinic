@@ -292,7 +292,7 @@ export default function ImpressoraPage() {
           html, body { height: auto !important; overflow: visible !important; background: #fff !important; }
           body > *:not([data-print-portal]) { display: none !important; }
           #imp-print-portal { display: block !important; position: static !important; width: 100% !important; background: #fff !important; }
-          @page { size: A4 portrait; margin: 10mm 12mm; }
+          @page { size: A4 portrait; margin: 0; } /* 27/11: margem dentro da .folha-a4 — sem cabeçalho/rodapé do navegador */
           @page impguia { size: A4 portrait; margin: 0; }
           @page impguiadeitada { size: A4 landscape; margin: 0; }
           .imp-guia { page: impguia; }

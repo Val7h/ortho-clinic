@@ -743,8 +743,10 @@ export default function PrescriptionPage() {
         <MemedDemoModal patient={patient} onConfirm={handleDemoConfirm} onClose={() => setShowDemoModal(false)} />
       )}
 
+      {/* 27/11 (Valth): receita simples desta página antiga também sai na folha A4
+          oficial (timbrado, itens alinhados, assinatura no pé). Mesmos dados. */}
       {printRx && (
-        <PrintPrescriptionModal rx={printRx} patient={patient} onClose={() => setPrintRx(null)} />
+        <PrintRxTipadaModal rx={{ ...printRx, medications: printRx.medications as any, prescription_type: "simples" }} patient={patient} collectorId={null} onClose={() => setPrintRx(null)} />
       )}
       {printRxTipada && (
         <PrintRxTipadaModal rx={printRxTipada} patient={patient} collectorId={null} onClose={() => setPrintRxTipada(null)} />
