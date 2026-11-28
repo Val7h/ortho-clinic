@@ -9,9 +9,9 @@ import {
 import toast from "react-hot-toast";
 import NavBar from "@/components/NavBar";
 import { PageWithSidebar } from "@/components/PageWithSidebar";
-import { api, prescriptionsApi, patientsApi } from "@/lib/api";
+import { api, prescriptionsApi, patientsApi, clinicApi } from "@/lib/api";
 import { formatDate, resolveDynamicParam, hojeISO } from "@/lib/utils";
-import { PrintModal as PrintRxTipadaModal, normalizePrescriptionType } from "@/app/painel/ConsultaDrawer";
+import { PrintModal as PrintRxTipadaModal, normalizePrescriptionType, crmDaClinica } from "@/app/painel/ConsultaDrawer";
 
 interface MemedConfig {
   enabled: boolean;
@@ -119,142 +119,6 @@ function AllergyBanners({ patient }: { patient: any }) {
   );
 }
 
-// ─── Modal de impressão de receita simples ────────────────────────────────────
-
-function PrintPrescriptionModal({
-  rx,
-  patient,
-  onClose,
-}: {
-  rx: { date: string; medications: Medication[]; instructions: string };
-  patient: any;
-  onClose: () => void;
-}) {
-  const handlePrint = () => window.print();
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 print:p-0" style={{ background: "rgba(0,0,0,0.55)" }}>
-      {/* Estilos de impressão embutidos */}
-      <style>{`
-        @media print {
-          body > *:not(#print-prescription-root) { display: none !important; }
-          #print-prescription-root {
-            position: fixed !important;
-            inset: 0 !important;
-            z-index: 9999 !important;
-            background: white !important;
-          }
-          .no-print { display: none !important; }
-          .print-page { page-break-after: always; }
-        }
-      `}</style>
-
-      <div id="print-prescription-root" className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[95vh] flex flex-col overflow-hidden">
-        {/* Header modal (some apenas na tela) */}
-        <div className="no-print px-5 pt-5 pb-4 border-b border-gray-200 dark:border-slate-700 flex items-center justify-between flex-shrink-0">
-          <h2 className="font-bold text-slate-900 dark:text-slate-50">Preview da Receita</h2>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handlePrint}
-              className="flex items-center gap-2 px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 font-semibold text-sm"
-            >
-              <Printer className="w-4 h-4" /> Imprimir
-            </button>
-            <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700">
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-
-        {/* Conteudo imprimivel */}
-        <div className="flex-1 overflow-y-auto p-6 bg-white">
-          <div className="print-page bg-white p-6 border border-gray-200 rounded-lg text-sm text-gray-900">
-            {/* Cabecalho */}
-            <div className="text-center border-b-2 border-blue-800 pb-4 mb-6">
-              <h1 className="text-xl font-bold text-blue-900">Dr. Valth Guimaraes</h1>
-              <p className="text-sm text-gray-600">Ortopedia e Traumatologia</p>
-              <p className="text-sm text-gray-600">CRM/PB 1234</p>
-            </div>
-
-            {/* Dados do paciente */}
-            <div className="grid grid-cols-2 gap-3 mb-6 text-xs">
-              <div>
-                <span className="font-bold text-gray-500 uppercase">Paciente:</span>
-                <p className="font-semibold">{patient?.name}</p>
-              </div>
-              <div>
-                <span className="font-bold text-gray-500 uppercase">Data:</span>
-                <p>{new Date(rx.date).toLocaleDateString("pt-BR")}</p>
-              </div>
-              {patient?.cpf && (
-                <div>
-                  <span className="font-bold text-gray-500 uppercase">CPF:</span>
-                  <p className="font-mono">{patient.cpf}</p>
-                </div>
-              )}
-              {patient?.birth_date && (
-                <div>
-                  <span className="font-bold text-gray-500 uppercase">Nasc.:</span>
-                  <p>{new Date(patient.birth_date).toLocaleDateString("pt-BR")}</p>
-                </div>
-              )}
-            </div>
-
-            {/* Medicamentos */}
-            {rx.medications.length > 0 && (
-              <div className="mb-6">
-                <p className="font-bold text-gray-700 uppercase text-xs tracking-wider mb-3 border-b border-gray-200 pb-1">Prescricao</p>
-                <ol className="space-y-3">
-                  {rx.medications.map((m, i) => (
-                    <li key={i} className="pl-2">
-                      <p className="font-semibold">
-                        {i + 1}. {m.name}
-                        {m.dose && <span className="font-normal text-gray-600"> — {m.dose}</span>}
-                      </p>
-                      <p className="text-gray-600 text-xs mt-0.5">
-                        {[m.route && `Via ${m.route}`, m.frequency, m.duration].filter(Boolean).join(" · ")}
-                      </p>
-                      {m.instructions && (
-                        <p className="text-gray-500 text-xs italic mt-0.5">Obs: {m.instructions}</p>
-                      )}
-                    </li>
-                  ))}
-                </ol>
-              </div>
-            )}
-
-            {/* Instrucoes gerais / texto livre */}
-            {rx.instructions && (
-              <div className="mb-6 bg-gray-50 rounded p-3">
-                <p className="font-bold text-gray-700 text-xs uppercase tracking-wider mb-1">
-                  {rx.medications.length === 0 ? "Prescricao" : "Orientacoes"}
-                </p>
-                <p className="text-xs text-gray-700 whitespace-pre-wrap">{rx.instructions}</p>
-              </div>
-            )}
-
-            {/* Assinatura */}
-            <div className="mt-10 flex justify-end">
-              <div className="text-center w-56">
-                <div className="border-t-2 border-gray-800 mb-2 pt-2"></div>
-                <p className="text-xs font-bold">Dr. Valth Guimaraes</p>
-                <p className="text-xs text-gray-500">CRM/PB 1234</p>
-                <p className="text-xs text-gray-400 mt-1">
-                  {new Date(rx.date).toLocaleDateString("pt-BR")}
-                </p>
-              </div>
-            </div>
-
-            {/* Rodape */}
-            <div className="mt-8 pt-4 border-t border-gray-200 text-center text-[10px] text-gray-400">
-              <p>OrthoClinic — Ortopedia e Traumatologia</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // ─── Modal Memed Demo ─────────────────────────────────────────────────────────
 
@@ -498,6 +362,17 @@ export default function PrescriptionPage() {
   const memedListenersAdded = useRef(false);
 
   const isDemo = memedConfig?.token === "demo";
+
+  // 28/11 (revisão): a folha precisa da clínica para sair com o CRM do estado e a
+  // cidade certos. Página antiga não tem atendimento: usa a última clínica usada
+  // neste aparelho (a mesma chave que o painel grava).
+  const [clinic, setClinic] = useState<any>(null);
+  useEffect(() => {
+    let id: string | null = null;
+    try { id = localStorage.getItem("ortho_last_clinic_id"); } catch {}
+    if (!id) return;
+    clinicApi.get(Number(id)).then(setClinic).catch(() => {});
+  }, []);
 
   useEffect(() => {
     Promise.all([
@@ -746,10 +621,10 @@ export default function PrescriptionPage() {
       {/* 27/11 (Valth): receita simples desta página antiga também sai na folha A4
           oficial (timbrado, itens alinhados, assinatura no pé). Mesmos dados. */}
       {printRx && (
-        <PrintRxTipadaModal rx={{ ...printRx, medications: printRx.medications as any, prescription_type: "simples" }} patient={patient} collectorId={null} onClose={() => setPrintRx(null)} />
+        <PrintRxTipadaModal rx={{ ...printRx, medications: printRx.medications as any, prescription_type: "simples" }} patient={patient} clinic={clinic} collectorId={null} onClose={() => setPrintRx(null)} />
       )}
       {printRxTipada && (
-        <PrintRxTipadaModal rx={printRxTipada} patient={patient} collectorId={null} onClose={() => setPrintRxTipada(null)} />
+        <PrintRxTipadaModal rx={printRxTipada} patient={patient} clinic={clinic} collectorId={null} onClose={() => setPrintRxTipada(null)} />
       )}
 
       <div className="max-w-4xl mx-auto px-4 py-6 space-y-4">
@@ -1096,7 +971,7 @@ export default function PrescriptionPage() {
                       .page-break { page-break-after: always; }
                     }
                   `}</style>
-                  <ControlledPrescriptionPrint rx={controlledRx} patient={patient} />
+                  <ControlledPrescriptionPrint rx={controlledRx} patient={patient} clinic={clinic} />
                 </div>
 
                 <div className="print:hidden bg-white dark:bg-slate-800 rounded-lg shadow p-6 space-y-4">
@@ -1137,7 +1012,7 @@ Via Branca - Paciente`}
   );
 }
 
-function ControlledPrescriptionPrint({ rx, patient }: { rx: ControlledPrescription; patient: any }) {
+function ControlledPrescriptionPrint({ rx, patient, clinic }: { rx: ControlledPrescription; patient: any; clinic?: any }) {
   return (
     <div className="space-y-8 text-sm">
       {[1, 2].map((via) => (
@@ -1149,7 +1024,7 @@ function ControlledPrescriptionPrint({ rx, patient }: { rx: ControlledPrescripti
             </div>
             <div className="text-right">
               <p className="text-sm font-bold">Dr. Valth Guimaraes</p>
-              <p className="text-xs text-gray-500">CRM/PB 1234</p>
+              <p className="text-xs text-gray-500">{crmDaClinica(clinic)}</p>
               <p className="font-mono text-xs">{new Date(rx.date).toLocaleDateString("pt-BR")}</p>
             </div>
           </div>
@@ -1206,7 +1081,7 @@ function ControlledPrescriptionPrint({ rx, patient }: { rx: ControlledPrescripti
               <div className="w-48">
                 <div className="border-t border-gray-900 mb-1" style={{ height: "50px" }} />
                 <p className="text-xs font-bold">Dr. Valth Guimaraes</p>
-                <p className="text-xs">CRM/PB 1234</p>
+                <p className="text-xs">{crmDaClinica(clinic)}</p>
               </div>
             </div>
           </div>

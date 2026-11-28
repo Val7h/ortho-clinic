@@ -22,6 +22,7 @@ import { juntarAnamnese, folhaDepoisDaJuncao } from "@/lib/anamneseJuncao";
 import * as escriba from "@/lib/escribaGravador";
 import { anamnesisApi, api, patientsApi, consultationsApi, prescriptionsApi, prescriptionTemplatesApi, referralTemplatesApi, examsApi, evolutionApi, clinicApi, chatApi, reportsApi, leafletsApi, waitingRoomApi, remindersApi, medicamentosApi, printJobsApi, msgErro, escribaApi, EscribaResumo, escribaSugestoesApi, EscribaGerar, EscribaGerarItem, assistenteApi } from "@/lib/api";
 import { baixarGuiaComVaga, baixarPaginasDaGuia } from "@/lib/paginasPdf";
+import { blocosDaReceita, numerosDosItens, type BlocoReceita } from "@/lib/receitaItens";
 import type { EscribaSugestao, EscribaSugestoes, EscribaSugTipo, AssistenteMsg } from "@/lib/api";
 import { formatDate, calcAge, hojeISO } from "@/lib/utils";
 
@@ -1091,39 +1092,7 @@ function textoReceitaFormatado(texto: string): React.ReactNode {
 // igual no banco, e só na hora de desenhar a folha a linha é separada em nome e
 // quantidade. Se o texto não tiver nenhuma linha nesse formato, a folha mostra
 // o texto como sempre mostrou.
-type BlocoReceita =
-  | { tipo: "via"; texto: string }
-  | { tipo: "item"; nome: string; qtd: string; posologia: string[] }
-  | { tipo: "texto"; linhas: string[] };
-
-// "1- NOME 50MG ------ 1CX", "NOME 50MG---------- 120 CP", "NOME .... 1 FR"
-const LINHA_ITEM_RECEITA = /^\s*(?:\d{1,2}\s*[.)\-–]\s+)?(.*?\S)\s*[-–—_.·]{4,}\s*([^-–—_.·\s].{0,24})$/;
-const LINHA_VIA_RECEITA = /^uso\s+[a-zà-ú]+(\s+[a-zà-ú]+)?\s*:?$/i;
-
-export function blocosDaReceita(texto: string): BlocoReceita[] | null {
-  const blocos: BlocoReceita[] = [];
-  let item: Extract<BlocoReceita, { tipo: "item" }> | null = null;
-  let livre: Extract<BlocoReceita, { tipo: "texto" }> | null = null;
-  let temItem = false;
-  for (const bruta of (texto || "").replace(/\r/g, "").split("\n")) {
-    const l = bruta.trim();
-    if (!l) { livre = null; continue; }
-    const m = l.match(LINHA_ITEM_RECEITA);
-    if (m) {
-      item = { tipo: "item", nome: m[1].trim(), qtd: m[2].trim(), posologia: [] };
-      blocos.push(item); livre = null; temItem = true;
-      continue;
-    }
-    if (LINHA_VIA_RECEITA.test(l)) {
-      blocos.push({ tipo: "via", texto: l }); item = null; livre = null;
-      continue;
-    }
-    if (item) { item.posologia.push(l); continue; }
-    if (!livre) { livre = { tipo: "texto", linhas: [] }; blocos.push(livre); }
-    livre.linhas.push(l);
-  }
-  return temItem ? blocos : null;
-}
+// O parser mora em lib/receitaItens.ts (testado em __tests__/unit/receitaItens.test.ts).
 
 function ItemReceitaLinha({ n, nome, qtd, posologia }: { n: number; nome: React.ReactNode; qtd?: string; posologia?: React.ReactNode[] }) {
   return (
@@ -1147,15 +1116,18 @@ function ItemReceitaLinha({ n, nome, qtd, posologia }: { n: number; nome: React.
   );
 }
 
-function ListaItensReceita({ blocos, justificar }: { blocos: BlocoReceita[]; justificar?: boolean }) {
-  let n = 0;
+function ListaItensReceita({ blocos, justificar, cru }: { blocos: BlocoReceita[]; justificar?: boolean; cru?: boolean }) {
+  // cru = pedido de exame: o texto sai como foi escrito, sem *negrito*/_itálico_.
+  const fmt = (t: string): React.ReactNode => (cru ? t : textoReceitaFormatado(t));
+  const numeros = numerosDosItens(blocos);
+  let k = 0;
   return (
     <div style={{ textAlign: justificar ? "justify" : "left" }}>
       {blocos.map((b, i) => {
-        if (b.tipo === "via") return <p key={i} style={{ fontWeight: 700, margin: "0 0 1.1em" }}>{textoReceitaFormatado(b.texto)}</p>;
-        if (b.tipo === "texto") return <p key={i} style={{ whiteSpace: "pre-wrap", margin: "0 0 1.1em", lineHeight: 1.5 }}>{textoReceitaFormatado(b.linhas.join("\n"))}</p>;
-        n += 1;
-        return <ItemReceitaLinha key={i} n={n} nome={textoReceitaFormatado(b.nome)} qtd={b.qtd} posologia={b.posologia.map((p) => textoReceitaFormatado(p))} />;
+        if (b.tipo === "via") return <p key={i} style={{ fontWeight: 700, margin: "0 0 1.1em" }}>{fmt(b.texto)}</p>;
+        if (b.tipo === "texto") return <p key={i} style={{ whiteSpace: "pre-wrap", margin: "0 0 1.1em", lineHeight: 1.5 }}>{fmt(b.linhas.join("\n"))}</p>;
+        const n = numeros[k++];
+        return <ItemReceitaLinha key={i} n={n} nome={fmt(b.nome)} qtd={b.qtd} posologia={b.posologia.map((p) => fmt(p))} />;
       })}
     </div>
   );
@@ -1499,7 +1471,7 @@ export function RxSheets({ rx, patient, clinic, formato }: { rx: RxImpressao; pa
       {type === "controle_especial" && viaLabels.map((label, idx) => (
         <div key={idx}>
           <div className={idx < vias - 1 ? "rx-via rx-via-break" : "rx-via"}>
-            <div className="folha-a4"><RCESheet viaLabel={label} viaIndex={idx} /></div>
+            <div className="folha-a4 folha-a4-via"><RCESheet viaLabel={label} viaIndex={idx} /></div>
           </div>
           {idx < vias - 1 && (
             <div className="rx-cut-line" style={{ textAlign: "center", color: "#aaa", fontSize: "10px", margin: "4px 0", letterSpacing: "2px", borderTop: "1px dashed #ccc", paddingTop: "4px" }}>
@@ -1514,7 +1486,7 @@ export function RxSheets({ rx, patient, clinic, formato }: { rx: RxImpressao; pa
       {type === "antimicrobiano" && viaLabels.map((label, idx) => (
         <div key={idx}>
           <div className={idx < vias - 1 ? "rx-via rx-via-break" : "rx-via"}>
-            <div className="folha-a4"><RCESheet viaLabel={label} viaIndex={idx} /></div>
+            <div className="folha-a4 folha-a4-via"><RCESheet viaLabel={label} viaIndex={idx} /></div>
           </div>
           {idx < vias - 1 && (
             <div className="rx-cut-line" style={{ textAlign: "center", color: "#aaa", fontSize: "10px", margin: "4px 0", letterSpacing: "2px", borderTop: "1px dashed #ccc", paddingTop: "4px" }}>
@@ -4458,7 +4430,9 @@ export function ExamSheet({ text, patientName, patient, clinic, fontSize = 14, l
 }) {
   const nasc = patient?.birth_date || patient?.birthdate || patient?.date_of_birth || null;
   const cids: string[] = Array.isArray(patient?.cids) ? patient.cids.filter(Boolean) : [];
-  const blocosExame = blocosDaReceita(text);
+  // 28/11: só vira lista alinhada se houver remédio/exame com quantidade digitada ("---- 1").
+  const blocosExameBrutos = blocosDaReceita(text);
+  const blocosExame = blocosExameBrutos && blocosExameBrutos.some((b) => b.tipo === "item" && b.qtd) ? blocosExameBrutos : null;
 
   // A folha de verdade — vai por portal no body para o navegador paginar.
   // Dentro do modal (absolute + flex) a folha herdava a altura do app inteiro
@@ -4482,7 +4456,7 @@ export function ExamSheet({ text, patientName, patient, clinic, fontSize = 14, l
       {/* 27/11: linha com tracejado digitado ("RNM ---- 1") sai alinhada, com pontilhado. */}
       {blocosExame ? (
         <div style={{ minHeight: "150px", lineHeight: lineHeight === "relaxed" ? 1.7 : 1.45, fontSize: `${fontSize}px`, marginBottom: "8px" }}>
-          <ListaItensReceita blocos={blocosExame} />
+          <ListaItensReceita blocos={blocosExame} cru />
         </div>
       ) : (
       <div style={{ minHeight: "150px", whiteSpace: "pre-wrap", lineHeight: lineHeight === "relaxed" ? 1.9 : 1.6, fontSize: `${fontSize}px`, marginBottom: "8px" }}>
@@ -5530,7 +5504,11 @@ function PrintDocModal({ title, content, onClose, extraHeader }: { title: string
       const canvas = await html2canvas(folha, { scale: 2, backgroundColor: "#ffffff", useCORS: true });
 
       const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
-      const margem = 0; // 27/11: a margem já está dentro da .folha-a4
+      // 27/11: folha de 1 página sai inteira, margem 0 (a margem está dentro da .folha-a4).
+      // 28/11 (revisão): documento de mais de 1 página volta à margem de 12 mm, senão o
+      // corte entre as fatias cai rente à borda do papel.
+      const umaPagina = canvas.height <= Math.ceil(297 * (canvas.width / 210)) + 8;
+      const margem = umaPagina ? 0 : 12;
       const larguraUtil = 210 - margem * 2;
       const alturaUtil = 297 - margem * 2;
       const pxPorMm = canvas.width / larguraUtil;
@@ -5613,7 +5591,7 @@ function DrHeader({ clinic }: { clinic?: any }) {
 // Registro profissional conforme o ESTADO onde ele está atendendo (10/08):
 // em Palmares e Caruaru vale o CREMEPE; na Paraíba, o CRM-PB. Sai um só —
 // o do conselho local — porque é esse que a clínica e o convênio conferem.
-function crmDaClinica(clinic?: any): string {
+export function crmDaClinica(clinic?: any): string {
   return (clinic?.state || "").toUpperCase() === "PE"
     ? "CREMEPE 16.551"
     : "CRM-PB 6326";
@@ -8854,7 +8832,7 @@ function PacoteDoDia({ patientId, patient, clinic, entryId, onClose }: { patient
     const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
     let primeira = true;
     const novaPagina = () => { if (!primeira) pdf.addPage("a4", "portrait"); primeira = false; };
-    const margem = 0, larguraUtil = 210 - margem * 2, alturaUtil = 297 - margem * 2; // 27/11: margem dentro da .folha-a4
+    // 27/11: margem 0 (está dentro da .folha-a4); 28/11: 12 mm quando a parte passa de 1 página.
     for (const i of escolhidos) {
       if (i.tipo === "guia") {
         const g = paginas[i.docId];
@@ -8879,6 +8857,8 @@ function PacoteDoDia({ patientId, patient, clinic, entryId, onClose }: { patient
         document.body.appendChild(clone);
         try {
           const canvas = await html2canvas(clone, { scale: 2, backgroundColor: "#ffffff", useCORS: true });
+          const margem = canvas.height <= Math.ceil(297 * (canvas.width / 210)) + 8 ? 0 : 12;
+          const larguraUtil = 210 - margem * 2, alturaUtil = 297 - margem * 2;
           const pxPorMm = canvas.width / larguraUtil;
           const alturaPaginaPx = Math.floor(alturaUtil * pxPorMm);
           for (let y = 0; y < canvas.height - 4; y += alturaPaginaPx) {

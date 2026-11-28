@@ -473,6 +473,14 @@
   padding: 13mm 17mm 9mm !important;
 }
 
+/* Via de receita controlada/antimicrobiano (28/11): volta a margem de antes
+   (10 mm em cima/embaixo, 12 mm nas laterais) para a prescrição longa caber. */
+@media print {
+  .folha-a4.folha-a4-via { padding: 10mm 12mm !important; }
+}
+.modo-a4 .folha-a4.folha-a4-via { padding: 10mm 12mm !important; }
+
+
 /* ── Mobile Navigation ──────────────────────────────────────────────────── */
 
 /**
